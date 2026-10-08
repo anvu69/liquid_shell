@@ -66,7 +66,69 @@ void main() {
       for (final label in ['Home', 'Inbox', 'Reports'])
         tester.getTopLeft(find.text(label)).dy,
     ];
-    expect(ys, orderedEquals([...ys]..sort()));
+    for (var i = 1; i < ys.length; i++) {
+      expect(
+        ys[i],
+        greaterThan(ys[i - 1]),
+        reason: 'row $i below row ${i - 1}',
+      );
+    }
+  });
+
+  testWidgets('without header and hide button the first row starts at the '
+      'top padding', (tester) async {
+    await tester.pumpWidget(_host());
+    // 24 (safe area) + 24 (sidebar padding); no empty header row or gap.
+    final firstRow = find.ancestor(
+      of: find.text('Home'),
+      matching: find.byType(InkWell),
+    );
+    expect(tester.getTopLeft(firstRow).dy, 48);
+  });
+
+  testWidgets('beside a body list, only the body follows the '
+      'PrimaryScrollController', (tester) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(colorScheme: _scheme),
+        home: PrimaryScrollController(
+          controller: controller,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              LiquidSidebar(
+                destinations: _destinations,
+                selectedIndex: 0,
+                onDestinationSelected: (_) {},
+                footer: const SizedBox(height: 500, child: Text('Profile')),
+              ),
+              Expanded(
+                child: ListView(
+                  children: [
+                    for (var i = 0; i < 40; i++)
+                      SizedBox(height: 100, child: Text('item $i')),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.drag(find.byType(LiquidSidebar), const Offset(0, -300));
+    await tester.drag(find.byType(ListView), const Offset(0, -300));
+    await tester.pump();
+    final sidebarY = tester.getTopLeft(find.text('Profile')).dy;
+    expect(find.text('item 0'), findsNothing);
+
+    // What a status-bar tap does: scroll the primary controller to the top.
+    controller.jumpTo(0);
+    await tester.pump();
+
+    expect(tester.getTopLeft(find.text('item 0')).dy, 0);
+    expect(tester.getTopLeft(find.text('Profile')).dy, sidebarY);
   });
 
   testWidgets('selected row: primaryContainer, onPrimaryContainer w600', (

@@ -7,9 +7,11 @@ import 'package:liquid_shell/src/shell/strings.dart';
 
 /// A full-height glass sidebar of destinations.
 ///
-/// From top to bottom: a header row (`header` and the hide button), the
-/// [trailing] action as a row, every destination in list order, and the
-/// [footer] pinned to the bottom. `LiquidShell` shows it in regular widths;
+/// From top to bottom: a header row (`header` and the hide button, left
+/// out when neither is set), the [trailing] action as a row, every
+/// destination in list order, and the [footer] pinned to the bottom. It
+/// never takes the route's `PrimaryScrollController`, so a body list beside
+/// it keeps status-bar scroll-to-top. `LiquidShell` shows it in regular widths;
 /// use it directly to build your own chrome.
 class LiquidSidebar extends StatelessWidget {
   /// Creates a sidebar.
@@ -63,18 +65,20 @@ class LiquidSidebar extends StatelessWidget {
     final onHide = this.onHide;
     final action = trailing;
     final rows = <Widget>[
-      Row(
-        children: [
-          Expanded(child: header ?? const SizedBox.shrink()),
-          if (onHide != null)
-            IconButton(
-              onPressed: onHide,
-              tooltip: strings.hideSidebar,
-              color: scheme.onSurfaceVariant,
-              icon: const Icon(Icons.view_sidebar_outlined),
-            ),
-        ],
-      ),
+      // No header row (and no gap after it) when it would be empty.
+      if (header != null || onHide != null)
+        Row(
+          children: [
+            Expanded(child: header ?? const SizedBox.shrink()),
+            if (onHide != null)
+              IconButton(
+                onPressed: onHide,
+                tooltip: strings.hideSidebar,
+                color: scheme.onSurfaceVariant,
+                icon: const Icon(Icons.view_sidebar_outlined),
+              ),
+          ],
+        ),
       if (action != null)
         _SidebarRow(
           icon: action.icon,
@@ -113,6 +117,9 @@ class LiquidSidebar extends StatelessWidget {
           child: Material(
             type: MaterialType.transparency,
             child: CustomScrollView(
+              // Never the route's primary scroll view: beside a body list
+              // (tiled layout) a status-bar tap must scroll the body only.
+              primary: false,
               slivers: [
                 SliverPadding(
                   padding: EdgeInsetsDirectional.fromSTEB(
