@@ -18,8 +18,8 @@ const kNarrowDestinations = [
 /// Five tabs plus a trailing action in a 320pt-wide shell, as in iPad Slide
 /// Over or ⅓ Split View. Below [kLiquidNarrowWidth] the shell trims the row
 /// margin to 8 and the pill padding to 4, so every cell stays at least
-/// 44pt wide at text scale 1 (Q17). The shell decides from its own width,
-/// not the screen's.
+/// 44pt wide at text scale 1 (Q17), and the labels fit untruncated (Q18).
+/// The shell decides from its own width, not the screen's.
 class NarrowWidthCase extends StatefulWidget {
   /// Creates the case.
   const NarrowWidthCase({super.key});
@@ -35,33 +35,37 @@ class _NarrowWidthCaseState extends State<NarrowWidthCase> {
   Widget build(BuildContext context) => ColoredBox(
     color: Theme.of(context).colorScheme.surfaceContainerLowest,
     child: Center(
-      // #docregion readme
-      child: SizedBox(
-        width: kNarrowShellWidth,
-        child: LiquidShell(
-          destinations: kNarrowDestinations,
-          selectedIndex: _index,
-          onDestinationSelected: (i) => setState(() => _index = i),
-          tabBarTrailing: LiquidTabAction(
-            icon: const Icon(Icons.search),
-            semanticLabel: 'Search',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const SearchPage()),
+      // The 320pt shell stands for a narrow window, which clips what it
+      // draws: the wallpaper discs stay inside it.
+      child: ClipRect(
+        // #docregion readme
+        child: SizedBox(
+          width: kNarrowShellWidth,
+          child: LiquidShell(
+            destinations: kNarrowDestinations,
+            selectedIndex: _index,
+            onDestinationSelected: (i) => setState(() => _index = i),
+            tabBarTrailing: LiquidTabAction(
+              icon: const Icon(Icons.search),
+              semanticLabel: 'Search',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const SearchPage()),
+              ),
+            ),
+            body: DemoPage(
+              title: kNarrowDestinations[_index].label,
+              children: const [
+                Text(
+                  'This shell is 320pt wide, below kLiquidNarrowWidth (340): '
+                  'row margin 8, pill padding 4, 45.2pt cells.',
+                ),
+                SizedBox(height: 12),
+              ],
             ),
           ),
-          body: DemoPage(
-            title: kNarrowDestinations[_index].label,
-            children: const [
-              Text(
-                'This shell is 320pt wide, below kLiquidNarrowWidth (340): '
-                'row margin 8, pill padding 4, 45.2pt cells.',
-              ),
-              SizedBox(height: 12),
-            ],
-          ),
         ),
+        // #enddocregion readme
       ),
-      // #enddocregion readme
     ),
   );
 }

@@ -24,19 +24,18 @@ class WallpaperPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final rect = Offset.zero & size;
-    // The discs overhang the edges; keep them inside a wallpaper that is
-    // narrower than the window (the narrow case).
-    canvas
-      ..clipRect(rect)
-      ..drawRect(
-        rect,
-        Paint()
-          ..shader = LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [scheme.surface, scheme.surfaceContainerHighest],
-          ).createShader(rect),
-      );
+    // No clip: the discs overhang the edges on purpose, so on iPad they reach
+    // under the tiled sidebar and show through its glass. A case that must
+    // stay inside its bounds clips itself (the narrow case).
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [scheme.surface, scheme.surfaceContainerHighest],
+        ).createShader(rect),
+    );
     final discs = [
       (const Offset(0.15, 0.2), 0.35, scheme.primary),
       (const Offset(0.85, 0.35), 0.30, scheme.tertiary),
