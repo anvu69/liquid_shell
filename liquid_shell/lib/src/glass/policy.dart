@@ -60,27 +60,32 @@ class LiquidGlassSignals {
   );
 }
 
-/// Picks the renderer for [signals], probing each registered renderer once.
+/// Picks the renderer for [signals]: `policy.resolve`, then
+/// `policy.rendererFor` the tier it returns.
 ///
-/// `LiquidGlass` calls this instead of `resolve` followed by `rendererFor`,
-/// which would probe `isSupported` twice per build and report a throwing
-/// probe twice. Not exported.
+/// Both may probe the same registered renderer (the default `resolve` asks
+/// whether a liquid renderer is supported, `rendererFor` asks again). For
+/// the length of this call every `isSupported` answer is remembered, so each
+/// renderer is probed, and a throwing probe reported, once per call however
+/// `resolve` is overridden. `LiquidGlass` calls this once per build. Not
+/// exported.
 LiquidGlassRenderer resolveGlassRenderer(
   LiquidGlassPolicy policy,
   BuildContext context,
   LiquidGlassSignals signals,
 ) {
-  final forced = policy.forcedTier;
-  if (forced != null) {
-    final renderer = policy.rendererFor(context, forced);
-    if (renderer.tier != forced) _logForcedFallback(forced, renderer.tier);
-    return renderer;
+  final outer = _probes;
+  _probes = outer ?? Map.identity();
+  try {
+    return policy.rendererFor(context, policy.resolve(context, signals));
+  } finally {
+    _probes = outer;
   }
-  return policy.rendererFor(
-    context,
-    signals.prefersSolid ? LiquidGlassTier.solid : LiquidGlassTier.liquid,
-  );
 }
+
+/// `isSupported` answers memoised during one [resolveGlassRenderer] call;
+/// null outside one.
+Map<LiquidGlassRenderer, bool>? _probes;
 
 bool _loggedForcedFallback = false;
 
@@ -123,8 +128,20 @@ class LiquidGlassPolicy {
   /// 2. [LiquidGlassSignals.prefersSolid] → solid.
   /// 3. Otherwise liquid when a supported liquid renderer is registered,
   ///    else frosted.
-  LiquidGlassTier resolve(BuildContext context, LiquidGlassSignals signals) =>
-      resolveGlassRenderer(this, context, signals).tier;
+  ///
+  /// Override it to change the rule, for example to force solid on some
+  /// devices; every `LiquidGlass` under this policy then draws
+  /// `rendererFor(context, resolve(context, signals))`.
+  LiquidGlassTier resolve(BuildContext context, LiquidGlassSignals signals) {
+    final forced = forcedTier;
+    if (forced != null) {
+      final used = rendererFor(context, forced).tier;
+      if (used != forced) _logForcedFallback(forced, used);
+      return used;
+    }
+    if (signals.prefersSolid) return LiquidGlassTier.solid;
+    return rendererFor(context, LiquidGlassTier.liquid).tier;
+  }
 
   /// The renderer that will draw [tier], after fallbacks.
   LiquidGlassRenderer rendererFor(BuildContext context, LiquidGlassTier tier) {
@@ -147,6 +164,12 @@ class LiquidGlassPolicy {
   }
 
   static bool _supported(LiquidGlassRenderer renderer, BuildContext context) {
+    final probes = _probes;
+    if (probes == null) return _probe(renderer, context);
+    return probes[renderer] ??= _probe(renderer, context);
+  }
+
+  static bool _probe(LiquidGlassRenderer renderer, BuildContext context) {
     try {
       return renderer.isSupported(context);
     } on Object catch (exception, stack) {
@@ -167,9 +190,12 @@ class LiquidGlassPolicy {
   @override
   bool operator ==(Object other) =>
       other is LiquidGlassPolicy &&
+      // A subclass may resolve differently, so it never equals the base.
+      other.runtimeType == runtimeType &&
       other.forcedTier == forcedTier &&
       listEquals(other.renderers, renderers);
 
   @override
-  int get hashCode => Object.hash(forcedTier, Object.hashAll(renderers));
+  int get hashCode =>
+      Object.hash(runtimeType, forcedTier, Object.hashAll(renderers));
 }

@@ -46,6 +46,30 @@ LiquidGlassScope(
 Put the scope in `MaterialApp.builder` to cover pages pushed above the
 shell too.
 
+## Your own rule
+
+Every `LiquidGlass` draws `policy.rendererFor(context, policy.resolve(context,
+signals))`, so overriding `resolve` changes the tier everywhere under the
+scope:
+
+```dart
+/// Never refracts, even with a liquid renderer registered.
+class FrostedAtMost extends LiquidGlassPolicy {
+  const FrostedAtMost({super.renderers});
+
+  @override
+  LiquidGlassTier resolve(BuildContext context, LiquidGlassSignals signals) {
+    final tier = super.resolve(context, signals);
+    return tier == LiquidGlassTier.liquid ? LiquidGlassTier.frosted : tier;
+  }
+}
+```
+
+A tier without a supported renderer steps down (liquid → frosted). Each
+renderer's `isSupported` runs once per build, however often `resolve` and
+`rendererFor` ask. Policies of different classes are never equal, so
+swapping one in rebuilds the glass.
+
 ## Writing a renderer
 
 ```dart

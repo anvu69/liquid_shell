@@ -81,6 +81,15 @@ class _CustomRenderer extends LiquidGlassRenderer {
       const _Stateful();
 }
 
+/// Overrides only [resolve], as an app with its own tier rule would.
+class _AlwaysSolidPolicy extends LiquidGlassPolicy {
+  const _AlwaysSolidPolicy();
+
+  @override
+  LiquidGlassTier resolve(BuildContext context, LiquidGlassSignals signals) =>
+      LiquidGlassTier.solid;
+}
+
 void main() {
   final glassTheme = LiquidGlassTheme.fromColorScheme(_scheme);
 
@@ -148,6 +157,27 @@ void main() {
     await tester.pumpWidget(
       _app(policy: const LiquidGlassPolicy(forcedTier: LiquidGlassTier.solid)),
     );
+    await tester.pumpAndSettle();
+    expect(find.byType(BackdropFilter), findsNothing);
+  });
+
+  testWidgets('an overridden resolve picks the tier LiquidGlass draws', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_app(policy: const _AlwaysSolidPolicy()));
+    await tester.pumpAndSettle();
+    expect(find.byType(BackdropFilter), findsNothing);
+    expect(_fills(tester, glassTheme.solid), hasLength(1));
+  });
+
+  testWidgets('swapping in a policy subclass re-resolves the tier', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_app(policy: const LiquidGlassPolicy()));
+    await tester.pumpAndSettle();
+    expect(find.byType(BackdropFilter), findsOneWidget);
+
+    await tester.pumpWidget(_app(policy: const _AlwaysSolidPolicy()));
     await tester.pumpAndSettle();
     expect(find.byType(BackdropFilter), findsNothing);
   });

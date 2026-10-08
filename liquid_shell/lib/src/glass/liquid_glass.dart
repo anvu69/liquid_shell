@@ -50,7 +50,7 @@ class _LiquidGlassState extends State<LiquidGlass> {
     child: widget.child,
     builder: (context, platform, child) {
       final policy = LiquidGlassScope.policyOf(context);
-      // One probe per build: resolve and rendererFor would probe twice.
+      // policy.resolve, then rendererFor, probing each renderer once.
       final renderer = resolveGlassRenderer(
         policy,
         context,

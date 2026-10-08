@@ -24,6 +24,21 @@ class _FakeRenderer extends LiquidGlassRenderer {
       const SizedBox.expand();
 }
 
+/// Overrides [resolve] to answer [tier], optionally after running the
+/// default algorithm.
+class _TierPolicy extends LiquidGlassPolicy {
+  const _TierPolicy(this.tier, {this.callSuper = false, super.renderers});
+
+  final LiquidGlassTier tier;
+  final bool callSuper;
+
+  @override
+  LiquidGlassTier resolve(BuildContext context, LiquidGlassSignals signals) {
+    if (callSuper) super.resolve(context, signals);
+    return tier;
+  }
+}
+
 Future<BuildContext> _context(WidgetTester tester) async {
   late BuildContext context;
   await tester.pumpWidget(
@@ -198,6 +213,46 @@ void main() {
   });
 
   group('resolveGlassRenderer', () {
+    testWidgets('goes through an overridden resolve', (tester) async {
+      final context = await _context(tester);
+      expect(
+        resolveGlassRenderer(
+          const _TierPolicy(LiquidGlassTier.solid),
+          context,
+          const LiquidGlassSignals(),
+        ),
+        isA<SolidGlassRenderer>(),
+      );
+    });
+
+    testWidgets('an overridden resolve that probes still reports a throwing '
+        'renderer once per call', (tester) async {
+      final context = await _context(tester);
+      // super.resolve probes the liquid renderer, then rendererFor(liquid)
+      // would probe it again.
+      const policy = _TierPolicy(
+        LiquidGlassTier.liquid,
+        callSuper: true,
+        renderers: [_FakeRenderer(LiquidGlassTier.liquid, throws: true)],
+      );
+      final errors = <FlutterErrorDetails>[];
+      final originalOnError = FlutterError.onError;
+      FlutterError.onError = errors.add;
+      try {
+        final renderer = resolveGlassRenderer(
+          policy,
+          context,
+          const LiquidGlassSignals(),
+        );
+        expect(renderer, isA<FrostedGlassRenderer>());
+        // A new call probes afresh.
+        resolveGlassRenderer(policy, context, const LiquidGlassSignals());
+      } finally {
+        FlutterError.onError = originalOnError;
+      }
+      expect(errors, hasLength(2));
+    });
+
     testWidgets('probes a throwing renderer once per call', (tester) async {
       final context = await _context(tester);
       const policy = LiquidGlassPolicy(
@@ -280,7 +335,12 @@ void main() {
     });
   });
 
-  test('== compares forcedTier and renderers', () {
+  test('== compares the type, forcedTier and renderers', () {
+    expect(
+      const LiquidGlassPolicy(),
+      isNot(const _TierPolicy(LiquidGlassTier.solid)),
+      reason: 'a subclass may resolve differently',
+    );
     const renderer = _FakeRenderer(LiquidGlassTier.liquid);
     expect(
       const LiquidGlassPolicy(renderers: [renderer]),

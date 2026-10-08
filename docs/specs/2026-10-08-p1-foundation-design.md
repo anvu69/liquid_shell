@@ -837,6 +837,8 @@ Every read is wrapped in `try/catch` (`SecurityException`, `SettingNotFoundExcep
 
 Glass always keeps rendering; a signal failure can only make the result *more* glassy, never blank.
 
+**Overriding `resolve` (amended 2026-10-09, final review I1).** `LiquidGlass` draws `policy.rendererFor(context, policy.resolve(context, signals))`, so a subclass that overrides `resolve` decides the tier of every glass under its scope. Within one build each registered renderer's `isSupported` is memoised, so it runs, and a throwing probe is reported, once per build however `resolve` and `rendererFor` combine. `LiquidGlassPolicy.==` also compares `runtimeType`, so swapping in a subclass with equal fields notifies `LiquidGlassScope` dependants.
+
 ## 7. Error handling
 
 | Case | Debug | Release |
