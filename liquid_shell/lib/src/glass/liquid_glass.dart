@@ -43,52 +43,55 @@ class _LiquidGlassState extends State<LiquidGlass> {
   }
 
   @override
-  Widget build(BuildContext context) =>
-      ValueListenableBuilder<LiquidPlatformSignals>(
-        valueListenable: _signals,
-        child: widget.child,
-        builder: (context, platform, child) {
-          final policy = LiquidGlassScope.policyOf(context);
-          // One probe per build: resolve and rendererFor would probe twice.
-          final renderer = resolveGlassRenderer(
-            policy,
-            context,
-            LiquidGlassSignals(
-              reduceTransparency: platform.reduceTransparency,
-              highContrast: MediaQuery.highContrastOf(context),
-              powerSave: platform.powerSave,
-              blurDisabled: platform.blurDisabled,
-              canBlur: liquidGlassCanBlur(),
-            ),
-          );
-          final theme = LiquidGlassTheme.of(context);
-          final background = KeyedSubtree(
-            key: ObjectKey(renderer),
-            child: renderer.buildBackground(
-              context,
-              LiquidGlassSpec(
-                borderRadius: widget.borderRadius ?? theme.borderRadius,
-                theme: theme,
-              ),
-            ),
-          );
-          return Stack(
-            children: [
-              Positioned.fill(
-                child: MediaQuery.disableAnimationsOf(context)
-                    ? background
-                    : AnimatedSwitcher(
-                        duration: _fade,
-                        layoutBuilder: (current, previous) => Stack(
-                          fit: StackFit.expand,
-                          children: [...previous, ?current],
-                        ),
-                        child: background,
-                      ),
-              ),
-              child!,
-            ],
-          );
-        },
+  Widget build(
+    BuildContext context,
+  ) => ValueListenableBuilder<LiquidPlatformSignals>(
+    valueListenable: _signals,
+    child: widget.child,
+    builder: (context, platform, child) {
+      final policy = LiquidGlassScope.policyOf(context);
+      // One probe per build: resolve and rendererFor would probe twice.
+      final renderer = resolveGlassRenderer(
+        policy,
+        context,
+        LiquidGlassSignals(
+          reduceTransparency: platform.reduceTransparency,
+          highContrast: MediaQuery.highContrastOf(context),
+          powerSave: platform.powerSave,
+          blurDisabled: platform.blurDisabled,
+          canBlur: liquidGlassCanBlur(),
+        ),
       );
+      final theme = LiquidGlassTheme.of(context);
+      final background = KeyedSubtree(
+        // Tier and type, not identity: a custom renderer built anew on every
+        // rebuild must not look like a tier change.
+        key: ValueKey((renderer.tier, renderer.runtimeType)),
+        child: renderer.buildBackground(
+          context,
+          LiquidGlassSpec(
+            borderRadius: widget.borderRadius ?? theme.borderRadius,
+            theme: theme,
+          ),
+        ),
+      );
+      return Stack(
+        children: [
+          Positioned.fill(
+            child: MediaQuery.disableAnimationsOf(context)
+                ? background
+                : AnimatedSwitcher(
+                    duration: _fade,
+                    layoutBuilder: (current, previous) => Stack(
+                      fit: StackFit.expand,
+                      children: [...previous, ?current],
+                    ),
+                    child: background,
+                  ),
+          ),
+          child!,
+        ],
+      );
+    },
+  );
 }

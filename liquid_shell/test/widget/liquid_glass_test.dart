@@ -50,6 +50,37 @@ class _CounterState extends State<_Counter> {
   );
 }
 
+class _Stateful extends StatefulWidget {
+  const _Stateful();
+
+  @override
+  State<_Stateful> createState() => _StatefulState();
+}
+
+class _StatefulState extends State<_Stateful> {
+  static int created = 0;
+  @override
+  void initState() {
+    super.initState();
+    created++;
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.expand();
+}
+
+/// A non-const custom renderer: equal in kind, never identical.
+class _CustomRenderer extends LiquidGlassRenderer {
+  _CustomRenderer();
+
+  @override
+  LiquidGlassTier get tier => LiquidGlassTier.liquid;
+
+  @override
+  Widget buildBackground(BuildContext context, LiquidGlassSpec spec) =>
+      const _Stateful();
+}
+
 void main() {
   final glassTheme = LiquidGlassTheme.fromColorScheme(_scheme);
 
@@ -185,6 +216,42 @@ void main() {
       debugPrint = original;
     }
     expect(logs.single, contains('channel broke'));
+  });
+
+  testWidgets('an equal but non-identical renderer neither fades nor resets', (
+    tester,
+  ) async {
+    _StatefulState.created = 0;
+    Widget app() => _app(
+      policy: LiquidGlassPolicy(renderers: [_CustomRenderer()]),
+    );
+    await tester.pumpWidget(app());
+    await tester.pump();
+    expect(_StatefulState.created, 1);
+
+    await tester.pumpWidget(app()); // a fresh renderer instance
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(_StatefulState.created, 1, reason: 'background state kept');
+    expect(find.byType(_Stateful), findsOneWidget, reason: 'no fade-out copy');
+  });
+
+  testWidgets('a burst of error events logs once', (tester) async {
+    final platform = installFakeSignals();
+    final logs = <String>[];
+    final original = debugPrint;
+    debugPrint = (message, {wrapWidth}) => logs.add(message ?? '');
+    try {
+      await tester.pumpWidget(_app());
+      await tester.pump();
+      platform.emitError(StateError('first'));
+      await tester.pump();
+      platform.emitError(StateError('second'));
+      await tester.pump();
+    } finally {
+      debugPrint = original;
+    }
+    expect(logs, hasLength(1));
+    expect(logs.single, contains('first'));
   });
 
   testWidgets('listens while any glass is mounted, stops after the last', (

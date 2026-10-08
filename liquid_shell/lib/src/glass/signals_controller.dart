@@ -45,10 +45,13 @@ class LiquidSignalsController extends ChangeNotifier
   void acquire() {
     _users++;
     if (_users == 1) {
+      var logged = false;
       _subscription = LiquidShellPlatform.instance.watchSignals().listen(
         _set,
         onError: (Object error) {
-          if (kDebugMode) {
+          // Once per subscription: a broken channel repeats its error.
+          if (kDebugMode && !logged) {
+            logged = true;
             debugPrint('liquid_shell signals: $error; using none');
           }
           _set(LiquidPlatformSignals.none);
