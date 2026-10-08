@@ -69,6 +69,8 @@ git checkout -b VK-345-p1-foundation
 
 ## Decisions needing owner confirmation
 
+> **Owner confirmed O1 and O2 as recommended (2026-10-08: "Ok").**
+
 | # | Question | Recommended default | Impact if declined |
 |---|---|---|---|
 | O1 | Spec S9 asks for pana at max score in P1. Before the interface is on pub.dev, pana cannot resolve the other three packages. Accept "interface at max (on `main`), the other three informational until P6, which publishes the interface first"? | **Yes.** P6 flips the three to `--exit-code-threshold 0` right after publishing `liquid_shell_platform_interface` | Publishing the interface early would require a pub.dev release before P6, which the spec reserves for the owner |
