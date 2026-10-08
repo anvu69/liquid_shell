@@ -215,7 +215,11 @@ class _LiquidShellState extends State<LiquidShell>
   void _expand() => _minimized.value = false;
 
   bool _onScroll(UserScrollNotification notification, LiquidChromeKind kind) {
-    if (!widget.minimizeOnScroll || kind != LiquidChromeKind.bottomBar) {
+    // Only vertical scrolling reads as "moving through content"; a carousel
+    // or PageView swipe leaves the bar alone.
+    if (!widget.minimizeOnScroll ||
+        kind != LiquidChromeKind.bottomBar ||
+        notification.metrics.axis != Axis.vertical) {
       return false;
     }
     switch (notification.direction) {

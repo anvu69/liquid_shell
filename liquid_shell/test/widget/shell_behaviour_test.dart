@@ -395,6 +395,47 @@ void main() {
       expect(find.text('Inbox'), findsOneWidget);
     });
 
+    testWidgets('a horizontal carousel does not minimise; the vertical '
+        'page around it still does', (tester) async {
+      await pumpShell(
+        tester,
+        TestShell(
+          pageBuilder: (i) => ListView(
+            key: ValueKey('page-$i'),
+            children: [
+              SizedBox(
+                height: 120,
+                child: ListView(
+                  key: ValueKey('carousel-$i'),
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    for (var c = 0; c < 20; c++)
+                      SizedBox(width: 150, child: Text('card $c')),
+                  ],
+                ),
+              ),
+              for (var r = 0; r < 60; r++)
+                SizedBox(height: 40, child: Text('row $r')),
+            ],
+          ),
+        ),
+      );
+      await tester.drag(
+        find.byKey(const ValueKey('carousel-0')),
+        const Offset(-300, 0),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('card 0'), findsNothing, reason: 'it did scroll');
+      expect(find.text('Inbox'), findsOneWidget);
+
+      await tester.drag(
+        find.byKey(const ValueKey('page-0')),
+        const Offset(0, -300),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Inbox'), findsNothing);
+    });
+
     testWidgets('a tap expands without changing tab and announces', (
       tester,
     ) async {
