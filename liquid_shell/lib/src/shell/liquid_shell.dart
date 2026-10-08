@@ -509,10 +509,15 @@ class _LiquidShellState extends State<LiquidShell>
     }
 
     // System back closes the overlay sidebar before it pops anything (Q10).
+    // The route calls every PopScope on it, so a back blocked by another one
+    // (an exit wrapper, an unsaved form) lands here too: act only while the
+    // overlay is what blocks it.
     return PopScope(
       canPop: kind != LiquidChromeKind.sidebarOverlay,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _setSidebarVisible(false);
+        if (!didPop && kind == LiquidChromeKind.sidebarOverlay) {
+          _setSidebarVisible(false);
+        }
       },
       child: ShellScopeMarker(
         data: LiquidShellScopeData(

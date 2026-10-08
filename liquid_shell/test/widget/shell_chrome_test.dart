@@ -251,6 +251,64 @@ void main() {
       expect(find.byType(TestShell), findsOneWidget);
     });
 
+    group("back blocked by the app's own PopScope", () {
+      /// Sends system back with `debugPrint` captured; returns the logs.
+      Future<List<String>> back(WidgetTester tester) async {
+        final logs = <String>[];
+        final original = debugPrint;
+        debugPrint = (message, {wrapWidth}) => logs.add(message ?? '');
+        try {
+          await tester.binding.handlePopRoute();
+          await tester.pumpAndSettle();
+        } finally {
+          debugPrint = original;
+        }
+        return logs;
+      }
+
+      const blocked = PopScope<Object?>(canPop: false, child: TestShell());
+
+      testWidgets('tiled: the sidebar stays, nothing is logged', (
+        tester,
+      ) async {
+        await pumpShell(
+          tester,
+          blocked,
+          size: kTabletLandscape,
+          padding: _tablet,
+        );
+        expect(scopeOf(tester).chromeKind, LiquidChromeKind.sidebarTiled);
+        final logs = await back(tester);
+        expect(scopeOf(tester).chromeKind, LiquidChromeKind.sidebarTiled);
+        expect(scopeOf(tester).sidebarVisible, isTrue);
+        expect(logs, isEmpty);
+      });
+
+      testWidgets('compact: nothing changes, nothing is logged', (
+        tester,
+      ) async {
+        await pumpShell(tester, blocked);
+        final logs = await back(tester);
+        expect(scopeOf(tester).chromeKind, LiquidChromeKind.bottomBar);
+        expect(logs, isEmpty);
+      });
+
+      testWidgets('overlay: back still closes it (Q10)', (tester) async {
+        await pumpShell(
+          tester,
+          blocked,
+          size: kTabletPortrait,
+          padding: _tablet,
+        );
+        await tester.tap(find.byTooltip('Show sidebar'));
+        await tester.pumpAndSettle();
+        expect(scopeOf(tester).chromeKind, LiquidChromeKind.sidebarOverlay);
+        await back(tester);
+        expect(scopeOf(tester).chromeKind, LiquidChromeKind.topBar);
+        expect(find.byType(LiquidSidebar), findsNothing);
+      });
+    });
+
     testWidgets('visibility resets when the presentation changes (Q2)', (
       tester,
     ) async {
