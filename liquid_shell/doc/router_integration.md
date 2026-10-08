@@ -78,7 +78,7 @@ StatefulShellRoute.indexedStack(
 | Page | Wrap it in | Effect |
 |---|---|---|
 | Inside a branch, normal | nothing; pad with `LiquidShellScope.contentPaddingOf(context)` | content scrolls under the glass |
-| Inside a branch, full frame (reader, detail) | `LiquidHideChrome` | every piece of chrome hides while it is mounted |
+| Inside a branch, full frame (reader, detail) | `LiquidHideChrome` | every piece of chrome hides while it is mounted and on screen |
 | Above the shell (root navigator: search, sheets) | `LiquidNoChrome` | its insets ignore the chrome underneath |
 | Static content | `LiquidContentInset` | `Padding(contentPaddingOf(context))` |
 
@@ -89,6 +89,17 @@ root navigator cannot hide the chrome; it is above the shell and needs
 `LiquidNoChrome` instead. Wrap your own branch navigator in a
 `NavigatorPopHandler` so system back pops the branch first. The README's
 "Hide the chrome" case is a complete example.
+
+"On screen" means no ancestor `Visibility` is hidden and tickers are on. An
+`IndexedStack` hides inactive branches with `Visibility`;
+`StatefulShellRoute.indexedStack` wraps them in `Offstage` and
+`TickerMode(enabled: false)`; a `Navigator` turns tickers off for a route
+covered by an opaque one. So a detail page left open in one branch stops
+hiding the chrome when you switch branches in code (a deep link, a
+notification tap, `context.go`), and hides it again when you switch back.
+If you keep branches alive some other way, wrap the inactive ones in
+`Visibility(visible: false, maintainState: true, ...)` or
+`TickerMode(enabled: false)`.
 
 ## Leaving a page with unsaved work
 

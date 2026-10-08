@@ -587,6 +587,86 @@ void main() {
       expect(find.byType(LiquidTabBar), findsOneWidget);
     });
 
+    group('only the visible branch or route hides the chrome', () {
+      Widget hidesOnInbox(int i) => i == 1
+          ? LiquidHideChrome(child: TestPage(label: kDestinations[i].label))
+          : TestPage(label: kDestinations[i].label);
+
+      for (final offstage in [false, true]) {
+        final keptBy = offstage ? 'Offstage + TickerMode' : 'IndexedStack';
+        testWidgets('kept alive by $keptBy: a programmatic switch away shows '
+            'the chrome, switching back hides it', (tester) async {
+          await pumpShell(
+            tester,
+            TestShell(
+              initialIndex: 1,
+              pageBuilder: hidesOnInbox,
+              offstageBranches: offstage,
+            ),
+          );
+          expect(find.byType(LiquidTabBar), findsNothing);
+
+          // A deep link or notification tap: no user selection involved.
+          tester.state<TestShellState>(find.byType(TestShell)).select(0);
+          await tester.pumpAndSettle();
+          expect(find.byType(LiquidTabBar), findsOneWidget);
+          expect(scopeOf(tester).chromeKind, LiquidChromeKind.bottomBar);
+
+          tester.state<TestShellState>(find.byType(TestShell)).select(1);
+          await tester.pumpAndSettle();
+          expect(find.byType(LiquidTabBar), findsNothing);
+        });
+
+        testWidgets('kept alive by $keptBy: an inactive branch that hides '
+            'from the start does not hide the chrome', (tester) async {
+          await pumpShell(
+            tester,
+            TestShell(pageBuilder: hidesOnInbox, offstageBranches: offstage),
+          );
+          expect(find.byType(LiquidTabBar), findsOneWidget);
+        });
+      }
+
+      testWidgets('a route covered by an opaque route stops hiding; popping '
+          'back to it hides again', (tester) async {
+        final navigator = GlobalKey<NavigatorState>();
+        await pumpShell(
+          tester,
+          TestShell(
+            pageBuilder: (i) => i == 0
+                ? Navigator(
+                    key: navigator,
+                    onGenerateRoute: (_) => MaterialPageRoute<void>(
+                      builder: (_) => const TestPage(label: 'Home'),
+                    ),
+                  )
+                : TestPage(label: kDestinations[i].label),
+          ),
+        );
+        unawaited(
+          navigator.currentState!.push(
+            MaterialPageRoute<void>(
+              builder: (_) => const LiquidHideChrome(child: Text('detail')),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byType(LiquidTabBar), findsNothing);
+
+        unawaited(
+          navigator.currentState!.push(
+            MaterialPageRoute<void>(builder: (_) => const Text('above')),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byType(LiquidTabBar), findsOneWidget);
+
+        navigator.currentState!.pop();
+        await tester.pumpAndSettle();
+        expect(find.byType(LiquidTabBar), findsNothing);
+      });
+    });
+
     testWidgets('a hide request made outside a frame applies at once', (
       tester,
     ) async {

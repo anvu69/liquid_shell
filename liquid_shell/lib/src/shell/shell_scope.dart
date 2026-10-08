@@ -122,12 +122,20 @@ abstract final class LiquidShellScope {
   }
 }
 
-/// While mounted with [enabled] inside a shell, hides all chrome (bar,
-/// toggle, sidebar) and zeroes the insets. For full-frame pages pushed
-/// inside a branch. Requests are reference-counted. Outside a shell it
-/// does nothing.
+/// While mounted with [enabled] inside a shell, and while on screen, hides
+/// all chrome (bar, toggle, sidebar) and zeroes the insets. For full-frame
+/// pages pushed inside a branch. Requests are reference-counted. Outside a
+/// shell it does nothing.
+///
+/// "On screen" means no ancestor `Visibility` is hidden and tickers are on
+/// (`TickerMode`). Branches kept alive but hidden therefore do not hide the
+/// chrome: an `IndexedStack` hides the inactive ones with `Visibility`, a
+/// router's indexed-stack shell route with `Offstage` and `TickerMode`,
+/// and a `Navigator` turns tickers off for a route covered by an opaque
+/// one. After a switch away from a branch whose page hides the
+/// chrome, the chrome comes back; switching back hides it again.
 class LiquidHideChrome extends StatefulWidget {
-  /// Hides the chrome while [child] is mounted.
+  /// Hides the chrome while [child] is mounted and on screen.
   const LiquidHideChrome({required this.child, this.enabled = true, super.key});
 
   /// The page.
@@ -143,6 +151,7 @@ class LiquidHideChrome extends StatefulWidget {
 class _LiquidHideChromeState extends State<LiquidHideChrome> {
   HideChromeRegistry? _registry;
   bool _active = false;
+  bool _onScreen = true;
 
   @override
   void didChangeDependencies() {
@@ -154,6 +163,8 @@ class _LiquidHideChromeState extends State<LiquidHideChrome> {
       _deactivate();
       _registry = registry;
     }
+    // Both register a dependency, so a branch or route switch lands here.
+    _onScreen = Visibility.of(context) && TickerMode.of(context);
     _sync();
   }
 
@@ -164,7 +175,7 @@ class _LiquidHideChromeState extends State<LiquidHideChrome> {
   }
 
   void _sync() {
-    if (widget.enabled && _registry != null) {
+    if (widget.enabled && _onScreen && _registry != null) {
       if (!_active) {
         _active = true;
         _registry!.addHideRequest();

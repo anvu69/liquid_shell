@@ -43,6 +43,7 @@ class TestShell extends StatefulWidget {
     this.minimizeOnScroll = true,
     this.strings = const LiquidShellStrings(),
     this.pageBuilder,
+    this.offstageBranches = false,
     super.key,
   });
 
@@ -60,6 +61,11 @@ class TestShell extends StatefulWidget {
 
   /// Builds the page of one destination. Defaults to [TestPage].
   final Widget Function(int index)? pageBuilder;
+
+  /// Keeps branches alive the way a router's indexed-stack shell route does
+  /// (`Offstage` + `TickerMode`) instead of with an `IndexedStack`
+  /// (`Visibility`).
+  final bool offstageBranches;
 
   @override
   State<TestShell> createState() => TestShellState();
@@ -86,14 +92,24 @@ class TestShellState extends State<TestShell> {
     chromeBuilder: widget.chromeBuilder,
     minimizeOnScroll: widget.minimizeOnScroll,
     strings: widget.strings,
-    body: IndexedStack(
-      index: index,
-      children: [
-        for (final (i, d) in widget.destinations.indexed)
-          widget.pageBuilder?.call(i) ?? TestPage(label: d.label),
-      ],
-    ),
+    body: widget.offstageBranches
+        ? Stack(
+            fit: StackFit.expand,
+            children: [
+              for (final (i, page) in _pages.indexed)
+                Offstage(
+                  offstage: i != index,
+                  child: TickerMode(enabled: i == index, child: page),
+                ),
+            ],
+          )
+        : IndexedStack(index: index, children: _pages),
   );
+
+  List<Widget> get _pages => [
+    for (final (i, d) in widget.destinations.indexed)
+      widget.pageBuilder?.call(i) ?? TestPage(label: d.label),
+  ];
 }
 
 /// A scrolling page with a tap counter, to prove its State survives.

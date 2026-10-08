@@ -341,7 +341,10 @@ Widget build(BuildContext context) => LiquidShell(
 ### Hide the chrome, or none at all
 
 A full-frame page pushed **inside** a branch hides every piece of chrome
-while it is mounted. The branch needs its own `Navigator` under the shell,
+while it is mounted and on screen. A branch kept alive off screen (an
+`IndexedStack`, go_router's `StatefulShellRoute.indexedStack`) or a route
+covered by another one does not hide it, so switching tabs in code brings
+the chrome back. The branch needs its own `Navigator` under the shell,
 as a router's shell branch has: `LiquidHideChrome` finds the shell above it,
 and a page on the app's navigator is not under the shell.
 
@@ -779,7 +782,7 @@ tests behave correctly.
 | Compact | width < 700 | never | bottom pill (narrow margins below 340) |
 | Regular, overlay | width ≥ 700, portrait or narrower than 1024 | hidden by default; covers the content when shown | top pill + toggle |
 | Regular, tiled | width ≥ 1024 and landscape | shown by default, beside the content | none while shown; top pill + toggle when hidden |
-| Hidden | a `LiquidHideChrome` is mounted | none | none |
+| Hidden | a `LiquidHideChrome` is mounted and on screen | none | none |
 
 Change the thresholds with `LiquidShellBreakpoints`. Read the current
 layout, insets and sidebar state with `LiquidShellScope.of(context)`.

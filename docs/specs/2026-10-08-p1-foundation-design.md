@@ -438,7 +438,8 @@ class LiquidShellScopeData {
   // == and hashCode compare every field except setSidebarVisible.
 }
 
-/// While mounted with enabled == true inside a shell, hides all chrome
+/// While mounted with enabled == true inside a shell AND on screen
+/// (Visibility.of && TickerMode.of, amended 2026-10-09), hides all chrome
 /// (bar, toggle, sidebar). For full-frame pages pushed inside a branch.
 /// Requests are reference-counted. Outside a shell it does nothing.
 class LiquidHideChrome extends StatefulWidget {
@@ -680,7 +681,7 @@ Test-only hooks (`@visibleForTesting`, exported): `debugLiquidGlassCanBlurOverri
 | **Compact** | `w < B.regular` | never | bottom pill | glass circle at the pill's end | none | not shown | full frame; content runs under the bar |
 | **Regular, overlay** (portrait, or landscape narrower than `B.tiledSidebar`) | `w ≥ B.regular` and not tiled | hidden by default; when shown it **covers** the body and the top bar, with a dismissible barrier | top pill, centred | circle at the pill's end; when the sidebar is shown, the first sidebar row | 48pt circle at the top start when hidden; hide button in the sidebar header when shown | sidebar only | full frame, never resized |
 | **Regular, tiled** | `w ≥ B.tiledSidebar` and `w > h` | shown by default, **beside** the body | none while the sidebar is shown; top pill + toggle when it is hidden | sidebar row when shown; circle when hidden | as above | sidebar only | `w − sidebarWidth` wide while the sidebar is shown |
-| **Hidden** | any `LiquidHideChrome` active | none | none | none | none | — | full frame |
+| **Hidden** | any `LiquidHideChrome` active (mounted, enabled and on screen, §4.4) | none | none | none | none | — | full frame |
 
 iOS and Android behave identically. iPhone 393 → compact. iPhone Pro Max landscape 932 → regular overlay. iPad 11" portrait 834 → regular overlay. iPad 11" landscape 1194 → tiled. Android phone 412 → compact. Android tablet landscape 1280 → tiled.
 
@@ -739,6 +740,7 @@ The bar is measured after layout and reported only once its height has been stab
 4. Programmatic changes to `selectedIndex` never call the guard.
 5. Reselect (`i == selectedIndex`) runs the same path.
 6. **`sidebarOnly` selected in compact.** The pill highlights nothing and the selection is kept. After the frame in which the layout becomes compact (or on the first frame if it starts compact), the shell calls `onSelectedDestinationHidden(selectedIndex)` once. It does not call it again until the layout leaves compact and comes back. In a regular layout with the sidebar hidden, the top pill also highlights nothing, and there is no callback, because the toggle can reveal the selection.
+7. **Programmatic switch and hidden chrome (amended 2026-10-09, final review I2).** A hide request counts only while its `LiquidHideChrome` is on screen (§4.4, §7). When the app changes `selectedIndex` (deep link, notification, `context.go`) away from a branch whose page hides the chrome, that branch goes off screen, its request stops counting and the chrome reappears after the frame, so the user always has navigation. Switching back hides it again. The criterion is `Visibility.of(context) && TickerMode.of(context)`, re-read in `didChangeDependencies`: it covers `IndexedStack` (`Visibility`), go_router's `StatefulShellRoute.indexedStack` (`Offstage` + `TickerMode`) and routes covered by an opaque route (`TickerMode`). `ModalRoute.isCurrent` was rejected because every branch navigator's top route is current; `Offstage` alone exposes nothing to descendants.
 
 ### 5.6 Per-tab state
 
@@ -858,6 +860,7 @@ Glass always keeps rendering; a signal failure can only make the result *more* g
 | `LiquidShellScope.of` outside a shell | `assert` | `LiquidShellScopeData.none()` |
 | `setSidebarVisible` in compact | `debugPrint` | ignored |
 | `LiquidHideChrome` outside a shell | — | no-op |
+| `LiquidHideChrome` mounted but off screen: an inactive branch kept alive by `IndexedStack` (`Visibility`) or by go_router's `StatefulShellRoute.indexedStack` (`Offstage` + `TickerMode(false)`), or a route covered by an opaque route (`TickerMode(false)`) | — | Its request does not count; it counts again when it comes back on screen (amended 2026-10-09, final review I2) |
 | Bar height never settles | — | Initial extents (83 / `pad.top + 72`) stay in use |
 | `sidebarWidth` ≥ `breakpoints.regular` | `assert` | Used as given |
 | Duplicate `LiquidDestination.label`s (labels must be unique) | `assert` naming the repeated labels | Drawn as given; an accepted guarded selection whose destination moved may be dropped, because the guard re-finds it by label (§5.5) |
@@ -957,7 +960,7 @@ TDD applies to every task (red → green → commit), with per-task review and a
 - **Trailing action:** circle in the bottom and top bars; it survives minimisation.
 - **`beforeDestinationChange`:** accept → callback and overlay closes; refuse → no callback and overlay stays open; throw → no callback and `FlutterError.onError` receives `library: 'liquid_shell'`; a second tap while pending is ignored; unmount while pending does not call back; reselect runs the guard.
 - **Per-tab state:** a stateful counter inside `body` keeps its value across a sidebar toggle, compact ↔ regular, rotation, `LiquidHideChrome` on/off, adding and removing `chromeBuilder`, and a tier change.
-- **`LiquidHideChrome`:** hides every slot and zeroes the insets; reference counting with two instances; `enabled: false` is a no-op; outside a shell it is a no-op.
+- **`LiquidHideChrome`:** hides every slot and zeroes the insets; reference counting with two instances; `enabled: false` is a no-op; outside a shell it is a no-op. Off screen it does not count (final review I2): with branches kept by `IndexedStack` and by `Offstage` + `TickerMode`, a programmatic switch away from a branch whose page hides the chrome shows the chrome and switching back hides it; an inactive hiding branch never hides it; a hiding route covered by an opaque route stops hiding and hides again after the pop.
 - **`LiquidNoChrome` / `LiquidContentInset` / `contentPaddingOf`.**
 - **Selection range:** out-of-range `selectedIndex` asserts in debug. The release behaviour is tested through the pure resolver, which maps it to 0.
 - **Minimise:** reverse scroll minimises, forward expands, tap expands without changing tab, announcement sent (`tester.binding` semantics announcements), no `AnimatedSize` under `disableAnimations`.
