@@ -1,2 +1,4 @@
 doc/images/
 test/goldens/failures/
+example/test/fonts/
+example/test/goldens/
