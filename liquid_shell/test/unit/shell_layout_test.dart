@@ -264,6 +264,16 @@ void main() {
       expect(insets(LiquidChromeKind.sidebarTiled), EdgeInsets.zero);
       expect(insets(LiquidChromeKind.hidden), EdgeInsets.zero);
     });
+
+    test('a bar measured at 0 covers nothing: zero, gap and padding too', () {
+      for (final kind in [
+        LiquidChromeKind.bottomBar,
+        LiquidChromeKind.topBar,
+        LiquidChromeKind.sidebarOverlay,
+      ]) {
+        expect(insets(kind, measured: 0), EdgeInsets.zero, reason: '$kind');
+      }
+    });
   });
 
   test('resolveSelectedIndex maps out-of-range to 0 (release)', () {

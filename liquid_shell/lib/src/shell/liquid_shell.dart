@@ -176,7 +176,7 @@ class _LiquidShellState extends State<LiquidShell>
   }
 
   void _onBarHeight((LiquidSizeClass, double) key, double height) {
-    if (!mounted || height <= 0 || _measured[key] == height) return;
+    if (!mounted || _measured[key] == height) return;
     setState(() => _measured = {..._measured, key: height});
   }
 

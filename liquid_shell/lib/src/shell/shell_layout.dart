@@ -108,13 +108,16 @@ double bottomGapFor({
 }
 
 /// The part of the body covered by chrome (§5.3). [measuredBar] is the
-/// measured bar slot height, or null before the first measurement.
+/// measured bar slot height, or null before the first measurement. A bar
+/// measured at 0 (a custom bar collapsed away) covers nothing, so the
+/// insets are zero: no gap or status bar band is added for it.
 EdgeInsets chromeInsetsFor({
   required LiquidChromeKind kind,
   required double topPadding,
   required double? measuredBar,
   required double bottomGap,
 }) => switch (kind) {
+  _ when measuredBar == 0 => EdgeInsets.zero,
   LiquidChromeKind.bottomBar => EdgeInsets.only(
     bottom: (measuredBar ?? kBottomPillExtent) + bottomGap,
   ),

@@ -665,6 +665,21 @@ void main() {
       expect(find.byType(LiquidTabBar), findsNothing);
     });
 
+    testWidgets('a custom bar collapsed to 0pt is measured: no inset', (
+      tester,
+    ) async {
+      await pumpShell(
+        tester,
+        TestShell(
+          chromeBuilder: (context, details, defaultChrome) =>
+              details.slot == LiquidChromeSlot.tabBar
+              ? const SizedBox(width: 300, height: 0)
+              : defaultChrome,
+        ),
+      );
+      expect(scopeOf(tester).chromeInsets, EdgeInsets.zero);
+    });
+
     test('LiquidChromeDetails ==', () {
       void select(int _) {}
       void expand() {}
