@@ -16,7 +16,7 @@
 | `make get` | Resolve the pub workspace (all packages and the example) |
 | `make format` | Rewrite formatting in place |
 | `make verify` | format-check, analyze, provenance, tests, coverage ≥ 90 %, goldens, README snippets. **Must be green before a PR.** |
-| `make goldens-update` | Regenerate goldens and `liquid_shell/doc/images` (macOS + 3.38 only) |
+| `make goldens-update` | Regenerate goldens and `liquid_shell/doc/images`, then recompress them losslessly with `tool/compress_pngs.dart` (macOS + 3.38 only) |
 | `make android-unit` | Kotlin JVM tests of the Android plugin |
 | `make integration-ios` / `make integration-android` | Signal channel tests on a simulator / emulator |
 | `make pana` / `make publish-check` | pub.dev scoring and publish dry-run |

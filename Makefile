@@ -62,8 +62,8 @@ goldens: ## Golden tests (reference toolchain: macOS + Flutter 3.38.x)
 	  cd $(EXAMPLE) && $(FLUTTER) test --tags golden; \
 	else echo "▸ no goldens yet"; fi
 
-goldens-update: ## Regenerate every golden and doc image
-	FLUTTER="$(FLUTTER)" tool/update_goldens.sh
+goldens-update: ## Regenerate every golden and doc image, then recompress them losslessly
+	FLUTTER="$(FLUTTER)" DART="$(DART)" tool/update_goldens.sh
 
 provenance: ## Fail on app names or banned dependencies outside docs/
 	tool/check_provenance.sh

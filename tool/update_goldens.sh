@@ -5,6 +5,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../liquid_shell/example"
 FLUTTER=${FLUTTER:-flutter}
+DART=${DART:-dart}
 
 if [ "$(uname)" != Darwin ]; then
   echo "✗ goldens are generated on macOS only (spec Q11)" >&2
@@ -20,4 +21,6 @@ case "$version" in
 esac
 
 $FLUTTER test --tags golden --update-goldens
+# Lossless: the pixels stay identical, only the PNG encoding shrinks.
+$DART run ../../tool/compress_pngs.dart ../doc/images
 echo "✓ goldens and doc images updated in liquid_shell/doc/images (Flutter $version)"
