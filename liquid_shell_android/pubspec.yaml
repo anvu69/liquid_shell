@@ -20,3 +20,12 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   very_good_analysis: 10.1.0
+
+flutter:
+  plugin:
+    implements: liquid_shell
+    platforms:
+      android:
+        package: vn.lasoai.liquid_shell
+        pluginClass: LiquidShellPlugin
+        dartPluginClass: LiquidShellAndroid

@@ -22,3 +22,11 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   very_good_analysis: 10.1.0
+
+flutter:
+  plugin:
+    platforms:
+      ios:
+        default_package: liquid_shell_ios
+      android:
+        default_package: liquid_shell_android
