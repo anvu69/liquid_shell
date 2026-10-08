@@ -1,7 +1,9 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
+import 'package:liquid_shell/src/chrome/fit_label.dart';
 import 'package:liquid_shell/src/chrome/large_content_viewer.dart';
 import 'package:liquid_shell/src/glass/outside_shadow.dart';
 
@@ -39,8 +41,12 @@ Widget _host({
   double width = 393,
   TextDirection direction = TextDirection.ltr,
   bool? narrow,
+  LiquidGlassTheme? glassTheme,
 }) => MaterialApp(
-  theme: ThemeData(colorScheme: _scheme),
+  theme: ThemeData(
+    colorScheme: _scheme,
+    extensions: [?glassTheme],
+  ),
   home: MediaQuery(
     data: MediaQueryData(
       size: Size(width, 852),
@@ -519,6 +525,8 @@ void main() {
     });
   });
 
+  group('narrow labels fit (Q18)', _narrowLabelTests);
+
   group('narrow pill padding (Q17)', () {
     // Inner padding = the first cell's start minus the pill's start.
     Future<double> padding(
@@ -577,6 +585,174 @@ void main() {
       );
       expect(pill.right - home.right, 4);
     });
+  });
+}
+
+// The size a label is drawn at: its style's size after the text scaler,
+// times the scale it is painted with (its global rect over its own size).
+double _drawnSize(WidgetTester tester, String label, {double base = 10}) {
+  final text = find.text(label);
+  final scaler = MediaQuery.textScalerOf(tester.element(text));
+  final scale = tester.getRect(text).width / tester.getSize(text).width;
+  return scaler.scale(base) * scale;
+}
+
+bool _ellipsized(WidgetTester tester, String label) =>
+    tester.renderObject<RenderParagraph>(find.text(label)).didExceedMaxLines;
+
+Rect _cellOf(WidgetTester tester, String label) => tester.getRect(
+  find.ancestor(of: find.text(label), matching: find.byType(InkWell)),
+);
+
+void _narrowLabelTests() {
+  // Four letters: about 42pt at 10pt in the test font, so each fits a narrow
+  // cell (about 46pt here) only without the 8pt side padding, and at text
+  // scale 1.3 (13pt) only once shrunk.
+  const short = ['Home', 'Mail', 'Feed', 'Chat', 'Help'];
+  final search = LiquidTabAction(
+    icon: const Icon(Icons.search),
+    onPressed: () {},
+    semanticLabel: 'Search',
+  );
+
+  List<LiquidDestination> destinations(List<String> labels) => [
+    for (final label in labels)
+      LiquidDestination(icon: const Icon(Icons.circle), label: label),
+  ];
+
+  Widget narrowBar({
+    List<String> labels = short,
+    double textScale = 1.3,
+    int selectedIndex = 0,
+    bool? narrow,
+    TextDirection direction = TextDirection.ltr,
+    LiquidGlassTheme? glassTheme,
+  }) => _host(
+    width: 320,
+    destinations: destinations(labels),
+    trailing: search,
+    textScale: textScale,
+    selectedIndex: selectedIndex,
+    narrow: narrow,
+    direction: direction,
+    glassTheme: glassTheme,
+  );
+
+  void expectFitted(WidgetTester tester, String label) {
+    expect(_ellipsized(tester, label), isFalse, reason: '$label ellipsized');
+    final size = _drawnSize(tester, label);
+    // Rects go through the paint transform: allow float noise.
+    expect(
+      size,
+      greaterThanOrEqualTo(kLiquidMinLabelSize - 1e-9),
+      reason: label,
+    );
+    final text = tester.getRect(find.text(label));
+    final cell = _cellOf(tester, label);
+    expect(text.left, greaterThanOrEqualTo(cell.left - 0.01), reason: label);
+    expect(text.right, lessThanOrEqualTo(cell.right + 0.01), reason: label);
+  }
+
+  test('the minimum is 10', () {
+    expect(kLiquidMinLabelSize, 10);
+  });
+
+  testWidgets('text scale 1: a label takes the side padding before it '
+      'ellipsizes, and keeps its 10pt size', (tester) async {
+    await tester.pumpWidget(narrowBar(textScale: 1));
+    for (final label in short) {
+      expectFitted(tester, label);
+      expect(_drawnSize(tester, label), moreOrLessEquals(10), reason: label);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('text scale 1.3: labels shrink to fit their cells, not below '
+      '10pt', (tester) async {
+    await tester.pumpWidget(narrowBar());
+    for (final label in short) {
+      expectFitted(tester, label);
+      expect(_drawnSize(tester, label), lessThan(13), reason: label);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the selected label fits too', (tester) async {
+    for (final index in [0, 4]) {
+      await tester.pumpWidget(narrowBar(selectedIndex: index));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<Text>(find.text(short[index])).style!.color,
+        _scheme.primary,
+      );
+      expectFitted(tester, short[index]);
+    }
+  });
+
+  testWidgets('a label too long even at 10pt ellipsizes at exactly 10pt', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      narrowBar(labels: ['Home', 'Mail', 'Feed', 'Chat', 'Settings']),
+    );
+    expect(_ellipsized(tester, 'Settings'), isTrue);
+    expect(_drawnSize(tester, 'Settings'), moreOrLessEquals(10));
+    final text = tester.getRect(find.text('Settings'));
+    final cell = _cellOf(tester, 'Settings');
+    expect(text.left, greaterThanOrEqualTo(cell.left - 0.01));
+    expect(text.right, lessThanOrEqualTo(cell.right + 0.01));
+    expectFitted(tester, 'Home');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a style already under 10pt is never enlarged', (tester) async {
+    final small = LiquidGlassTheme.fromColorScheme(_scheme);
+    await tester.pumpWidget(
+      narrowBar(
+        textScale: 1,
+        labels: ['Home', 'Mail', 'Feed', 'Chat', 'Settings'],
+        glassTheme: small.copyWith(
+          labelStyle: small.labelStyle.copyWith(fontSize: 8),
+        ),
+      ),
+    );
+    expect(_drawnSize(tester, 'Home', base: 8), moreOrLessEquals(8));
+    expect(_ellipsized(tester, 'Settings'), isTrue);
+    expect(_drawnSize(tester, 'Settings', base: 8), moreOrLessEquals(8));
+  });
+
+  testWidgets('regular width is unchanged: padding 8, ellipsis at the '
+      "style's size", (tester) async {
+    await tester.pumpWidget(narrowBar(narrow: false));
+    for (final label in short) {
+      expect(_ellipsized(tester, label), isTrue, reason: label);
+      expect(_drawnSize(tester, label), moreOrLessEquals(13), reason: label);
+      final text = tester.getRect(find.text(label));
+      final cell = _cellOf(tester, label);
+      expect(text.left - cell.left, moreOrLessEquals(8), reason: label);
+    }
+  });
+
+  testWidgets('RTL: labels fit the same way, cells run right to left', (
+    tester,
+  ) async {
+    await tester.pumpWidget(narrowBar(direction: TextDirection.rtl));
+    for (final label in short) {
+      expectFitted(tester, label);
+      expect(_drawnSize(tester, label), lessThan(13), reason: label);
+    }
+    expect(
+      _cellOf(tester, short.first).left,
+      greaterThan(_cellOf(tester, short.last).left),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('AX text scale stays icon-only when narrow', (tester) async {
+    await tester.pumpWidget(narrowBar(textScale: 2));
+    for (final label in short) {
+      expect(find.text(label), findsNothing);
+    }
   });
 }
 

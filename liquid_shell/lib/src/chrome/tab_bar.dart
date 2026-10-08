@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
+import 'package:liquid_shell/src/chrome/fit_label.dart';
 import 'package:liquid_shell/src/chrome/large_content_viewer.dart';
 import 'package:liquid_shell/src/chrome/text_scale.dart';
 import 'package:liquid_shell/src/destinations/badge.dart';
@@ -29,6 +30,10 @@ const double kLiquidTabBarTrailingGap = 8;
 /// to 320 at text scale 1 (iPad Slide Over, ⅓ Split View, small phones).
 /// Larger text grows the pill, and the square trailing circle with it, so
 /// cells can drop below 44pt there.
+///
+/// A narrow bar also fits its labels (Q18): a label that does not fit its
+/// cell first takes the cell's side padding, then shrinks down to 10pt, and
+/// only then ellipsizes.
 const double kLiquidNarrowWidth = 340;
 
 /// A floating glass pill of destinations, with an optional separate glass
@@ -87,8 +92,10 @@ class LiquidTabBar extends StatelessWidget {
   final LiquidShellStrings strings;
 
   /// Whether to use the narrow pill padding (4 instead of 8 at each end of
-  /// the bottom pill). Null: narrow when `MediaQuery.sizeOf(context).width`
-  /// is below [kLiquidNarrowWidth]. The top pill is already 4 either way.
+  /// the bottom pill) and fit the bottom labels (they take the cell's side
+  /// padding, then shrink to 10pt, before they ellipsize). Null: narrow when
+  /// `MediaQuery.sizeOf(context).width` is below [kLiquidNarrowWidth]. The
+  /// top bar is the same either way.
   ///
   /// `MediaQuery` is the window. When the bar sits in a pane narrower than
   /// the window (an in-app split view, a fixed-width column), pass [narrow]
@@ -159,6 +166,7 @@ class LiquidTabBar extends StatelessWidget {
                 minimized: minimized,
                 expandable: onExpand != null,
                 top: top,
+                narrow: narrow && !top,
                 ax: ax,
                 strings: strings,
                 onTap: () => handleTap(i),
@@ -199,6 +207,9 @@ class LiquidTabBar extends StatelessWidget {
   }
 }
 
+/// Side padding of a bottom cell.
+const double _cellSidePadding = 8;
+
 class _Cell extends StatelessWidget {
   const _Cell({
     required this.destination,
@@ -206,6 +217,7 @@ class _Cell extends StatelessWidget {
     required this.minimized,
     required this.expandable,
     required this.top,
+    required this.narrow,
     required this.ax,
     required this.strings,
     required this.onTap,
@@ -219,6 +231,9 @@ class _Cell extends StatelessWidget {
   /// is set). Without it the cell carries no expand hint.
   final bool expandable;
   final bool top;
+
+  /// Narrow bottom cell: the label fits itself (Q18).
+  final bool narrow;
   final bool ax;
   final LiquidShellStrings strings;
   final VoidCallback onTap;
@@ -238,17 +253,23 @@ class _Cell extends StatelessWidget {
       size: iconSize,
       color: color,
     );
+    final labelStyle = top
+        ? theme.textTheme.labelMedium?.copyWith(color: color)
+        : LiquidGlassTheme.of(context).labelStyle.copyWith(color: color);
     final label = ax
         ? null
+        : narrow
+        // The label may take the cell's side padding before it shrinks.
+        ? FitLabel(
+            destination.label,
+            style: labelStyle,
+            slack: 2 * _cellSidePadding,
+          )
         : Text(
             destination.label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: top
-                ? theme.textTheme.labelMedium?.copyWith(color: color)
-                : LiquidGlassTheme.of(
-                    context,
-                  ).labelStyle.copyWith(color: color),
+            style: labelStyle,
           );
     final decoration = BoxDecoration(
       color: selected ? scheme.primaryContainer : Colors.transparent,
@@ -273,12 +294,25 @@ class _Cell extends StatelessWidget {
           )
         : Container(
             constraints: const BoxConstraints(maxWidth: 88),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            // Narrow: the side padding moves onto the icon, so the cell keeps
+            // its width while the label may use the padding.
+            padding: EdgeInsets.symmetric(
+              horizontal: narrow ? 0 : _cellSidePadding,
+              vertical: 4,
+            ),
             decoration: decoration,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                icon,
+                if (narrow)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: _cellSidePadding,
+                    ),
+                    child: icon,
+                  )
+                else
+                  icon,
                 if (label != null) ...[const SizedBox(height: 4), label],
               ],
             ),
