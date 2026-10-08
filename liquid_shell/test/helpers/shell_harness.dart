@@ -175,6 +175,22 @@ Future<void> resize(WidgetTester tester, Size size) async {
   await tester.pumpAndSettle();
 }
 
+/// Fails when any [Text] in the tree, offstage included, has no text style
+/// above it: the empty [DefaultTextStyle.fallback] (no app at all) or
+/// `MaterialApp`'s red, double-underlined "fallback style" (no `Material`).
+void expectNoFallbackText(WidgetTester tester) {
+  final bad = <String>[
+    for (final element in find.byType(Text, skipOffstage: false).evaluate())
+      if (_isFallback(DefaultTextStyle.of(element).style))
+        (element.widget as Text).data ?? '<rich text>',
+  ];
+  expect(bad, isEmpty, reason: 'Text drawn in the fallback style');
+}
+
+bool _isFallback(TextStyle style) =>
+    style == const TextStyle() ||
+    (style.debugLabel?.contains('fallback style') ?? false);
+
 /// The scope data seen by the page of [label].
 LiquidShellScopeData scopeOf(WidgetTester tester, [String label = 'Home']) =>
     LiquidShellScope.of(tester.element(find.byKey(ValueKey('list-$label'))));

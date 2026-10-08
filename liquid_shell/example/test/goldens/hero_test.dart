@@ -18,7 +18,7 @@ void main() {
           device: device,
           brightness: brightness,
         );
-        await expectLater(find.byType(MaterialApp), matchesDocImage(name));
+        await expectDocImage(tester, name);
       });
     }
   }

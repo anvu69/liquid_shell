@@ -498,6 +498,7 @@ class LiquidChromeDetails {
 ```
 
 - The shell calls `chromeBuilder` once per visible slot, passing the widget it would have drawn as `defaultChrome`. Apps can wrap it or ignore it.
+- The builder's result is placed in a `Material(type: MaterialType.transparency)`, the same wrapper the default chrome uses, so its text gets the theme's `bodyMedium` style instead of `MaterialApp`'s red fallback style, and ink has a target (amended 2026-10-09, Task 14: the custom chrome case drew "Beta" in the fallback style).
 - Placement does not change. The tab-bar slot is aligned to the bottom (`bottomBar`) or the top (`topBar`, toggle included) and is **measured**, so `chromeInsets` stay correct for custom bars. The sidebar slot gets tight width `sidebarWidth` and full height.
 - `chromeBuilder` cannot move or reparent `body` (§5.6).
 
@@ -963,7 +964,7 @@ TDD applies to every task (red → green → commit), with per-task review and a
 - **Semantics:** labels, `selected`, the minimised hint, the toggle and hide tooltips from `strings`, barrier label, AX text scale 2.0 → icon-only with a label in semantics and long press → large content viewer.
 - **System back** with the overlay shown closes it (Q10).
 - **Outside shadow:** pixel-capture test ported from `glass_surface_test.dart:258-300`.
-- **Custom chrome:** `chromeBuilder` receives `defaultChrome` and correct details per slot; a custom bar of height 100 is measured into `chromeInsets`; a custom bar of height 0 yields zero insets.
+- **Custom chrome:** `chromeBuilder` receives `defaultChrome` and correct details per slot; a custom bar of height 100 is measured into `chromeInsets`; a custom bar of height 0 yields zero insets. Plain `Text` returned by the builder, in either slot, gets the theme's `bodyMedium` style, not the fallback style; standalone `LiquidTabBar` and `LiquidSidebar` text has no fallback style outside a `Material`. Every golden first fails if any `Text` resolves to a fallback style.
 - **Narrow widths (Q17):** at 320×568 with 5 tabs + trailing every cell is ≥ 44pt wide inside the real shell; 375 keeps margin 16 and padding 8; 339 is narrow and 340 is not; RTL mirrors it; standalone `LiquidTabBar` follows `narrow` and the `MediaQuery` default.
 - **Narrow labels (Q18):** at 320 a label that fits after taking the side padding draws at its own size with no ellipsis; at text scale 1.3 a label shrinks to fit and stays ≥ 10pt; a label too long at 10pt ellipsizes at exactly 10pt; the selected label fits; regular width keeps padding 8 and ellipsizes at the style's size; RTL behaves the same. In the example (Inter, iPhone, 320pt shell) all five labels of `NarrowWidthCase` fit untruncated at ≥ 10pt, selected or not.
 

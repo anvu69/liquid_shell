@@ -430,6 +430,9 @@ it and draw your own; the shell still places and measures the slot, so
 `chromeInsets` follow your bar, and a bar that collapses to 0pt adds no
 inset. `LiquidTabBar` and `LiquidSidebar` are public for building your own
 (see [Standalone tab bar and sidebar](#standalone-tab-bar-and-sidebar)).
+The builder's result sits in a transparent `Material`, like the default
+chrome, so plain `Text` gets the theme's `bodyMedium` style and an `InkWell`
+has somewhere to splash, with no `Scaffold` above the shell.
 
 <?code-excerpt "custom_chrome.dart (readme)"?>
 ```dart

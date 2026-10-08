@@ -33,7 +33,7 @@ void main() {
       await interact();
       await tester.pumpAndSettle();
     }
-    await expectLater(find.byType(MaterialApp), matchesDocImage(name));
+    await expectDocImage(tester, name);
   }
 
   testWidgets('case_basic', (tester) async {

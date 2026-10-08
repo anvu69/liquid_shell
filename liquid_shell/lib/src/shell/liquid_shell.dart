@@ -118,6 +118,10 @@ class LiquidShell extends StatefulWidget {
 
   /// Replaces or wraps the default chrome per slot.
   ///
+  /// The result sits in a transparent `Material`, like the default chrome,
+  /// so its text gets the theme's `bodyMedium` style and ink splashes have a
+  /// target without a `Scaffold` above the shell.
+  ///
   /// The shell's accessibility support (semantics, 44pt hit targets, the
   /// large content viewer, the overlay's modal barrier) belongs to the
   /// default chrome. A replacement must provide its own.
@@ -433,8 +437,14 @@ class _LiquidShellState extends State<LiquidShell>
     Widget slot(LiquidChromeDetails details, Widget defaultChrome) {
       final builder = widget.chromeBuilder;
       if (builder == null) return defaultChrome;
-      return Builder(
-        builder: (context) => builder(context, details, defaultChrome),
+      // The same transparent Material the default chrome sits in: custom
+      // chrome has no Scaffold above it, so without one its Text would get
+      // MaterialApp's red fallback style and its InkWells no ink target.
+      return Material(
+        type: MaterialType.transparency,
+        child: Builder(
+          builder: (context) => builder(context, details, defaultChrome),
+        ),
       );
     }
 

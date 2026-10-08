@@ -123,6 +123,26 @@ Future<void> pumpGolden(
   await tester.pumpAndSettle();
 }
 
-/// Matches the doc image `liquid_shell/doc/images/<name>.png`.
-Matcher matchesDocImage(String name) =>
-    matchesGoldenFile('../../../doc/images/$name.png');
+/// Compares the app with the doc image `liquid_shell/doc/images/<name>.png`.
+///
+/// First fails when any [Text] is drawn in a fallback style (no `Material`
+/// or `DefaultTextStyle` above it), so a regenerated golden cannot record
+/// red, double-underlined text as the expected image.
+Future<void> expectDocImage(WidgetTester tester, String name) async {
+  final bad = <String>[
+    for (final element in find.byType(Text, skipOffstage: false).evaluate())
+      if (_isFallback(DefaultTextStyle.of(element).style))
+        (element.widget as Text).data ?? '<rich text>',
+  ];
+  expect(bad, isEmpty, reason: 'Text drawn in the fallback style in $name');
+  await expectLater(
+    find.byType(MaterialApp),
+    matchesGoldenFile('../../../doc/images/$name.png'),
+  );
+}
+
+/// The empty `DefaultTextStyle.fallback()` (no app at all) or MaterialApp's
+/// red, double-underlined "fallback style" (no `Material`).
+bool _isFallback(TextStyle style) =>
+    style == const TextStyle() ||
+    (style.debugLabel?.contains('fallback style') ?? false);

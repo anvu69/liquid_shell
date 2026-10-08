@@ -770,6 +770,81 @@ void main() {
       expect(scopeOf(tester).chromeInsets, EdgeInsets.zero);
     });
 
+    // A chromeBuilder result has no Scaffold or Material of the app above
+    // it. Its text must still get the theme's style, like the default
+    // chrome, not MaterialApp's red, double-underlined fallback.
+    for (final (slot, size, padding) in [
+      (LiquidChromeSlot.tabBar, kPhone, const EdgeInsets.only(bottom: 34)),
+      (LiquidChromeSlot.sidebar, kTabletLandscape, _tablet),
+    ]) {
+      testWidgets('text in a custom ${slot.name} gets the theme text style', (
+        tester,
+      ) async {
+        await pumpShell(
+          tester,
+          TestShell(
+            chromeBuilder: (context, details, defaultChrome) =>
+                details.slot == slot
+                ? Text('custom ${slot.name}')
+                : defaultChrome,
+            // TestPage has no Material of its own; only chrome is checked.
+            pageBuilder: (_) => const SizedBox.expand(),
+          ),
+          size: size,
+          padding: padding,
+        );
+        final element = tester.element(find.text('custom ${slot.name}'));
+        final style = DefaultTextStyle.of(element).style;
+        final body = Theme.of(element).textTheme.bodyMedium!;
+        expect(style.debugLabel, isNot(contains('fallback style')));
+        expect(style.decoration, isNot(TextDecoration.underline));
+        expect(style.fontSize, body.fontSize);
+        expect(style.color, body.color);
+        expectNoFallbackText(tester);
+      });
+    }
+
+    // The standalone widgets bring their own transparent Material, so they
+    // work in a bare route with no Scaffold.
+    testWidgets('standalone tab bar and sidebar text outside a Material', (
+      tester,
+    ) async {
+      tester.view
+        ..devicePixelRatio = 1
+        ..physicalSize = kTabletLandscape;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              LiquidSidebar(
+                destinations: kDestinations,
+                selectedIndex: 0,
+                onDestinationSelected: (_) {},
+                header: const Text('Header'),
+                footer: const Text('Footer'),
+              ),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: LiquidTabBar(
+                    destinations: [kDestinations[0], kDestinations[1]],
+                    selectedIndex: 0,
+                    onDestinationSelected: (_) {},
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Header'), findsOneWidget);
+      expect(find.text('Footer'), findsOneWidget);
+      expectNoFallbackText(tester);
+    });
+
     test('LiquidChromeDetails ==', () {
       void select(int _) {}
       void expand() {}

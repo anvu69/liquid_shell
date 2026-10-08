@@ -1,7 +1,6 @@
 @Tags(['golden'])
 library;
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell_example/cases/basic_tabs.dart';
 
@@ -13,7 +12,7 @@ void main() {
     final name = 'ff_${device.name}';
     testWidgets(name, (tester) async {
       await pumpGolden(tester, const BasicTabsCase(), device: device);
-      await expectLater(find.byType(MaterialApp), matchesDocImage(name));
+      await expectDocImage(tester, name);
     });
   }
 
@@ -21,9 +20,6 @@ void main() {
     await pumpGolden(tester, const BasicTabsCase(), device: ipadPortrait);
     await tester.tap(find.byTooltip('Show sidebar'));
     await tester.pumpAndSettle();
-    await expectLater(
-      find.byType(MaterialApp),
-      matchesDocImage('ff_ipad_portrait_sidebar_open'),
-    );
+    await expectDocImage(tester, 'ff_ipad_portrait_sidebar_open');
   });
 }
