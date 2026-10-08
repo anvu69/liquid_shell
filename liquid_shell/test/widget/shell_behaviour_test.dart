@@ -249,6 +249,77 @@ void main() {
       expect(selections, isEmpty);
     });
 
+    group('destinations change while the guard is pending', () {
+      /// Taps Settings (index 3), swaps the list to [next] while the guard
+      /// is pending, then accepts. Returns what the app was told.
+      Future<List<int>> tapThenSwap(
+        WidgetTester tester,
+        List<LiquidDestination> next,
+      ) async {
+        final selections = <int>[];
+        final pending = Completer<bool>();
+        var destinations = kDestinations;
+        late StateSetter rebuild;
+        await pumpShell(
+          tester,
+          StatefulBuilder(
+            builder: (context, setState) {
+              rebuild = setState;
+              return TestShell(
+                destinations: destinations,
+                selections: selections,
+                guard: (i) => pending.future,
+              );
+            },
+          ),
+        );
+        await tester.tap(find.text('Settings'));
+        await tester.pump();
+        rebuild(() => destinations = next);
+        await tester.pumpAndSettle();
+        pending.complete(true);
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        return selections;
+      }
+
+      testWidgets('the destination moved → its current index', (
+        tester,
+      ) async {
+        final selections = await tapThenSwap(tester, [
+          kDestinations[0],
+          kDestinations[1],
+          kDestinations[3],
+        ]);
+        expect(selections, [2]);
+        expect(scopeOf(tester, 'Settings').chromeKind, isNotNull);
+      });
+
+      testWidgets('the destination is gone → nothing is selected', (
+        tester,
+      ) async {
+        final selections = await tapThenSwap(
+          tester,
+          kDestinations.sublist(0, 3),
+        );
+        expect(selections, isEmpty);
+      });
+
+      testWidgets('rebuilt in place with a new badge → still selected', (
+        tester,
+      ) async {
+        final selections = await tapThenSwap(tester, [
+          ...kDestinations.sublist(0, 3),
+          const LiquidDestination(
+            icon: Icon(Icons.settings_outlined),
+            label: 'Settings',
+            badge: LiquidBadge.count(1),
+          ),
+        ]);
+        expect(selections, [3]);
+      });
+    });
+
     testWidgets('reselect runs the guard; programmatic changes do not', (
       tester,
     ) async {

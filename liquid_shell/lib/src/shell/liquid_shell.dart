@@ -188,6 +188,7 @@ class _LiquidShellState extends State<LiquidShell>
     if (_guardPending) return;
     final guard = widget.beforeDestinationChange;
     if (guard != null) {
+      final requested = widget.destinations[index].label;
       _guardPending = true;
       var accepted = false;
       try {
@@ -205,11 +206,32 @@ class _LiquidShellState extends State<LiquidShell>
         _guardPending = false;
       }
       if (!mounted || !accepted) return;
+      // The list may have changed while the guard ran: find the requested
+      // destination in the current one, or drop the selection.
+      final current = _currentIndexOf(requested, index);
+      if (current == null) return;
+      index = current;
     }
     widget.onDestinationSelected(index);
     if (mounted && _presentation == ShellPresentation.overlay) {
       _setSidebarVisible(false);
     }
+  }
+
+  /// Where the destination labelled [label], once at [index], is now: the
+  /// same index when it is still there, else its only other position, else
+  /// null. Matched by label because apps rebuild destinations (new badge,
+  /// non-const icon) and `==` would then miss an unchanged one.
+  int? _currentIndexOf(String label, int index) {
+    final destinations = widget.destinations;
+    if (index < destinations.length && destinations[index].label == label) {
+      return index;
+    }
+    final matches = [
+      for (final (i, d) in destinations.indexed)
+        if (d.label == label) i,
+    ];
+    return matches.length == 1 ? matches.single : null;
   }
 
   void _expand() => _minimized.value = false;
