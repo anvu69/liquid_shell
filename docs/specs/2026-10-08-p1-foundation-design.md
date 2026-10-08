@@ -817,7 +817,7 @@ Android 16/17's "Reduce blur effects" toggle has no confirmed public API. P1 rel
 
 ### 6.3 iOS (`LiquidShellPlugin.swift`)
 
-`FlutterPlugin` + `FlutterStreamHandler`. It observes `UIAccessibility.reduceTransparencyStatusDidChangeNotification` on the main queue. This is ported from `AppDelegate.swift:42-74` with the channel renamed. It ships for CocoaPods and Swift Package Manager (the same source in `Sources/liquid_shell_ios`), with an empty privacy manifest.
+`FlutterPlugin` + `FlutterStreamHandler`. It observes `UIAccessibility.reduceTransparencyStatusDidChangeNotification` on the main queue. This is ported from `AppDelegate.swift:42-74` with the channel renamed. It ships for CocoaPods and Swift Package Manager (the same source in `Sources/liquid_shell_ios`), with an empty privacy manifest. **Amended 2026-10-09 (final review I5, owner decision O2):** only CocoaPods has been built and run (every simulator and device run). `Package.swift` stays in the package, but the README says it is unverified until Flutter's SwiftPM build works on Xcode 27; the P6 checklist (§12.1) gates the release on a SwiftPM build.
 
 ### 6.4 Android (`LiquidShellPlugin.kt`, `SignalReader.kt`)
 
@@ -1055,6 +1055,8 @@ Shared support: `lib/support/wallpaper.dart` (the same painter the goldens use; 
 Images use relative paths (`doc/images/…`). pub.dev rewrites them against `repository`, so they appear on pub.dev only once the public repo exists (P6).
 
 **P6 release checklist, images (added 2026-10-09, Task 13 review).** pub.dev never serves README images from the archive (`doc/images/` is in `.pubignore`); it rewrites relative URLs to `https://github.com/anvu69/liquid_shell/raw/main/liquid_shell/doc/images/…`, and only when pana's repository verification did not fail. Before `dart pub publish`: (1) the GitHub repo is public; (2) `liquid_shell/doc/images/*` is on `main`; (3) pana reports the repository as verified (no lost repository points). Relative images track `main`, so an older version's page shows the current images.
+
+**P6 release checklist, Swift Package Manager (added 2026-10-09, final review I5, owner decision O2).** Before `dart pub publish`, build and run the example with SwiftPM on the release toolchain (Flutter's SwiftPM support on Xcode 27): enable it for the example project only (`flutter: config: enable-swift-package-manager: true` in `liquid_shell/example/pubspec.yaml`, never the global `flutter config`), run `make integration-ios`, and fix `liquid_shell_ios/ios/liquid_shell_ios/Package.swift` if the build needs it (for example a `FlutterFramework` package dependency in newer plugin templates). When it passes, replace the "unverified" sentence in `liquid_shell_ios/README.md` with "Ships for CocoaPods and Swift Package Manager". If it cannot pass, keep the sentence and say so in the CHANGELOG.
 
 ### 12.2 `liquid_shell/doc/`
 

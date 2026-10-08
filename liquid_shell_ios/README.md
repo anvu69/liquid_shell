@@ -2,7 +2,9 @@
 
 The iOS implementation of [`liquid_shell`][app].
 
-It reports Reduce Transparency (`UIAccessibility.isReduceTransparencyEnabled`). iOS 15.0 or later. Ships for CocoaPods and Swift Package Manager.
+It reports Reduce Transparency (`UIAccessibility.isReduceTransparencyEnabled`). iOS 15.0 or later.
+
+CocoaPods is the tested path; a Swift Package manifest is included but unverified until Flutter's SwiftPM build works on Xcode 27.
 
 ## Usage
 
