@@ -204,7 +204,8 @@ class _LiquidShellState extends State<LiquidShell>
 
   /// The one path every user selection takes (§5.5): single-flight guard,
   /// then the callback, then the overlay closes.
-  Future<void> _select(int index) async {
+  Future<void> _select(int requestedIndex) async {
+    var index = requestedIndex;
     if (_guardPending) return;
     final guard = widget.beforeDestinationChange;
     if (guard != null) {
@@ -331,7 +332,7 @@ class _LiquidShellState extends State<LiquidShell>
 
   @override
   Widget build(BuildContext context) {
-    assert(_debugCheckArguments());
+    assert(_debugCheckArguments(), 'invalid LiquidShell arguments');
     return LayoutBuilder(builder: _buildLayout);
   }
 

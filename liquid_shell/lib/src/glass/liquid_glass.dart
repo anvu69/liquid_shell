@@ -28,7 +28,7 @@ class LiquidGlass extends StatefulWidget {
 
 class _LiquidGlassState extends State<LiquidGlass> {
   static const _fade = Duration(milliseconds: 200);
-  final _signals = LiquidSignalsController.instance;
+  final LiquidSignalsController _signals = LiquidSignalsController.instance;
 
   @override
   void initState() {

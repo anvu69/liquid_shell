@@ -34,8 +34,8 @@ format: ## Rewrite formatting in place (a fixer, not a gate)
 format-check: ## Formatting gate: check only, never rewrite
 	$(DART) format --output=none --set-exit-if-changed .
 
-analyze: ## Static analysis; infos and warnings are fatal
-	$(FLUTTER) analyze --fatal-infos --fatal-warnings
+analyze: ## Static analysis of every package, the example and tool/; infos and warnings are fatal
+	$(DART) analyze --fatal-infos --fatal-warnings $(PACKAGES) $(EXAMPLE) tool
 
 test: ## Unit and widget tests in every package and the example (no goldens)
 	@set -e; for p in $(PACKAGES) $(EXAMPLE); do \

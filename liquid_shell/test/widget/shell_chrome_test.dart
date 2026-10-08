@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
@@ -568,8 +570,7 @@ void main() {
       );
       final state = tester.state<_HideChromePageState>(
         find.byType(_HideChromePage),
-      );
-      state.set(first: true, second: true);
+      )..set(first: true, second: true);
       await tester.pumpAndSettle();
       expect(find.byType(LiquidTabBar), findsNothing);
       expect(find.byTooltip('Show sidebar'), findsNothing);
@@ -590,11 +591,11 @@ void main() {
       tester,
     ) async {
       await pumpShell(tester, const TestShell());
-      final registry = tester
-          .widget<ShellScopeMarker>(find.byType(ShellScopeMarker))
-          .registry!;
-
-      registry.addHideRequest();
+      final registry =
+          tester
+                .widget<ShellScopeMarker>(find.byType(ShellScopeMarker))
+                .registry!
+            ..addHideRequest();
       expect(tester.binding.hasScheduledFrame, isTrue);
       await tester.pump();
       expect(find.byType(LiquidTabBar), findsNothing);
@@ -772,6 +773,10 @@ void main() {
     test('LiquidChromeDetails ==', () {
       void select(int _) {}
       void expand() {}
+      // One shared instance: LiquidChromeDetails == compares the callbacks.
+      // The positional bool is the public callback's own signature
+      // (`void Function(bool)`), which a test double cannot change.
+      // ignore: avoid_positional_boolean_parameters
       void setVisible(bool _) {}
       LiquidChromeDetails details({
         LiquidChromeSlot slot = LiquidChromeSlot.tabBar,
@@ -835,10 +840,12 @@ void main() {
 }
 
 void unawaitedPush(NavigatorState navigator) {
-  navigator.push(
-    MaterialPageRoute<void>(
-      builder: (context) => const LiquidNoChrome(
-        child: Scaffold(body: LiquidContentInset(child: Text('above'))),
+  unawaited(
+    navigator.push(
+      MaterialPageRoute<void>(
+        builder: (context) => const LiquidNoChrome(
+          child: Scaffold(body: LiquidContentInset(child: Text('above'))),
+        ),
       ),
     ),
   );

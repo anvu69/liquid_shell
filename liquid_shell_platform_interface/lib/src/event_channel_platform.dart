@@ -67,8 +67,7 @@ class EventChannelLiquidShellPlatform extends LiquidShellPlatform {
   }
 
   static Future<void> _start() async {
-    final messenger = channel.binaryMessenger;
-    messenger.setMessageHandler(channel.name, (data) async {
+    channel.binaryMessenger.setMessageHandler(channel.name, (data) async {
       if (data == null) {
         // End of stream: close every listener; the last close stops us.
         for (final listener in [..._listeners]) {

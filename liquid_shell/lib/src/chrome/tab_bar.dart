@@ -101,8 +101,14 @@ class LiquidTabBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    assert(debugCheckHasDirectionality(context));
-    assert(debugCheckHasOverlay(context));
+    assert(
+      debugCheckHasDirectionality(context),
+      'LiquidTabBar needs a Directionality ancestor.',
+    );
+    assert(
+      debugCheckHasOverlay(context),
+      'LiquidTabBar needs an Overlay ancestor.',
+    );
     final visible = [
       for (final (i, destination) in destinations.indexed)
         if (destination.placement == LiquidPlacement.everywhere) i,

@@ -50,7 +50,7 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
 
   /// The theme extension if present, otherwise one derived from
   /// `Theme.of(context).colorScheme`. Never throws.
-  static LiquidGlassTheme of(BuildContext context) {
+  factory LiquidGlassTheme.of(BuildContext context) {
     final theme = Theme.of(context);
     return theme.extension<LiquidGlassTheme>() ??
         LiquidGlassTheme.fromColorScheme(theme.colorScheme);

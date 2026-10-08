@@ -142,9 +142,7 @@ void main() {
     final image = (await tester.runAsync(
       () => captureImage(tester.element(find.byKey(key))),
     ))!;
-    final bytes = (await tester.runAsync(
-      () => image.toByteData(format: ui.ImageByteFormat.rawRgba),
-    ))!;
+    final bytes = (await tester.runAsync(image.toByteData))!;
     int red(int x, int y) => bytes.getUint8((y * image.width + x) * 4);
 
     const x = inset + w ~/ 2;

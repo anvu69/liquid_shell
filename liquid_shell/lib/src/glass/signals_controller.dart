@@ -83,9 +83,9 @@ class LiquidSignalsController extends ChangeNotifier
 /// debug logs, so the next test starts clean.
 @visibleForTesting
 void debugResetLiquidGlassSignals() {
-  final controller = LiquidSignalsController.instance
+  LiquidSignalsController.instance
     .._cancel()
-    .._users = 0;
-  controller._set(LiquidPlatformSignals.none);
+    .._users = 0
+    .._set(LiquidPlatformSignals.none);
   debugResetPolicyLogging();
 }

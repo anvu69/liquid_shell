@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/destinations/badge.dart';
 
 final _scheme = ColorScheme.fromSeed(seedColor: const Color(0xFF3366CC));
