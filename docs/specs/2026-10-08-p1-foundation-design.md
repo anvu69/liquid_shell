@@ -663,7 +663,7 @@ class EventChannelLiquidShellPlatform extends LiquidShellPlatform {
 
 ### 4.9 Exported vs internal
 
-Exported: everything in §4.1–4.7 plus `LiquidPlatformSignals`, **plus `LiquidTabBar` and `LiquidSidebar` as standalone public widgets (Q12 = Yes): each gets a documented constructor taking the same destinations / selection / badge / trailing / header / footer inputs the shell passes, its own tests, an example case and a README section.** Internal (`lib/src`, not exported): the sidebar toggle widget, the frosted and solid renderers, the bar height reporter, the signals controller, the large content viewer and the text-scale helpers.
+Exported: everything in §4.1–4.7 plus `LiquidPlatformSignals`, **plus `LiquidTabBar` and `LiquidSidebar` as standalone public widgets (Q12 = Yes): each gets a documented constructor taking the same destinations / selection / badge / trailing / header / footer inputs the shell passes, its own tests, an example case and a README section.** `LiquidTabBar` also takes `bool? narrow` and is exported with the constant `kLiquidNarrowWidth = 340` (Q17, §5.3): `narrow: true` uses the narrow pill padding; `null` (the default) means `MediaQuery.sizeOf(context).width < kLiquidNarrowWidth`. The shell always passes it explicitly from its own constraints. Neither `LiquidShellBreakpoints` nor `LiquidGlassTheme` gains a field: the pill margins are not themeable, so the threshold is a constant. Internal (`lib/src`, not exported): the sidebar toggle widget, the frosted and solid renderers, the bar height reporter, the signals controller, the large content viewer and the text-scale helpers.
 
 Test-only hooks (`@visibleForTesting`, exported): `debugLiquidGlassCanBlurOverride` (a `bool?` top-level variable) and `debugResetLiquidGlassSignals()`.
 
@@ -699,7 +699,7 @@ Numbers are preserved from the app. `pad` = `MediaQuery.paddingOf` of the shell.
 
 | Element | Geometry |
 |---|---|
-| Bottom bar row | Horizontal margin 16. Bottom gap = 21 when the bottom system inset is a gesture area (always on iOS; on Android when `systemGestureInsets.bottom > 0`), otherwise `max(21, viewPadding.bottom + 8)` (Q9). The pill is 62 high at text scale 1. Compact cells stack the icon over the label. The trailing circle is the same height as the pill, square, 8 from the pill. |
+| Bottom bar row | Horizontal margin 16, or 8 when narrow (below). Bottom gap = 21 when the bottom system inset is a gesture area (always on iOS; on Android when `systemGestureInsets.bottom > 0`), otherwise `max(21, viewPadding.bottom + 8)` (Q9). The pill is 62 high at text scale 1. Compact cells stack the icon over the label. The trailing circle is the same height as the pill, square, 8 from the pill. |
 | Top bar row | Starts at `pad.top + 20`. The pill is 52 high. Cells put the icon beside the label. Margin 16; when the toggle is present, each side also reserves 20 + 48 + 8 so the pill stays centred. |
 | Toggle | 48 × 48 glass circle at `(start: 20, top: pad.top + 20)`. |
 | Sidebar | `sidebarWidth` wide, full height. Glass with `BorderRadius.zero` and a 1px end border in `outlineVariant`. Inner padding 16 horizontal, 24 vertical, plus `pad`. Order: header row `[sidebarHeader (expanded) │ hide button]`, trailing-action row (§5.4), destination rows in list order, spacer, `sidebarFooter`. Rows: 12 radius, 12 horizontal padding, 12 icon–label gap. Selected row: `primaryContainer` / `onPrimaryContainer`, w600; otherwise w500. |
@@ -712,6 +712,9 @@ Numbers are preserved from the app. `pad` = `MediaQuery.paddingOf` of the shell.
 | `bottomBar` | `bottom` = measured row height + bottom gap (83 before the first measurement) |
 | `topBar`, `sidebarOverlay` | `top` = `pad.top` + 20 + measured pill height (`pad.top + 72` before measurement) |
 | `sidebarTiled`, `hidden` | zero (the body is already beside the sidebar or the chrome is gone) |
+| any kind, bar **measured at 0** | zero. A `chromeBuilder` bar that collapses to 0pt draws nothing, so neither the bottom gap nor the `pad.top + 20` band is added for it (amended 2026-10-08, Task 10 review M4). Before the first measurement the initial extents still apply |
+
+**Narrow widths (Q17, amended 2026-10-08).** The shell is *narrow* when its constraint width `w < kLiquidNarrowWidth` (340). In the compact bottom bar a narrow shell uses a horizontal row margin of **8** instead of 16, and the pill's inner horizontal padding is **4** instead of 8 (vertical padding stays 4). Cell width with 5 tabs plus the trailing circle at 320 is then (320 − 2×8 − 62 − 8 − 2×4) / 5 = **45.2pt**, at or above the 44pt HIG hit target (40.4pt with the regular values). At `w ≥ 340` nothing changes: (340 − 32 − 62 − 8 − 16) / 5 = 44.4pt. The top bar is unaffected (it only exists at `w ≥ B.regular`, and its pill padding is already 4). Standalone `LiquidTabBar` applies the same inner padding through its `narrow` flag (§4.9); its outer margins are the caller's.
 
 The bar is measured after layout and reported only once its height has been stable for 2 frames. The report is keyed by `(sizeClass, textScaler)`. This is ported from `_HeightReporter`. In tiled-shown, the body gets `MediaQuery` with `size.width = w − sidebarWidth` and the start padding set to 0, so pages beside the sidebar see their real width.
 
@@ -835,7 +838,7 @@ Glass always keeps rendering; a signal failure can only make the result *more* g
 | Platform signal fails or is unsupported | `debugPrint` once | Treated as off (§6.5) |
 | `selectedIndex` out of range | `assert` with a message naming the range | Treated as `0` |
 | `destinations` empty | `assert` | Body only, no chrome |
-| More than 5, or zero, `everywhere` destinations (Q4) | `assert` | Draws them; cells shrink to fit |
+| More than 5, or zero, `everywhere` destinations (Q4) | `assert` | Draws them; cells shrink to fit. Up to 5 + trailing stay ≥ 44pt wide down to 320 (Q17) |
 | Negative `LiquidBadge.count` | `assert` | Hidden, as for 0 |
 | `beforeDestinationChange` throws | `FlutterError.reportError(FlutterErrorDetails(exception, stack, library: 'liquid_shell', context: ErrorDescription('while running beforeDestinationChange')))`; selection refused | same |
 | Guard completes after unmount | ignored | ignored |
@@ -954,7 +957,8 @@ TDD applies to every task (red → green → commit), with per-task review and a
 - **Semantics:** labels, `selected`, the minimised hint, the toggle and hide tooltips from `strings`, barrier label, AX text scale 2.0 → icon-only with a label in semantics and long press → large content viewer.
 - **System back** with the overlay shown closes it (Q10).
 - **Outside shadow:** pixel-capture test ported from `glass_surface_test.dart:258-300`.
-- **Custom chrome:** `chromeBuilder` receives `defaultChrome` and correct details per slot; a custom bar of height 100 is measured into `chromeInsets`.
+- **Custom chrome:** `chromeBuilder` receives `defaultChrome` and correct details per slot; a custom bar of height 100 is measured into `chromeInsets`; a custom bar of height 0 yields zero insets.
+- **Narrow widths (Q17):** at 320×568 with 5 tabs + trailing every cell is ≥ 44pt wide inside the real shell; 375 keeps margin 16 and padding 8; 339 is narrow and 340 is not; RTL mirrors it; standalone `LiquidTabBar` follows `narrow` and the `MediaQuery` default.
 
 ### 10.3 Goldens: regression guard and doc images
 
@@ -1088,3 +1092,4 @@ Every entry has a recommended default. If the owner says nothing, the default ap
 | Q14 | Coverage gate | **90% line coverage** for `liquid_shell/lib` and `liquid_shell_platform_interface/lib`, as a fixed floor, without ratchet files |
 | Q15 | Copyright line in the MIT `LICENSE` | **`Copyright (c) 2026 lasoai.vn`** |
 | Q16 | Native floors | **iOS 15.0 (owner, 2026-10-08: Xcode 27 rejects deployment targets below 15.0; matches the vankhan app, ADR there); Android `minSdk` = Flutter's default (`flutter.minSdkVersion`), `compileSdk` 36** |
+| Q17 | Narrow-width hit targets (owner 2026-10-08: C) | **Resolved 2026-10-08, option C.** At 320pt (iPad Slide Over, ⅓ Split View, small phones) 5 tabs + the trailing circle gave 40.4pt cells, under the 44pt HIG target. Below the constant `kLiquidNarrowWidth` = **340** (shell constraint width `w < 340`; exactly 340 is regular) the compact bottom row margin becomes **8** (was 16) and the pill's inner horizontal padding **4** (was 8). 5 tabs + trailing at 320 → **45.2pt** cells. Applied in `LiquidShell`'s compact layout and in standalone `LiquidTabBar` (`narrow` flag, default from `MediaQuery` width). A constant, not a `LiquidShellBreakpoints` / `LiquidGlassTheme` field, because the margins are not themeable. §4.9, §5.3 amended. No debug assert: the configuration is legal |
