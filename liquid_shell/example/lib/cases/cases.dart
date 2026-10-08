@@ -79,7 +79,7 @@ const kCases = <ExampleCase>[
   (
     id: 'narrow',
     title: 'Narrow width',
-    subtitle: '5 tabs + trailing in a 320pt shell keep 44pt cells',
+    subtitle: '5 tabs + trailing in a 320pt shell: 44pt cells at text scale 1',
     page: NarrowWidthCase(),
   ),
 ];

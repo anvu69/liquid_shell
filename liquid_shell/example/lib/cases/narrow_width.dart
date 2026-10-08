@@ -18,7 +18,8 @@ const kNarrowDestinations = [
 /// Five tabs plus a trailing action in a 320pt-wide shell, as in iPad Slide
 /// Over or ⅓ Split View. Below [kLiquidNarrowWidth] the shell trims the row
 /// margin to 8 and the pill padding to 4, so every cell stays at least
-/// 44pt wide (Q17). The shell decides from its own width, not the screen's.
+/// 44pt wide at text scale 1 (Q17). The shell decides from its own width,
+/// not the screen's.
 class NarrowWidthCase extends StatefulWidget {
   /// Creates the case.
   const NarrowWidthCase({super.key});

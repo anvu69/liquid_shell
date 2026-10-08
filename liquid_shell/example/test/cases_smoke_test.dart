@@ -44,6 +44,27 @@ void main() {
     expect(find.text('Home item 1'), findsOneWidget);
   });
 
+  testWidgets('the guard moves on and clears the edits after "Discard"', (
+    tester,
+  ) async {
+    await _openCase(tester, 'guard');
+    await tester.tap(find.text('Explore'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Discard'));
+    await tester.pumpAndSettle();
+    expect(find.text('Discard changes?'), findsNothing);
+    expect(find.text('Explore item 1'), findsOneWidget);
+    expect(find.text('Home item 1'), findsNothing);
+
+    // The edits are gone, so the next change does not ask again.
+    final dirty = tester.widget<SwitchListTile>(find.byType(SwitchListTile));
+    expect(dirty.value, isFalse);
+    await tester.tap(find.text('Home'));
+    await tester.pumpAndSettle();
+    expect(find.text('Discard changes?'), findsNothing);
+    expect(find.text('Home item 1'), findsOneWidget);
+  });
+
   testWidgets('the detail page hides the chrome', (tester) async {
     await _openCase(tester, 'guard');
     await tester.tap(find.text('Open a full-frame detail page'));
@@ -102,8 +123,8 @@ void main() {
     expect(PrimaryScrollController.of(route).positions, hasLength(1));
   });
 
-  testWidgets('narrow: 5 tabs + trailing in a 320pt shell keep 44pt cells '
-      '(Q17)', (tester) async {
+  testWidgets('narrow: 5 tabs + trailing in a 320pt shell keep 44pt cells at '
+      'text scale 1 (Q17)', (tester) async {
     tester.view
       ..devicePixelRatio = 1
       ..physicalSize = const Size(393, 852);
