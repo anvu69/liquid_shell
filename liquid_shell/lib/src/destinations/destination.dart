@@ -28,7 +28,8 @@ class LiquidDestination {
   /// Icon when selected. Falls back to [icon].
   final Widget? selectedIcon;
 
-  /// Visible text and semantics label. Must not be empty.
+  /// Visible text and semantics label. Must not be empty, and must be
+  /// unique within a `LiquidShell`'s destinations.
   final String label;
 
   /// Optional count or dot.

@@ -261,6 +261,7 @@ class LiquidShell extends StatefulWidget {
   });
 
   /// All destinations, in display order. Indices refer to this list.
+  /// Labels must be unique (debug assert, §7).
   final List<LiquidDestination> destinations;
 
   /// The destination whose content `body` currently shows.
@@ -714,7 +715,7 @@ Numbers are preserved from the app. `pad` = `MediaQuery.paddingOf` of the shell.
 | `sidebarTiled`, `hidden` | zero (the body is already beside the sidebar or the chrome is gone) |
 | any kind, bar **measured at 0** | zero. A `chromeBuilder` bar that collapses to 0pt draws nothing, so neither the bottom gap nor the `pad.top + 20` band is added for it (amended 2026-10-08, Task 10 review M4). Before the first measurement the initial extents still apply |
 
-**Narrow widths (Q17, amended 2026-10-08).** The shell is *narrow* when its constraint width `w < kLiquidNarrowWidth` (340). In the compact bottom bar a narrow shell uses a horizontal row margin of **8** instead of 16, and the pill's inner horizontal padding is **4** instead of 8 (vertical padding stays 4). Cell width with 5 tabs plus the trailing circle at 320 is then (320 − 2×8 − 62 − 8 − 2×4) / 5 = **45.2pt**, at or above the 44pt HIG hit target (40.4pt with the regular values). At `w ≥ 340` nothing changes: (340 − 32 − 62 − 8 − 16) / 5 = 44.4pt. The top bar is unaffected (it only exists at `w ≥ B.regular`, and its pill padding is already 4). Standalone `LiquidTabBar` applies the same inner padding through its `narrow` flag (§4.9); its outer margins are the caller's.
+**Narrow widths (Q17, amended 2026-10-08).** The shell is *narrow* when its constraint width `w < kLiquidNarrowWidth` (340). In the compact bottom bar a narrow shell uses a horizontal row margin of **8** instead of 16, and the pill's inner horizontal padding is **4** instead of 8 (vertical padding stays 4). Cell width with 5 tabs plus the trailing circle at 320 is then, at text scale 1, (320 − 2×8 − 62 − 8 − 2×4) / 5 = **45.2pt**, at or above the 44pt HIG hit target (40.4pt with the regular values). Larger text below the accessibility threshold grows the pill and the square trailing circle with it, so cells can drop under 44pt there (amended 2026-10-08, Task 10 re-review N3). At `w ≥ 340` nothing changes: (340 − 32 − 62 − 8 − 16) / 5 = 44.4pt. The top bar is unaffected (it only exists at `w ≥ B.regular`, and its pill padding is already 4). Standalone `LiquidTabBar` applies the same inner padding through its `narrow` flag (§4.9); its outer margins are the caller's. The flag defaults from `MediaQuery` width, which is the window: a bar in a pane narrower than the window (an in-app split view), and a `chromeBuilder` that builds its own `LiquidTabBar` in a shell narrower than the window, must pass `narrow` explicitly (Task 10 re-review N2).
 
 The bar is measured after layout and reported only once its height has been stable for 2 frames. The report is keyed by `(sizeClass, textScaler)`. This is ported from `_HeightReporter`. In tiled-shown, the body gets `MediaQuery` with `size.width = w − sidebarWidth` and the start padding set to 0, so pages beside the sidebar see their real width.
 
@@ -731,6 +732,7 @@ The bar is measured after layout and reported only once its height has been stab
    - `false`: do nothing; the overlay stays open.
    - The guard throws: same as `false`, plus `FlutterError.reportError` (§7).
    - The shell is unmounted while the guard is pending: drop the result.
+   - `destinations` changed while the guard was pending: an accepted selection goes to the destination with the requested label (the same index if it is still there, else its only match), or is dropped. Labels are therefore required to be unique (§7; Task 10 review M7, re-review N1).
 4. Programmatic changes to `selectedIndex` never call the guard.
 5. Reselect (`i == selectedIndex`) runs the same path.
 6. **`sidebarOnly` selected in compact.** The pill highlights nothing and the selection is kept. After the frame in which the layout becomes compact (or on the first frame if it starts compact), the shell calls `onSelectedDestinationHidden(selectedIndex)` once. It does not call it again until the layout leaves compact and comes back. In a regular layout with the sidebar hidden, the top pill also highlights nothing, and there is no callback, because the toggle can reveal the selection.
@@ -838,7 +840,7 @@ Glass always keeps rendering; a signal failure can only make the result *more* g
 | Platform signal fails or is unsupported | `debugPrint` once | Treated as off (§6.5) |
 | `selectedIndex` out of range | `assert` with a message naming the range | Treated as `0` |
 | `destinations` empty | `assert` | Body only, no chrome |
-| More than 5, or zero, `everywhere` destinations (Q4) | `assert` | Draws them; cells shrink to fit. Up to 5 + trailing stay ≥ 44pt wide down to 320 (Q17) |
+| More than 5, or zero, `everywhere` destinations (Q4) | `assert` | Draws them; cells shrink to fit. Up to 5 + trailing stay ≥ 44pt wide down to 320 at text scale 1 (Q17) |
 | Negative `LiquidBadge.count` | `assert` | Hidden, as for 0 |
 | `beforeDestinationChange` throws | `FlutterError.reportError(FlutterErrorDetails(exception, stack, library: 'liquid_shell', context: ErrorDescription('while running beforeDestinationChange')))`; selection refused | same |
 | Guard completes after unmount | ignored | ignored |
@@ -852,6 +854,7 @@ Glass always keeps rendering; a signal failure can only make the result *more* g
 | `LiquidHideChrome` outside a shell | — | no-op |
 | Bar height never settles | — | Initial extents (83 / `pad.top + 72`) stay in use |
 | `sidebarWidth` ≥ `breakpoints.regular` | `assert` | Used as given |
+| Duplicate `LiquidDestination.label`s (labels must be unique) | `assert` naming the repeated labels | Drawn as given; an accepted guarded selection whose destination moved may be dropped, because the guard re-finds it by label (§5.5) |
 
 Exceptions thrown by app callbacks (`onDestinationSelected`, `LiquidTabAction.onPressed`) and by app widgets (`chromeBuilder`, third-party `buildBackground`) are not caught. Flutter reports them as usual. The built-in renderers do not throw.
 

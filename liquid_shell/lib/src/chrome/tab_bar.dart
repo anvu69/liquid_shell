@@ -26,7 +26,9 @@ const double kLiquidTabBarTrailingGap = 8;
 /// Below this width (logical pixels) the bottom tab bar is *narrow*: its
 /// pill padding drops from 8 to 4, and `LiquidShell` shrinks the row margin
 /// from 16 to 8, so 5 tabs plus a trailing action keep 44pt-wide cells down
-/// to 320 (iPad Slide Over, ⅓ Split View, small phones).
+/// to 320 at text scale 1 (iPad Slide Over, ⅓ Split View, small phones).
+/// Larger text grows the pill, and the square trailing circle with it, so
+/// cells can drop below 44pt there.
 const double kLiquidNarrowWidth = 340;
 
 /// A floating glass pill of destinations, with an optional separate glass
@@ -87,6 +89,14 @@ class LiquidTabBar extends StatelessWidget {
   /// Whether to use the narrow pill padding (4 instead of 8 at each end of
   /// the bottom pill). Null: narrow when `MediaQuery.sizeOf(context).width`
   /// is below [kLiquidNarrowWidth]. The top pill is already 4 either way.
+  ///
+  /// `MediaQuery` is the window. When the bar sits in a pane narrower than
+  /// the window (an in-app split view, a fixed-width column), pass [narrow]
+  /// yourself, for example `constraints.maxWidth < kLiquidNarrowWidth` from
+  /// a `LayoutBuilder` around the pane. The same goes for a `LiquidShell`
+  /// `chromeBuilder` that builds its own [LiquidTabBar] while the shell is
+  /// narrower than the window: the shell decides from its own width, the
+  /// default here from the window's.
   final bool? narrow;
 
   @override

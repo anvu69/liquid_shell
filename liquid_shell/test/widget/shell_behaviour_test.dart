@@ -108,6 +108,33 @@ void main() {
       expect('$error', contains('label must be non-empty'));
     });
 
+    testWidgets('duplicate labels assert: the guard re-finds by label', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: LiquidShell(
+            destinations: const [
+              LiquidDestination(icon: Icon(Icons.home), label: 'Home'),
+              LiquidDestination(icon: Icon(Icons.inbox), label: 'Inbox'),
+              LiquidDestination(
+                icon: Icon(Icons.home_outlined),
+                label: 'Home',
+                placement: LiquidPlacement.sidebarOnly,
+              ),
+            ],
+            selectedIndex: 0,
+            onDestinationSelected: (_) {},
+            body: const SizedBox(),
+          ),
+        ),
+      );
+      final error = tester.takeException();
+      expect(error, isAssertionError);
+      expect('$error', contains('labels must be unique'));
+      expect('$error', contains('"Home"'));
+    });
+
     testWidgets('sidebarWidth outside (0, breakpoints.regular) asserts', (
       tester,
     ) async {
@@ -292,7 +319,8 @@ void main() {
           kDestinations[3],
         ]);
         expect(selections, [2]);
-        expect(scopeOf(tester, 'Settings').chromeKind, isNotNull);
+        // The Settings page is the one on stage now.
+        expect(find.byKey(const ValueKey('list-Settings')), findsOneWidget);
       });
 
       testWidgets('the destination is gone → nothing is selected', (

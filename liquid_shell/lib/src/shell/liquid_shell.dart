@@ -30,6 +30,15 @@ const double _kNarrowBarMargin = 8;
 const double _kToggleReserve =
     kSidebarToggleInset + kSidebarToggleSize + kLiquidTabBarTrailingGap;
 
+/// The labels that occur more than once in [destinations], quoted.
+String _repeatedLabels(List<LiquidDestination> destinations) {
+  final seen = <String>{};
+  return {
+    for (final d in destinations)
+      if (!seen.add(d.label)) '"${d.label}"',
+  }.join(', ');
+}
+
 /// An adaptive navigation shell with no router dependency.
 ///
 /// Below `breakpoints.regular` it floats a glass tab bar at the bottom.
@@ -67,6 +76,10 @@ class LiquidShell extends StatefulWidget {
   });
 
   /// All destinations, in display order. Indices refer to this list.
+  ///
+  /// Labels must be unique (asserted in debug): a label is the semantics
+  /// label of its cell, and [beforeDestinationChange] re-finds a pending
+  /// selection by label.
   final List<LiquidDestination> destinations;
 
   /// The destination whose content [body] currently shows.
@@ -84,6 +97,10 @@ class LiquidShell extends StatefulWidget {
   /// Optional async guard, for example "Discard changes?". Runs before every
   /// user selection, including reselect; `false` or a throw cancels it.
   /// Taps while it is pending are ignored.
+  ///
+  /// If [destinations] changes while the guard is pending, an accepted
+  /// selection goes to the destination with the same label (labels must be
+  /// unique), or is dropped when that label is gone.
   final LiquidBeforeDestinationChange? beforeDestinationChange;
 
   /// Called once when the layout becomes compact while a sidebar-only
@@ -294,6 +311,13 @@ class _LiquidShellState extends State<LiquidShell>
     assert(
       destinations.every((d) => d.label.isNotEmpty),
       'Every LiquidDestination.label must be non-empty.',
+    );
+    assert(
+      destinations.map((d) => d.label).toSet().length == length,
+      'LiquidShell destination labels must be unique; '
+      '${_repeatedLabels(destinations)} repeats. A label is the semantics '
+      'label of its cell, and a guarded selection re-finds its destination '
+      'by label.',
     );
     assert(
       widget.sidebarWidth > 0 &&
