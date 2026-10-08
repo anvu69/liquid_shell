@@ -9,11 +9,17 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-banned='vankhan|Văn Khấn|calculator_promax|LocaleKeys|easy_localization|AppColors|AppGlassColors|GetIt'
-outside_docs=(-- . ':!docs/' ':!tool/check_provenance.sh')
+banned='vankhan|Văn Khấn|calculator_promax|LocaleKeys|easy_localization|AppColors|AppGlassColors'
+# GetIt is matched case-sensitively as a whole word, so widgetItem and
+# budgetItems do not trip it.
+banned_word='GetIt'
+outside_docs=(-- . ':!docs/' ':!tool/check_provenance.sh' ':!tool/test/check_provenance_test.dart')
 status=0
 
 if git grep --untracked -n -I -i -E "$banned" "${outside_docs[@]}"; then
+  status=1
+fi
+if git grep --untracked -n -I -w "$banned_word" "${outside_docs[@]}"; then
   status=1
 fi
 if git grep --untracked -n -I -E 'go_router' "${outside_docs[@]}" ':!*.md'; then

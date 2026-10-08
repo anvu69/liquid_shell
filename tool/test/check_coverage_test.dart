@@ -1,6 +1,7 @@
 import 'package:test/test.dart';
 
 import '../check_coverage.dart';
+import '../gen_coverage_helper.dart';
 
 void main() {
   group('LineCoverage.parse', () {
@@ -22,8 +23,15 @@ end_of_record
       expect(coverage.percent, 75);
     });
 
-    test('an empty report is 100 percent (nothing to cover)', () {
-      expect(LineCoverage.parse('').percent, 100);
+    test('an empty report instruments nothing and never passes', () {
+      final coverage = LineCoverage.parse('');
+      expect(coverage.isEmpty, isTrue);
+      expect(coverage.meets(0), isFalse);
+    });
+
+    test('a report with only non-lib records is empty too', () {
+      const lcov = 'SF:test/helper.dart\nLF:10\nLH:10\nend_of_record\n';
+      expect(LineCoverage.parse(lcov).meets(0), isFalse);
     });
 
     test('ignores records outside lib/', () {
@@ -38,6 +46,31 @@ LH:4
 end_of_record
 ''';
       expect(LineCoverage.parse(lcov).percent, 100);
+    });
+  });
+
+  group('renderCoverageHelper', () {
+    test('imports every lib file by package URI, sorted', () {
+      final source = renderCoverageHelper('pkg', [
+        'lib/src/b.dart',
+        'lib/pkg.dart',
+        'lib/src/a.dart',
+      ]);
+      final imports = RegExp(
+        r"import 'package:[^']+' as _i\d+;",
+      ).allMatches(source).map((m) => m.group(0)).toList();
+      expect(imports, [
+        "import 'package:pkg/pkg.dart' as _i0;",
+        "import 'package:pkg/src/a.dart' as _i1;",
+        "import 'package:pkg/src/b.dart' as _i2;",
+      ]);
+    });
+
+    test('has a main so flutter test accepts it', () {
+      expect(
+        renderCoverageHelper('pkg', ['lib/a.dart']),
+        contains('void main'),
+      );
     });
   });
 

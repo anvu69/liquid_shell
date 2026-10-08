@@ -33,12 +33,16 @@ class LineCoverage {
   /// Lines executed at least once.
   final int hit;
 
-  /// Percentage of [found] lines that were hit. 100 when nothing is
-  /// instrumented.
-  double get percent => found == 0 ? 100 : hit * 100 / found;
+  /// Whether no line of `lib/` was instrumented. That means the tests loaded
+  /// no library code (or there were no tests), so there is nothing to trust.
+  bool get isEmpty => found == 0;
 
-  /// Whether [percent] is at least [floor].
-  bool meets(double floor) => percent >= floor;
+  /// Percentage of [found] lines that were hit. 0 when nothing is
+  /// instrumented.
+  double get percent => isEmpty ? 0 : hit * 100 / found;
+
+  /// Whether [percent] is at least [floor]. An empty report never meets it.
+  bool meets(double floor) => !isEmpty && percent >= floor;
 }
 
 void main(List<String> args) {
@@ -56,6 +60,10 @@ void main(List<String> args) {
   final summary =
       '${coverage.percent.toStringAsFixed(2)}% '
       '(${coverage.hit}/${coverage.found} lines) in ${args[0]}';
+  if (coverage.isEmpty) {
+    stderr.writeln('✗ coverage: no lib/ lines instrumented in ${args[0]}');
+    exit(1);
+  }
   if (!coverage.meets(floor)) {
     stderr.writeln('✗ coverage $summary is below $floor%');
     exit(1);

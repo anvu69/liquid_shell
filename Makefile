@@ -11,7 +11,9 @@ DART ?= $(if $(FVM),fvm dart,dart)
 PACKAGES := liquid_shell liquid_shell_platform_interface liquid_shell_ios liquid_shell_android
 EXAMPLE := liquid_shell/example
 # Packages whose lib/ must keep >= COVERAGE_MIN % line coverage (spec Q14).
-COVERED := liquid_shell liquid_shell_platform_interface
+# Add liquid_shell here in the task that gives its lib/ executable code: a
+# barrel-only package instruments 0 lines, and the gate fails on that.
+COVERED := liquid_shell_platform_interface
 COVERAGE_MIN := 90
 
 .PHONY: help get format format-check analyze test coverage goldens \
@@ -43,13 +45,14 @@ test: ## Unit and widget tests in every package and the example (no goldens)
 	done
 	$(DART) test tool/test
 
-coverage: ## Tests with coverage; fails below COVERAGE_MIN for COVERED packages
+coverage: ## Tests with coverage; fails below COVERAGE_MIN, with no tests, or with no lib lines
 	@set -e; for p in $(COVERED); do \
-	  if [ -d $$p/test ]; then \
-	    echo "▸ coverage $$p"; \
-	    (cd $$p && $(FLUTTER) test --exclude-tags golden --coverage); \
-	    $(DART) run tool/check_coverage.dart $$p/coverage/lcov.info $(COVERAGE_MIN); \
-	  fi; \
+	  echo "▸ coverage $$p"; \
+	  $(DART) run tool/gen_coverage_helper.dart $$p; \
+	  trap '$(DART) run tool/gen_coverage_helper.dart $$p --remove' EXIT; \
+	  (cd $$p && $(FLUTTER) test --exclude-tags golden --coverage); \
+	  $(DART) run tool/gen_coverage_helper.dart $$p --remove; trap - EXIT; \
+	  $(DART) run tool/check_coverage.dart $$p/coverage/lcov.info $(COVERAGE_MIN); \
 	done
 
 goldens: ## Golden tests (reference toolchain: macOS + Flutter 3.38.x)

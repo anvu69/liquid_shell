@@ -21,6 +21,22 @@
 | `make integration-ios` / `make integration-android` | Signal channel tests on a simulator / emulator |
 | `make pana` / `make publish-check` | pub.dev scoring and publish dry-run |
 
+## Coverage gate
+
+`make coverage` runs for the packages listed in `COVERED` (Makefile) and is
+honest in three ways:
+
+- `flutter test --coverage` only reports files a test loads, so
+  `tool/gen_coverage_helper.dart` writes a throwaway
+  `test/coverage_all_libs_test.dart` that imports every file under `lib/`;
+  the Makefile deletes it after the run (it is also git-ignored). An
+  untested file therefore counts as 0 %, not as absent.
+- A package with no tests, or whose report instruments no `lib/` line,
+  **fails**. It never passes as 100 %.
+- Below `COVERAGE_MIN` (90) fails.
+
+A package joins `COVERED` in the task that gives its `lib/` executable code.
+
 ## Pre-commit gate
 
 Run the hook **by hand** before every commit:
