@@ -14,7 +14,7 @@ EXAMPLE := liquid_shell/example
 # A barrel-only package instruments 0 lines and stays out; every package whose
 # lib/ has more than directives must be listed, or tool/check_covered.dart
 # fails `make coverage`.
-COVERED := liquid_shell_platform_interface liquid_shell_ios liquid_shell_android
+COVERED := liquid_shell liquid_shell_platform_interface liquid_shell_ios liquid_shell_android
 COVERAGE_MIN := 90
 
 .PHONY: help get format format-check analyze test coverage goldens \
