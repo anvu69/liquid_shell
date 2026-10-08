@@ -49,6 +49,9 @@ class DemoPage extends StatelessWidget {
               ...children,
               for (var i = 1; i <= 24; i++)
                 Card(
+                  // Flat: flutter_test paints shadows without blur, which
+                  // would show as hard outlines in the doc images.
+                  elevation: 0,
                   color: theme.colorScheme.surface.withValues(alpha: 0.8),
                   child: ListTile(
                     title: Text('$title item $i'),

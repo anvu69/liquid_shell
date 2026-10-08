@@ -123,3 +123,30 @@ jobs:
         env:
           IOS_RUNTIME: ""
           IOS_DEVICES: auto
+
+  goldens:
+    name: goldens (${{ matrix.flutter }})
+    runs-on: macos-latest
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - flutter: 3.38.x
+            experimental: false
+          - flutter: stable
+            experimental: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ matrix.flutter == 'stable' && '' || matrix.flutter }}
+          cache: true
+      - run: make get
+      - run: make goldens
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-failures-${{ matrix.flutter }}
+          path: liquid_shell/example/test/goldens/failures/
