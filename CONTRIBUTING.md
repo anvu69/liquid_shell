@@ -24,7 +24,7 @@
 ## Coverage gate
 
 `make coverage` runs for the packages listed in `COVERED` (Makefile) and is
-honest in three ways:
+honest in four ways:
 
 - `flutter test --coverage` only reports files a test loads, so
   `tool/gen_coverage_helper.dart` writes a throwaway
@@ -35,7 +35,9 @@ honest in three ways:
   **fails**. It never passes as 100 %.
 - Below `COVERAGE_MIN` (90) fails.
 
-A package joins `COVERED` in the task that gives its `lib/` executable code.
+- A package whose `lib/` holds more than comments and directives but is
+  missing from `COVERED` **fails** (`tool/check_covered.dart`). A package
+  joins `COVERED` in the task that gives its `lib/` executable code.
 
 ## Pre-commit gate
 

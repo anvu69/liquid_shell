@@ -895,6 +895,11 @@ DART ?= $(if $(FVM),fvm dart,dart)
 PACKAGES := liquid_shell liquid_shell_platform_interface liquid_shell_ios liquid_shell_android
 EXAMPLE := liquid_shell/example
 # Packages whose lib/ must keep >= COVERAGE_MIN % line coverage (spec Q14).
+# As executed: Task 2 starts with liquid_shell_platform_interface only (a
+# barrel-only liquid_shell instruments 0 lines); Task 3 adds
+# tool/check_covered.dart, which fails `make coverage` when a package whose
+# lib/ has code is missing here, so liquid_shell rejoins in the task that
+# gives its lib/ code.
 COVERED := liquid_shell liquid_shell_platform_interface
 COVERAGE_MIN := 90
 

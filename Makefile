@@ -11,8 +11,9 @@ DART ?= $(if $(FVM),fvm dart,dart)
 PACKAGES := liquid_shell liquid_shell_platform_interface liquid_shell_ios liquid_shell_android
 EXAMPLE := liquid_shell/example
 # Packages whose lib/ must keep >= COVERAGE_MIN % line coverage (spec Q14).
-# Add liquid_shell here in the task that gives its lib/ executable code: a
-# barrel-only package instruments 0 lines, and the gate fails on that.
+# A barrel-only package instruments 0 lines and stays out; every package whose
+# lib/ has more than directives must be listed, or tool/check_covered.dart
+# fails `make coverage`.
 COVERED := liquid_shell_platform_interface
 COVERAGE_MIN := 90
 
@@ -45,13 +46,14 @@ test: ## Unit and widget tests in every package and the example (no goldens)
 	done
 	$(DART) test tool/test
 
-coverage: ## Tests with coverage; fails below COVERAGE_MIN, with no tests, or with no lib lines
-	@set -e; for p in $(COVERED); do \
+coverage: ## Tests with coverage; fails below COVERAGE_MIN, with no tests, with no lib lines, or when COVERED misses a package with lib code
+	@$(DART) run tool/check_covered.dart "$(PACKAGES)" "$(COVERED)"
+	@set -e; \
+	trap 'for q in $(COVERED); do $(DART) run tool/gen_coverage_helper.dart $$q --remove; done' EXIT; \
+	for p in $(COVERED); do \
 	  echo "▸ coverage $$p"; \
 	  $(DART) run tool/gen_coverage_helper.dart $$p; \
-	  trap '$(DART) run tool/gen_coverage_helper.dart $$p --remove' EXIT; \
 	  (cd $$p && $(FLUTTER) test --exclude-tags golden --coverage); \
-	  $(DART) run tool/gen_coverage_helper.dart $$p --remove; trap - EXIT; \
 	  $(DART) run tool/check_coverage.dart $$p/coverage/lcov.info $(COVERAGE_MIN); \
 	done
 
