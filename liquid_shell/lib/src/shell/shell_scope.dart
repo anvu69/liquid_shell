@@ -43,8 +43,11 @@ class LiquidShellScopeData {
   /// Shows or hides the sidebar. Ignored in compact (logged in debug).
   final ValueSetter<bool> setSidebarVisible;
 
-  /// Field by field, except [setSidebarVisible]: the shell hands out a new
-  /// tear-off each build, and it must not notify dependents on its own.
+  /// Field by field, except [setSidebarVisible] (spec §4.4). The setter is an
+  /// action, not state: pages depend on what the shell shows, so equality
+  /// covers the four values only. Two scopes that show the same thing are
+  /// equal whatever function they carry, e.g. [LiquidShellScopeData.none]
+  /// and data built with any other setter (closures equal only themselves).
   @override
   bool operator ==(Object other) =>
       other is LiquidShellScopeData &&
