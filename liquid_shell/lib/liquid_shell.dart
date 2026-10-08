@@ -5,7 +5,8 @@ export 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.
     show LiquidPlatformSignals;
 
 export 'src/chrome/sidebar.dart';
-export 'src/chrome/tab_bar.dart' show LiquidTabBar, LiquidTabBarPosition;
+export 'src/chrome/tab_bar.dart'
+    show LiquidTabBar, LiquidTabBarPosition, kLiquidNarrowWidth;
 export 'src/destinations/badge.dart'
     show LiquidBadge, LiquidCountBadge, LiquidDotBadge;
 export 'src/destinations/destination.dart';

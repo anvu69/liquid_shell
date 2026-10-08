@@ -23,6 +23,12 @@ enum LiquidTabBarPosition {
 /// The gap between the pill and the trailing circle.
 const double kLiquidTabBarTrailingGap = 8;
 
+/// Below this width (logical pixels) the bottom tab bar is *narrow*: its
+/// pill padding drops from 8 to 4, and `LiquidShell` shrinks the row margin
+/// from 16 to 8, so 5 tabs plus a trailing action keep 44pt-wide cells down
+/// to 320 (iPad Slide Over, ⅓ Split View, small phones).
+const double kLiquidNarrowWidth = 340;
+
 /// A floating glass pill of destinations, with an optional separate glass
 /// circle for a [LiquidTabAction].
 ///
@@ -46,6 +52,7 @@ class LiquidTabBar extends StatelessWidget {
     this.minimized = false,
     this.onExpand,
     this.strings = const LiquidShellStrings(),
+    this.narrow,
     super.key,
   });
 
@@ -76,6 +83,11 @@ class LiquidTabBar extends StatelessWidget {
 
   /// Strings for the minimised hint, the expand announcement and badges.
   final LiquidShellStrings strings;
+
+  /// Whether to use the narrow pill padding (4 instead of 8 at each end of
+  /// the bottom pill). Null: narrow when `MediaQuery.sizeOf(context).width`
+  /// is below [kLiquidNarrowWidth]. The top pill is already 4 either way.
+  final bool? narrow;
 
   @override
   Widget build(BuildContext context) {
@@ -114,10 +126,12 @@ class LiquidTabBar extends StatelessWidget {
       );
     }
 
+    final narrow =
+        this.narrow ?? MediaQuery.sizeOf(context).width < kLiquidNarrowWidth;
     final cells = Padding(
       padding: top
           ? const EdgeInsets.all(4)
-          : const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          : EdgeInsets.symmetric(horizontal: narrow ? 4 : 8, vertical: 4),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

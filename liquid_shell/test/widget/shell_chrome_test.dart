@@ -121,7 +121,7 @@ void main() {
     });
   });
 
-  group('hit targets at 320pt (Q4)', () {
+  group('hit targets at narrow widths (Q4, Q17)', () {
     const labels = ['Home', 'Inbox', 'Search', 'Library', 'Settings'];
     final add = LiquidTabAction(
       icon: const Icon(Icons.add),
@@ -134,6 +134,8 @@ void main() {
       int count, {
       LiquidTabAction? trailing,
       List<int>? selections,
+      double width = 320,
+      TextDirection direction = TextDirection.ltr,
     }) async {
       await pumpShell(
         tester,
@@ -145,8 +147,9 @@ void main() {
           trailing: trailing,
           selections: selections,
         ),
-        size: const Size(320, 568),
+        size: Size(width, 568),
         padding: const EdgeInsets.only(top: 20),
+        direction: direction,
       );
       return [
         for (final label in labels.take(count))
@@ -159,8 +162,34 @@ void main() {
       ];
     }
 
-    testWidgets('5 tabs + trailing: cells shrink to 40.4pt, tile the pill '
-        'and each tap selects its own tab', (tester) async {
+    // The bottom row: the shell's Align, as wide as the window minus margins.
+    Rect row(WidgetTester tester) => tester.getRect(
+      find
+          .ancestor(of: find.byType(LiquidTabBar), matching: find.byType(Align))
+          .first,
+    );
+
+    // The pill: the first glass inside the bar (the second is the circle).
+    Rect pill(WidgetTester tester) => tester.getRect(
+      find
+          .descendant(
+            of: find.byType(LiquidTabBar),
+            matching: find.byType(LiquidGlass),
+          )
+          .first,
+    );
+
+    Rect circle(WidgetTester tester) => tester.getRect(
+      find.ancestor(
+        of: find.byIcon(Icons.add),
+        matching: find.byType(LiquidGlass),
+      ),
+    );
+
+    testWidgets('320: 5 tabs + trailing keep 45.2pt cells with margin 8 and '
+        'pill padding 4, tile the pill, and each tap selects its tab', (
+      tester,
+    ) async {
       final selections = <int>[];
       final rects = await cells(
         tester,
@@ -169,19 +198,79 @@ void main() {
         selections: selections,
       );
       expect(tester.takeException(), isNull, reason: 'no overflow');
-      // (320 − 2×16 margin − 62 circle − 8 gap − 2×8 pill padding) / 5.
+      expect(row(tester).left, 8);
+      expect(row(tester).right, 312);
+      expect(rects.first.left - pill(tester).left, 4);
+      // (320 − 2×8 margin − 62 circle − 8 gap − 2×4 pill padding) / 5.
       for (final rect in rects) {
-        expect(rect.width, moreOrLessEquals(40.4, epsilon: 0.01));
+        expect(rect.width, greaterThanOrEqualTo(44));
+        expect(rect.width, moreOrLessEquals(45.2, epsilon: 0.01));
         expect(rect.height, greaterThanOrEqualTo(44));
       }
       for (var i = 1; i < rects.length; i++) {
         expect(rects[i].left, moreOrLessEquals(rects[i - 1].right));
       }
+      expect(circle(tester).right, 312);
       for (final label in labels) {
         await tester.tap(find.text(label));
         await tester.pumpAndSettle();
       }
       expect(selections, [0, 1, 2, 3, 4]);
+    });
+
+    testWidgets('375: the regular margin 16 and pill padding 8 are kept', (
+      tester,
+    ) async {
+      final rects = await cells(tester, 5, trailing: add, width: 375);
+      expect(row(tester).left, 16);
+      expect(row(tester).right, 375 - 16);
+      expect(rects.first.left - pill(tester).left, 8);
+      expect(circle(tester).right, 375 - 16);
+      for (final rect in rects) {
+        expect(rect.width, greaterThanOrEqualTo(44));
+      }
+    });
+
+    testWidgets('339 is narrow, 340 is not (kLiquidNarrowWidth)', (
+      tester,
+    ) async {
+      var rects = await cells(tester, 5, trailing: add, width: 339);
+      expect(row(tester).left, 8);
+      expect(row(tester).right, 339 - 8);
+      expect(rects.first.left - pill(tester).left, 4);
+      for (final rect in rects) {
+        expect(rect.width, greaterThanOrEqualTo(44));
+      }
+
+      rects = await cells(tester, 5, trailing: add, width: 340);
+      expect(row(tester).left, 16);
+      expect(row(tester).right, 340 - 16);
+      expect(rects.first.left - pill(tester).left, 8);
+      // (340 − 32 − 62 − 8 − 16) / 5 = 44.4.
+      for (final rect in rects) {
+        expect(rect.width, greaterThanOrEqualTo(44));
+      }
+    });
+
+    testWidgets('RTL at 320: mirrored, same margins, 45.2pt cells', (
+      tester,
+    ) async {
+      final rects = await cells(
+        tester,
+        5,
+        trailing: add,
+        direction: TextDirection.rtl,
+      );
+      expect(tester.takeException(), isNull, reason: 'no overflow');
+      expect(row(tester).left, 8);
+      expect(row(tester).right, 312);
+      // The circle sits at the pill's left; the first tab at its right.
+      expect(circle(tester).left, 8);
+      expect(pill(tester).right - rects.first.right, 4);
+      expect(rects.first.left, greaterThan(rects.last.left));
+      for (final rect in rects) {
+        expect(rect.width, moreOrLessEquals(45.2, epsilon: 0.01));
+      }
     });
 
     testWidgets('4 tabs + trailing, or 5 tabs alone, keep 44pt cells', (

@@ -22,6 +22,9 @@ typedef LiquidBeforeDestinationChange = Future<bool> Function(int index);
 /// Horizontal margin of the tab bar rows.
 const double _kBarMargin = 16;
 
+/// Horizontal margin of the bottom row below [kLiquidNarrowWidth] (Q17).
+const double _kNarrowBarMargin = 8;
+
 /// Space each side of the top pill reserves while the toggle is shown:
 /// toggle inset + toggle + gap.
 const double _kToggleReserve =
@@ -414,10 +417,13 @@ class _LiquidShellState extends State<LiquidShell>
 
     switch (kind) {
       case LiquidChromeKind.bottomBar:
+        // Q17: narrow shells trade margin for 44pt-wide cells.
+        final narrow = size.width < kLiquidNarrowWidth;
+        final margin = narrow ? _kNarrowBarMargin : _kBarMargin;
         children.add(
           Positioned(
-            left: _kBarMargin,
-            right: _kBarMargin,
+            left: margin,
+            right: margin,
             bottom: bottomGap,
             child: Align(
               alignment: Alignment.bottomCenter,
@@ -439,6 +445,7 @@ class _LiquidShellState extends State<LiquidShell>
                         minimized: isMinimized,
                         onExpand: _expand,
                         strings: widget.strings,
+                        narrow: narrow,
                       ),
                     ),
                   );

@@ -38,6 +38,7 @@ Widget _host({
   bool disableAnimations = false,
   double width = 393,
   TextDirection direction = TextDirection.ltr,
+  bool? narrow,
 }) => MaterialApp(
   theme: ThemeData(colorScheme: _scheme),
   home: MediaQuery(
@@ -62,6 +63,7 @@ Widget _host({
                 trailing: trailing,
                 minimized: minimized,
                 onExpand: onExpand,
+                narrow: narrow,
               ),
             ),
           ),
@@ -514,6 +516,66 @@ void main() {
           contains('No Directionality widget found'),
         ),
       );
+    });
+  });
+
+  group('narrow pill padding (Q17)', () {
+    // Inner padding = the first cell's start minus the pill's start.
+    Future<double> padding(
+      WidgetTester tester, {
+      required double width,
+      bool? narrow,
+      LiquidTabBarPosition position = LiquidTabBarPosition.bottom,
+    }) async {
+      await tester.pumpWidget(
+        _host(width: width, narrow: narrow, position: position),
+      );
+      // A second pump in one test animates the pill size; let it land.
+      await tester.pumpAndSettle();
+      final pill = tester.getRect(find.byType(LiquidGlass).first);
+      final home = tester.getRect(
+        find.ancestor(of: find.text('Home'), matching: find.byType(InkWell)),
+      );
+      return home.left - pill.left;
+    }
+
+    test('the threshold is 340', () {
+      expect(kLiquidNarrowWidth, 340);
+    });
+
+    testWidgets('narrow: true uses 4, narrow: false uses 8, at any width', (
+      tester,
+    ) async {
+      expect(await padding(tester, width: 393, narrow: true), 4);
+      expect(await padding(tester, width: 320, narrow: false), 8);
+    });
+
+    testWidgets('by default it follows the MediaQuery width: 339 narrow, '
+        '340 not', (tester) async {
+      expect(await padding(tester, width: 339), 4);
+      expect(await padding(tester, width: 340), 8);
+    });
+
+    testWidgets('the top bar keeps its 4pt padding either way', (
+      tester,
+    ) async {
+      const top = LiquidTabBarPosition.top;
+      expect(await padding(tester, width: 393, position: top), 4);
+      expect(await padding(tester, width: 320, position: top), 4);
+      expect(await padding(tester, width: 393, narrow: true, position: top), 4);
+    });
+
+    testWidgets('RTL: the narrow padding is at the pill end too', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(width: 320, direction: TextDirection.rtl),
+      );
+      final pill = tester.getRect(find.byType(LiquidGlass).first);
+      final home = tester.getRect(
+        find.ancestor(of: find.text('Home'), matching: find.byType(InkWell)),
+      );
+      expect(pill.right - home.right, 4);
     });
   });
 }
