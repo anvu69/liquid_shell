@@ -96,6 +96,69 @@ void main() {
     expect(calls, ['listen', 'cancel']);
   });
 
+  test('concurrent listeners share one native stream; cancelling one '
+      'leaves the other receiving', () async {
+    final calls = <String>[];
+    late MockStreamHandlerEventSink sink;
+    messenger.setMockStreamHandler(
+      channel,
+      MockStreamHandler.inline(
+        onListen: (arguments, events) {
+          calls.add('listen');
+          sink = events..success(const {'reduceTransparency': true});
+        },
+        onCancel: (arguments) => calls.add('cancel'),
+      ),
+    );
+
+    final first = <LiquidPlatformSignals>[];
+    final second = <LiquidPlatformSignals>[];
+    final a = EventChannelLiquidShellPlatform().watchSignals().listen(
+      first.add,
+    );
+    await pumpEventQueue();
+    final b = EventChannelLiquidShellPlatform().watchSignals().listen(
+      second.add,
+    );
+    await pumpEventQueue();
+    await a.cancel();
+    sink.success(const {'powerSave': true});
+    await pumpEventQueue();
+    await b.cancel();
+
+    expect(first, const [LiquidPlatformSignals(reduceTransparency: true)]);
+    expect(second, const [
+      LiquidPlatformSignals(reduceTransparency: true),
+      LiquidPlatformSignals(powerSave: true),
+    ]);
+    expect(calls, ['listen', 'cancel']);
+  });
+
+  test(
+    'listening again after the last cancel restarts the native side',
+    () async {
+      final calls = <String>[];
+      messenger.setMockStreamHandler(
+        channel,
+        MockStreamHandler.inline(
+          onListen: (arguments, events) {
+            calls.add('listen');
+            events.success(const {'powerSave': true});
+          },
+          onCancel: (arguments) => calls.add('cancel'),
+        ),
+      );
+
+      final platform = EventChannelLiquidShellPlatform();
+      final first = await platform.watchSignals().first;
+      final second = await platform.watchSignals().first;
+
+      expect(first, const LiquidPlatformSignals(powerSave: true));
+      expect(second, const LiquidPlatformSignals(powerSave: true));
+      expect(calls, ['listen', 'cancel', 'listen', 'cancel']);
+    },
+  );
+
   test('a cancel that fails natively is swallowed', () async {
     messenger.setMockMethodCallHandler(methods, (call) async {
       if (call.method == 'cancel') throw PlatformException(code: 'gone');
