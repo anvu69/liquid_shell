@@ -29,7 +29,10 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: ${{ matrix.flutter == 'stable' && '' || matrix.flutter }}
+          # `a && '' || b` always yields b in Actions ('' is falsy), which sent
+          # flutter-version: stable to the action and failed setup. An empty
+          # version means the latest release on the channel.
+          flutter-version: ${{ matrix.flutter != 'stable' && matrix.flutter || '' }}
           cache: true
       - run: make get
       - run: make format-check
@@ -59,12 +62,17 @@ jobs:
           liquid_shell_platform_interface
       # These three depend on liquid_shell_platform_interface, which pana can
       # only resolve from pub.dev. Informational until P6 publishes it first.
-      - name: pana dependants (informational until P6)
+      # One step each: in a single `bash -e` loop the first failure stopped
+      # the loop, so the other two were never scored.
+      - name: pana liquid_shell (informational until P6)
         continue-on-error: true
-        run: |
-          for p in liquid_shell liquid_shell_ios liquid_shell_android; do
-            dart pub global run pana --no-warning --exit-code-threshold 0 "$p"
-          done
+        run: dart pub global run pana --no-warning --exit-code-threshold 0 liquid_shell
+      - name: pana liquid_shell_ios (informational until P6)
+        continue-on-error: true
+        run: dart pub global run pana --no-warning --exit-code-threshold 0 liquid_shell_ios
+      - name: pana liquid_shell_android (informational until P6)
+        continue-on-error: true
+        run: dart pub global run pana --no-warning --exit-code-threshold 0 liquid_shell_android
       - run: make publish-check
 
   android-unit:
@@ -145,7 +153,10 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: ${{ matrix.flutter == 'stable' && '' || matrix.flutter }}
+          # `a && '' || b` always yields b in Actions ('' is falsy), which sent
+          # flutter-version: stable to the action and failed setup. An empty
+          # version means the latest release on the channel.
+          flutter-version: ${{ matrix.flutter != 'stable' && matrix.flutter || '' }}
           cache: true
       - run: make get
       - run: make goldens
