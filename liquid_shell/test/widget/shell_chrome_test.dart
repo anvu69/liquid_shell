@@ -446,6 +446,49 @@ void main() {
       expect(logs.single, contains('compact'));
     });
 
+    group('setSidebarVisible while a page builds applies after the frame', () {
+      final pages = <String, Widget Function()>{
+        'initState': () => Builder(
+          builder: (context) => _HidesSidebarInInitState(
+            setSidebarVisible: LiquidShellScope.of(context).setSidebarVisible,
+          ),
+        ),
+        'didChangeDependencies': () => const _HidesSidebarOnDependencies(),
+        'build': () => Builder(
+          builder: (context) {
+            LiquidShellScope.of(context).setSidebarVisible(false);
+            return const TestPage(label: 'Home');
+          },
+        ),
+      };
+      for (final MapEntry(key: where, value: page) in pages.entries) {
+        testWidgets('from $where', (tester) async {
+          await pumpShell(
+            tester,
+            TestShell(
+              pageBuilder: (i) =>
+                  i == 0 ? page() : TestPage(label: kDestinations[i].label),
+            ),
+            size: kTabletLandscape,
+            padding: _tablet,
+            settle: false,
+          );
+          expect(tester.takeException(), isNull);
+          expect(
+            scopeOf(tester).chromeKind,
+            LiquidChromeKind.sidebarTiled,
+            reason: 'not during the frame that asked',
+          );
+
+          await tester.pump();
+          expect(tester.takeException(), isNull);
+          expect(scopeOf(tester).chromeKind, LiquidChromeKind.topBar);
+          await tester.pumpAndSettle();
+          expect(scopeOf(tester).chromeKind, LiquidChromeKind.topBar);
+        });
+      }
+    });
+
     testWidgets('header, footer, hide button and trailing row', (
       tester,
     ) async {
@@ -1031,4 +1074,52 @@ class _HideChromePageState extends State<_HideChromePage> {
       const Text('probe'),
     ],
   );
+}
+
+/// Hides the sidebar from `initState`, with a setter read by its parent.
+class _HidesSidebarInInitState extends StatefulWidget {
+  const _HidesSidebarInInitState({required this.setSidebarVisible});
+
+  final ValueSetter<bool> setSidebarVisible;
+
+  @override
+  State<_HidesSidebarInInitState> createState() =>
+      _HidesSidebarInInitStateState();
+}
+
+class _HidesSidebarInInitStateState extends State<_HidesSidebarInInitState> {
+  @override
+  void initState() {
+    super.initState();
+    widget.setSidebarVisible(false);
+  }
+
+  @override
+  Widget build(BuildContext context) => const TestPage(label: 'Home');
+}
+
+/// Hides the sidebar once it can read the scope.
+class _HidesSidebarOnDependencies extends StatefulWidget {
+  const _HidesSidebarOnDependencies();
+
+  @override
+  State<_HidesSidebarOnDependencies> createState() =>
+      _HidesSidebarOnDependenciesState();
+}
+
+class _HidesSidebarOnDependenciesState
+    extends State<_HidesSidebarOnDependencies> {
+  bool _asked = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final scope = LiquidShellScope.of(context);
+    if (_asked) return;
+    _asked = true;
+    scope.setSidebarVisible(false);
+  }
+
+  @override
+  Widget build(BuildContext context) => const TestPage(label: 'Home');
 }

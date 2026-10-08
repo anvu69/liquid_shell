@@ -434,6 +434,8 @@ class LiquidShellScopeData {
   final EdgeInsets chromeInsets;
   final bool sidebarVisible;
   /// Shows or hides the sidebar. Ignored in compact (debug log).
+  /// Safe while a page builds: then applied after the frame (amended
+  /// 2026-10-09, final review I3).
   final ValueSetter<bool> setSidebarVisible;
   // == and hashCode compare every field except setSidebarVisible.
 }
@@ -694,6 +696,7 @@ iOS and Android behave identically. iPhone 393 → compact. iPhone Pro Max lands
 - When the presentation changes (compact ↔ overlay ↔ tiled, through rotation or resize), the value **resets** to the new presentation's default.
 - Changes come from: the toggle (show), the sidebar's hide button, the overlay barrier (tap), the overlay **closing itself after a selection is accepted**, `LiquidShellScopeData.setSidebarVisible`, and the system back gesture while the overlay is shown (Q10). A tiled sidebar does not close on selection.
 - In compact the state is `false` and setters are ignored.
+- **Timing (amended 2026-10-09, final review I3).** Pages call `setSidebarVisible` from `initState`, `didChangeDependencies` or `build`, which run inside the shell's `LayoutBuilder` while it lays out the body; marking the shell dirty then asserts "setState() called during build". Like hide-chrome requests, a call made while `SchedulerBinding.schedulerPhase == persistentCallbacks` applies in a post-frame callback; any other call applies at once. The compact check runs when the call applies. Applying is idempotent.
 - Show and hide are not animated in P1 (same as the app today).
 
 ### 5.3 Geometry and insets

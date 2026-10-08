@@ -171,13 +171,15 @@ class _LiquidShellState extends State<LiquidShell>
   @override
   void removeHideRequest() => _changeHideRequests(-1);
 
-  void _changeHideRequests(int delta) {
-    void apply() {
-      if (mounted) setState(() => _hideRequests += delta);
-    }
+  void _changeHideRequests(int delta) => _outsideBuild(() {
+    if (mounted) setState(() => _hideRequests += delta);
+  });
 
-    // Requests arrive while pages build or unmount; the shell cannot be
-    // marked dirty then, so they apply right after the frame.
+  /// Runs [apply] now, or right after the frame when called during one.
+  ///
+  /// Pages ask from `initState`, `build` or `dispose`, which run while the
+  /// shell lays out its body; the shell cannot be marked dirty then.
+  void _outsideBuild(VoidCallback apply) {
     if (SchedulerBinding.instance.schedulerPhase ==
         SchedulerPhase.persistentCallbacks) {
       SchedulerBinding.instance.addPostFrameCallback((_) => apply());
@@ -188,7 +190,13 @@ class _LiquidShellState extends State<LiquidShell>
 
   // --- sidebar and selection ---------------------------------------------
 
-  void _setSidebarVisible(bool visible) {
+  /// The scope's and the chrome's setter. Safe from a page's `initState` or
+  /// `build`: it then applies after the frame. Idempotent.
+  void _setSidebarVisible(bool visible) =>
+      _outsideBuild(() => _applySidebarVisible(visible));
+
+  void _applySidebarVisible(bool visible) {
+    if (!mounted) return;
     if (_presentation == ShellPresentation.compact) {
       if (kDebugMode) {
         debugPrint(

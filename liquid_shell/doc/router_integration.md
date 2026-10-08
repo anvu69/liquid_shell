@@ -126,11 +126,25 @@ That is why labels must be unique; a debug assert names any repeats.
 ## The sidebar from your pages
 
 ```dart
-final scope = LiquidShellScope.of(context);
-if (scope.sizeClass == LiquidSizeClass.regular) {
-  scope.setSidebarVisible(false); // for example, on a wide editor page
+// In the State of a wide editor page.
+bool _askedForRoom = false;
+
+@override
+void didChangeDependencies() {
+  super.didChangeDependencies();
+  final scope = LiquidShellScope.of(context);
+  if (!_askedForRoom && scope.sizeClass == LiquidSizeClass.regular) {
+    _askedForRoom = true;
+    scope.setSidebarVisible(false); // once, when the page opens
+  }
 }
 ```
+
+A call made while the page builds (from `initState`,
+`didChangeDependencies` or `build`) applies right after that frame. Ask
+once, as above: a page that reads the scope rebuilds when the sidebar
+changes, so a call in `build` would hide the sidebar again as soon as the
+user shows it.
 
 There is one shell-wide sidebar state. It resets to the default (shown when
 tiled, hidden when overlay) whenever the presentation changes.

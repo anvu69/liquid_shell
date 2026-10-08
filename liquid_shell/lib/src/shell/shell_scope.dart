@@ -40,6 +40,9 @@ class LiquidShellScopeData {
   final bool sidebarVisible;
 
   /// Shows or hides the sidebar. Ignored in compact (logged in debug).
+  ///
+  /// Safe to call while a page builds (`initState`, `didChangeDependencies`,
+  /// `build`): the change then applies right after that frame.
   final ValueSetter<bool> setSidebarVisible;
 
   /// Field by field, except [setSidebarVisible] (spec §4.4). The setter is an
