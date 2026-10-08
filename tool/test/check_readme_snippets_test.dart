@@ -31,6 +31,54 @@ class A {
         throwsFormatException,
       );
     });
+
+    test('a region opened twice is an error', () {
+      expect(
+        () => extractRegions(
+          '// #docregion readme\nint x;\n// #enddocregion readme\n'
+          '// #docregion readme\nint y;\n// #enddocregion readme\n',
+        ),
+        throwsA(_formatError(contains('readme'))),
+      );
+    });
+
+    test('an #enddocregion with no open region is an error', () {
+      expect(
+        () => extractRegions('int x;\n// #enddocregion readme\n'),
+        throwsA(_formatError(contains('readme'))),
+      );
+    });
+
+    test('a mistyped region marker is an error, not code', () {
+      for (final typo in [
+        '//#docregion readme',
+        '// #docregion',
+        '// #docregion readme extra',
+        '// #enddocregion  ',
+        '// #docregon readme',
+      ]) {
+        expect(
+          () => extractRegions('$typo\nint x;\n'),
+          throwsFormatException,
+          reason: typo,
+        );
+      }
+    });
+
+    test('regions may nest and overlap', () {
+      const source = '''
+// #docregion readme
+int a;
+// #docregion inner
+int b;
+// #enddocregion inner
+// #enddocregion readme
+''';
+      expect(extractRegions(source), {
+        'readme': 'int a;\nint b;',
+        'inner': 'int b;',
+      });
+    });
   });
 
   group('findExcerpts', () {
@@ -55,6 +103,38 @@ int x = 1;
         ('basic_tabs.dart', 'readme', 'return 1;'),
         ('badges.dart', 'other', 'int x = 1;'),
       ]);
+    });
+
+    test('an unclosed marked block is an error', () {
+      expect(
+        () => findExcerpts(
+          '<?code-excerpt "a.dart (readme)"?>\n```dart\nreturn 1;\n',
+        ),
+        throwsA(_formatError(contains('line 2'))),
+      );
+    });
+
+    test('an unclosed unmarked block is an error too', () {
+      expect(
+        () => findExcerpts('Text.\n\n```sh\nflutter pub add x\n'),
+        throwsA(_formatError(contains('line 3'))),
+      );
+    });
+
+    test('a mistyped marker is an error, not an unchecked block', () {
+      for (final typo in [
+        '<?code-excerpt "a.dart(readme)"?>',
+        '<?code-excerpt  "a.dart (readme)"?>',
+        "<?code-excerpt 'a.dart (readme)'?>",
+        '<?code-excerpt "a.dart (readme)">',
+        '<?code-excerpt "a.dart"?>',
+      ]) {
+        expect(
+          () => findExcerpts('$typo\n```dart\nx\n```\n'),
+          throwsA(_formatError(contains('line 1'))),
+          reason: typo,
+        );
+      }
     });
   });
 
@@ -91,5 +171,38 @@ int x = 1;
       final fixed = fixSnippets(readme, regions);
       expect(checkSnippets(fixed, regions), isEmpty);
     });
+
+    test('fixSnippets refuses to run when a region is missing', () {
+      const readme =
+          '<?code-excerpt "a.dart (readme)"?>\n```dart\nreturn 2;\n```\n'
+          '<?code-excerpt "a.dart (nope)"?>\n```dart\nx\n```\n';
+      expect(
+        () => fixSnippets(readme, regions),
+        throwsA(_formatError(contains('a.dart (nope)'))),
+      );
+    });
+  });
+
+  group('unusedRegions', () {
+    const regions = {
+      'a.dart': {'readme': 'return 1;', 'extra': 'int x;'},
+      'b.dart': {'readme': 'return 2;'},
+    };
+
+    test('names every region no document marks', () {
+      const readme = '<?code-excerpt "a.dart (readme)"?>\n```dart\nx\n```\n';
+      const guide = '<?code-excerpt "b.dart (readme)"?>\n```dart\nx\n```\n';
+      expect(unusedRegions(regions, [readme]), [
+        'a.dart (extra)',
+        'b.dart (readme)',
+      ]);
+      expect(unusedRegions(regions, [readme, guide]), ['a.dart (extra)']);
+    });
   });
 }
+
+Matcher _formatError(Matcher message) => isA<FormatException>().having(
+  (e) => e.message,
+  'message',
+  message,
+);
