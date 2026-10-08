@@ -428,7 +428,8 @@ Widget _searchPage(BuildContext context) => const LiquidNoChrome(
 `chromeBuilder` receives the chrome the shell would draw. Wrap it, or ignore
 it and draw your own; the shell still places and measures the slot, so
 `chromeInsets` follow your bar, and a bar that collapses to 0pt adds no
-inset. `LiquidTabBar` and `LiquidSidebar` are public for building your own.
+inset. `LiquidTabBar` and `LiquidSidebar` are public for building your own
+(see [Standalone tab bar and sidebar](#standalone-tab-bar-and-sidebar)).
 
 <?code-excerpt "custom_chrome.dart (readme)"?>
 ```dart
@@ -495,6 +496,71 @@ A replacement sidebar list sets `primary: false`, as `LiquidSidebar` does,
 so a status-bar tap still scrolls the body. A `LiquidTabBar` you build
 yourself decides `narrow` from the window's width; in a shell narrower than
 the window, pass `narrow` explicitly (see [Narrow width](#narrow-width)).
+
+### Standalone tab bar and sidebar
+
+`LiquidTabBar` and `LiquidSidebar` work without a `LiquidShell`, in your own
+layout. You then own what the shell would do: the bar's outer margins and
+its safe area, the switch between bar and sidebar, the content insets, and
+system back. Both need a `Directionality` and an `Overlay` above them (for
+tooltips and the large-text label viewer): a route of a `MaterialApp` has
+both, `MaterialApp.builder` has no `Overlay`. `LiquidTabBar` picks its
+narrow padding from the window width; in a pane narrower than the window,
+pass `narrow` yourself.
+
+<?code-excerpt "standalone_widgets.dart (readme)"?>
+```dart
+int _index = 0;
+
+// Both widgets need a Directionality and an Overlay above them (tooltips,
+// the large-text label viewer). A route of a MaterialApp has both;
+// MaterialApp.builder, above the Navigator, has no Overlay.
+@override
+Widget build(BuildContext context) {
+  final page = DemoPage(title: kDemoDestinations[_index].label);
+  void select(int index) => setState(() => _index = index);
+  if (MediaQuery.sizeOf(context).width >= 700) {
+    return Scaffold(
+      body: Row(
+        children: [
+          LiquidSidebar(
+            destinations: kDemoDestinations,
+            selectedIndex: _index,
+            onDestinationSelected: select,
+            header: Text(
+              'Acme Notes',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+          ),
+          Expanded(child: page),
+        ],
+      ),
+    );
+  }
+  return Scaffold(
+    // The page scrolls under the floating bar; Scaffold pads it clear.
+    extendBody: true,
+    body: page,
+    bottomNavigationBar: SafeArea(
+      top: false,
+      // The bar draws the row only: the margins are yours.
+      minimum: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: Center(
+        heightFactor: 1,
+        child: LiquidTabBar(
+          destinations: kDemoDestinations,
+          selectedIndex: _index,
+          onDestinationSelected: select,
+        ),
+      ),
+    ),
+  );
+}
+```
+
+| Phone: `LiquidTabBar` | Wide window: `LiquidSidebar` |
+|---|---|
+| <img src="doc/images/case_standalone_tab_bar.png" width="260" alt="A standalone glass tab bar in a Scaffold"> | <img src="doc/images/case_standalone_sidebar.png" width="480" alt="A standalone glass sidebar beside the page"> |
 
 ### Custom theme
 

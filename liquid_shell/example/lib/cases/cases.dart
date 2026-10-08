@@ -10,6 +10,7 @@ import 'package:liquid_shell_example/cases/hide_chrome.dart';
 import 'package:liquid_shell_example/cases/narrow_width.dart';
 import 'package:liquid_shell_example/cases/sidebar_only.dart';
 import 'package:liquid_shell_example/cases/sidebar_slots.dart';
+import 'package:liquid_shell_example/cases/standalone_widgets.dart';
 import 'package:liquid_shell_example/cases/trailing_action.dart';
 
 /// One entry of the case list.
@@ -88,5 +89,11 @@ const kCases = <ExampleCase>[
     title: 'Narrow width',
     subtitle: '5 tabs + trailing in a 320pt shell: 44pt cells at text scale 1',
     page: NarrowWidthCase(),
+  ),
+  (
+    id: 'standalone',
+    title: 'Standalone widgets',
+    subtitle: 'LiquidTabBar and LiquidSidebar in your own Scaffold',
+    page: StandaloneWidgetsCase(),
   ),
 ];

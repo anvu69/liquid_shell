@@ -14,6 +14,7 @@ import 'package:liquid_shell_example/cases/hide_chrome.dart';
 import 'package:liquid_shell_example/cases/narrow_width.dart';
 import 'package:liquid_shell_example/cases/sidebar_only.dart';
 import 'package:liquid_shell_example/cases/sidebar_slots.dart';
+import 'package:liquid_shell_example/cases/standalone_widgets.dart';
 import 'package:liquid_shell_example/cases/trailing_action.dart';
 
 import '../support/golden_harness.dart';
@@ -119,5 +120,23 @@ void main() {
   // narrow margins (Q17).
   testWidgets('case_narrow', (tester) async {
     await golden(tester, 'case_narrow', const NarrowWidthCase());
+  });
+
+  // LiquidTabBar and LiquidSidebar in the app's own Scaffold, no shell.
+  testWidgets('case_standalone_tab_bar', (tester) async {
+    await golden(
+      tester,
+      'case_standalone_tab_bar',
+      const StandaloneWidgetsCase(),
+    );
+  });
+
+  testWidgets('case_standalone_sidebar', (tester) async {
+    await golden(
+      tester,
+      'case_standalone_sidebar',
+      const StandaloneWidgetsCase(),
+      device: ipadLandscape,
+    );
   });
 }

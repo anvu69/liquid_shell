@@ -35,7 +35,12 @@ void main() {
         addTearDown(tester.view.reset);
         await _openCase(tester, entry.id);
         expect(tester.takeException(), isNull);
-        expect(find.byType(LiquidShell), findsWidgets);
+        expect(
+          find.byWidgetPredicate(
+            (w) => w is LiquidShell || w is LiquidTabBar || w is LiquidSidebar,
+          ),
+          findsWidgets,
+        );
       });
     }
   }
@@ -166,4 +171,38 @@ void main() {
     );
     expect(shell.right - circle.right, 8);
   });
+
+  testWidgets('standalone: a phone gets a LiquidTabBar in your own Scaffold', (
+    tester,
+  ) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(393, 852);
+    addTearDown(tester.view.reset);
+    await _openCase(tester, 'standalone');
+    expect(find.byType(LiquidShell), findsNothing);
+    expect(find.byType(LiquidSidebar), findsNothing);
+    expect(find.byType(LiquidTabBar), findsOneWidget);
+    await tester.tap(find.text('Explore'));
+    await tester.pumpAndSettle();
+    expect(find.text('Explore item 1'), findsOneWidget);
+  });
+
+  testWidgets(
+    'standalone: a wide window gets a LiquidSidebar beside the page',
+    (tester) async {
+      tester.view
+        ..devicePixelRatio = 1
+        ..physicalSize = const Size(1194, 834);
+      addTearDown(tester.view.reset);
+      await _openCase(tester, 'standalone');
+      expect(find.byType(LiquidShell), findsNothing);
+      expect(find.byType(LiquidTabBar), findsNothing);
+      final sidebar = tester.getRect(find.byType(LiquidSidebar));
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      final page = tester.getRect(find.text('Settings item 1'));
+      expect(page.left, greaterThanOrEqualTo(sidebar.right));
+    },
+  );
 }
