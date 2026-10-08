@@ -41,6 +41,13 @@ void main() {
         isNot(const LiquidShellBreakpoints(tiledSidebar: 1200)),
       );
     });
+
+    test('toString names both thresholds', () {
+      expect(
+        '${const LiquidShellBreakpoints(regular: 600, tiledSidebar: 1200)}',
+        'LiquidShellBreakpoints(regular: 600.0, tiledSidebar: 1200.0)',
+      );
+    });
   });
 
   group('presentationFor', () {
@@ -62,6 +69,8 @@ void main() {
       expect(of(1025, 700), ShellPresentation.tiled);
       expect(of(1024, 1366), ShellPresentation.overlay); // portrait
       expect(of(1100, 1100), ShellPresentation.overlay); // square is not w > h
+      expect(of(1024, 1024), ShellPresentation.overlay); // square at the edge
+      expect(of(1100, 1099), ShellPresentation.tiled); // just landscape
     });
 
     test('size class at 699 / 700', () {

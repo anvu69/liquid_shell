@@ -37,4 +37,8 @@ class LiquidShellBreakpoints {
 
   @override
   int get hashCode => Object.hash(regular, tiledSidebar);
+
+  @override
+  String toString() =>
+      'LiquidShellBreakpoints(regular: $regular, tiledSidebar: $tiledSidebar)';
 }
