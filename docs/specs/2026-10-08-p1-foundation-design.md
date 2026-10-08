@@ -1008,7 +1008,7 @@ Matrix `flutter: [3.38.x, stable]` unless noted.
 
 ## 11. Example app
 
-`liquid_shell/example`: a case list on the home screen, and each entry opens one self-contained screen. Each case file has a `// #docregion readme` region, which is the README snippet. A region is a set of members of the screen's `State` class (its fields, `build` and helpers), so it compiles when pasted into the `State` of a new `StatefulWidget` that imports `material.dart` and `liquid_shell.dart`, with the example's `DemoPage` and `kDemoDestinations` as stand-ins (amended 2026-10-09, Task 13). `discard_guard.dart` also has `hide-chrome` (the branch navigator with the `LiquidHideChrome` detail page) and `trailing_action.dart` has `no-chrome` (the search page method); the guard and trailing snippets compile together with these.
+`liquid_shell/example`: a case list on the home screen, and each entry opens one self-contained screen. Each case file has a `// #docregion readme` region, which is the README snippet. A region is a set of members of the screen's `State` class (its fields, `build` and helpers), so it compiles when pasted into the `State` of a new `StatefulWidget` that imports `material.dart` and `liquid_shell.dart`, with the example's `DemoPage` and `kDemoDestinations` as stand-ins (amended 2026-10-09, Task 13). Every region compiles on its own (Task 13 review): the hide-chrome page is its own case, the guard's body is a plain page, and the trailing region includes its search page method, which is also the nested `no-chrome` region. The README quickstart is `lib/quickstart.dart`, a whole app (`main`, `MaterialApp`, `LiquidShell`) whose `quickstart` region compiles in a fresh `flutter create` project. `tool/check_readme_snippets.dart` fails on any region that no README or `doc/` snippet uses.
 
 | Case | File | Shows |
 |---|---|---|
@@ -1017,11 +1017,13 @@ Matrix `flutter: [3.38.x, stable]` unless noted.
 | `sidebarOnly` | `lib/cases/sidebar_only.dart` | Two sidebar-only destinations plus `onSelectedDestinationHidden` switching to tab 0 |
 | Sidebar header/footer | `lib/cases/sidebar_slots.dart` | App title header, profile-style footer |
 | Trailing ⌕ | `lib/cases/trailing_action.dart` | `LiquidTabAction` opening a search page that uses `LiquidNoChrome` |
-| "Discard changes?" guard | `lib/cases/discard_guard.dart` | `beforeDestinationChange` showing a dialog; a detail page pushed inside the branch's own `Navigator` (as a router's shell branch does) with `LiquidHideChrome` |
+| "Discard changes?" guard | `lib/cases/discard_guard.dart` | `beforeDestinationChange` showing a dialog, with an "Unsaved changes" switch |
+| Hide the chrome | `lib/cases/hide_chrome.dart` | A detail page pushed inside the branch's own `Navigator` (as a router's shell branch does) with `LiquidHideChrome` (split from the guard case 2026-10-09, Task 13 review) |
 | Custom chrome | `lib/cases/custom_chrome.dart` | `chromeBuilder` wrapping the default bar and replacing the sidebar |
 | Custom theme | `lib/cases/custom_theme.dart` | `LiquidGlassTheme` extension with brand tint, blur and label style; light/dark switch |
 | Forced tier | `lib/cases/forced_tier.dart` | Segmented liquid/frosted/solid via `LiquidGlassScope(policy: LiquidGlassPolicy(forcedTier: …))`; liquid shows frosted plus a note until P4 |
 | Form factors | `lib/cases/form_factors.dart` | The basic shell inside fixed frames (iPhone 393×852, iPad portrait 834×1194, iPad landscape 1194×834, Android 412×915), scaled to fit, so one device shows every layout |
+| Standalone widgets | `lib/cases/standalone_widgets.dart` | §4.9: `LiquidTabBar` at the bottom of the app's own `Scaffold` on a phone, `LiquidSidebar` beside the page from 700pt; no `LiquidShell` (added 2026-10-09, Task 13 review) |
 | Narrow width | `lib/cases/narrow_width.dart` | 5 tabs + a trailing action in a 320pt-wide shell: margin 8, pill padding 4, 45.2pt cells at text scale 1 (Q17), labels fitted untruncated (Q18); the shell decides from its own width, not the screen's (added 2026-10-08, Task 11). The case clips its 320pt shell, which stands for a narrow window, so the wallpaper discs stay inside it |
 
 Shared support: `lib/support/wallpaper.dart` (the same painter the goldens use; it does not clip, so on iPad the discs show through the tiled sidebar's glass, owner 2026-10-09: 2A) and `lib/support/demo_page.dart` (a long list). `example/test/cases_smoke_test.dart` pumps every case at phone and tablet sizes with no exceptions, and checks the guard, hide/no-chrome pages, the sidebar-only fallback, the custom sidebar leaving the primary scroll controller to the body, and the narrow-width cells.
@@ -1034,13 +1036,15 @@ Shared support: `lib/support/wallpaper.dart` (the same painter the goldens use; 
 2. **Hero images**: a 2 × 3 grid, iPhone / iPad landscape / Android × light / dark (`doc/images/hero_*`).
 3. Features list (only what P1 ships) and platform table (iOS, Android; other platforms: frosted, no signals).
 4. Install (`flutter pub add liquid_shell`).
-5. **Quickstart**: about 10 lines, the basic case.
-6. **Cases**: one `###` section per §11 row, each with **one snippet** (its docregion) and **one image** (its golden). In order: badges, sidebar-only, sidebar slots, trailing action, guard, hide chrome / no chrome, custom chrome, custom theme, forced tier, form factors, narrow width.
+5. **Quickstart**: a whole app from `example/lib/quickstart.dart` (`main`, `MaterialApp`, a two-tab `LiquidShell`), checked like every snippet; the shell itself is about 10 lines.
+6. **Cases**: one `###` section per §11 row, each with **one snippet** (its docregion) and **one image** (its golden). In order: basic tabs, badges, sidebar-only, sidebar slots, trailing action, guard, hide chrome / no chrome, custom chrome, standalone tab bar and sidebar, custom theme, forced tier, form factors, narrow width.
 7. Layout rules: a short version of the §5.1 table.
 8. Accessibility and fallbacks: the signals table from §6.1.
-9. Links to `doc/`; roadmap (P2–P6 in one line each); license.
+9. Limitations (5-tab maximum, narrow label shrink between text scale 1 and 1.6, `PopScope` calls while the overlay sidebar is open, native iOS 26 chrome in P2, liquid tier in P4); links to `doc/`; roadmap (P2–P6 in one line each); license.
 
 Images use relative paths (`doc/images/…`). pub.dev rewrites them against `repository`, so they appear on pub.dev only once the public repo exists (P6).
+
+**P6 release checklist, images (added 2026-10-09, Task 13 review).** pub.dev never serves README images from the archive (`doc/images/` is in `.pubignore`); it rewrites relative URLs to `https://github.com/anvu69/liquid_shell/raw/main/liquid_shell/doc/images/…`, and only when pana's repository verification did not fail. Before `dart pub publish`: (1) the GitHub repo is public; (2) `liquid_shell/doc/images/*` is on `main`; (3) pana reports the repository as verified (no lost repository points). Relative images track `main`, so an older version's page shows the current images.
 
 ### 12.2 `liquid_shell/doc/`
 
