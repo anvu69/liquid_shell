@@ -18,4 +18,6 @@ export 'src/glass/renderer.dart';
 export 'src/glass/signals_controller.dart'
     show debugLiquidGlassCanBlurOverride, debugResetLiquidGlassSignals;
 export 'src/glass/tier.dart';
+export 'src/shell/breakpoints.dart';
+export 'src/shell/shell_layout.dart' show LiquidChromeKind;
 export 'src/shell/strings.dart';
