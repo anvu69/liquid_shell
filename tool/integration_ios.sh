@@ -40,6 +40,7 @@ for name in "${names[@]}"; do
     --driver=test_driver/integration_test.dart \
     --target=integration_test/signals_test.dart \
     -d "$udid" \
+    --dart-define=RUN_NAME="ios_${name//[^A-Za-z0-9]/_}" \
     --dart-define=EXPECT_REDUCE_TRANSPARENCY=false \
     --dart-define=EXPECT_POWER_SAVE=false \
     --dart-define=EXPECT_BLUR_DISABLED=false

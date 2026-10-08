@@ -3,10 +3,11 @@
 // tool/integration_ios.sh and tool/integration_android.sh pass the expected
 // value of each signal with --dart-define. An empty value means "do not
 // check this field" (for example, battery saver also disables window blurs).
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:liquid_shell/liquid_shell.dart';
+import 'package:liquid_shell_example/cases/basic_tabs.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
 const _expectReduceTransparency = String.fromEnvironment(
@@ -15,8 +16,11 @@ const _expectReduceTransparency = String.fromEnvironment(
 const _expectPowerSave = String.fromEnvironment('EXPECT_POWER_SAVE');
 const _expectBlurDisabled = String.fromEnvironment('EXPECT_BLUR_DISABLED');
 
+/// Names the screenshot of this run, for example `android_powerSave`.
+const _runName = String.fromEnvironment('RUN_NAME', defaultValue: 'run');
+
 /// Solid is expected when the run switched any signal on.
-final _expectSolid = [
+final bool _expectSolid = [
   _expectReduceTransparency,
   _expectPowerSave,
   _expectBlurDisabled,
@@ -28,7 +32,7 @@ void _check(String expected, {required bool actual, required String name}) {
 }
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('the platform package registered the event channel', (
     tester,
@@ -61,20 +65,20 @@ void main() {
     );
   });
 
-  testWidgets('glass draws the tier the signals ask for', (tester) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Center(
-          child: LiquidGlass(child: SizedBox(width: 200, height: 60)),
-        ),
-      ),
-    );
+  testWidgets('the shell draws the tier the signals ask for', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: BasicTabsCase()));
     // The first channel event arrives asynchronously, then the tier fades.
     await Future<void>.delayed(const Duration(seconds: 1));
     await tester.pumpAndSettle();
     expect(
       find.byType(BackdropFilter),
-      _expectSolid ? findsNothing : findsOneWidget,
+      _expectSolid ? findsNothing : findsWidgets,
     );
+
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      await binding.convertFlutterSurfaceToImage();
+      await tester.pumpAndSettle();
+    }
+    await binding.takeScreenshot('shell_$_runName');
   });
 }

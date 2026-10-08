@@ -1013,13 +1013,14 @@ Matrix `flutter: [3.38.x, stable]` unless noted.
 | `sidebarOnly` | `lib/cases/sidebar_only.dart` | Two sidebar-only destinations plus `onSelectedDestinationHidden` switching to tab 0 |
 | Sidebar header/footer | `lib/cases/sidebar_slots.dart` | App title header, profile-style footer |
 | Trailing ⌕ | `lib/cases/trailing_action.dart` | `LiquidTabAction` opening a search page that uses `LiquidNoChrome` |
-| "Discard changes?" guard | `lib/cases/discard_guard.dart` | `beforeDestinationChange` showing a dialog; a pushed detail page with `LiquidHideChrome` |
+| "Discard changes?" guard | `lib/cases/discard_guard.dart` | `beforeDestinationChange` showing a dialog; a detail page pushed inside the branch's own `Navigator` (as a router's shell branch does) with `LiquidHideChrome` |
 | Custom chrome | `lib/cases/custom_chrome.dart` | `chromeBuilder` wrapping the default bar and replacing the sidebar |
 | Custom theme | `lib/cases/custom_theme.dart` | `LiquidGlassTheme` extension with brand tint, blur and label style; light/dark switch |
 | Forced tier | `lib/cases/forced_tier.dart` | Segmented liquid/frosted/solid via `LiquidGlassScope(policy: LiquidGlassPolicy(forcedTier: …))`; liquid shows frosted plus a note until P4 |
 | Form factors | `lib/cases/form_factors.dart` | The basic shell inside fixed frames (iPhone 393×852, iPad portrait 834×1194, iPad landscape 1194×834, Android 412×915), scaled to fit, so one device shows every layout |
+| Narrow width | `lib/cases/narrow_width.dart` | 5 tabs + a trailing action in a 320pt-wide shell: margin 8, pill padding 4, 45.2pt cells (Q17); the shell decides from its own width, not the screen's (added 2026-10-08, Task 11) |
 
-Shared support: `lib/support/wallpaper.dart` (the same painter the goldens use) and `lib/support/demo_page.dart` (a long list). `example/test/cases_smoke_test.dart` pumps every case at phone and tablet sizes with no exceptions.
+Shared support: `lib/support/wallpaper.dart` (the same painter the goldens use) and `lib/support/demo_page.dart` (a long list). `example/test/cases_smoke_test.dart` pumps every case at phone and tablet sizes with no exceptions, and checks the guard, hide/no-chrome pages, the sidebar-only fallback, the custom sidebar leaving the primary scroll controller to the body, and the narrow-width cells.
 
 ## 12. Documentation
 

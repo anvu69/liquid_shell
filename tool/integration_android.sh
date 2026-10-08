@@ -51,7 +51,8 @@ run() {
   $FLUTTER drive \
     --driver=test_driver/integration_test.dart \
     --target=integration_test/signals_test.dart \
-    -d "$ANDROID_SERIAL" "$@"
+    -d "$ANDROID_SERIAL" \
+    --dart-define=RUN_NAME="android_$name" "$@"
 }
 
 blur_default=false
