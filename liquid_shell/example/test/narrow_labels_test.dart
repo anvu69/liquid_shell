@@ -26,7 +26,11 @@ void main() {
   testWidgets('at 320 every label of the narrow case fits at 10pt or more, '
       'selected or not', (tester) async {
     await pumpGolden(tester, const NarrowWidthCase(), device: iphone);
-    final labels = [for (final d in kNarrowDestinations) d.label];
+    final labels = [
+      for (final d
+          in tester.widget<LiquidShell>(find.byType(LiquidShell)).destinations)
+        d.label,
+    ];
     expect(labels, ['Home', 'Explore', 'Inbox', 'Saved', 'Settings']);
     for (final text in labels) {
       expectFits(tester, text);

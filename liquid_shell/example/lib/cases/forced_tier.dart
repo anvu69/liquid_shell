@@ -15,12 +15,12 @@ class ForcedTierCase extends StatefulWidget {
 }
 
 class _ForcedTierCaseState extends State<ForcedTierCase> {
+  // #docregion readme
   int _index = 0;
-  late LiquidGlassTier _tier = widget.initialTier;
+  LiquidGlassTier _tier = LiquidGlassTier.frosted;
 
   @override
   Widget build(BuildContext context) {
-    // #docregion readme
     return LiquidGlassScope(
       policy: LiquidGlassPolicy(forcedTier: _tier),
       child: LiquidShell(
@@ -44,6 +44,12 @@ class _ForcedTierCaseState extends State<ForcedTierCase> {
         ),
       ),
     );
-    // #enddocregion readme
+  }
+  // #enddocregion readme
+
+  @override
+  void initState() {
+    super.initState();
+    _tier = widget.initialTier;
   }
 }

@@ -12,11 +12,11 @@ class BasicTabsCase extends StatefulWidget {
 }
 
 class _BasicTabsCaseState extends State<BasicTabsCase> {
+  // #docregion readme
   int _index = 0;
 
   @override
   Widget build(BuildContext context) {
-    // #docregion readme
     return LiquidShell(
       destinations: const [
         LiquidDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
@@ -37,6 +37,7 @@ class _BasicTabsCaseState extends State<BasicTabsCase> {
         ],
       ),
     );
-    // #enddocregion readme
   }
+
+  // #enddocregion readme
 }

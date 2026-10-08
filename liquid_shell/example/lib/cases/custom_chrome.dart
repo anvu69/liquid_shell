@@ -12,6 +12,7 @@ class CustomChromeCase extends StatefulWidget {
 }
 
 class _CustomChromeCaseState extends State<CustomChromeCase> {
+  // #docregion readme
   int _index = 0;
 
   @override
@@ -23,7 +24,6 @@ class _CustomChromeCaseState extends State<CustomChromeCase> {
     body: DemoPage(title: kDemoDestinations[_index].label),
   );
 
-  // #docregion readme
   Widget _chrome(
     BuildContext context,
     LiquidChromeDetails details,

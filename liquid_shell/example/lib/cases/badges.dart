@@ -12,11 +12,11 @@ class BadgesCase extends StatefulWidget {
 }
 
 class _BadgesCaseState extends State<BadgesCase> {
+  // #docregion readme
   int _index = 0;
 
   @override
   Widget build(BuildContext context) {
-    // #docregion readme
     const destinations = [
       LiquidDestination(
         icon: Icon(Icons.inbox_outlined),
@@ -34,7 +34,6 @@ class _BadgesCaseState extends State<BadgesCase> {
         badge: LiquidBadge.dot(),
       ),
     ];
-    // #enddocregion readme
     return LiquidShell(
       destinations: destinations,
       selectedIndex: _index,
@@ -42,4 +41,6 @@ class _BadgesCaseState extends State<BadgesCase> {
       body: DemoPage(title: destinations[_index].label),
     );
   }
+
+  // #enddocregion readme
 }

@@ -74,6 +74,16 @@ void main() {
     );
   });
 
+  // The detail page inside the branch: no chrome at all.
+  testWidgets('case_hide_chrome', (tester) async {
+    await golden(
+      tester,
+      'case_hide_chrome',
+      const DiscardGuardCase(),
+      interact: () => tester.tap(find.text('Open a full-frame detail page')),
+    );
+  });
+
   testWidgets('case_custom_chrome', (tester) async {
     await golden(tester, 'case_custom_chrome', const CustomChromeCase());
   });

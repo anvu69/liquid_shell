@@ -12,12 +12,12 @@ class SidebarSlotsCase extends StatefulWidget {
 }
 
 class _SidebarSlotsCaseState extends State<SidebarSlotsCase> {
+  // #docregion readme
   int _index = 0;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // #docregion readme
     return LiquidShell(
       destinations: kDemoDestinations,
       selectedIndex: _index,
@@ -30,6 +30,7 @@ class _SidebarSlotsCaseState extends State<SidebarSlotsCase> {
       ),
       body: DemoPage(title: kDemoDestinations[_index].label),
     );
-    // #enddocregion readme
   }
+
+  // #enddocregion readme
 }

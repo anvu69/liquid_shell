@@ -12,12 +12,12 @@ class CustomThemeCase extends StatefulWidget {
 }
 
 class _CustomThemeCaseState extends State<CustomThemeCase> {
+  // #docregion readme
   int _index = 0;
   Brightness _brightness = Brightness.light;
 
   @override
   Widget build(BuildContext context) {
-    // #docregion readme
     final scheme = ColorScheme.fromSeed(
       seedColor: const Color(0xFF00897B),
       brightness: _brightness,
@@ -32,7 +32,6 @@ class _CustomThemeCaseState extends State<CustomThemeCase> {
       ),
     );
     final theme = ThemeData(colorScheme: scheme, extensions: [glass]);
-    // #enddocregion readme
     return Theme(
       data: theme,
       child: LiquidShell(
@@ -54,4 +53,6 @@ class _CustomThemeCaseState extends State<CustomThemeCase> {
       ),
     );
   }
+
+  // #enddocregion readme
 }

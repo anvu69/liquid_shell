@@ -43,27 +43,36 @@ class FormFactorsCase extends StatelessWidget {
         for (final frame in kDeviceFrames) ...[
           Text(frame.name, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
-          // #docregion readme
-          AspectRatio(
-            aspectRatio: frame.size.aspectRatio,
-            child: FittedBox(
-              child: SizedBox.fromSize(
-                size: frame.size,
-                child: MediaQuery(
-                  data: MediaQuery.of(context).copyWith(
-                    size: frame.size,
-                    padding: frame.padding,
-                    viewPadding: frame.padding,
-                  ),
-                  child: const BasicTabsCase(),
-                ),
-              ),
-            ),
-          ),
-          // #enddocregion readme
+          _inFrame(context, frame.size, frame.padding, const BasicTabsCase()),
           const SizedBox(height: 24),
         ],
       ],
     ),
   );
+
+  // #docregion readme
+  /// [child] laid out as on a device of logical [size] with safe-area
+  /// [padding], then scaled to the width it is given.
+  Widget _inFrame(
+    BuildContext context,
+    Size size,
+    EdgeInsets padding,
+    Widget child,
+  ) => AspectRatio(
+    aspectRatio: size.aspectRatio,
+    child: FittedBox(
+      child: SizedBox.fromSize(
+        size: size,
+        child: MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            size: size,
+            padding: padding,
+            viewPadding: padding,
+          ),
+          child: child,
+        ),
+      ),
+    ),
+  );
+  // #enddocregion readme
 }

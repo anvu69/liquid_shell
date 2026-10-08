@@ -12,11 +12,11 @@ class SidebarOnlyCase extends StatefulWidget {
 }
 
 class _SidebarOnlyCaseState extends State<SidebarOnlyCase> {
+  // #docregion readme
   int _index = 0;
 
   @override
   Widget build(BuildContext context) {
-    // #docregion readme
     return LiquidShell(
       destinations: const [
         ...kDemoDestinations,
@@ -37,6 +37,7 @@ class _SidebarOnlyCaseState extends State<SidebarOnlyCase> {
       onSelectedDestinationHidden: (_) => setState(() => _index = 0),
       body: DemoPage(title: 'Destination ${_index + 1}'),
     );
-    // #enddocregion readme
   }
+
+  // #enddocregion readme
 }

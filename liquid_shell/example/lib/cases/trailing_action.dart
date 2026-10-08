@@ -12,11 +12,11 @@ class TrailingActionCase extends StatefulWidget {
 }
 
 class _TrailingActionCaseState extends State<TrailingActionCase> {
+  // #docregion readme
   int _index = 0;
 
   @override
   Widget build(BuildContext context) {
-    // #docregion readme
     return LiquidShell(
       destinations: kDemoDestinations,
       selectedIndex: _index,
@@ -25,22 +25,17 @@ class _TrailingActionCaseState extends State<TrailingActionCase> {
         icon: const Icon(Icons.search),
         semanticLabel: 'Search',
         onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(builder: (_) => const SearchPage()),
+          MaterialPageRoute<void>(builder: _searchPage),
         ),
       ),
       body: DemoPage(title: kDemoDestinations[_index].label),
     );
-    // #enddocregion readme
   }
-}
+  // #enddocregion readme
 
-/// A page pushed above the shell: no chrome covers it.
-class SearchPage extends StatelessWidget {
-  /// Creates the page.
-  const SearchPage({super.key});
-
-  @override
-  Widget build(BuildContext context) => const LiquidNoChrome(
+  // #docregion no-chrome
+  // Pushed above the shell (on the app's navigator): no chrome covers it.
+  Widget _searchPage(BuildContext context) => const LiquidNoChrome(
     child: Scaffold(
       body: DemoPage(
         title: 'Search',
@@ -48,4 +43,5 @@ class SearchPage extends StatelessWidget {
       ),
     ),
   );
+  // #enddocregion no-chrome
 }

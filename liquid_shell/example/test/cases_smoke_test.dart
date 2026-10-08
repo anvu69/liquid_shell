@@ -2,8 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell_example/cases/cases.dart';
-import 'package:liquid_shell_example/cases/narrow_width.dart';
 import 'package:liquid_shell_example/main.dart';
+
+/// The destination labels of the only [LiquidShell] on screen.
+List<String> shellLabels(WidgetTester tester) => [
+  for (final d
+      in tester.widget<LiquidShell>(find.byType(LiquidShell)).destinations)
+    d.label,
+];
 
 const _sizes = {'phone': Size(393, 852), 'tablet': Size(1194, 834)};
 
@@ -136,7 +142,7 @@ void main() {
     expect(shell.width, 320);
     final bar = find.byType(LiquidTabBar);
     final cells = [
-      for (final label in kNarrowDestinations.map((d) => d.label))
+      for (final label in shellLabels(tester))
         tester.getRect(
           find.ancestor(
             of: find.descendant(of: bar, matching: find.text(label)),

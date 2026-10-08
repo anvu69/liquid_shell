@@ -1,0 +1,154 @@
+# Router integration
+
+`LiquidShell` owns no navigation. You give it the selected index, a callback
+and a `body`; it gives you chrome, insets and the sidebar.
+
+## Keep branch state alive
+
+The shell never rebuilds `body` under a new parent, so state survives every
+layout change. Keeping **inactive** branches alive is your job: use an
+`IndexedStack` (or your router's equivalent).
+
+```dart
+LiquidShell(
+  destinations: destinations,
+  selectedIndex: index,
+  onDestinationSelected: (i) => setState(() => index = i),
+  body: IndexedStack(
+    index: index,
+    children: [for (final tab in tabs) tab.page],
+  ),
+)
+```
+
+## One Navigator per tab
+
+```dart
+final keys = [for (final _ in tabs) GlobalKey<NavigatorState>()];
+
+LiquidShell(
+  destinations: destinations,
+  selectedIndex: index,
+  onDestinationSelected: (i) {
+    if (i == index) {
+      keys[i].currentState!.popUntil((route) => route.isFirst); // reselect
+    }
+    setState(() => index = i);
+  },
+  body: IndexedStack(
+    index: index,
+    children: [
+      for (final (i, tab) in tabs.indexed)
+        Navigator(
+          key: keys[i],
+          onGenerateRoute: (_) => MaterialPageRoute(builder: tab.builder),
+        ),
+    ],
+  ),
+)
+```
+
+## go_router (until the adapter ships)
+
+```dart
+StatefulShellRoute.indexedStack(
+  builder: (context, state, shell) => LiquidShell(
+    destinations: destinations,
+    selectedIndex: shell.currentIndex,
+    onDestinationSelected: (i) =>
+        shell.goBranch(i, initialLocation: i == shell.currentIndex),
+    body: shell,
+  ),
+  branches: [/* one StatefulShellBranch per destination */],
+)
+```
+
+`StatefulShellRoute.indexedStack` already keeps each branch alive.
+
+## Pages and the chrome
+
+| Page | Wrap it in | Effect |
+|---|---|---|
+| Inside a branch, normal | nothing; pad with `LiquidShellScope.contentPaddingOf(context)` | content scrolls under the glass |
+| Inside a branch, full frame (reader, detail) | `LiquidHideChrome` | every piece of chrome hides while it is mounted |
+| Above the shell (root navigator: search, sheets) | `LiquidNoChrome` | its insets ignore the chrome underneath |
+| Static content | `LiquidContentInset` | `Padding(contentPaddingOf(context))` |
+
+"Inside a branch" means on a `Navigator` that sits **under** the shell, in
+its `body`: a router's shell branch, or your own per-tab `Navigator` as
+above. `LiquidHideChrome` finds the shell above it, so a page on the app's
+root navigator cannot hide the chrome; it is above the shell and needs
+`LiquidNoChrome` instead. Wrap your own branch navigator in a
+`NavigatorPopHandler` so system back pops the branch first. The README's
+"Hide the chrome" case is a complete example.
+
+## Leaving a page with unsaved work
+
+`beforeDestinationChange` runs before every user selection (not before
+programmatic `selectedIndex` changes). Show a dialog and return its answer:
+
+```dart
+beforeDestinationChange: (index) async {
+  if (!form.isDirty) return true;
+  return await showDialog<bool>(
+        context: context,
+        builder: (_) => const DiscardDialog(),
+      ) ??
+      false;
+},
+```
+
+While it is pending, further taps are ignored. A throw counts as `false`
+and is reported through `FlutterError.reportError`. If `destinations`
+changes while the guard is pending, an accepted selection goes to the
+destination with the same label, or is dropped when that label is gone.
+That is why labels must be unique; a debug assert names any repeats.
+
+## The sidebar from your pages
+
+```dart
+final scope = LiquidShellScope.of(context);
+if (scope.sizeClass == LiquidSizeClass.regular) {
+  scope.setSidebarVisible(false); // for example, on a wide editor page
+}
+```
+
+There is one shell-wide sidebar state. It resets to the default (shown when
+tiled, hidden when overlay) whenever the presentation changes.
+
+## System back and the overlay sidebar
+
+While the overlay sidebar is open, system back closes it before it pops
+anything. The shell does this with a `PopScope` that blocks the pop only
+while the overlay is shown; otherwise it does not take part, and your own
+`PopScope`s (an exit confirmation, an unsaved form) decide as usual.
+
+Known limitation: a route calls **every** `PopScope` on it. So while the
+overlay is open, a back gesture that closes the sidebar also calls your own
+`PopScope.onPopInvokedWithResult` on the same route, with `didPop: false`.
+If that handler shows a dialog, ignore the call while the overlay is open:
+
+```dart
+PopScope(
+  canPop: !form.isDirty,
+  onPopInvokedWithResult: (didPop, _) {
+    if (didPop) return;
+    final shell = LiquidShellScope.maybeOf(context);
+    if (shell?.chromeKind == LiquidChromeKind.sidebarOverlay) return;
+    showDiscardDialog(context);
+  },
+  child: page,
+)
+```
+
+`LiquidShellScope.maybeOf` only sees the shell from below it, so put such a
+`PopScope` inside the shell's `body`, or track the sidebar yourself. The
+same goes for a `NavigatorPopHandler` around a branch navigator: it is a
+`PopScope` on the shell's route, so while the overlay is open a back
+gesture would also pop a page the branch has pushed. Return early from its
+`onPopWithResult` the same way. (A `PopScope` on a page of the branch's own
+navigator belongs to that navigator's route and is not called.)
+
+A router that sends system back to the deepest navigator itself, as
+go_router does, has its own order; this guide does not cover how it treats
+an open overlay sidebar. The planned go_router adapter will.

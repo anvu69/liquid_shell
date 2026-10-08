@@ -43,6 +43,6 @@ void main() {
       tester.getRect(clip),
       tester.getRect(find.byType(LiquidShell)),
     );
-    expect(tester.getSize(clip).width, kNarrowShellWidth);
+    expect(tester.getSize(clip).width, 320);
   });
 }
