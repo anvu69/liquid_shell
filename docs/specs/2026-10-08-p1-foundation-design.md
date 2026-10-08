@@ -217,7 +217,7 @@ Rules:
 - **Runtime dependencies are Flutter only**, plus our own federated packages and `plugin_platform_interface` (BSD-3, from the Flutter team). There is no third-party UI, i18n, router, logger or equality package.
 - Every package's `analysis_options.yaml` includes `package:very_good_analysis/analysis_options.yaml` directly, never a file outside the package.
 - `very_good_analysis` is pinned to **10.1.0**. It is the last release whose SDK constraint (`^3.10.0`) resolves on Dart 3.10. Releases 10.2 and later need Dart 3.11 or 3.12. Pinning the exact version keeps the lint set the same on the 3.38 and stable CI jobs.
-- Native floors: iOS 13.0 (Flutter 3.38 minimum); Android `minSdk` = `flutter.minSdkVersion` and `compileSdk` 36 (Q16).
+- Native floors: iOS 15.0 (Xcode 27 rejects lower deployment targets); Android `minSdk` = `flutter.minSdkVersion` and `compileSdk` 36 (Q16).
 - `liquid_shell/.pubignore` excludes `doc/images/` and `test/goldens/failures/`. README images resolve through `repository` on pub.dev (§12.1).
 
 ### 3.3 Federated wiring
@@ -663,7 +663,7 @@ class EventChannelLiquidShellPlatform extends LiquidShellPlatform {
 
 ### 4.9 Exported vs internal
 
-Exported: everything in §4.1–4.7 plus `LiquidPlatformSignals`. Internal (`lib/src`, not exported): the tab bar, sidebar and toggle widgets, the frosted and solid renderers, the bar height reporter, the signals controller, the large content viewer and the text-scale helpers. Q12 covers whether to export the bar and sidebar widgets.
+Exported: everything in §4.1–4.7 plus `LiquidPlatformSignals`, **plus `LiquidTabBar` and `LiquidSidebar` as standalone public widgets (Q12 = Yes): each gets a documented constructor taking the same destinations / selection / badge / trailing / header / footer inputs the shell passes, its own tests, an example case and a README section.** Internal (`lib/src`, not exported): the sidebar toggle widget, the frosted and solid renderers, the bar height reporter, the signals controller, the large content viewer and the text-scale helpers.
 
 Test-only hooks (`@visibleForTesting`, exported): `debugLiquidGlassCanBlurOverride` (a `bool?` top-level variable) and `debugResetLiquidGlassSignals()`.
 
@@ -1066,6 +1066,8 @@ Images use relative paths (`doc/images/…`). pub.dev rewrites them against `rep
 
 ## 15. Open questions
 
+> **Resolved 2026-10-08 — the owner accepted every default below ("Ok hết"), with Q12 changed to Yes and Q16 changed to iOS 15.0. The rest of this spec is amended accordingly wherever it says otherwise.**
+
 Every entry has a recommended default. If the owner says nothing, the default applies.
 
 | # | Question | Recommended default |
@@ -1081,8 +1083,8 @@ Every entry has a recommended default. If the owner says nothing, the default ap
 | Q9 | Bottom gap on Android with 3-button navigation | **21 over gesture areas, otherwise `max(21, viewPadding.bottom + 8)`** |
 | Q10 | System back while the overlay sidebar is shown | **Closes the sidebar** (`PopScope` on the shell's route). P5 re-checks this with go_router |
 | Q11 | Golden reference toolchain | **macOS runner + Flutter 3.38.x is blocking**; stable runs non-blocking; 0.5% pixel tolerance. Images are regenerated on macOS with `tool/update_goldens.sh` |
-| Q12 | Export the tab bar and sidebar as standalone widgets? | **No in P1.** `chromeBuilder` hands over `defaultChrome`. Revisit in P6 |
+| Q12 | Export the tab bar and sidebar as standalone widgets? | **Yes (owner, 2026-10-08).** Export `LiquidTabBar` and `LiquidSidebar` as public, documented, tested widgets so apps can compose their own chrome; `chromeBuilder` still hands over `defaultChrome` |
 | Q13 | Automated README snippet check | **Yes**, `tool/check_readme_snippets.dart` in CI (small script, prevents doc drift) |
 | Q14 | Coverage gate | **90% line coverage** for `liquid_shell/lib` and `liquid_shell_platform_interface/lib`, as a fixed floor, without ratchet files |
 | Q15 | Copyright line in the MIT `LICENSE` | **`Copyright (c) 2026 lasoai.vn`** |
-| Q16 | Native floors | **iOS 13.0; Android `minSdk` = Flutter's default (`flutter.minSdkVersion`), `compileSdk` 36** |
+| Q16 | Native floors | **iOS 15.0 (owner, 2026-10-08: Xcode 27 rejects deployment targets below 15.0; matches the vankhan app, ADR there); Android `minSdk` = Flutter's default (`flutter.minSdkVersion`), `compileSdk` 36** |
