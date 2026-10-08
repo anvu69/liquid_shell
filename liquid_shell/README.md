@@ -793,6 +793,29 @@ Cells and rows are buttons with labels, badge text and selected state. From
 The overlay sidebar is modal for screen readers, and while it is open,
 system back closes it before anything else.
 
+## Limitations
+
+- **At most 5 tab-bar destinations.** More than 5 `everywhere`
+  destinations trip a debug assert; release builds draw them in narrower
+  cells. Put the rest in the sidebar with `LiquidPlacement.sidebarOnly`.
+- **Narrow labels shrink before large text takes over.** In a narrow bar,
+  between text scale 1 and 1.6 a label that does not fit is drawn smaller
+  than the size the user chose, down to 10pt. Icon-only cells and the
+  large content viewer start at 1.6 (see [Narrow width](#narrow-width)).
+- **Back with the overlay sidebar open.** System back closes the overlay
+  sidebar first, but the route still calls your own `PopScope` handlers
+  with `didPop: false`. A handler that shows a dialog should return early
+  while `chromeKind` is `LiquidChromeKind.sidebarOverlay` (see
+  [doc/router_integration.md](doc/router_integration.md#system-back-and-the-overlay-sidebar)).
+  How a router such as go_router orders back is not covered yet.
+- **Flutter-drawn chrome on iOS 26.** The tab bar and sidebar are drawn by
+  Flutter on every platform. Native iOS 26 chrome (`UITabBarController`,
+  the iPadOS window controls) comes in P2.
+- **No liquid tier yet.** Forcing `LiquidGlassTier.liquid` draws frosted.
+  The liquid tier comes in P4 (and a native iOS 26 renderer in P2).
+- **Android signals are best effort.** Each one that cannot be read
+  counts as off.
+
 ## More
 
 - [doc/theming.md](doc/theming.md): `LiquidGlassTheme` fields and defaults
@@ -801,9 +824,15 @@ system back closes it before anything else.
   `Navigator` and go_router wiring, branch state, hide/no chrome, system
   back, known limits
 
-Roadmap: native iOS chrome (UITabBarController, window controls); back
-button and search field; a liquid tier for Android; a go_router adapter;
-0.1.0 on pub.dev.
+## Roadmap
+
+- **P2:** native iOS chrome (`UITabBarController` sidebar, iPadOS 26 window
+  controls) and a native liquid renderer on iOS 26.
+- **P3:** a glass back button and title bar, a search field and a search tab.
+- **P4:** the liquid tier on Android, as a `LiquidGlassRenderer` adapter.
+- **P5:** a go_router adapter (`StatefulShellRoute` builder, route-driven
+  hide chrome).
+- **P6:** final docs pass and 0.1.0 on pub.dev.
 
 ## License
 

@@ -23,15 +23,23 @@ LiquidShell(
 
 ## One Navigator per tab
 
-```dart
-final keys = [for (final _ in tabs) GlobalKey<NavigatorState>()];
+Create the navigator keys once, as fields of your `State`. A `GlobalKey`
+made in `build` is a new key on every build, so every tab would lose its
+stack.
 
+```dart
+// Fields of your State class: created once, never in build.
+late final List<GlobalKey<NavigatorState>> _keys = [
+  for (final _ in tabs) GlobalKey<NavigatorState>(),
+];
+
+// In build:
 LiquidShell(
   destinations: destinations,
   selectedIndex: index,
   onDestinationSelected: (i) {
     if (i == index) {
-      keys[i].currentState!.popUntil((route) => route.isFirst); // reselect
+      _keys[i].currentState!.popUntil((route) => route.isFirst); // reselect
     }
     setState(() => index = i);
   },
@@ -40,7 +48,7 @@ LiquidShell(
     children: [
       for (final (i, tab) in tabs.indexed)
         Navigator(
-          key: keys[i],
+          key: _keys[i],
           onGenerateRoute: (_) => MaterialPageRoute(builder: tab.builder),
         ),
     ],
