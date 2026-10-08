@@ -35,12 +35,21 @@ jobs:
           flutter-version: ${{ matrix.flutter != 'stable' && matrix.flutter || '' }}
           cache: true
       - run: make get
+      # On the informational stable leg every check runs even after one
+      # fails, so a single run shows every stable incompatibility. The job
+      # still ends red. The 3.38.x leg keeps stopping at the first failure.
       - run: make format-check
+        if: ${{ success() || (failure() && matrix.experimental) }}
       - run: make analyze
+        if: ${{ success() || (failure() && matrix.experimental) }}
       - run: make provenance
+        if: ${{ success() || (failure() && matrix.experimental) }}
       - run: make test
+        if: ${{ success() || (failure() && matrix.experimental) }}
       - run: make coverage
+        if: ${{ success() || (failure() && matrix.experimental) }}
       - run: make snippets
+        if: ${{ success() || (failure() && matrix.experimental) }}
 
   pana:
     runs-on: ubuntu-latest
