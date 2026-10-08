@@ -28,6 +28,13 @@ const double kLiquidTabBarTrailingGap = 8;
 ///
 /// `LiquidShell` places it for you. Use it directly to build your own
 /// chrome. It draws the row only: the caller adds the outer margins.
+///
+/// Standalone use needs a [Directionality] and an [Overlay] above it: the
+/// trailing tooltip and the large content viewer (long press at accessibility
+/// text sizes) show in the overlay. Inside a route of a `MaterialApp` both
+/// are present; in `MaterialApp.builder`, above the `Navigator`, there is no
+/// [Overlay]. Debug builds assert both. ([MediaQuery] always comes from the
+/// enclosing `View`.)
 class LiquidTabBar extends StatelessWidget {
   /// Creates a tab bar.
   const LiquidTabBar({
@@ -63,7 +70,8 @@ class LiquidTabBar extends StatelessWidget {
   /// change the destination.
   final bool minimized;
 
-  /// Called when the minimised bar is tapped.
+  /// Called when the minimised bar is tapped. When null, the minimised bar
+  /// neither announces an expansion nor carries the expand hint.
   final VoidCallback? onExpand;
 
   /// Strings for the minimised hint, the expand announcement and badges.
@@ -71,6 +79,8 @@ class LiquidTabBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    assert(debugCheckHasDirectionality(context));
+    assert(debugCheckHasOverlay(context));
     final visible = [
       for (final (i, destination) in destinations.indexed)
         if (destination.placement == LiquidPlacement.everywhere) i,
@@ -91,7 +101,10 @@ class LiquidTabBar extends StatelessWidget {
         onDestinationSelected(index);
         return;
       }
-      onExpand?.call();
+      final expand = onExpand;
+      // Nothing opens without onExpand, so there is nothing to announce.
+      if (expand == null) return;
+      expand();
       unawaited(
         SemanticsService.sendAnnouncement(
           View.of(context),
@@ -101,29 +114,39 @@ class LiquidTabBar extends StatelessWidget {
       );
     }
 
-    final pill = LiquidGlass(
-      child: Padding(
-        padding: top
-            ? const EdgeInsets.all(4)
-            : const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final i in shown)
-              Flexible(
-                child: _Cell(
-                  destination: destinations[i],
-                  selected: i == selectedIndex,
-                  minimized: minimized,
-                  top: top,
-                  ax: ax,
-                  strings: strings,
-                  onTap: () => handleTap(i),
-                ),
+    final cells = Padding(
+      padding: top
+          ? const EdgeInsets.all(4)
+          : const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final i in shown)
+            Flexible(
+              child: _Cell(
+                destination: destinations[i],
+                selected: i == selectedIndex,
+                minimized: minimized,
+                expandable: onExpand != null,
+                top: top,
+                ax: ax,
+                strings: strings,
+                onTap: () => handleTap(i),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
+    );
+    // The size animates INSIDE the glass, so the glass background (its
+    // rounded shape and outside shadow) follows the animated size instead of
+    // being laid out at full size and clipped square by AnimatedSize.
+    final pill = LiquidGlass(
+      child: MediaQuery.disableAnimationsOf(context)
+          ? cells
+          : AnimatedSize(
+              duration: const Duration(milliseconds: 200),
+              child: cells,
+            ),
     );
 
     final action = trailing;
@@ -134,14 +157,7 @@ class LiquidTabBar extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Flexible(
-              child: MediaQuery.disableAnimationsOf(context)
-                  ? pill
-                  : AnimatedSize(
-                      duration: const Duration(milliseconds: 200),
-                      child: pill,
-                    ),
-            ),
+            Flexible(child: pill),
             if (action != null) ...[
               const SizedBox(width: kLiquidTabBarTrailingGap),
               LiquidActionCircle(action: action),
@@ -158,6 +174,7 @@ class _Cell extends StatelessWidget {
     required this.destination,
     required this.selected,
     required this.minimized,
+    required this.expandable,
     required this.top,
     required this.ax,
     required this.strings,
@@ -167,6 +184,10 @@ class _Cell extends StatelessWidget {
   final LiquidDestination destination;
   final bool selected;
   final bool minimized;
+
+  /// Whether a tap on the minimised cell opens the bar ([LiquidTabBar.onExpand]
+  /// is set). Without it the cell carries no expand hint.
+  final bool expandable;
   final bool top;
   final bool ax;
   final LiquidShellStrings strings;
@@ -240,7 +261,7 @@ class _Cell extends StatelessWidget {
       // node must not claim a selected state at all.
       selected: minimized ? null : selected,
       label: badgeSemanticsLabel(destination.label, destination.badge, strings),
-      hint: minimized ? strings.expandTabBarHint : null,
+      hint: minimized && expandable ? strings.expandTabBarHint : null,
       onTap: onTap,
       excludeSemantics: true,
       child: LargeContentViewer(

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/chrome/large_content_viewer.dart';
+import 'package:liquid_shell/src/glass/outside_shadow.dart';
 
 final _scheme = ColorScheme.fromSeed(seedColor: const Color(0xFF3366CC));
 
@@ -258,6 +259,33 @@ void main() {
     expect(find.byType(AnimatedSize), findsNothing);
   });
 
+  testWidgets('expanding animates the glass itself, so its rounded shape and '
+      'outside shadow follow the size', (tester) async {
+    await tester.pumpWidget(_host(selectedIndex: 1, minimized: true));
+    final glass = find.byType(LiquidGlass);
+    final shadow = find.descendant(
+      of: glass,
+      matching: find.byType(OutsideShadow),
+    );
+    final small = tester.getSize(glass).width;
+
+    await tester.pumpWidget(_host(selectedIndex: 1));
+    await tester.pump(const Duration(milliseconds: 100));
+    // Mid-animation: the glass is outermost (no AnimatedSize clips it), it
+    // has the in-between width, and its shadow is drawn at that width.
+    expect(
+      find.ancestor(of: glass, matching: find.byType(AnimatedSize)),
+      findsNothing,
+    );
+    final mid = tester.getSize(glass).width;
+    expect(tester.getSize(shadow).width, mid);
+
+    await tester.pumpAndSettle();
+    final full = tester.getSize(glass).width;
+    expect(mid, greaterThan(small));
+    expect(mid, lessThan(full));
+  });
+
   testWidgets('AX text scale: icon-only cells, label in semantics, long '
       'press shows the large content viewer', (tester) async {
     final handle = tester.ensureSemantics();
@@ -318,10 +346,34 @@ void main() {
 
   testWidgets('announcement uses the ambient text direction', (tester) async {
     await tester.pumpWidget(
-      _host(minimized: true, direction: TextDirection.rtl),
+      _host(minimized: true, direction: TextDirection.rtl, onExpand: () {}),
     );
     await tester.tap(find.text('Home'));
     expect(tester.takeAnnouncements().single.textDirection, TextDirection.rtl);
+  });
+
+  testWidgets('minimised without onExpand: no hint and no announcement', (
+    tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    final selected = <int>[];
+    await tester.pumpWidget(
+      _host(selectedIndex: 1, minimized: true, onSelected: selected.add),
+    );
+    expect(
+      tester.getSemantics(_cell('Inbox')),
+      matchesSemantics(
+        label: 'Inbox, 120 new',
+        isButton: true,
+        hasTapAction: true,
+      ),
+    );
+    // matchesSemantics skips a null hint, so check it directly.
+    expect(tester.getSemantics(_cell('Inbox')).hint, isEmpty);
+    await tester.tap(find.text('Inbox'));
+    expect(tester.takeAnnouncements(), isEmpty);
+    expect(selected, isEmpty);
+    handle.dispose();
   });
 
   testWidgets('the selected cell draws selectedIcon, the others icon', (
@@ -422,4 +474,48 @@ void main() {
     );
     expect(tester.getSize(cell).width, lessThanOrEqualTo(88));
   });
+
+  group('standalone use asserts its required ancestors', () {
+    const bar = LiquidTabBar(
+      destinations: _destinations,
+      selectedIndex: 0,
+      onDestinationSelected: _ignore,
+    );
+
+    testWidgets('Overlay', (tester) async {
+      await tester.pumpWidget(
+        const MediaQuery(
+          data: MediaQueryData(),
+          child: Directionality(textDirection: TextDirection.ltr, child: bar),
+        ),
+      );
+      expect(
+        tester.takeException(),
+        isA<FlutterError>().having(
+          (e) => e.message,
+          'message',
+          allOf(
+            contains('No Overlay widget found'),
+            contains('LiquidTabBar widgets require an Overlay widget ancestor'),
+          ),
+        ),
+      );
+    });
+
+    testWidgets('Directionality', (tester) async {
+      await tester.pumpWidget(
+        const MediaQuery(data: MediaQueryData(), child: bar),
+      );
+      expect(
+        tester.takeException(),
+        isA<FlutterError>().having(
+          (e) => e.message,
+          'message',
+          contains('No Directionality widget found'),
+        ),
+      );
+    });
+  });
 }
+
+void _ignore(int _) {}
