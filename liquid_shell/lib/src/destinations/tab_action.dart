@@ -21,6 +21,9 @@ class LiquidTabAction {
   /// row.
   final String semanticLabel;
 
+  /// Field by field. Widgets ([icon]) and callbacks ([onPressed]) compare by
+  /// identity; use const or stable instances, or two equal-looking actions
+  /// are never `==`.
   @override
   bool operator ==(Object other) =>
       other is LiquidTabAction &&

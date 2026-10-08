@@ -37,6 +37,9 @@ class LiquidDestination {
   /// Tab bar and sidebar, or sidebar only.
   final LiquidPlacement placement;
 
+  /// Field by field. Widgets ([icon], [selectedIcon]) compare by identity;
+  /// use const or stable instances, or two equal-looking destinations are
+  /// never `==`.
   @override
   bool operator ==(Object other) =>
       other is LiquidDestination &&

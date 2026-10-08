@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/destinations/badge.dart';
 
+String _otherBadgeCount(int count) => '$count unread';
+
 void main() {
   group('LiquidDestination', () {
     test('defaults: everywhere, no badge, no selected icon', () {
@@ -15,7 +17,7 @@ void main() {
       expect(destination.selectedIcon, isNull);
     });
 
-    test('== compares every field', () {
+    test('equal fields are equal with equal hash codes', () {
       const icon = Icon(Icons.home_outlined);
       expect(
         const LiquidDestination(icon: icon, label: 'Home'),
@@ -25,27 +27,47 @@ void main() {
         const LiquidDestination(icon: icon, label: 'Home').hashCode,
         const LiquidDestination(icon: icon, label: 'Home').hashCode,
       );
-      expect(
-        const LiquidDestination(icon: icon, label: 'Home'),
-        isNot(
-          const LiquidDestination(
-            icon: icon,
-            label: 'Home',
-            placement: LiquidPlacement.sidebarOnly,
-          ),
-        ),
-      );
-      expect(
-        const LiquidDestination(icon: icon, label: 'Home'),
-        isNot(
-          const LiquidDestination(
-            icon: icon,
-            label: 'Home',
-            badge: LiquidBadge.dot(),
-          ),
-        ),
-      );
     });
+
+    // Shared instances: under `flutter test` widget-creation tracking makes
+    // two `const Icon(...)` at different source lines non-identical, and
+    // widgets compare by identity.
+    const home = Icon(Icons.home_outlined);
+    const homeFilled = Icon(Icons.home);
+    const inbox = Icon(Icons.inbox_outlined);
+    LiquidDestination destination({
+      Widget icon = home,
+      Widget? selectedIcon = homeFilled,
+      String label = 'Home',
+      LiquidBadge? badge = const LiquidBadge.count(3),
+      LiquidPlacement placement = LiquidPlacement.everywhere,
+    }) => LiquidDestination(
+      icon: icon,
+      selectedIcon: selectedIcon,
+      label: label,
+      badge: badge,
+      placement: placement,
+    );
+
+    test('the shared builder is equal to itself', () {
+      expect(destination(), destination());
+      expect(destination().hashCode, destination().hashCode);
+    });
+
+    for (final (field, other) in [
+      ('icon', () => destination(icon: inbox)),
+      ('selectedIcon', () => destination(selectedIcon: inbox)),
+      ('label', () => destination(label: 'Start')),
+      ('badge', () => destination(badge: const LiquidBadge.count(4))),
+      (
+        'placement',
+        () => destination(placement: LiquidPlacement.sidebarOnly),
+      ),
+    ]) {
+      test('== sees a different $field alone', () {
+        expect(destination(), isNot(other()));
+      });
+    }
   });
 
   group('LiquidBadge', () {
@@ -71,6 +93,9 @@ void main() {
         const LiquidBadge.count(3),
         isNot(const LiquidBadge.count(3, max: 9)),
       );
+      expect(const LiquidBadge.count(3), isNot(const LiquidBadge.count(4)));
+      expect(const LiquidBadge.count(1), isNot(const LiquidBadge.dot()));
+      expect(const LiquidBadge.dot(), isNot(const LiquidBadge.count(1)));
       expect(const LiquidBadge.dot(), const LiquidBadge.dot());
       expect(
         const LiquidBadge.dot().hashCode,
@@ -108,35 +133,54 @@ void main() {
         'Inbox, New',
       );
     });
+
+    test('semantics label speaks the overridden badge strings', () {
+      final strings = LiquidShellStrings(
+        badgeDot: 'Unread',
+        badgeCount: (count) => count == 1 ? '1 message' : '$count messages',
+      );
+      expect(
+        badgeSemanticsLabel('Inbox', const LiquidCountBadge(1), strings),
+        'Inbox, 1 message',
+      );
+      expect(
+        badgeSemanticsLabel('Inbox', const LiquidCountBadge(120), strings),
+        'Inbox, 120 messages',
+      );
+      expect(
+        badgeSemanticsLabel('Inbox', const LiquidDotBadge(), strings),
+        'Inbox, Unread',
+      );
+    });
   });
 
   group('LiquidTabAction', () {
-    test('== compares every field', () {
-      void onPressed() {}
-      const icon = Icon(Icons.search);
-      expect(
-        LiquidTabAction(icon: icon, onPressed: onPressed, semanticLabel: 'S'),
-        LiquidTabAction(icon: icon, onPressed: onPressed, semanticLabel: 'S'),
-      );
-      expect(
-        LiquidTabAction(
-          icon: icon,
-          onPressed: onPressed,
-          semanticLabel: 'S',
-        ).hashCode,
-        LiquidTabAction(
-          icon: icon,
-          onPressed: onPressed,
-          semanticLabel: 'S',
-        ).hashCode,
-      );
-      expect(
-        LiquidTabAction(icon: icon, onPressed: onPressed, semanticLabel: 'S'),
-        isNot(
-          LiquidTabAction(icon: icon, onPressed: onPressed, semanticLabel: 'T'),
-        ),
-      );
+    void search() {}
+    void dictate() {}
+    LiquidTabAction action({
+      Widget icon = const Icon(Icons.search),
+      VoidCallback? onPressed,
+      String semanticLabel = 'Search',
+    }) => LiquidTabAction(
+      icon: icon,
+      onPressed: onPressed ?? search,
+      semanticLabel: semanticLabel,
+    );
+
+    test('equal fields are equal with equal hash codes', () {
+      expect(action(), action());
+      expect(action().hashCode, action().hashCode);
     });
+
+    for (final (field, other) in [
+      ('icon', () => action(icon: const Icon(Icons.mic))),
+      ('onPressed', () => action(onPressed: dictate)),
+      ('semanticLabel', () => action(semanticLabel: 'Find')),
+    ]) {
+      test('== sees a different $field alone', () {
+        expect(action(), isNot(other()));
+      });
+    }
   });
 
   group('LiquidShellStrings', () {
@@ -151,16 +195,25 @@ void main() {
       expect(LiquidShellStrings.defaultBadgeCount(7), '7 new');
     });
 
-    test('== compares every field', () {
+    test('equal fields are equal with equal hash codes', () {
       expect(const LiquidShellStrings(), const LiquidShellStrings());
       expect(
         const LiquidShellStrings().hashCode,
         const LiquidShellStrings().hashCode,
       );
-      expect(
-        const LiquidShellStrings(),
-        isNot(const LiquidShellStrings(badgeDot: 'Mới')),
-      );
     });
+
+    for (final (field, other) in [
+      ('showSidebar', const LiquidShellStrings(showSidebar: 'x')),
+      ('hideSidebar', const LiquidShellStrings(hideSidebar: 'x')),
+      ('tabBarExpanded', const LiquidShellStrings(tabBarExpanded: 'x')),
+      ('expandTabBarHint', const LiquidShellStrings(expandTabBarHint: 'x')),
+      ('badgeDot', const LiquidShellStrings(badgeDot: 'x')),
+      ('badgeCount', const LiquidShellStrings(badgeCount: _otherBadgeCount)),
+    ]) {
+      test('== sees a different $field alone', () {
+        expect(const LiquidShellStrings(), isNot(other));
+      });
+    }
   });
 }

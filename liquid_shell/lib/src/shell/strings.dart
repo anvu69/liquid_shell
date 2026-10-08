@@ -38,6 +38,9 @@ class LiquidShellStrings {
   /// The default [badgeCount]: `'3 new'`.
   static String defaultBadgeCount(int count) => '$count new';
 
+  /// Field by field. Callbacks ([badgeCount]) compare by identity; use a
+  /// const or stable instance (a top-level or static function, not a fresh
+  /// closure per build), or two equal-looking string sets are never `==`.
   @override
   bool operator ==(Object other) =>
       other is LiquidShellStrings &&

@@ -49,6 +49,18 @@ void main() {
   testWidgets('dot is 8×8 in the error colour', (tester) async {
     await _pump(tester, const LiquidBadge.dot());
     expect(tester.getSize(find.byType(LiquidBadgeView)), const Size(8, 8));
+    final decoration =
+        tester
+                .widget<DecoratedBox>(
+                  find.descendant(
+                    of: find.byType(LiquidBadgeView),
+                    matching: find.byType(DecoratedBox),
+                  ),
+                )
+                .decoration
+            as BoxDecoration;
+    expect(decoration.color, _scheme.error);
+    expect(decoration.shape, BoxShape.circle);
   });
 
   testWidgets('the badge adds no semantics node of its own', (tester) async {
