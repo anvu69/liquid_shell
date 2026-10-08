@@ -497,6 +497,12 @@ so a status-bar tap still scrolls the body. A `LiquidTabBar` you build
 yourself decides `narrow` from the window's width; in a shell narrower than
 the window, pass `narrow` explicitly (see [Narrow width](#narrow-width)).
 
+Chrome you draw yourself owns its own accessibility: semantics (labels,
+selected state, a modal barrier for an overlay sidebar), hit targets of at
+least 44pt, and large-text behaviour such as a large content viewer. The
+guarantees in [Accessibility and fallbacks](#accessibility-and-fallbacks)
+cover only the default chrome, or the parts of it you keep.
+
 ### Standalone tab bar and sidebar
 
 `LiquidTabBar` and `LiquidSidebar` work without a `LiquidShell`, in your own
@@ -792,6 +798,10 @@ Cells and rows are buttons with labels, badge text and selected state. From
 1.6× text size the bar is icon-only and a long press shows the label large.
 The overlay sidebar is modal for screen readers, and while it is open,
 system back closes it before anything else.
+
+These guarantees cover the chrome the shell draws. A `chromeBuilder` that
+replaces a slot must provide its own semantics, hit targets and large
+content viewer (see [Custom chrome](#custom-chrome)).
 
 ## Limitations
 

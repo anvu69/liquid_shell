@@ -1036,7 +1036,7 @@ Shared support: `lib/support/wallpaper.dart` (the same painter the goldens use; 
 2. **Hero images**: a 2 × 3 grid, iPhone / iPad landscape / Android × light / dark (`doc/images/hero_*`).
 3. Features list (only what P1 ships) and platform table (iOS, Android; other platforms: frosted, no signals).
 4. Install (`flutter pub add liquid_shell`).
-5. **Quickstart**: a whole app from `example/lib/quickstart.dart` (`main`, `MaterialApp`, a two-tab `LiquidShell`), checked like every snippet; the shell itself is about 10 lines.
+5. **Quickstart**: a whole app from `example/lib/quickstart.dart` (`main`, `MaterialApp`, a two-tab `LiquidShell`), checked like every snippet; ~25 lines (a whole runnable app), of which the `LiquidShell` call is about 9.
 6. **Cases**: one `###` section per §11 row, each with **one snippet** (its docregion) and **one image** (its golden). In order: basic tabs, badges, sidebar-only, sidebar slots, trailing action, guard, hide chrome / no chrome, custom chrome, standalone tab bar and sidebar, custom theme, forced tier, form factors, narrow width.
 7. Layout rules: a short version of the §5.1 table.
 8. Accessibility and fallbacks: the signals table from §6.1.

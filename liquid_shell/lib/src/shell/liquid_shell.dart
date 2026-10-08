@@ -117,6 +117,10 @@ class LiquidShell extends StatefulWidget {
   final Widget? sidebarFooter;
 
   /// Replaces or wraps the default chrome per slot.
+  ///
+  /// The shell's accessibility support (semantics, 44pt hit targets, the
+  /// large content viewer, the overlay's modal barrier) belongs to the
+  /// default chrome. A replacement must provide its own.
   final LiquidChromeBuilder? chromeBuilder;
 
   /// Width thresholds.

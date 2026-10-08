@@ -15,6 +15,9 @@ class ForcedTierCase extends StatefulWidget {
 }
 
 class _ForcedTierCaseState extends State<ForcedTierCase> {
+  // The README shows the region below as a pasteable snippet, so `_tier`
+  // starts at `frosted` there; `initState` (outside the region) then applies
+  // `widget.initialTier`, which the goldens use to start at another tier.
   // #docregion readme
   int _index = 0;
   LiquidGlassTier _tier = LiquidGlassTier.frosted;
