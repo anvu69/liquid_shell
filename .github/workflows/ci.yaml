@@ -107,6 +107,10 @@ jobs:
           api-level: 34
           target: google_apis
           arch: x86_64
+          # The default (true) sets animator_duration_scale to 0, which the
+          # plugin reads as reduce transparency. The script also sets its own
+          # baseline of 1 and restores the starting value on exit.
+          disable-animations: false
           script: tool/integration_android.sh
 
   integration-ios:

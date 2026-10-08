@@ -997,6 +997,7 @@ TDD applies to every task (red → green → commit), with per-task review and a
   - `settings put global low_power 1` (after `cmd battery unplug`) → `powerSave`
   - `wm disable-blur 1` → `blurDisabled`
   Each run asserts the signal and the solid tier, then the script restores the settings. API 36 also records whether "Reduce blur effects" flips `blurDisabled` (§6.1).
+  **Baseline (amended 2026-10-09, final review I4).** Every run starts from a known baseline: `animator_duration_scale 1`, `low_power 0`, battery reset, `disable_window_blurs 0`. The script records `animator_duration_scale` at start and puts it back on exit (deleting it when it was unset). `reactivecircus/android-emulator-runner` disables animations by default, which the plugin reads as reduce transparency, so the CI step also sets `disable-animations: false`.
 - iOS (`tool/integration_ios.sh`, latest iOS simulator): channel round-trip and default value. Reduce Transparency has no supported `simctl` toggle, so toggling it is a manual check: flip it in Settings while the example runs, then save a screenshot to `docs/qa/` as evidence.
 - The screenshot driver for these runs is written fresh (§9).
 

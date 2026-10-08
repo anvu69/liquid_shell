@@ -8,9 +8,13 @@
 #                 device unless ALLOW_PHYSICAL_DEVICE=1.
 # FLUTTER         flutter command (default: flutter).
 #
-# Each run sets one signal with adb, then asserts it through
-# integration_test/signals_test.dart (expectations via --dart-define).
-# Every setting is restored on exit, even after a failure.
+# Each run starts from a known baseline (animations at 1x, battery saver
+# and the blur switch off), sets one signal with adb, then asserts it
+# through integration_test/signals_test.dart (expectations via
+# --dart-define). The baseline matters: an emulator started with animations
+# off (android-emulator-runner's default) reads as reduce transparency.
+# On exit, even after a failure, the animator scale goes back to the value
+# found at start and the other settings are reset.
 set -euo pipefail
 cd "$(dirname "$0")/../liquid_shell/example"
 FLUTTER=${FLUTTER:-flutter}
@@ -31,18 +35,31 @@ api=$(adb shell getprop ro.build.version.sdk | tr -d '\r')
 echo "▸ device $ANDROID_SERIAL, API $api"
 
 orig_scale=$(adb shell settings get global animator_duration_scale | tr -d '\r')
+echo "▸ animator_duration_scale at start: $orig_scale"
+
+reset_power_and_blur() {
+  adb shell settings put global low_power 0 || true
+  adb shell cmd battery reset || true
+  adb shell settings put global disable_window_blurs 0 || true
+}
+
+# Known state before every run: animations on, no battery saver, blurs on.
+baseline() {
+  adb shell settings put global animator_duration_scale 1
+  reset_power_and_blur
+}
+
 restore() {
   if [ "$orig_scale" = null ]; then
     adb shell settings delete global animator_duration_scale >/dev/null || true
   else
     adb shell settings put global animator_duration_scale "$orig_scale" || true
   fi
-  adb shell settings put global low_power 0 || true
-  adb shell cmd battery reset || true
-  adb shell settings put global disable_window_blurs 0 || true
+  reset_power_and_blur
+  echo "▸ animator_duration_scale restored: $(adb shell settings get global animator_duration_scale | tr -d '\r')"
 }
 trap restore EXIT
-restore
+baseline
 
 run() {
   local name=$1
@@ -68,20 +85,20 @@ run default \
 
 adb shell settings put global animator_duration_scale 0
 run reduceTransparency --dart-define=EXPECT_REDUCE_TRANSPARENCY=true
-restore
+baseline
 
 adb shell cmd battery unplug
 adb shell settings put global low_power 1
 # Battery saver also disables window blurs on API 31+, so blurDisabled is
 # not asserted in this run.
 run powerSave --dart-define=EXPECT_POWER_SAVE=true
-restore
+baseline
 
 if [ "$api" -ge 31 ]; then
   # `wm disable-blur 1` writes this setting but needs root on API 36
   # google_apis images (SecurityException as the shell user).
   adb shell settings put global disable_window_blurs 1
   run blurDisabled --dart-define=EXPECT_BLUR_DISABLED=true
-  restore
+  baseline
 fi
 echo "✓ Android integration passed"
