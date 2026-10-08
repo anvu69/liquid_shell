@@ -72,7 +72,7 @@ void main() {
   });
 
   testWidgets('the detail page hides the chrome', (tester) async {
-    await _openCase(tester, 'guard');
+    await _openCase(tester, 'hide_chrome');
     await tester.tap(find.text('Open a full-frame detail page'));
     await tester.pumpAndSettle();
     expect(find.text('Detail item 1'), findsOneWidget);

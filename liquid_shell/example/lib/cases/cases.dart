@@ -6,6 +6,7 @@ import 'package:liquid_shell_example/cases/custom_theme.dart';
 import 'package:liquid_shell_example/cases/discard_guard.dart';
 import 'package:liquid_shell_example/cases/forced_tier.dart';
 import 'package:liquid_shell_example/cases/form_factors.dart';
+import 'package:liquid_shell_example/cases/hide_chrome.dart';
 import 'package:liquid_shell_example/cases/narrow_width.dart';
 import 'package:liquid_shell_example/cases/sidebar_only.dart';
 import 'package:liquid_shell_example/cases/sidebar_slots.dart';
@@ -49,8 +50,14 @@ const kCases = <ExampleCase>[
   (
     id: 'guard',
     title: '"Discard changes?" guard',
-    subtitle: 'beforeDestinationChange and LiquidHideChrome',
+    subtitle: 'beforeDestinationChange',
     page: DiscardGuardCase(),
+  ),
+  (
+    id: 'hide_chrome',
+    title: 'Hide the chrome',
+    subtitle: 'LiquidHideChrome on a page inside the branch',
+    page: HideChromeCase(),
   ),
   (
     id: 'custom_chrome',

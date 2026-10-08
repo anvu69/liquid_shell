@@ -10,6 +10,7 @@ import 'package:liquid_shell_example/cases/custom_chrome.dart';
 import 'package:liquid_shell_example/cases/custom_theme.dart';
 import 'package:liquid_shell_example/cases/discard_guard.dart';
 import 'package:liquid_shell_example/cases/forced_tier.dart';
+import 'package:liquid_shell_example/cases/hide_chrome.dart';
 import 'package:liquid_shell_example/cases/narrow_width.dart';
 import 'package:liquid_shell_example/cases/sidebar_only.dart';
 import 'package:liquid_shell_example/cases/sidebar_slots.dart';
@@ -79,8 +80,18 @@ void main() {
     await golden(
       tester,
       'case_hide_chrome',
-      const DiscardGuardCase(),
+      const HideChromeCase(),
       interact: () => tester.tap(find.text('Open a full-frame detail page')),
+    );
+  });
+
+  // The search page pushed above the shell: LiquidNoChrome.
+  testWidgets('case_no_chrome', (tester) async {
+    await golden(
+      tester,
+      'case_no_chrome',
+      const TrailingActionCase(),
+      interact: () => tester.tap(find.byTooltip('Search')),
     );
   });
 

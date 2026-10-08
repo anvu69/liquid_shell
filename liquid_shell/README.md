@@ -51,7 +51,65 @@ Requires Flutter 3.38 or later.
 
 ## Quickstart
 
-Three tabs over an `IndexedStack`, as the inside of a `State` class:
+A whole app: replace `lib/main.dart` of a new `flutter create` project with
+it and run.
+
+<?code-excerpt "quickstart.dart (quickstart)"?>
+```dart
+import 'package:flutter/material.dart';
+import 'package:liquid_shell/liquid_shell.dart';
+
+void main() => runApp(const MaterialApp(home: _Tabs()));
+
+class _Tabs extends StatefulWidget {
+  const _Tabs();
+  @override
+  State<_Tabs> createState() => _TabsState();
+}
+
+class _TabsState extends State<_Tabs> {
+  int _index = 0;
+  @override
+  Widget build(BuildContext context) => LiquidShell(
+    destinations: const [
+      LiquidDestination(icon: Icon(Icons.home), label: 'Home'),
+      LiquidDestination(icon: Icon(Icons.settings), label: 'Settings'),
+    ],
+    selectedIndex: _index,
+    onDestinationSelected: (i) => setState(() => _index = i),
+    body: Center(child: Text('Tab ${_index + 1}')),
+  );
+}
+```
+
+Pad your pages with `LiquidShellScope.contentPaddingOf(context)` so content
+scrolls under the glass but starts and ends clear of it.
+
+Destination labels must be unique (a debug assert names any repeats). Put
+the shell inside a route, for example `MaterialApp.home` or a router's shell
+route, not in `MaterialApp.builder`: its tooltips need an `Overlay`.
+
+## Cases
+
+Every case is a screen in [`example/`](example/lib/cases). Each snippet is
+the inside of that screen's `State` class and compiles on its own: paste it
+into the `State` of a new `StatefulWidget` in a file that imports
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:liquid_shell/liquid_shell.dart';
+```
+
+`DemoPage` and `kDemoDestinations` stand in for your own pages and
+destinations; they are in
+[`example/lib/support/demo_page.dart`](example/lib/support/demo_page.dart).
+Each snippet is checked against its source in CI, and each image is a golden
+test.
+
+### Three tabs over an `IndexedStack`
+
+The quickstart with real pages. An `IndexedStack` keeps every tab's state
+(scroll position, text fields) while another tab is shown.
 
 <?code-excerpt "basic_tabs.dart (readme)"?>
 ```dart
@@ -82,31 +140,7 @@ Widget build(BuildContext context) {
 }
 ```
 
-Pad your pages with `LiquidShellScope.contentPaddingOf(context)` so content
-scrolls under the glass but starts and ends clear of it.
-
-Destination labels must be unique (a debug assert names any repeats). Put
-the shell inside a route, for example `MaterialApp.home` or a router's shell
-route, not in `MaterialApp.builder`: its tooltips need an `Overlay`.
-
-## Cases
-
-Every case is a screen in [`example/`](example/lib/cases). Each snippet is
-the inside of that screen's `State` class: paste it into the `State` of a
-new `StatefulWidget` in a file that imports
-
-```dart
-import 'package:flutter/material.dart';
-import 'package:liquid_shell/liquid_shell.dart';
-```
-
-`DemoPage` and `kDemoDestinations` stand in for your own pages and
-destinations; they are in
-[`example/lib/support/demo_page.dart`](example/lib/support/demo_page.dart).
-Two snippets push a page whose method is under
-[Hide the chrome, or none at all](#hide-the-chrome-or-none-at-all). Each
-snippet is checked against its source in CI, and each image is a golden
-test.
+<img src="doc/images/case_basic.png" width="260" alt="Three tabs in the glass bar">
 
 ### Badges
 
@@ -210,8 +244,9 @@ Widget build(BuildContext context) {
 ### Trailing action
 
 The action is a separate glass circle at the end of the tab bar, and the
-first row of the sidebar while the sidebar is shown. `_searchPage` is under
-[Hide the chrome, or none at all](#hide-the-chrome-or-none-at-all).
+first row of the sidebar while the sidebar is shown. The search page sits
+above the shell, so it wraps itself in `LiquidNoChrome` (see
+[Hide the chrome, or none at all](#hide-the-chrome-or-none-at-all)).
 
 <?code-excerpt "trailing_action.dart (readme)"?>
 ```dart
@@ -233,6 +268,16 @@ Widget build(BuildContext context) {
     body: DemoPage(title: kDemoDestinations[_index].label),
   );
 }
+
+// Pushed above the shell (on the app's navigator): no chrome covers it.
+Widget _searchPage(BuildContext context) => const LiquidNoChrome(
+  child: Scaffold(
+    body: DemoPage(
+      title: 'Search',
+      children: [TextField(decoration: InputDecoration(hintText: 'Find'))],
+    ),
+  ),
+);
 ```
 
 <img src="doc/images/case_trailing.png" width="260" alt="Search circle beside the tab bar">
@@ -241,8 +286,7 @@ Widget build(BuildContext context) {
 
 `beforeDestinationChange` runs before every user selection, reselect
 included. Return `false` (or throw) to stay. Taps while it is pending are
-ignored. `_branch()` is under
-[Hide the chrome, or none at all](#hide-the-chrome-or-none-at-all).
+ignored.
 
 <?code-excerpt "discard_guard.dart (readme)"?>
 ```dart
@@ -279,7 +323,16 @@ Widget build(BuildContext context) => LiquidShell(
     if (i != _index) _dirty = false;
     _index = i;
   }),
-  body: _branch(),
+  body: DemoPage(
+    title: kDemoDestinations[_index].label,
+    children: [
+      SwitchListTile(
+        title: const Text('Unsaved changes'),
+        value: _dirty,
+        onChanged: (value) => setState(() => _dirty = value),
+      ),
+    ],
+  ),
 );
 ```
 
@@ -290,15 +343,26 @@ Widget build(BuildContext context) => LiquidShell(
 A full-frame page pushed **inside** a branch hides every piece of chrome
 while it is mounted. The branch needs its own `Navigator` under the shell,
 as a router's shell branch has: `LiquidHideChrome` finds the shell above it,
-and a page on the app's navigator is not under the shell. With the guard
-snippet above, this is the whole screen.
+and a page on the app's navigator is not under the shell.
 
-<?code-excerpt "discard_guard.dart (hide-chrome)"?>
+<?code-excerpt "hide_chrome.dart (readme)"?>
 ```dart
 static const _rootKey = ValueKey<String>('root');
 static const _detailKey = ValueKey<String>('detail');
 final _branchKey = GlobalKey<NavigatorState>();
+int _index = 0;
 bool _detailOpen = false;
+
+@override
+Widget build(BuildContext context) => LiquidShell(
+  destinations: kDemoDestinations,
+  selectedIndex: _index,
+  onDestinationSelected: (i) => setState(() {
+    _index = i;
+    _detailOpen = false;
+  }),
+  body: _branch(),
+);
 
 // The branch has its own navigator, as a router's shell branch does. The
 // detail page is pushed inside it, under the shell, which is where
@@ -313,11 +377,6 @@ Widget _branch() => NavigatorPopHandler(
         child: DemoPage(
           title: kDemoDestinations[_index].label,
           children: [
-            SwitchListTile(
-              title: const Text('Unsaved changes'),
-              value: _dirty,
-              onChanged: (value) => setState(() => _dirty = value),
-            ),
             ListTile(
               title: const Text('Open a full-frame detail page'),
               trailing: const Icon(Icons.chevron_right),
@@ -344,8 +403,10 @@ Widget _branch() => NavigatorPopHandler(
 
 <img src="doc/images/case_hide_chrome.png" width="260" alt="A full-frame detail page without chrome">
 
-A page pushed **above** the shell (on the app's navigator) tells its content
-that no chrome covers it:
+A page pushed **above** the shell (on the app's navigator) is not covered by
+the chrome. `LiquidNoChrome` tells its content so, and
+`LiquidShellScope.contentPaddingOf` then pads only for the system insets.
+This is the search page of the trailing-action snippet:
 
 <?code-excerpt "trailing_action.dart (no-chrome)"?>
 ```dart
@@ -359,6 +420,8 @@ Widget _searchPage(BuildContext context) => const LiquidNoChrome(
   ),
 );
 ```
+
+<img src="doc/images/case_no_chrome.png" width="260" alt="The search page, above the shell, without chrome">
 
 ### Custom chrome
 

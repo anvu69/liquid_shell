@@ -31,7 +31,6 @@ class _TrailingActionCaseState extends State<TrailingActionCase> {
       body: DemoPage(title: kDemoDestinations[_index].label),
     );
   }
-  // #enddocregion readme
 
   // #docregion no-chrome
   // Pushed above the shell (on the app's navigator): no chrome covers it.
@@ -44,4 +43,5 @@ class _TrailingActionCaseState extends State<TrailingActionCase> {
     ),
   );
   // #enddocregion no-chrome
+  // #enddocregion readme
 }
