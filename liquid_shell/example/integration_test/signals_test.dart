@@ -3,9 +3,10 @@
 // tool/integration_ios.sh and tool/integration_android.sh pass the expected
 // value of each signal with --dart-define. An empty value means "do not
 // check this field" (for example, battery saver also disables window blurs).
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
 const _expectReduceTransparency = String.fromEnvironment(
@@ -13,6 +14,13 @@ const _expectReduceTransparency = String.fromEnvironment(
 );
 const _expectPowerSave = String.fromEnvironment('EXPECT_POWER_SAVE');
 const _expectBlurDisabled = String.fromEnvironment('EXPECT_BLUR_DISABLED');
+
+/// Solid is expected when the run switched any signal on.
+final _expectSolid = [
+  _expectReduceTransparency,
+  _expectPowerSave,
+  _expectBlurDisabled,
+].contains('true');
 
 void _check(String expected, {required bool actual, required String name}) {
   if (expected.isEmpty) return;
@@ -50,6 +58,23 @@ void main() {
       _expectBlurDisabled,
       actual: signals.blurDisabled,
       name: 'blurDisabled',
+    );
+  });
+
+  testWidgets('glass draws the tier the signals ask for', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Center(
+          child: LiquidGlass(child: SizedBox(width: 200, height: 60)),
+        ),
+      ),
+    );
+    // The first channel event arrives asynchronously, then the tier fades.
+    await Future<void>.delayed(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    expect(
+      find.byType(BackdropFilter),
+      _expectSolid ? findsNothing : findsOneWidget,
     );
   });
 }

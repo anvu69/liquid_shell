@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/glass/frosted_renderer.dart';
+import 'package:liquid_shell/src/glass/policy.dart';
 import 'package:liquid_shell/src/glass/solid_renderer.dart';
 
 class _FakeRenderer extends LiquidGlassRenderer {
@@ -194,6 +195,51 @@ void main() {
       }
       expect(errors.single.library, 'liquid_shell');
       expect(errors.single.exception, isA<StateError>());
+    });
+  });
+
+  group('resolveGlassRenderer', () {
+    testWidgets('probes a throwing renderer once per call', (tester) async {
+      final context = await _context(tester);
+      const policy = LiquidGlassPolicy(
+        renderers: [_FakeRenderer(LiquidGlassTier.liquid, throws: true)],
+      );
+      final errors = <FlutterErrorDetails>[];
+      final originalOnError = FlutterError.onError;
+      FlutterError.onError = errors.add;
+      try {
+        final renderer = resolveGlassRenderer(
+          policy,
+          context,
+          const LiquidGlassSignals(),
+        );
+        expect(renderer, isA<FrostedGlassRenderer>());
+      } finally {
+        FlutterError.onError = originalOnError;
+      }
+      expect(errors, hasLength(1));
+    });
+
+    testWidgets('prefersSolid picks solid; forced tier steps down', (
+      tester,
+    ) async {
+      final context = await _context(tester);
+      expect(
+        resolveGlassRenderer(
+          const LiquidGlassPolicy(),
+          context,
+          const LiquidGlassSignals(powerSave: true),
+        ),
+        isA<SolidGlassRenderer>(),
+      );
+      expect(
+        resolveGlassRenderer(
+          const LiquidGlassPolicy(forcedTier: LiquidGlassTier.liquid),
+          context,
+          const LiquidGlassSignals(powerSave: true),
+        ),
+        isA<FrostedGlassRenderer>(),
+      );
     });
   });
 

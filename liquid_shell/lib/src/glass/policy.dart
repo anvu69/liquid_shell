@@ -60,10 +60,43 @@ class LiquidGlassSignals {
   );
 }
 
+/// Picks the renderer for [signals], probing each registered renderer once.
+///
+/// `LiquidGlass` calls this instead of `resolve` followed by `rendererFor`,
+/// which would probe `isSupported` twice per build and report a throwing
+/// probe twice. Not exported.
+LiquidGlassRenderer resolveGlassRenderer(
+  LiquidGlassPolicy policy,
+  BuildContext context,
+  LiquidGlassSignals signals,
+) {
+  final forced = policy.forcedTier;
+  if (forced != null) {
+    final renderer = policy.rendererFor(context, forced);
+    if (renderer.tier != forced) _logForcedFallback(forced, renderer.tier);
+    return renderer;
+  }
+  return policy.rendererFor(
+    context,
+    signals.prefersSolid ? LiquidGlassTier.solid : LiquidGlassTier.liquid,
+  );
+}
+
 bool _loggedForcedFallback = false;
 
 /// Resets the once-only debug log. Called by `debugResetLiquidGlassSignals`.
 void debugResetPolicyLogging() => _loggedForcedFallback = false;
+
+void _logForcedFallback(LiquidGlassTier forced, LiquidGlassTier used) {
+  if (_loggedForcedFallback) return;
+  _loggedForcedFallback = true;
+  if (kDebugMode) {
+    debugPrint(
+      'liquid_shell: forced tier ${forced.name} has no supported renderer; '
+      'drawing ${used.name}.',
+    );
+  }
+}
 
 /// Chooses the tier and the renderer for every `LiquidGlass`.
 @immutable
@@ -90,18 +123,8 @@ class LiquidGlassPolicy {
   /// 2. [LiquidGlassSignals.prefersSolid] → solid.
   /// 3. Otherwise liquid when a supported liquid renderer is registered,
   ///    else frosted.
-  LiquidGlassTier resolve(BuildContext context, LiquidGlassSignals signals) {
-    final forced = forcedTier;
-    if (forced != null) {
-      final tier = rendererFor(context, forced).tier;
-      if (tier != forced) _logForcedFallback(forced, tier);
-      return tier;
-    }
-    if (signals.prefersSolid) return LiquidGlassTier.solid;
-    return _registered(context, LiquidGlassTier.liquid) != null
-        ? LiquidGlassTier.liquid
-        : LiquidGlassTier.frosted;
-  }
+  LiquidGlassTier resolve(BuildContext context, LiquidGlassSignals signals) =>
+      resolveGlassRenderer(this, context, signals).tier;
 
   /// The renderer that will draw [tier], after fallbacks.
   LiquidGlassRenderer rendererFor(BuildContext context, LiquidGlassTier tier) {
@@ -138,17 +161,6 @@ class LiquidGlassPolicy {
         ),
       );
       return false;
-    }
-  }
-
-  static void _logForcedFallback(LiquidGlassTier forced, LiquidGlassTier used) {
-    if (_loggedForcedFallback) return;
-    _loggedForcedFallback = true;
-    if (kDebugMode) {
-      debugPrint(
-        'liquid_shell: forced tier ${forced.name} has no supported renderer; '
-        'drawing ${used.name}.',
-      );
     }
   }
 
