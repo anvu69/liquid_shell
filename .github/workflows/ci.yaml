@@ -1,0 +1,68 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Flutter 3.38.x is the supported floor and blocks merges. Latest stable runs
+# as an early warning and never blocks (continue-on-error).
+jobs:
+  checks:
+    name: checks (${{ matrix.flutter }})
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - flutter: 3.38.x
+            experimental: false
+          - flutter: stable
+            experimental: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ matrix.flutter == 'stable' && '' || matrix.flutter }}
+          cache: true
+      - run: make get
+      - run: make format-check
+      - run: make analyze
+      - run: make provenance
+      - run: make test
+      - run: make coverage
+      - run: make snippets
+
+  pana:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: make get
+      - run: dart pub global activate pana
+      # pana checks that `repository` on GitHub main contains this pubspec.
+      # On a branch that adds a package, main does not have it yet, so those
+      # 10 points are allowed off main only.
+      - name: pana liquid_shell_platform_interface (max score on main)
+        run: >
+          dart pub global run pana --no-warning
+          --exit-code-threshold ${{ github.ref == 'refs/heads/main' && '0' || '10' }}
+          liquid_shell_platform_interface
+      # These three depend on liquid_shell_platform_interface, which pana can
+      # only resolve from pub.dev. Informational until P6 publishes it first.
+      - name: pana dependants (informational until P6)
+        continue-on-error: true
+        run: |
+          for p in liquid_shell liquid_shell_ios liquid_shell_android; do
+            dart pub global run pana --no-warning --exit-code-threshold 0 "$p"
+          done
+      - run: make publish-check

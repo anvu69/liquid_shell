@@ -1,0 +1,27 @@
+# Dart / Flutter
+.dart_tool/
+.packages
+build/
+coverage/
+pubspec_overrides.yaml
+.flutter-plugins
+.flutter-plugins-dependencies
+**/doc/api/
+
+# Golden failures (diff images from a failed golden run)
+**/failures/
+
+# fvm: the SDK symlink is per machine; .fvmrc is committed
+.fvm/
+
+# IDE / OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# Libraries do not commit lock files; CI and pana resolve fresh.
+pubspec.lock
+
+# CocoaPods lock of the example app (regenerated per toolchain)
+liquid_shell/example/ios/Podfile.lock

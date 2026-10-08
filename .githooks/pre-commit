@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Pre-commit gate. Run it BY HAND before every commit:
+#
+#   .githooks/pre-commit && git commit ...
+#
+# Never wire it with `git config core.hooksPath` (repo rule: nobody changes
+# git config). It runs the fast half of `make verify`; coverage and goldens
+# run in `make verify` before a PR.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+# When git runs a hook it exports GIT_DIR and friends. flutter reads its own
+# version with `git describe` inside the SDK checkout; with GIT_DIR pointing
+# here it reports 0.0.0-unknown and pub rejects every SDK constraint.
+nogit() { env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX "$@"; }
+
+[ -f .dart_tool/package_config.json ] || {
+  echo "✗ Workspace not resolved. Run: make get" >&2
+  exit 1
+}
+
+for target in format-check analyze provenance test; do
+  echo "▸ pre-commit: $target"
+  nogit make --no-print-directory "$target"
+done
+echo "✓ pre-commit passed"
