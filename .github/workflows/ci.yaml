@@ -45,6 +45,8 @@ jobs:
         if: ${{ success() || (failure() && matrix.experimental) }}
       - run: make provenance
         if: ${{ success() || (failure() && matrix.experimental) }}
+      - run: make pigeon-check
+        if: ${{ success() || (failure() && matrix.experimental) }}
       - run: make test
         if: ${{ success() || (failure() && matrix.experimental) }}
       - run: make coverage
@@ -151,6 +153,51 @@ jobs:
         env:
           IOS_RUNTIME: ""
           IOS_DEVICES: auto
+
+  ios-unit:
+    runs-on: macos-latest
+    # `make ios-unit` stops a stalled xcodebuild after IOS_UNIT_TIMEOUT
+    # (tool/with_timeout.sh) and never collects test diagnostics, which
+    # stalled a red run for minutes; this caps the whole job.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.44.x
+          cache: true
+      - run: make get
+      - name: XCTest of liquid_shell_ios on the newest iPad simulator
+        run: |
+          udid=$(xcrun simctl list devices available | grep -F '    iPad' | tail -n1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          make ios-unit IOS_UNIT_DEVICE="$udid"
+
+  integration-ios-native:
+    runs-on: macos-latest
+    # The script stops a stalled drive after 10 min and retries it once
+    # (as integration-ios does); this caps two devices, retries included.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.44.x
+          cache: true
+      - run: make get
+      - name: Native shell on an iPad (iOS 26+) and an iPhone
+        run: |
+          ipad=$(xcrun simctl list devices available | grep -F '    iPad' | tail -n1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          iphone=$(xcrun simctl list devices available | grep -F '    iPhone' | tail -n1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          NATIVE_DEVICES="$ipad=true;$iphone=false" tool/integration_ios_native.sh
+        env:
+          IOS_RUNTIME: ""
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-shell-screenshots
+          path: liquid_shell/example/build/integration_screenshots/
 
   goldens:
     name: goldens (${{ matrix.flutter }})

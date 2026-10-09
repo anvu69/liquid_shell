@@ -188,6 +188,24 @@ void main() {
     expect(find.text('Explore item 1'), findsOneWidget);
   });
 
+  testWidgets('native_chrome can be drawn natively: a symbol on every '
+      'destination and the trailing action, and a native footer', (
+    tester,
+  ) async {
+    await _openCase(tester, 'native_chrome');
+    final shell = tester.widget<LiquidShell>(find.byType(LiquidShell));
+    expect(shell.nativeChrome, LiquidNativeChrome.auto);
+    expect(shell.chromeBuilder, isNull);
+    expect(shell.destinations.map((d) => d.sfSymbol), everyElement(isNotNull));
+    expect(shell.tabBarTrailing?.sfSymbol, isNotNull);
+    expect(shell.nativeSidebarFooter, isNotNull);
+
+    // Off iPadOS 26 it draws the Flutter chrome; the trailing action counts.
+    await tester.tap(find.byTooltip('Search'));
+    await tester.pumpAndSettle();
+    expect(find.text('Searches: 1'), findsOneWidget);
+  });
+
   testWidgets(
     'standalone: a wide window gets a LiquidSidebar beside the page',
     (tester) async {

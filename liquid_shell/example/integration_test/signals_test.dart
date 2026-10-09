@@ -7,7 +7,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:liquid_shell_example/cases/basic_tabs.dart';
+import 'package:liquid_shell/liquid_shell.dart';
+import 'package:liquid_shell_example/support/demo_page.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
 const _expectReduceTransparency = String.fromEnvironment(
@@ -66,7 +67,19 @@ void main() {
   });
 
   testWidgets('the shell draws the tier the signals ask for', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: BasicTabsCase()));
+    // nativeChrome off: on an iPad 26 the example opts into native chrome,
+    // which has no Flutter glass to look at.
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LiquidShell(
+          nativeChrome: LiquidNativeChrome.off,
+          destinations: kDemoDestinations,
+          selectedIndex: 0,
+          onDestinationSelected: (_) {},
+          body: const DemoPage(title: 'Home'),
+        ),
+      ),
+    );
     // The first channel event arrives asynchronously, then the tier fades.
     await Future<void>.delayed(const Duration(seconds: 1));
     await tester.pumpAndSettle();

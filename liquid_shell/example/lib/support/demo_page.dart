@@ -36,14 +36,21 @@ class DemoPage extends StatelessWidget {
               context,
             ).add(const EdgeInsets.symmetric(horizontal: 16)),
             children: [
-              Row(
-                children: [
-                  if (navigator.canPop())
-                    BackButton(onPressed: navigator.maybePop),
-                  Expanded(
-                    child: Text(title, style: theme.textTheme.headlineMedium),
-                  ),
-                ],
+              // The title row clears the iPadOS 26 window controls when it
+              // sits in their band (a windowed app with no top chrome).
+              LiquidWindowControlsClearance(
+                rowTop:
+                    LiquidShellScope.contentPaddingOf(context).top -
+                    MediaQuery.paddingOf(context).top,
+                child: Row(
+                  children: [
+                    if (navigator.canPop())
+                      BackButton(onPressed: navigator.maybePop),
+                    Expanded(
+                      child: Text(title, style: theme.textTheme.headlineMedium),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 12),
               ...children,

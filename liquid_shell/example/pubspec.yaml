@@ -20,6 +20,8 @@ dev_dependencies:
     sdk: flutter
   integration_test:
     sdk: flutter
+  # The native shell integration test drives LiquidShellIOS.debugTap.
+  liquid_shell_ios: ^0.1.0-dev.1
   liquid_shell_platform_interface: ^0.1.0-dev.1
   very_good_analysis: 10.3.0
 

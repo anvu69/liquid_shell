@@ -19,7 +19,7 @@ COVERAGE_MIN := 90
 
 .PHONY: help get format format-check analyze test coverage goldens \
         goldens-update provenance snippets verify pana publish-check \
-        android-unit ios-unit integration-ios integration-android pigeon pigeon-check
+        android-unit ios-unit integration-ios integration-ios-native integration-android pigeon pigeon-check
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -128,6 +128,9 @@ ios-unit: ## XCTest of liquid_shell_ios (example RunnerTests) on an iPad simulat
 
 integration-ios: ## Signal channel round-trip on an iOS simulator
 	FLUTTER="$(FLUTTER)" tool/integration_ios.sh
+
+integration-ios-native: ## Native iPadOS 26 shell on an iPad and an iPhone simulator
+	FLUTTER="$(FLUTTER)" tool/integration_ios_native.sh
 
 integration-android: ## Signal channel + every Android signal on an emulator
 	FLUTTER="$(FLUTTER)" tool/integration_android.sh

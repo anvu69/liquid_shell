@@ -8,6 +8,7 @@ import 'package:liquid_shell_example/cases/forced_tier.dart';
 import 'package:liquid_shell_example/cases/form_factors.dart';
 import 'package:liquid_shell_example/cases/hide_chrome.dart';
 import 'package:liquid_shell_example/cases/narrow_width.dart';
+import 'package:liquid_shell_example/cases/native_chrome.dart';
 import 'package:liquid_shell_example/cases/sidebar_only.dart';
 import 'package:liquid_shell_example/cases/sidebar_slots.dart';
 import 'package:liquid_shell_example/cases/standalone_widgets.dart';
@@ -95,5 +96,11 @@ const kCases = <ExampleCase>[
     title: 'Standalone widgets',
     subtitle: 'LiquidTabBar and LiquidSidebar in your own Scaffold',
     page: StandaloneWidgetsCase(),
+  ),
+  (
+    id: 'native_chrome',
+    title: 'Native iPadOS chrome',
+    subtitle: 'UITabBarController sidebar on iPad 26, Flutter elsewhere',
+    page: NativeChromeCase(),
   ),
 ];
