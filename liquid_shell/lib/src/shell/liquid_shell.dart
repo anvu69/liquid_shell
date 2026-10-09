@@ -192,7 +192,6 @@ class _LiquidShellState extends State<LiquidShell>
   LiquidNativeChromeConfig? _nativeConfig;
   bool _nativeSendScheduled = false;
   bool _forceNativeSend = false;
-  bool _loggedNotDescribable = false;
 
   @override
   void initState() {
@@ -815,14 +814,15 @@ class _LiquidShellState extends State<LiquidShell>
       hasChromeBuilder: widget.chromeBuilder != null,
       describable: describable,
     );
-    if (kDebugMode &&
-        !describable &&
-        (state?.installed ?? false) &&
-        !_loggedNotDescribable) {
-      _loggedNotDescribable = true;
-      debugPrint(
+    // Only for a shell that asked for native chrome and could use it.
+    if (!describable &&
+        widget.nativeChrome == LiquidNativeChrome.auto &&
+        widget.chromeBuilder == null &&
+        (state?.installed ?? false)) {
+      NativeChromeHost.debugLogOnce(
+        'notDescribable',
         'liquid_shell: native chrome needs an sfSymbol on every destination '
-        'and on tabBarTrailing; drawing Flutter chrome.',
+            'and on tabBarTrailing; drawing Flutter chrome.',
       );
     }
     final wasEngaged = _nativeEngaged;

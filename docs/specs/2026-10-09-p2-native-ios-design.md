@@ -361,7 +361,7 @@ When the shell is engaged, its build keeps P1's body chain exactly: `PopScope â†
 
 **Not engaged but owner.** The shell still sends its config with `engaged: false`, so the platform hides its chrome while the shell draws the Flutter one (compact width, missing symbols). This is the double-chrome guard.
 
-A debug log fires once when the device supports native chrome but the app has not opted in (`notEnabled`), and once when native chrome is installed but a symbol is missing.
+A debug log fires once per process when the device supports native chrome but the app has not opted in (`notEnabled`), and once per process when native chrome is installed but a symbol is missing on a shell that asked for it (`auto`, no `chromeBuilder`).
 
 ### 7.2 Ownership
 

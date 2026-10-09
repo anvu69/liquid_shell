@@ -22,12 +22,24 @@ final class NativeChromeHost extends ChangeNotifier {
     instance = NativeChromeHost._();
   }
 
+  /// Keys of the debug logs already printed. Process-wide, not per host:
+  /// every test (and every hot restart's new host) would print them again.
+  static final Set<String> _logged = {};
+
+  /// Prints [message] in debug builds, once per process for [key].
+  static void debugLogOnce(String key, String message) {
+    if (kDebugMode && _logged.add(key)) debugPrint(message);
+  }
+
+  /// Re-arms the once-only debug logs. Tests only.
+  @visibleForTesting
+  static void debugResetLogs() => _logged.clear();
+
   final ValueNotifier<LiquidNativeShellState?> _state = ValueNotifier(null);
   final List<NativeChromeClaim> _claims = [];
   StreamSubscription<LiquidNativeEvent>? _events;
   LiquidNativeChromeConfig? _sent;
   bool _started = false;
-  bool _loggedUnavailable = false;
 
   /// The platform's report; null until the first answer (pending).
   ValueListenable<LiquidNativeShellState?> get state => _state;
@@ -56,15 +68,13 @@ final class NativeChromeHost extends ChangeNotifier {
 
   void _setState(LiquidNativeShellState state) {
     _state.value = state;
-    if (kDebugMode &&
-        !state.installed &&
-        state.unavailableReason == LiquidNativeUnavailableReason.notEnabled &&
-        !_loggedUnavailable) {
-      _loggedUnavailable = true;
-      debugPrint(
+    if (!state.installed &&
+        state.unavailableReason == LiquidNativeUnavailableReason.notEnabled) {
+      debugLogOnce(
+        'notEnabled',
         'liquid_shell: native iPadOS chrome is available on this device but '
-        'not enabled; add <key>LiquidShellNativeChrome</key><true/> to '
-        'Info.plist to use it.',
+            'not enabled; add <key>LiquidShellNativeChrome</key><true/> to '
+            'Info.plist to use it.',
       );
     }
   }

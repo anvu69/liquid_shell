@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
+import 'package:liquid_shell/src/native/native_host.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
 import '../helpers/fake_native_platform.dart';
@@ -56,6 +57,21 @@ Future<void> _pumpNative(
 bool _flutterChrome() =>
     find.byType(LiquidTabBar).evaluate().isNotEmpty ||
     find.byType(LiquidSidebar).evaluate().isNotEmpty;
+
+/// Runs [body] with `debugPrint` captured and the once-only logs re-armed.
+/// Restores `debugPrint` before the test ends: testWidgets checks it.
+Future<List<String>> _logsOf(Future<void> Function() body) async {
+  NativeChromeHost.debugResetLogs();
+  final logs = <String>[];
+  final original = debugPrint;
+  debugPrint = (message, {wrapWidth}) => logs.add(message ?? '');
+  try {
+    await body();
+  } finally {
+    debugPrint = original;
+  }
+  return logs;
+}
 
 LiquidShellScopeData _scope(WidgetTester tester) => LiquidShellScope.of(
   tester.element(find.byType(TestPage, skipOffstage: false).first),
@@ -170,6 +186,24 @@ void main() {
       expect(native.configs, isEmpty);
     });
 
+    testWidgets('auto → off releases the chrome: dormant, Flutter chrome', (
+      tester,
+    ) async {
+      final native = installFakeNative();
+      await _pumpNative(tester);
+      expect(native.last.engaged, isTrue);
+      await _pumpNative(
+        tester,
+        shell: const TestShell(
+          destinations: kNative,
+          nativeChrome: LiquidNativeChrome.off,
+        ),
+      );
+      expect(native.last, LiquidNativeChromeConfig.dormant);
+      expect(_flutterChrome(), isTrue);
+      expect(_scope(tester).nativeChrome, isFalse);
+    });
+
     testWidgets('not installed: Flutter chrome and no config sent', (
       tester,
     ) async {
@@ -260,6 +294,55 @@ void main() {
     });
   });
 
+  group('debug logs (spec P2 §7.1): once per process', () {
+    testWidgets('not enabled: logged once, across hosts', (tester) async {
+      const notEnabled = LiquidNativeShellState(
+        installed: false,
+        unavailableReason: LiquidNativeUnavailableReason.notEnabled,
+      );
+      final logs = await _logsOf(() async {
+        installFakeNative(state: notEnabled);
+        await _pumpNative(tester);
+        // A new host (a hot restart, the next test) asks again.
+        await tester.pumpWidget(const SizedBox());
+        debugResetLiquidNative();
+        await _pumpNative(tester);
+      });
+      expect(logs.where((l) => l.contains('not enabled')), hasLength(1));
+    });
+
+    testWidgets('a missing sfSymbol: logged once, and only for a shell that '
+        'asked for native chrome', (tester) async {
+      final quiet = await _logsOf(() async {
+        installFakeNative();
+        await _pumpNative(
+          tester,
+          shell: const TestShell(nativeChrome: LiquidNativeChrome.off),
+        );
+        await _pumpNative(
+          tester,
+          shell: TestShell(
+            chromeBuilder: (context, details, chrome) => chrome,
+          ),
+        );
+      });
+      expect(quiet.where((l) => l.contains('sfSymbol')), isEmpty);
+
+      final logs = await _logsOf(() async {
+        await _pumpNative(tester, shell: const TestShell());
+        // A second shell without symbols, pushed above the first.
+        tester
+            .state<NavigatorState>(find.byType(Navigator))
+            .push(
+              MaterialPageRoute<void>(builder: (_) => const TestShell()),
+            )
+            .ignore();
+        await tester.pumpAndSettle();
+      });
+      expect(logs.where((l) => l.contains('sfSymbol')), hasLength(1));
+    });
+  });
+
   group('scene reconnect (spec P2 §5.7)', () {
     testWidgets('a state report re-sends the whole config, selection too', (
       tester,
@@ -307,6 +390,33 @@ void main() {
       expect(MediaQuery.sizeOf(page).width, kTabletLandscape.width - 300);
       expect(MediaQuery.paddingOf(page).left, 0);
       expect(tester.getTopLeft(find.byType(TestPage).first).dx, 300);
+    });
+
+    testWidgets('RTL tiled: the sidebar is on the right; the body loses it', (
+      tester,
+    ) async {
+      installFakeNative(
+        state: const LiquidNativeShellState(
+          installed: true,
+          sidebar: LiquidNativeSidebar.tiled,
+        ),
+      );
+      await pumpShell(
+        tester,
+        const TestShell(destinations: kNative),
+        size: kTabletLandscape,
+        padding: const EdgeInsets.only(right: 300, top: 24, bottom: 20),
+        direction: TextDirection.rtl,
+      );
+      expect(_flutterChrome(), isFalse);
+      final page = tester.element(find.byType(TestPage).first);
+      expect(MediaQuery.sizeOf(page).width, kTabletLandscape.width - 300);
+      expect(MediaQuery.paddingOf(page).right, 0);
+      expect(tester.getTopLeft(find.byType(TestPage).first).dx, 0);
+      expect(
+        tester.getTopRight(find.byType(TestPage).first).dx,
+        kTabletLandscape.width - 300,
+      );
     });
 
     testWidgets('overlay: system back closes the native sidebar', (

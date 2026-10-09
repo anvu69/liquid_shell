@@ -238,6 +238,23 @@ void main() {
       expect(pill.center.dx, closeTo(kTabletPortrait.width / 2, 0.5));
     });
 
+    testWidgets('RTL: the toggle moves past it on the right', (tester) async {
+      _installWindowed();
+      await pumpShell(
+        tester,
+        const TestShell(),
+        size: kTabletPortrait,
+        padding: const EdgeInsets.only(top: 24, bottom: 20),
+        direction: TextDirection.rtl,
+      );
+      expect(
+        tester.getTopRight(find.byType(SidebarToggle)).dx,
+        kTabletPortrait.width - kSidebarToggleInset - 66,
+      );
+      final pill = tester.getRect(find.byType(LiquidTabBar));
+      expect(pill.center.dx, closeTo(kTabletPortrait.width / 2, 0.5));
+    });
+
     testWidgets('the sidebar header row moves past it', (tester) async {
       _installWindowed();
       await pumpShell(
