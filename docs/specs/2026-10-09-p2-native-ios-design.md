@@ -563,6 +563,8 @@ These jobs are added to `.github/workflows/ci.yaml`:
 
 ## 13. Owner decisions
 
+> **Owner approved every recommended default, Q1–Q13 (2026-10-09: "Duyệt").**
+
 Each row has a recommended default; silence means the default.
 
 | Q | Question | Recommended default |

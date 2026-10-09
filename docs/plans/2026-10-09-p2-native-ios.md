@@ -1,5 +1,7 @@
 # liquid_shell P2: native iPadOS chrome Implementation Plan
 
+
+> **Owner approved every recommended default, Q1–Q13 (2026-10-09: "Duyệt").**
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Port vankhan's native iPadOS 26 shell (VK-242) into `liquid_shell_ios`, drive it from `LiquidShell(nativeChrome:)` with P1's guard and insets, and expose the iPadOS 26 window controls through `LiquidShellScope` (spec `docs/specs/2026-10-09-p2-native-ios-design.md`).
