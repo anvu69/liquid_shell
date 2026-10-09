@@ -5,4 +5,6 @@ library;
 
 export 'src/event_channel_platform.dart';
 export 'src/liquid_shell_platform.dart';
+export 'src/native_chrome.dart';
 export 'src/platform_signals.dart';
+export 'src/window_controls.dart';

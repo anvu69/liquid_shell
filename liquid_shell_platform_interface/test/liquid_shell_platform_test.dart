@@ -10,6 +10,11 @@ class _ExtendsFake extends LiquidShellPlatform {
 class _ImplementsFake implements LiquidShellPlatform {
   @override
   Stream<LiquidPlatformSignals> watchSignals() => const Stream.empty();
+
+  // Members added after P1 (native chrome, window controls) are not
+  // implemented here on purpose: `implements` must still be rejected.
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 void main() {
@@ -27,6 +32,19 @@ void main() {
     LiquidShellPlatform.instance = _ExtendsFake();
     final first = await LiquidShellPlatform.instance.watchSignals().first;
     expect(first.powerSave, isTrue);
+  });
+
+  test('the default instance has no native chrome and no channel', () async {
+    final platform = LiquidShellPlatform.instance;
+    expect(platform.supportsNativeChrome, isFalse);
+    expect(
+      await platform.attachNativeChrome(),
+      LiquidNativeShellState.unavailable,
+    );
+    await platform.updateNativeChrome(LiquidNativeChromeConfig.dormant);
+    await platform.setNativeSidebarVisible(visible: true);
+    expect(await platform.readWindowControls(), LiquidWindowControls.zero);
+    expect(await platform.nativeEvents.isEmpty, isTrue);
   });
 
   test('rejects an implementation that only implements the interface', () {
