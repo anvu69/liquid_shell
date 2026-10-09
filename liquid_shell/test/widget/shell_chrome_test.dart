@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
@@ -686,21 +684,21 @@ void main() {
                 : TestPage(label: kDestinations[i].label),
           ),
         );
-        unawaited(
-          navigator.currentState!.push(
-            MaterialPageRoute<void>(
-              builder: (_) => const LiquidHideChrome(child: Text('detail')),
-            ),
-          ),
-        );
+        navigator.currentState!
+            .push(
+              MaterialPageRoute<void>(
+                builder: (_) => const LiquidHideChrome(child: Text('detail')),
+              ),
+            )
+            .ignore();
         await tester.pumpAndSettle();
         expect(find.byType(LiquidTabBar), findsNothing);
 
-        unawaited(
-          navigator.currentState!.push(
-            MaterialPageRoute<void>(builder: (_) => const Text('above')),
-          ),
-        );
+        navigator.currentState!
+            .push(
+              MaterialPageRoute<void>(builder: (_) => const Text('above')),
+            )
+            .ignore();
         await tester.pumpAndSettle();
         expect(find.byType(LiquidTabBar), findsOneWidget);
 
@@ -1038,15 +1036,15 @@ void main() {
 }
 
 void unawaitedPush(NavigatorState navigator) {
-  unawaited(
-    navigator.push(
-      MaterialPageRoute<void>(
-        builder: (context) => const LiquidNoChrome(
-          child: Scaffold(body: LiquidContentInset(child: Text('above'))),
+  navigator
+      .push(
+        MaterialPageRoute<void>(
+          builder: (context) => const LiquidNoChrome(
+            child: Scaffold(body: LiquidContentInset(child: Text('above'))),
+          ),
         ),
-      ),
-    ),
-  );
+      )
+      .ignore();
 }
 
 class _HideChromePage extends StatefulWidget {
