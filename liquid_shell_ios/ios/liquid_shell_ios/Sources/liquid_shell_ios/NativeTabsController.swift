@@ -35,6 +35,10 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   /// `safe.top` while the sidebar did not overlay: kept while it does, so
   /// the content under the dimming view does not jump up.
   private var heldTop: CGFloat = 0
+  /// Whether Dart attached. Before that, state and window-control sends
+  /// have no receiver and only fail; `attach` returns the state, and Dart
+  /// reads the window controls itself.
+  var dartAttached = false
   private var lastState: NativeShellState?
   private var lastControls: (leading: Double, top: Double)?
   private var rereadScheduled = false
@@ -222,6 +226,7 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   }
 
   private func publishState() {
+    guard dartAttached else { return }
     let state = currentState()
     guard state != lastState else { return }
     lastState = state
@@ -232,6 +237,7 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   }
 
   func publishWindowControls() {
+    guard dartAttached else { return }
     let read = WindowControlsReader.read(flutter.viewIfLoaded)
     let value = (leading: read.leading, top: read.top)
     guard ShellMath.differs(lastControls, value) else { return }
@@ -252,7 +258,7 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     }
   }
 
-  /// Native → Dart. A failed send is logged, never swallowed.
+  /// Native → Dart. A failed send is logged in debug builds (spec §11).
   private func send(
     _ what: String,
     onFailure: (() -> Void)? = nil,
@@ -260,7 +266,9 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   ) {
     call { result in
       guard case .failure(let error) = result else { return }
-      NSLog("[liquid_shell] sending %@ to Dart failed: %@", what, String(describing: error))
+      #if DEBUG
+        NSLog("[liquid_shell] sending %@ to Dart failed: %@", what, String(describing: error))
+      #endif
       onFailure?()
     }
   }

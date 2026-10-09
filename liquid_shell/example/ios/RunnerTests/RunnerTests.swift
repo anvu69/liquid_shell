@@ -263,6 +263,73 @@ final class NativeTabsTests: XCTestCase {
     XCTAssertTrue(tabs.sidebar.isHidden, "dormant closes an overlay sidebar (spec §5.5 step 6)")
   }
 
+  /// A shell installed by the installer, as a scene connection does.
+  private func installedByInstaller() throws -> (NativeShellInstaller, UIWindow) {
+    let scene = try XCTUnwrap(
+      UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+    let window = UIWindow(windowScene: scene)
+    let flutter = UIViewController()
+    window.rootViewController = flutter
+    window.isHidden = false
+    self.window = window
+    let installer = NativeShellInstaller(events: events, ownViewController: { flutter })
+    installer.install(flutter, in: window)
+    settle()
+    return (installer, window)
+  }
+
+  private func tabs(in window: UIWindow) throws -> NativeTabsController {
+    try XCTUnwrap((window.rootViewController as? ShellContainerController)?.tabs)
+  }
+
+  /// The window owns the shell; the installer must not, or engine → plugin
+  /// → installer → shell → Flutter view controller → engine is a cycle.
+  func testTheInstallerDoesNotKeepTheShellAlive() throws {
+    weak var shell: NativeTabsController?
+    // Inside a pool: UIKit autoreleases the controllers it hands out.
+    let installer = try autoreleasepool { () throws -> NativeShellInstaller in
+      let (installer, window) = try installedByInstaller()
+      shell = try tabs(in: window)
+      XCTAssertTrue(try installer.attach().installed)
+      window.rootViewController = UIViewController()
+      return installer
+    }
+    settle()
+    XCTAssertNil(shell, "released with the window's root")
+    XCTAssertFalse(try installer.attach().installed)
+  }
+
+  /// Until Dart attaches nothing receives native → Dart calls: sending
+  /// only fails (and logs).
+  func testStateAndWindowControlsWaitForDartToAttach() throws {
+    let (installer, window) = try installedByInstaller()
+    let shell = try tabs(in: window)
+    shell.syncFlutter()
+    XCTAssertEqual(events.sent, [], "nothing sent before attach")
+
+    _ = try installer.attach()
+    shell.syncFlutter()
+    XCTAssertTrue(events.sent.contains("state"))
+    XCTAssertTrue(events.sent.contains("controls"))
+  }
+
+  /// Dart attached before a scene reconnect: the new shell sends at once.
+  func testAShellInstalledAfterDartAttachedSends() throws {
+    let scene = try XCTUnwrap(
+      UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+    let window = UIWindow(windowScene: scene)
+    let flutter = UIViewController()
+    window.rootViewController = flutter
+    window.isHidden = false
+    self.window = window
+    let installer = NativeShellInstaller(events: events, ownViewController: { flutter })
+    XCTAssertFalse(try installer.attach().installed)
+
+    installer.install(flutter, in: window)
+    settle()
+    XCTAssertTrue(events.sent.contains("state"))
+  }
+
   private func footerView(_ tabs: NativeTabsController) throws -> SidebarFooterView {
     try XCTUnwrap(tabs.sidebar.bottomBarView as? SidebarFooterView)
   }

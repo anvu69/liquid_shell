@@ -26,7 +26,13 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
   private weak var flutter: FlutterViewController?
   private weak var scene: UIWindowScene?
   /// `NativeTabsController` once installed. `AnyObject`: that class needs iOS 26.
-  private var shell: AnyObject?
+  /// Weak: the window's root (the container) owns it. A strong reference
+  /// closes engine → plugin → installer → shell → Flutter view controller
+  /// → engine, which leaks the engine when an app replaces the root.
+  private weak var shell: AnyObject?
+  /// Dart called `attach`, so native → Dart calls have a receiver. Kept
+  /// here, not in the shell: a reinstall after a scene reconnect inherits it.
+  private var dartAttached = false
 
   init(
     events: NativeShellFlutterApiProtocol,
@@ -114,7 +120,14 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
     guard #available(iOS 26.0, *), let flutter,
       let window = scene.windows.first ?? sceneWindow
     else { return }
+    install(flutter, in: window)
+  }
+
+  /// Makes the shell container the window's root, around [flutter] (spec §5.2).
+  @available(iOS 26.0, *)
+  func install(_ flutter: UIViewController, in window: UIWindow) {
     let tabs = NativeTabsController(flutter: flutter, events: events)
+    tabs.dartAttached = dartAttached
     // Detach the Flutter view controller from the root role first, or
     // `addChild` throws UIViewControllerHierarchyInconsistency.
     window.rootViewController = nil
@@ -142,7 +155,11 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
   // MARK: - NativeShellHostApi (Dart → native)
 
   func attach() throws -> NativeShellState {
-    if #available(iOS 26.0, *), let tabs { return tabs.currentState() }
+    dartAttached = true
+    if #available(iOS 26.0, *), let tabs {
+      tabs.dartAttached = true
+      return tabs.currentState()
+    }
     return NativeShellState(
       installed: false, compact: false, sidebar: .hidden, unavailableReason: reason)
   }
