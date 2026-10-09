@@ -268,6 +268,48 @@ void main() {
     });
   });
 
+  group('native chrome (spec P2 §8.3)', () {
+    testWidgets('a visible native chrome clears the cluster itself: no '
+        'indent, whatever the platform reads', (tester) async {
+      // A windowed read below the native bar row: a 66pt leading delta
+      // and no vertical one read as {66, 44}.
+      final native = installFakeNative()
+        ..controls = const LiquidWindowControls(leading: 66, top: 44);
+      await pumpShell(
+        tester,
+        const TestShell(
+          destinations: [
+            LiquidDestination(
+              icon: Icon(Icons.home_outlined),
+              label: 'Home',
+              sfSymbol: 'house',
+            ),
+            LiquidDestination(
+              icon: Icon(Icons.inbox_outlined),
+              label: 'Inbox',
+              sfSymbol: 'tray',
+            ),
+          ],
+          pageBuilder: _titlePage,
+        ),
+        size: kTabletPortrait,
+        padding: const EdgeInsets.only(top: 96, bottom: 20),
+      );
+      native.emitNative(
+        const LiquidWindowControlsChanged(
+          LiquidWindowControls(leading: 66, top: 44),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final scope = LiquidShellScope.of(
+        tester.element(find.text('Title 0')),
+      );
+      expect(scope.nativeChrome, isTrue);
+      expect(scope.windowControls, LiquidWindowControls.zero);
+      expect(tester.getTopLeft(find.text('Title 0')).dx, 0);
+    });
+  });
+
   group('scope', () {
     testWidgets('the shell and LiquidNoChrome publish the controls', (
       tester,

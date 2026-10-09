@@ -923,7 +923,11 @@ class _LiquidShellState extends State<LiquidShell>
           sidebarVisible: state?.sidebarVisible ?? false,
           setSidebarVisible: _setSidebarVisible,
           nativeChrome: engaged,
-          windowControls: _windowControls.value.value,
+          // UIKit's bar and sidebar make room for the cluster; the body
+          // starts below or beside them (spec P2 §8.3).
+          windowControls: engaged
+              ? LiquidWindowControls.zero
+              : _windowControls.value.value,
         ),
         registry: this,
         // The same chain as the Flutter layout (BackdropGroup → Stack →

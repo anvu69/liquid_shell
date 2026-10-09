@@ -16,7 +16,10 @@ enum ShellMath {
   /// Cluster height used when the vertical corner adaptation reads 0 while
   /// the horizontal one does not (spec §8.1). At least the measured cluster:
   /// a windowed iPad Air (M3, iPadOS 27) reports 66 × 43pt at every size
-  /// (docs/qa/p2/spike.md).
+  /// (docs/qa/p2/spike.md). Flutter chrome only: under visible native
+  /// chrome the value is zero without a read
+  /// (`NativeTabsController.windowControls`), because there the bar row,
+  /// not a missing adaptation, makes the vertical delta 0.
   static let fallbackClusterTop = 44.0
 
   /// Below this the horizontal delta is the display's rounded corner, not

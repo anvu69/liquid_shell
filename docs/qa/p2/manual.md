@@ -30,6 +30,11 @@ Nếu cần log: `fvm flutter run -d <UDID>` thay cho ba lệnh cuối.
       thước nhiều cỡ. Tiêu đề trang (hàng trên cùng) **tránh** nút `•••` /
       đóng-thu nhỏ; ở full screen không bị thụt. Trong sidebar tiled, tiêu đề
       trang không bị đẩy. Lúc đẩy/pop trang, tiêu đề không trượt lạ.
+- [ ] **Clearance khi chrome native bật** (case "Native chrome", cửa sổ
+      nổi): thanh tab / sidebar native tự né nút `•••`; tiêu đề trang
+      **không** thụt 66pt (giá trị window controls là 0 khi chrome native
+      hiện). Đẩy một trang lên (chrome native ẩn): tiêu đề trang đó né nút
+      `•••` như ở chrome Flutter.
 - [ ] **Split View:** mở cùng app ở 1/3 màn hình: chỉ còn thanh dưới Flutter
       (không có chrome native). Kéo lên 1/2 và 2/3: quay lại native khi đủ
       rộng. Không thấy hai chrome cùng lúc.

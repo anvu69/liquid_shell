@@ -120,8 +120,9 @@ native chrome (Android, web, desktop) answer at once.
 A windowed iPadOS 26 app has close, minimise and resize buttons in its
 top-leading corner. `LiquidShellScope.of(context).windowControls` gives their
 size (`leading`, `top`), measured from the safe area. It is zero on every
-other platform, in full screen, and while the native tab bar already keeps
-content clear of them. The Flutter top bar and the Flutter sidebar header
+other platform, in full screen, and while the native chrome is visible:
+UIKit's tab bar and sidebar make room for the buttons, as its navigation bar
+does, and your content starts below the bar row or beside the sidebar. The Flutter top bar and the Flutter sidebar header
 move past them on their own. For your own top rows, use
 `LiquidWindowControlsClearance`.
 

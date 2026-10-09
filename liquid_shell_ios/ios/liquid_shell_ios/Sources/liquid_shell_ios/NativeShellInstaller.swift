@@ -205,6 +205,7 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
   }
 
   func windowControls() throws -> NativeWindowControls {
+    if #available(iOS 26.0, *), let tabs { return tabs.windowControls() }
     let view = flutter?.viewIfLoaded ?? ownViewController()?.viewIfLoaded
     return WindowControlsReader.read(view)
   }

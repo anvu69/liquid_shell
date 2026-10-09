@@ -94,7 +94,9 @@ final class WindowControlsSource with WidgetsBindingObserver {
 /// animating.
 ///
 /// Use it on a page's top row, for example a large title. Works anywhere,
-/// inside a shell or not. Animates over 200ms, and jumps when the platform
+/// inside a shell or not. Inside a shell that shows native chrome it
+/// never indents: the native tab bar and sidebar make room for the
+/// controls. Animates over 200ms, and jumps when the platform
 /// asks to reduce motion. Zero (no padding) on every other platform.
 class LiquidWindowControlsClearance extends StatefulWidget {
   /// Creates the clearance.
@@ -205,11 +207,12 @@ class _LiquidWindowControlsClearanceState
     _view = View.of(context);
     _direction = Directionality.maybeOf(context) ?? TextDirection.ltr;
     _watchRoute(ModalRoute.of(context));
+    final scope = LiquidShellScope.maybeOf(context);
     // Beside a tiled sidebar the body starts past the cluster: a new row
     // there is never drawn under it, not even for its first frame.
-    final tiled =
-        LiquidShellScope.maybeOf(context)?.chromeKind ==
-        LiquidChromeKind.sidebarTiled;
+    final tiled = scope?.chromeKind == LiquidChromeKind.sidebarTiled;
+    // Native chrome makes room for the cluster itself (spec P2 §8.3).
+    final native = scope?.nativeChrome ?? false;
     _scheduleMeasure();
     return _LayoutProbe(
       onLayout: _scheduleMeasure,
@@ -219,7 +222,8 @@ class _LiquidWindowControlsClearanceState
           // Unmeasured: assume under the cluster (the common top row),
           // unless the shell tiles its sidebar.
           final start = _start;
-          final under = start == null ? !tiled : start < controls.leading;
+          final under =
+              !native && (start == null ? !tiled : start < controls.leading);
           final padding = EdgeInsetsDirectional.only(
             start: under ? controls.indentFor(rowTop: widget.rowTop) : 0,
           );

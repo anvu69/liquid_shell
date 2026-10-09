@@ -182,6 +182,7 @@ final class PassThroughTests: XCTestCase {
 /// Records every native → Dart call; every send succeeds.
 final class RecordingEvents: NativeShellFlutterApiProtocol {
   var sent: [String] = []
+  var controls: [NativeWindowControls] = []
 
   func onDestinationTapped(
     index indexArg: Int64, completion: @escaping (Result<Void, PigeonError>) -> Void
@@ -212,6 +213,7 @@ final class RecordingEvents: NativeShellFlutterApiProtocol {
     completion: @escaping (Result<Void, PigeonError>) -> Void
   ) {
     sent.append("controls")
+    controls.append(controlsArg)
     completion(.success(()))
   }
 }
@@ -384,6 +386,31 @@ final class NativeTabsTests: XCTestCase {
     shell.syncFlutter()
     XCTAssertTrue(events.sent.contains("state"))
     XCTAssertTrue(events.sent.contains("controls"))
+  }
+
+  /// Under visible native chrome UIKit's tab bar and sidebar make room for
+  /// the window controls themselves, and Flutter content starts below or
+  /// beside them. A windowed read there (a 66pt leading delta with no
+  /// vertical one below the bar row reads as `{66, 44}`) must not reach
+  /// Dart as a cluster, pushed or read. Once the chrome hides (a page
+  /// covers the shell) Flutter has the whole window and the read counts.
+  func testWindowControlsAreZeroWhileTheNativeChromeIsVisible() throws {
+    let (installer, window) = try installedByInstaller()
+    let shell = try tabs(in: window)
+    let windowed = NativeWindowControls(leading: 66, top: 44)
+    let zero = NativeWindowControls(leading: 0, top: 0)
+    shell.readWindowControls = { _ in windowed }
+    _ = try installer.attach()
+    try installer.update(config: config())
+    settle()
+    XCTAssertTrue(shell.chromeVisible)
+    XCTAssertEqual(events.controls.last, zero, "pushed")
+    XCTAssertEqual(try installer.windowControls(), zero, "read")
+
+    try installer.update(config: config(hidden: true))
+    settle()
+    XCTAssertEqual(events.controls.last, windowed, "pushed, chrome hidden")
+    XCTAssertEqual(try installer.windowControls(), windowed, "read, chrome hidden")
   }
 
   /// Dart attached before a scene reconnect: the new shell sends at once.

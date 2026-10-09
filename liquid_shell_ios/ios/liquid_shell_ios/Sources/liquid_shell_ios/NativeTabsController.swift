@@ -41,6 +41,8 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   var dartAttached = false
   private var lastState: NativeShellState?
   private var lastControls: (leading: Double, top: Double)?
+  /// Reads the window controls from the Flutter view. Injectable for tests.
+  var readWindowControls: (UIView?) -> NativeWindowControls = { WindowControlsReader.read($0) }
   private var rereadScheduled = false
 
   init(flutter: UIViewController, events: NativeShellFlutterApiProtocol) {
@@ -243,13 +245,25 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
 
   func publishWindowControls() {
     guard dartAttached else { return }
-    let read = WindowControlsReader.read(flutter.viewIfLoaded)
+    let read = windowControls()
     let value = (leading: read.leading, top: read.top)
     guard ShellMath.differs(lastControls, value) else { return }
     lastControls = value
     send("onWindowControlsChanged", onFailure: { [weak self] in self?.lastControls = nil }) {
       self.events.onWindowControlsChanged(controls: read, completion: $0)
     }
+  }
+
+  /// The window controls Flutter must clear (spec §8.1). None while the
+  /// native chrome is visible: UIKit's tab bar and sidebar make room for
+  /// the cluster themselves, as its navigation bar does, and Flutter
+  /// content starts below the bar row or beside the sidebar. The corner
+  /// read is meaningless there: Flutter's safe top (the bar row) is below
+  /// the cluster, so the vertical delta is 0 and the leading one alone
+  /// would read as a cluster (`ShellMath.fallbackClusterTop`).
+  func windowControls() -> NativeWindowControls {
+    if chromeVisible { return NativeWindowControls(leading: 0, top: 0) }
+    return readWindowControls(flutter.viewIfLoaded)
   }
 
   /// The corner-adapted region can lag one layout pass: read once more on

@@ -420,7 +420,7 @@ leading = max(0, directionalEdgeInsets(for: .safeArea(cornerAdaptation: .horizon
 top     = max(0, directionalEdgeInsets(for: .safeArea(cornerAdaptation: .vertical)).top − safeArea.top)
 ```
 
-on the Flutter view, using the leading side for its layout direction. Flutter's own safe area already includes the copied native tab bar row, so a native bar that clears the cluster yields about 0 (VK-342 research 5.4). Rules in `ShellMath.windowControls`:
+on the Flutter view, using the leading side for its layout direction. **While the native chrome is visible the value is `{0, 0}` without a read** (final review I4): UIKit's bar and sidebar make room for the cluster, as its navigation bar does, and Flutter content starts below the bar row or beside the sidebar. A read there would be wrong: Flutter's safe top is the bar row (96), below the cluster (75), so the vertical delta is 0, and a 66pt leading delta alone would hit the fallback below and indent every title. Dart agrees on its side: an engaged shell's scope and every `LiquidWindowControlsClearance` inside it use zero. Rules in `ShellMath.windowControls`, which therefore applies to the Flutter-chrome path only (no shell installed, chrome hidden under a page, or dormant):
 
 - a non-finite or negative value becomes 0;
 - **rounded corner, not a cluster:** when `top` reads 0 and `leading < 24` → `{0, 0}`. The dry run measured **leading 9.5, top 0** on a *full-screen* iPad Air 11" (M4), iOS 26.5, with and without native chrome: the display's rounded corner, not window controls. VK-342's pass bar for full screen is `{0, 0}`;
@@ -444,7 +444,7 @@ Values reach Dart three ways:
 | Flutter sidebar header row (`LiquidSidebar`, also standalone) | Wrapped in `LiquidWindowControlsClearance(rowTop: 24)` (24 = the sidebar's top padding) |
 | P1 bottom bar | Unaffected: it is at the bottom |
 | Page large titles | Apps wrap the title row in `LiquidWindowControlsClearance(rowTop: contentPaddingOf(context).top − paddingOf(context).top)`. The example's `DemoPage` does, so every case shows it. Rows below the band never move (Music's look), and neither do rows that start past the cluster horizontally: beside a tiled sidebar (Flutter or native) the page starts at the sidebar's edge, so its title stays put. The check uses the row's position in the window, not in the page, read only while the page's route is at rest (no push, pop or route above it moving), so a title does not slide during a transition. Until it is first read, a row counts as under the cluster, except in a shell with a tiled sidebar |
-| Native chrome | UIKit adapts its own bar and sidebar; Flutter's safe area includes them, so the value reads about 0 |
+| Native chrome | UIKit adapts its own bar and sidebar; the value is published as 0 while the native chrome is visible (§8.1), and an engaged shell's scope and clearance widgets use 0 |
 | P3 (later) | The back button / title bar and the search page read `LiquidShellScope.of(context).windowControls` or use the clearance widget. Nothing else is needed from P2 |
 
 When there is no cluster, every P1 position is unchanged; widget tests pin this for the toggle, the pill and the sidebar header.

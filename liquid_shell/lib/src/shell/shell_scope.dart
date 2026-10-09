@@ -58,8 +58,9 @@ class LiquidShellScopeData {
   /// the top padding while the native tab bar shows.
   final bool nativeChrome;
 
-  /// The iPadOS 26 window controls, zero elsewhere. Rows at the top of a
-  /// page clear them with `LiquidWindowControlsClearance`.
+  /// The iPadOS 26 window controls, zero elsewhere and while [nativeChrome]
+  /// is true (the native bar and sidebar make room for them). Rows at the
+  /// top of a page clear them with `LiquidWindowControlsClearance`.
   final LiquidWindowControls windowControls;
 
   /// Field by field, except [setSidebarVisible] (spec §4.4). The setter is an
