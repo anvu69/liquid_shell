@@ -19,7 +19,7 @@ COVERAGE_MIN := 90
 
 .PHONY: help get format format-check analyze test coverage goldens \
         goldens-update provenance snippets verify pana publish-check \
-        android-unit integration-ios integration-android pigeon pigeon-check
+        android-unit ios-unit integration-ios integration-android pigeon pigeon-check
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -105,6 +105,12 @@ publish-check: ## pub publish --dry-run for each package
 android-unit: ## JVM unit tests of the Android plugin (SignalReaderTest)
 	cd $(EXAMPLE) && $(FLUTTER) build apk --debug --config-only
 	cd $(EXAMPLE)/android && ./gradlew :liquid_shell_android:testDebugUnitTest
+
+ios-unit: ## XCTest of liquid_shell_ios (example RunnerTests) on an iPad simulator; IOS_UNIT_DEVICE=<udid>
+	cd $(EXAMPLE) && $(FLUTTER) build ios --config-only --simulator --debug
+	cd $(EXAMPLE)/ios && xcodebuild test -workspace Runner.xcworkspace -scheme Runner \
+	  -destination "id=$${IOS_UNIT_DEVICE:?set IOS_UNIT_DEVICE to a simulator UDID}" \
+	  -only-testing:RunnerTests -parallel-testing-enabled NO -quiet
 
 integration-ios: ## Signal channel round-trip on an iOS simulator
 	FLUTTER="$(FLUTTER)" tool/integration_ios.sh

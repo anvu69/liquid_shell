@@ -1,0 +1,369 @@
+import Flutter
+import UIKit
+
+/// The transparent `UITabBarController(.tabSidebar)` over the Flutter view
+/// (spec §5): tab bar, sidebar toggle, sidebar, trailing action and footer
+/// are real UIKit.
+///
+/// Sources of truth: Dart owns the selection (a tap only proposes it,
+/// `onDestinationTapped`, and Dart answers with `update`); UIKit owns the
+/// sidebar (shown/hidden, overlay/tiled) and the size class, pushed to Dart
+/// with `onStateChanged`.
+@available(iOS 26.0, *)
+final class NativeTabsController: UITabBarController, UITabBarControllerDelegate,
+  UITabBarController.Sidebar.Delegate
+{
+  let flutter: FlutterViewController
+  private let events: NativeShellFlutterApiProtocol
+
+  private var destinationTabs: [UITab] = []
+  private var trailingTab: UITab?
+  /// Sidebar-only flags plus "has trailing": a change rebuilds the tabs.
+  private var structure: [Bool] = []
+  private let footer = SidebarFooterView()
+
+  /// The last config from Dart; nil until the first `update`.
+  private(set) var config: NativeChromeConfig?
+
+  /// True while Dart's selection is applied: `didSelectTab` also fires for
+  /// programmatic changes.
+  private var applyingFromDart = false
+
+  /// `safe.top` while the sidebar did not overlay: kept while it does, so
+  /// the content under the dimming view does not jump up.
+  private var heldTop: CGFloat = 0
+  private var lastState: NativeShellState?
+  private var lastControls: (leading: Double, top: Double)?
+  private var rereadScheduled = false
+
+  init(flutter: FlutterViewController, events: NativeShellFlutterApiProtocol) {
+    self.flutter = flutter
+    self.events = events
+    super.init(nibName: nil, bundle: nil)
+    mode = .tabSidebar
+    delegate = self
+    sidebar.delegate = self
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) { nil }
+
+  /// Whether the chrome is on screen: a shell engaged it and nothing hides it.
+  var chromeVisible: Bool {
+    guard let config else { return false }
+    return config.engaged && !config.hidden
+  }
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    view.backgroundColor = .clear
+    view.isHidden = true
+    footer.onTap = { [weak self] in self?.footerTapped() }
+    registerForTraitChanges([UITraitHorizontalSizeClass.self]) {
+      (self: NativeTabsController, _: UITraitCollection) in
+      self.syncFlutter()
+    }
+  }
+
+  override func viewDidLayoutSubviews() {
+    super.viewDidLayoutSubviews()
+    syncFlutter()
+  }
+
+  // MARK: - Dart → native
+
+  /// Applies a whole config in a fixed order: tabs, selection, footer,
+  /// tint, appearance, direction, then visibility (spec §6.2).
+  func apply(_ new: NativeChromeConfig) {
+    loadViewIfNeeded()
+    let wasVisible = chromeVisible
+    rebuildTabsIfNeeded(new)
+    for (tab, spec) in zip(destinationTabs, new.tabs) {
+      tab.title = spec.title
+      tab.image = UIImage(systemName: spec.sfSymbol)
+      tab.badgeValue = spec.badge
+    }
+    if let tab = trailingTab, let action = new.trailing {
+      tab.title = action.title
+      tab.image = UIImage(systemName: action.sfSymbol)
+    }
+    select(Int(new.selectedIndex))
+    setFooter(new.footer)
+    view.tintColor = UIColor(argb: new.tintArgb)
+    traitOverrides.userInterfaceStyle = new.dark ? .dark : .light
+    traitOverrides.layoutDirection = new.rtl ? .rightToLeft : .leftToRight
+    config = new
+    view.isUserInteractionEnabled = new.interactive
+    if chromeVisible != wasVisible { setChromeVisible(chromeVisible) }
+    syncFlutter()
+  }
+
+  func setSidebarVisible(_ visible: Bool) {
+    guard chromeVisible, traitCollection.horizontalSizeClass != .compact else { return }
+    sidebar.isHidden = !visible
+  }
+
+  private func rebuildTabsIfNeeded(_ new: NativeChromeConfig) {
+    let wanted = new.tabs.map(\.sidebarOnly) + [new.trailing != nil]
+    guard wanted != structure else { return }
+    structure = wanted
+    destinationTabs = new.tabs.enumerated().map { index, spec in
+      let tab = UITab(title: "", image: nil, identifier: "destination\(index)") { _ in
+        TabHostController()
+      }
+      // `.fixed`: nothing to add, remove or reorder, so no sidebar "Edit".
+      tab.preferredPlacement = spec.sidebarOnly ? .sidebarOnly : .fixed
+      return tab
+    }
+    trailingTab = new.trailing.map { _ in
+      let tab = UITab(title: "", image: nil, identifier: "trailing") { _ in
+        TabHostController()
+      }
+      // Pinned: the trailing end of the tab bar, the first sidebar row.
+      tab.preferredPlacement = .pinned
+      return tab
+    }
+    applyingFromDart = true
+    setTabs((trailingTab.map { [$0] } ?? []) + destinationTabs, animated: false)
+    applyingFromDart = false
+  }
+
+  private func select(_ index: Int) {
+    guard destinationTabs.indices.contains(index), selectedTab !== destinationTabs[index]
+    else { return }
+    applyingFromDart = true
+    selectedTab = destinationTabs[index]
+    applyingFromDart = false
+  }
+
+  private func setFooter(_ data: NativeFooter?) {
+    guard let data else {
+      sidebar.bottomBarView = nil
+      return
+    }
+    footer.update(data)
+    if sidebar.bottomBarView !== footer { sidebar.bottomBarView = footer }
+  }
+
+  private func setChromeVisible(_ visible: Bool) {
+    // An overlay sidebar is transient: it does not come back with the chrome.
+    if !visible, currentSidebar() == .overlay { sidebar.isHidden = true }
+    view.isHidden = !visible
+    guard visible, !UIAccessibility.isReduceMotionEnabled else { return }
+    view.alpha = 0
+    UIView.animate(withDuration: 0.2) { self.view.alpha = 1 }
+  }
+
+  // MARK: - State
+
+  private var isTiled: Bool {
+    guard let host = selectedViewController?.viewIfLoaded else { return false }
+    return ShellMath.isTiled(host: ShellInsets(host.safeAreaInsets), root: ShellInsets(view.safeAreaInsets))
+  }
+
+  private func currentSidebar() -> NativeSidebar {
+    let compact = traitCollection.horizontalSizeClass == .compact
+    guard chromeVisible, !compact, !sidebar.isHidden else { return .hidden }
+    return isTiled ? .tiled : .overlay
+  }
+
+  func currentState() -> NativeShellState {
+    NativeShellState(
+      installed: true,
+      compact: traitCollection.horizontalSizeClass == .compact,
+      sidebar: currentSidebar())
+  }
+
+  // MARK: - Flutter frame and safe area (spec §5.4)
+
+  /// Flutter view frame = the selected host's frame; the host's safe area
+  /// that Flutter lacks goes into the FVC's `additionalSafeAreaInsets`.
+  /// While the chrome is hidden Flutter gets the whole window. Assigns only
+  /// on change, then publishes state and window controls.
+  func syncFlutter() {
+    guard isViewLoaded, let root = view.superview else { return }
+    if chromeVisible, let host = selectedViewController, host.isViewLoaded {
+      let frame = host.view.convert(host.view.bounds, to: root)
+      if flutter.view.frame != frame { flutter.view.frame = frame }
+      var want = ShellInsets(host.view.safeAreaInsets)
+      // Portrait overlay: the tab bar hides and safe.top drops; keep the
+      // closed value so Flutter sees no metrics change.
+      if currentSidebar() == .overlay {
+        want.top = max(want.top, Double(heldTop))
+      } else {
+        heldTop = CGFloat(want.top)
+      }
+      let need = ShellMath.additionalInsets(
+        want: want,
+        current: ShellInsets(flutter.view.safeAreaInsets),
+        added: ShellInsets(flutter.additionalSafeAreaInsets))
+      if need != ShellInsets(flutter.additionalSafeAreaInsets) {
+        flutter.additionalSafeAreaInsets = need.uiEdgeInsets
+      }
+    } else {
+      if flutter.view.frame != root.bounds { flutter.view.frame = root.bounds }
+      if flutter.additionalSafeAreaInsets != .zero { flutter.additionalSafeAreaInsets = .zero }
+    }
+    publishState()
+    publishWindowControls()
+    scheduleControlsReread()
+  }
+
+  private func publishState() {
+    let state = currentState()
+    guard state != lastState else { return }
+    lastState = state
+    // A failed send forgets `lastState`, so the next pass sends again.
+    send("onStateChanged", onFailure: { [weak self] in
+      if self?.lastState == state { self?.lastState = nil }
+    }) { self.events.onStateChanged(state: state, completion: $0) }
+  }
+
+  func publishWindowControls() {
+    let read = WindowControlsReader.read(flutter.viewIfLoaded)
+    let value = (leading: read.leading, top: read.top)
+    guard ShellMath.differs(lastControls, value) else { return }
+    lastControls = value
+    send("onWindowControlsChanged", onFailure: { [weak self] in self?.lastControls = nil }) {
+      self.events.onWindowControlsChanged(controls: read, completion: $0)
+    }
+  }
+
+  /// The corner-adapted region can lag one layout pass: read once more on
+  /// the next run loop turn. Reads and sends only, never re-syncs.
+  private func scheduleControlsReread() {
+    guard !rereadScheduled else { return }
+    rereadScheduled = true
+    DispatchQueue.main.async { [weak self] in
+      self?.rereadScheduled = false
+      self?.publishWindowControls()
+    }
+  }
+
+  /// Native → Dart. A failed send is logged, never swallowed.
+  private func send(
+    _ what: String,
+    onFailure: (() -> Void)? = nil,
+    _ call: (@escaping (Result<Void, PigeonError>) -> Void) -> Void
+  ) {
+    call { result in
+      guard case .failure(let error) = result else { return }
+      NSLog("[liquid_shell] sending %@ to Dart failed: %@", what, String(describing: error))
+      onFailure?()
+    }
+  }
+
+  // MARK: - Taps (native → Dart)
+
+  private func closeOverlay() {
+    if currentSidebar() == .overlay { sidebar.isHidden = true }
+  }
+
+  private func footerTapped() {
+    closeOverlay()
+    send("onFooterTapped") { self.events.onFooterTapped(completion: $0) }
+  }
+
+  func tabBarController(_ tabBarController: UITabBarController, shouldSelectTab tab: UITab) -> Bool {
+    if tab === trailingTab {
+      closeOverlay()
+      send("onTrailingTapped") { self.events.onTrailingTapped(completion: $0) }
+      return false
+    }
+    if let index = destinationTabs.firstIndex(where: { $0 === tab }) {
+      // Propose, do not select: Dart runs the guard, then answers with
+      // `update`, which selects the tab and closes an overlay sidebar.
+      send("onDestinationTapped") { self.events.onDestinationTapped(index: Int64(index), completion: $0) }
+      return false
+    }
+    return true
+  }
+
+  func tabBarController(
+    _ tabBarController: UITabBarController, didSelectTab selectedTab: UITab, previousTab: UITab?
+  ) {
+    // Safety net for a selection UIKit makes without asking: report it; Dart
+    // answers with the selection it accepts.
+    guard !applyingFromDart, selectedTab !== previousTab,
+      let index = destinationTabs.firstIndex(where: { $0 === selectedTab })
+    else { return }
+    send("onDestinationTapped") { self.events.onDestinationTapped(index: Int64(index), completion: $0) }
+  }
+
+  func tabBarController(
+    _ tabBarController: UITabBarController,
+    sidebarVisibilityWillChange sidebar: UITabBarController.Sidebar,
+    animator: any UITabBarController.Sidebar.Animating
+  ) {
+    // Publish the end value, read once the transition is done.
+    animator.addCompletion { [weak self] in self?.syncFlutter() }
+  }
+
+  /// Debug builds: the code path of a user tap, for integration tests.
+  func debugTap(_ target: NativeTapTarget, index: Int) {
+    #if DEBUG
+      switch target {
+      case .destination:
+        guard destinationTabs.indices.contains(index) else { return }
+        _ = tabBarController(self, shouldSelectTab: destinationTabs[index])
+      case .trailing:
+        guard let trailingTab else { return }
+        _ = tabBarController(self, shouldSelectTab: trailingTab)
+      case .footer:
+        footerTapped()
+      }
+    #endif
+  }
+}
+
+/// The empty, transparent controller of every tab. The Flutter view never
+/// moves in here: the host only reports its frame and safe area.
+@available(iOS 26.0, *)
+final class TabHostController: UIViewController {
+  private var shell: NativeTabsController? { tabBarController as? NativeTabsController }
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    view.backgroundColor = .clear
+  }
+
+  override func viewIsAppearing(_ animated: Bool) {
+    super.viewIsAppearing(animated)
+    shell?.syncFlutter()
+  }
+
+  override func viewDidLayoutSubviews() {
+    super.viewDidLayoutSubviews()
+    shell?.syncFlutter()
+  }
+
+  override func viewSafeAreaInsetsDidChange() {
+    super.viewSafeAreaInsetsDidChange()
+    shell?.syncFlutter()
+  }
+}
+
+extension ShellInsets {
+  init(_ insets: UIEdgeInsets) {
+    self.init(
+      top: Double(insets.top), left: Double(insets.left),
+      bottom: Double(insets.bottom), right: Double(insets.right))
+  }
+
+  var uiEdgeInsets: UIEdgeInsets {
+    UIEdgeInsets(
+      top: CGFloat(top), left: CGFloat(left), bottom: CGFloat(bottom), right: CGFloat(right))
+  }
+}
+
+extension UIColor {
+  /// Dart's `Color.toARGB32()`.
+  fileprivate convenience init(argb: Int64) {
+    let value = UInt32(truncatingIfNeeded: argb)
+    self.init(
+      red: CGFloat((value >> 16) & 0xFF) / 255,
+      green: CGFloat((value >> 8) & 0xFF) / 255,
+      blue: CGFloat(value & 0xFF) / 255,
+      alpha: CGFloat((value >> 24) & 0xFF) / 255)
+  }
+}
