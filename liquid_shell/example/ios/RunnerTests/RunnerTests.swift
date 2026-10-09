@@ -5,7 +5,8 @@ import XCTest
 @testable import liquid_shell_ios
 
 /// Unit tests of liquid_shell_ios's native shell: the pure arithmetic, the
-/// install rule and the pass-through hit test (spec P2 §9.3). They live in
+/// install rule, the pass-through hit test (spec P2 §9.3), and the UIKit
+/// shell in a window of the test host. They live in
 /// the example's RunnerTests target because a plugin has no test target of
 /// its own under CocoaPods. Run with `make ios-unit`.
 final class ShellMathTests: XCTestCase {
@@ -56,11 +57,28 @@ final class ShellMathTests: XCTestCase {
       safeLeading: 0, safeTop: 32, horizontalLeading: 66, verticalTop: 75)
     XCTAssertEqual(windowed.leading, 66)
     XCTAssertEqual(windowed.top, 43)
-    // Full screen: 9.5pt of rounded corner, no vertical delta.
+    // A short window: safe.top 10, v.top 53. Same cluster.
+    let short = ShellMath.windowControls(
+      safeLeading: 0, safeTop: 10, horizontalLeading: 66, verticalTop: 53)
+    XCTAssertEqual(short.leading, 66)
+    XCTAssertEqual(short.top, 43)
+    // Full screen after a windowed spell: 5.5pt of rounded corner, no
+    // vertical delta.
     let fullScreen = ShellMath.windowControls(
-      safeLeading: 0, safeTop: 32, horizontalLeading: 9.5, verticalTop: 32)
+      safeLeading: 0, safeTop: 32, horizontalLeading: 5.5, verticalTop: 32)
     XCTAssertEqual(fullScreen.leading, 0)
     XCTAssertEqual(fullScreen.top, 0)
+  }
+
+  func testALeadingOfExactly24IsACluster() {
+    let c = ShellMath.windowControls(
+      safeLeading: 0, safeTop: 0, horizontalLeading: 24, verticalTop: 0)
+    XCTAssertEqual(c.leading, 24)
+    XCTAssertEqual(c.top, ShellMath.fallbackClusterTop)
+    let below = ShellMath.windowControls(
+      safeLeading: 0, safeTop: 0, horizontalLeading: 23.9, verticalTop: 0)
+    XCTAssertEqual(below.leading, 0)
+    XCTAssertEqual(below.top, 0)
   }
 
   func testAdditionalInsetsFillOnlyWhatIsMissing() {
@@ -89,6 +107,21 @@ final class ShellMathTests: XCTestCase {
     XCTAssertFalse(ShellMath.differs((66, 30), (66.4, 30.2)))
     XCTAssertTrue(ShellMath.differs((66, 30), (66.5, 30)))
     XCTAssertTrue(ShellMath.differs((66, 30), (66, 29.5)))
+  }
+}
+
+final class ArgbColorTests: XCTestCase {
+  func testArgbIsDartsToArgb32() {
+    var red: CGFloat = 0
+    var green: CGFloat = 0
+    var blue: CGFloat = 0
+    var alpha: CGFloat = 0
+    XCTAssertTrue(
+      UIColor(argb: 0x80FF_4020).getRed(&red, green: &green, blue: &blue, alpha: &alpha))
+    XCTAssertEqual(alpha, 128 / 255, accuracy: 1e-6)
+    XCTAssertEqual(red, 1, accuracy: 1e-6)
+    XCTAssertEqual(green, 64 / 255, accuracy: 1e-6)
+    XCTAssertEqual(blue, 32 / 255, accuracy: 1e-6)
   }
 }
 

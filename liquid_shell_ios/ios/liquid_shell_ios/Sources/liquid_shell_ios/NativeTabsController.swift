@@ -80,7 +80,8 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   // MARK: - Dart → native
 
   /// Applies a whole config in a fixed order: tabs, selection, footer,
-  /// tint, appearance, direction, then visibility (spec §6.2).
+  /// style (tint, appearance, direction), interaction, then visibility
+  /// (spec §5.5).
   func apply(_ new: NativeChromeConfig) {
     loadViewIfNeeded()
     let wasVisible = chromeVisible
@@ -378,7 +379,7 @@ extension ShellInsets {
 
 extension UIColor {
   /// Dart's `Color.toARGB32()`.
-  fileprivate convenience init(argb: Int64) {
+  convenience init(argb: Int64) {
     let value = UInt32(truncatingIfNeeded: argb)
     self.init(
       red: CGFloat((value >> 16) & 0xFF) / 255,

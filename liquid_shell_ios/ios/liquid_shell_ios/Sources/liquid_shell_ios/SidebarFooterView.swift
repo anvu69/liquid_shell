@@ -1,6 +1,6 @@
 import UIKit
 
-/// The native sidebar footer (`sidebar.bottomBarView`, spec §4.3). It has to
+/// The native sidebar footer (`sidebar.bottomBarView`, spec §4.1). It has to
 /// be UIKit: a Flutter widget cannot live in the sidebar without a second
 /// engine. Dart sends its content.
 @available(iOS 26.0, *)

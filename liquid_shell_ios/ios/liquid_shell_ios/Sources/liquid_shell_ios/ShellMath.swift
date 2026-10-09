@@ -11,10 +11,10 @@ struct ShellInsets: Equatable {
   static let zero = ShellInsets(top: 0, left: 0, bottom: 0, right: 0)
 }
 
-/// The native shell's pure arithmetic (spec §6.4). No UIKit, no Flutter.
+/// The native shell's pure arithmetic (spec §8.1). No UIKit, no Flutter.
 enum ShellMath {
   /// Cluster height used when the vertical corner adaptation reads 0 while
-  /// the horizontal one does not (spec §6.6). At least the measured cluster:
+  /// the horizontal one does not (spec §8.1). At least the measured cluster:
   /// a windowed iPad Air (M3, iPadOS 27) reports 66 × 43pt at every size
   /// (docs/qa/p2/spike.md).
   static let fallbackClusterTop = 44.0

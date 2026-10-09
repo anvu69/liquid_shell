@@ -1,6 +1,6 @@
 import UIKit
 
-/// Reads the iPadOS 26 window-controls cluster from a view (spec §6.4).
+/// Reads the iPadOS 26 window-controls cluster from a view (spec §8.1).
 enum WindowControlsReader {
   static func read(_ view: UIView?) -> NativeWindowControls {
     guard #available(iOS 26.0, *), let view else {
