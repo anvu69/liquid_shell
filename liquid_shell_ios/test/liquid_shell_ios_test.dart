@@ -1,7 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell_ios/liquid_shell_ios.dart';
+import 'package:liquid_shell_ios/src/mapping.dart';
 import 'package:liquid_shell_ios/src/native_shell_api.g.dart';
+import 'package:liquid_shell_ios/src/platform.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
 /// Records Dart → native calls; answers with [state] and [controls].
@@ -49,6 +52,7 @@ class _FakeHost extends NativeShellHostApi {
   @override
   Future<void> debugTap(NativeTapTarget target, int index) async {
     calls.add('debugTap(${target.name}, $index)');
+    _maybeFail();
   }
 }
 
@@ -78,7 +82,35 @@ void main() {
 
   late LiquidShellPlatform original;
   setUp(() => original = LiquidShellPlatform.instance);
-  tearDown(() => LiquidShellPlatform.instance = original);
+  tearDown(() {
+    LiquidShellPlatform.instance = original;
+    // Receiving is process-wide: forget the previous test's receiver.
+    NativeShellFlutterApi.setUp(null);
+  });
+
+  final messenger =
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+
+  /// Sends a native → Dart call; true when a receiver answered it.
+  Future<bool> deliver(String method, List<Object?> args) async {
+    var answered = false;
+    await messenger.handlePlatformMessage(
+      'dev.flutter.pigeon.liquid_shell_ios.NativeShellFlutterApi.$method',
+      NativeShellFlutterApi.pigeonChannelCodec.encodeMessage(args),
+      (reply) => answered = reply != null,
+    );
+    await pumpEventQueue();
+    return answered;
+  }
+
+  /// Captures `debugPrint` until the test ends.
+  List<String> captureLogs() {
+    final logs = <String>[];
+    final previous = debugPrint;
+    debugPrint = (message, {wrapWidth}) => logs.add(message ?? '');
+    addTearDown(() => debugPrint = previous);
+    return logs;
+  }
 
   test('registerWith installs LiquidShellIOS, which keeps the signals', () {
     LiquidShellIOS.registerWith();
@@ -92,7 +124,7 @@ void main() {
 
   test('attachNativeChrome maps the native state', () async {
     final host = _FakeHost();
-    final state = await LiquidShellIOS(hostApi: host).attachNativeChrome();
+    final state = await liquidShellIOSWithHost(host).attachNativeChrome();
     expect(
       state,
       const LiquidNativeShellState(
@@ -127,7 +159,7 @@ void main() {
 
   test('a failed attach reports channelError instead of throwing', () async {
     final host = _FakeHost()..failure = PlatformException(code: 'gone');
-    final state = await LiquidShellIOS(hostApi: host).attachNativeChrome();
+    final state = await liquidShellIOSWithHost(host).attachNativeChrome();
     expect(state.installed, isFalse);
     expect(
       state.unavailableReason,
@@ -137,7 +169,7 @@ void main() {
 
   test('updateNativeChrome sends every field', () async {
     final host = _FakeHost();
-    await LiquidShellIOS(hostApi: host).updateNativeChrome(_config);
+    await liquidShellIOSWithHost(host).updateNativeChrome(_config);
     final sent = host.calls.single as NativeChromeConfig;
     expect(sent.engaged, isTrue);
     expect(sent.tabs.map((t) => t.title), ['Home', 'Files']);
@@ -165,24 +197,76 @@ void main() {
 
   test('setNativeSidebarVisible and debugTap reach the host', () async {
     final host = _FakeHost();
-    final platform = LiquidShellIOS(hostApi: host);
+    final platform = liquidShellIOSWithHost(host);
     await platform.setNativeSidebarVisible(visible: false);
     await platform.debugTap(NativeTapTarget.footer);
     expect(host.calls, ['setSidebarVisible(false)', 'debugTap(footer, 0)']);
   });
 
-  test('failed sends are swallowed', () async {
+  test('failed calls are swallowed and logged once per method', () async {
+    final logs = captureLogs();
     final host = _FakeHost()..failure = PlatformException(code: 'gone');
-    final platform = LiquidShellIOS(hostApi: host);
-    await platform.updateNativeChrome(_config);
-    await platform.updateNativeChrome(_config);
-    await platform.setNativeSidebarVisible(visible: true);
-    expect(host.calls, hasLength(3));
+    final platform = liquidShellIOSWithHost(host);
+    for (var i = 0; i < 2; i++) {
+      await platform.attachNativeChrome();
+      await platform.updateNativeChrome(_config);
+      await platform.setNativeSidebarVisible(visible: true);
+      await platform.readWindowControls();
+      await platform.debugTap(NativeTapTarget.destination, 1);
+    }
+    expect(host.calls, hasLength(10));
+    expect(logs, [
+      'liquid_shell native: attach failed (gone); falling back',
+      'liquid_shell native: update failed (gone); falling back',
+      'liquid_shell native: setSidebarVisible failed (gone); falling back',
+      'liquid_shell native: windowControls failed (gone); falling back',
+      'liquid_shell native: debugTap failed (gone); falling back',
+    ]);
+  });
+
+  test('nothing is received before the first attach, read or listen', () async {
+    liquidShellIOSWithHost(_FakeHost());
+    // No receiver yet: the channel buffers the call instead of answering.
+    expect(await deliver('onTrailingTapped', []), isFalse);
+  });
+
+  test('attachNativeChrome starts receiving; unheard events drop', () async {
+    final platform = liquidShellIOSWithHost(_FakeHost());
+    await platform.attachNativeChrome();
+    // Answered, but nothing listens yet: the event is dropped, not queued.
+    expect(await deliver('onFooterTapped', []), isTrue);
+
+    final events = <LiquidNativeEvent>[];
+    final subscription = platform.nativeEvents.listen(events.add);
+    addTearDown(subscription.cancel);
+    expect(await deliver('onDestinationTapped', [1]), isTrue);
+    expect(events, [const LiquidNativeDestinationTapped(1)]);
+  });
+
+  test('readWindowControls starts receiving too', () async {
+    final platform = liquidShellIOSWithHost(_FakeHost());
+    await platform.readWindowControls();
+    expect(await deliver('onTrailingTapped', []), isTrue);
+
+    final events = <LiquidNativeEvent>[];
+    final subscription = platform.nativeEvents.listen(events.add);
+    addTearDown(subscription.cancel);
+    expect(
+      await deliver('onWindowControlsChanged', [
+        NativeWindowControls(leading: 66, top: 30),
+      ]),
+      isTrue,
+    );
+    expect(events, [
+      const LiquidWindowControlsChanged(
+        LiquidWindowControls(leading: 66, top: 30),
+      ),
+    ]);
   });
 
   test('readWindowControls sanitizes; a failure reads zero', () async {
     final host = _FakeHost();
-    final platform = LiquidShellIOS(hostApi: host);
+    final platform = liquidShellIOSWithHost(host);
     expect(
       await platform.readWindowControls(),
       const LiquidWindowControls(leading: 66, top: 24),
@@ -194,21 +278,10 @@ void main() {
   });
 
   test('native calls arrive on nativeEvents through the channel', () async {
-    final platform = LiquidShellIOS(hostApi: _FakeHost());
+    final platform = liquidShellIOSWithHost(_FakeHost());
     final events = <LiquidNativeEvent>[];
     final subscription = platform.nativeEvents.listen(events.add);
     addTearDown(subscription.cancel);
-
-    const codec = NativeShellFlutterApi.pigeonChannelCodec;
-    final messenger =
-        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-    Future<void> deliver(String method, List<Object?> args) async {
-      await messenger.handlePlatformMessage(
-        'dev.flutter.pigeon.liquid_shell_ios.NativeShellFlutterApi.$method',
-        codec.encodeMessage(args),
-        (_) {},
-      );
-    }
 
     await deliver('onDestinationTapped', [2]);
     await deliver('onTrailingTapped', []);

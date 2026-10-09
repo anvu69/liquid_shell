@@ -81,9 +81,12 @@ pigeon: ## Regenerate both ends of the native shell channel
 	cd liquid_shell_ios && $(DART) run pigeon --input pigeons/native_shell.dart
 	$(DART) format liquid_shell_ios/lib/src/native_shell_api.g.dart
 
+# `git status --porcelain`, not `git diff`: an untracked (never committed) or
+# staged-but-uncommitted output must fail too.
 pigeon-check: pigeon ## Fail when the committed channel code drifts from its Pigeon source
-	@git diff --exit-code -- $(PIGEON_OUT) >/dev/null || { \
-	  echo "✗ generated channel code drifted from pigeons/native_shell.dart; review git diff and commit it" >&2; \
+	@drift="$$(git status --porcelain -- $(PIGEON_OUT))"; [ -z "$$drift" ] || { \
+	  echo "$$drift" >&2; \
+	  echo "✗ generated channel code drifted from pigeons/native_shell.dart; review git status and commit it" >&2; \
 	  exit 1; }
 	@echo "✓ pigeon output matches its source"
 
