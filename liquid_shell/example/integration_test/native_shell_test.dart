@@ -27,8 +27,33 @@ Future<void> _settle(WidgetTester tester) async {
 LiquidShellScopeData _scope(WidgetTester tester) =>
     LiquidShellScope.of(tester.element(find.byType(DemoPage).first));
 
+/// The case without the debug banner: its screenshots are doc images.
+const _app = MaterialApp(
+  debugShowCheckedModeBanner: false,
+  home: NativeChromeCase(),
+);
+
+String _title(WidgetTester tester) =>
+    tester.widget<DemoPage>(find.byType(DemoPage).first).title;
+
+/// The real iOS platform, also recording every config the shell sends.
+/// Installed before the first test: one instance receives every native
+/// call (the Pigeon receiver belongs to the instance that started it).
+class _RecordingIOS extends LiquidShellIOS {
+  final configs = <LiquidNativeChromeConfig>[];
+
+  @override
+  Future<void> updateNativeChrome(LiquidNativeChromeConfig config) {
+    configs.add(config);
+    return super.updateNativeChrome(config);
+  }
+}
+
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  if (LiquidShellPlatform.instance is LiquidShellIOS) {
+    LiquidShellPlatform.instance = _RecordingIOS();
+  }
 
   testWidgets('install state matches the device', (tester) async {
     final platform = LiquidShellPlatform.instance;
@@ -44,7 +69,7 @@ void main() {
   testWidgets('the native case draws native or Flutter chrome, not both', (
     tester,
   ) async {
-    await tester.pumpWidget(const MaterialApp(home: NativeChromeCase()));
+    await tester.pumpWidget(_app);
     await _settle(tester);
     final scope = _scope(tester);
     debugPrint(
@@ -72,9 +97,11 @@ void main() {
     await binding.takeScreenshot('native_${_runName}_home');
   });
 
-  testWidgets('native taps take the guarded path and select', (tester) async {
+  testWidgets('native taps select; the trailing action calls the app', (
+    tester,
+  ) async {
     if (!_expectNative) return;
-    await tester.pumpWidget(const MaterialApp(home: NativeChromeCase()));
+    await tester.pumpWidget(_app);
     await _settle(tester);
     final platform = LiquidShellPlatform.instance as LiquidShellIOS;
 
@@ -94,9 +121,57 @@ void main() {
     expect(find.text('Searches: 1'), findsOneWidget);
   });
 
+  // The guard round trip on the real native chrome (final review I2): the
+  // tap only proposes, the app's dialog answers, and the native selection
+  // follows the answer. Started from the portrait overlay sidebar when the
+  // simulator is portrait, where the dialog must not open under it (I1).
+  testWidgets('a dirty page: a native tap asks first; keep stays, discard '
+      'leaves', (tester) async {
+    if (!_expectNative) return;
+    final recorder = LiquidShellPlatform.instance as _RecordingIOS;
+    await tester.pumpWidget(_app);
+    await _settle(tester);
+    await tester.tap(find.text('Unsaved changes'));
+    await _settle(tester);
+    _scope(tester).setSidebarVisible(true);
+    await _settle(tester);
+    final overlay =
+        _scope(tester).chromeKind == LiquidChromeKind.sidebarOverlay;
+    debugPrint('liquid_shell native: guard from ${_scope(tester).chromeKind}');
+
+    await recorder.debugTap(NativeTapTarget.destination, 1);
+    await _settle(tester);
+    expect(find.text('Discard changes?'), findsOneWidget);
+    // Inert under the dialog; an overlay sidebar closed natively (UIKit
+    // reports it hidden), so nothing native covers the dialog.
+    expect(recorder.configs.last.interactive, isFalse);
+    expect(recorder.configs.last.selectedIndex, 0);
+    if (overlay) expect(_scope(tester).sidebarVisible, isFalse);
+    await binding.takeScreenshot('native_${_runName}_guard');
+
+    final beforeKeep = recorder.configs.length;
+    await tester.tap(find.text('Keep editing'));
+    await _settle(tester);
+    expect(find.text('Discard changes?'), findsNothing);
+    expect(_title(tester), 'Home');
+    // Re-synced: the current selection went back to UIKit, interactive.
+    final resent = recorder.configs.sublist(beforeKeep);
+    expect(resent, isNotEmpty);
+    expect(resent.last.selectedIndex, 0);
+    expect(resent.last.interactive, isTrue);
+
+    await recorder.debugTap(NativeTapTarget.destination, 1);
+    await _settle(tester);
+    await tester.tap(find.text('Discard'));
+    await _settle(tester);
+    expect(_title(tester), 'Inbox');
+    expect(recorder.configs.last.selectedIndex, 1);
+    expect(recorder.configs.last.interactive, isTrue);
+  });
+
   testWidgets('the sidebar opens from Dart and reports back', (tester) async {
     if (!_expectNative) return;
-    await tester.pumpWidget(const MaterialApp(home: NativeChromeCase()));
+    await tester.pumpWidget(_app);
     await _settle(tester);
     _scope(tester).setSidebarVisible(true);
     await _settle(tester);
@@ -122,7 +197,7 @@ void main() {
     tester,
   ) async {
     if (!_expectNative) return;
-    await tester.pumpWidget(const MaterialApp(home: NativeChromeCase()));
+    await tester.pumpWidget(_app);
     await _settle(tester);
     final below = MediaQuery.paddingOf(
       tester.element(find.byType(DemoPage).first),

@@ -481,6 +481,7 @@ On an **iPad Air 11-inch (M4), iOS 26.5** with `EXPECT_NATIVE=true` it checks:
 - full screen → zero window controls;
 - the tab bar row in the top safe area (> 40pt);
 - `debugTap` destination → Inbox selected; trailing → callback;
+- the guard round trip (final review I2): "Unsaved changes" on, the portrait overlay sidebar open, `debugTap` destination → the dialog shows, the config is non-interactive and UIKit reports the overlay closed; "Keep editing" → still Home, and the current selection is re-sent, interactive; "Discard" → Inbox;
 - the sidebar opens from Dart and reports back; footer → callback;
 - a page above hides the chrome (its top padding drops), and the chrome returns after the pop.
 
@@ -517,6 +518,7 @@ These jobs are added to `.github/workflows/ci.yaml`:
   - 4 destinations with symbols (one `sidebarOnly`, one with a count badge);
   - a trailing search action that counts taps;
   - a native footer that jumps to Settings;
+  - an "Unsaved changes" switch: while on, `beforeDestinationChange` asks "Discard changes?" (the native guard path, final review I2);
   - one `// #docregion readme`.
   - It is in `kCases` and in `cases_smoke_test` (phone and tablet).
 - **`DemoPage`:** the title row is wrapped in `LiquidWindowControlsClearance`.

@@ -3,7 +3,9 @@
 Chạy trên **iPad Air (iPadOS 27)** thật và **iPhone 16 Plus** thật. Agent
 không có GUI/VoiceOver/xoay máy nên các mục dưới là phần còn lại của Task 5.
 Đã có sẵn trên simulator (iPad 26.5): pill native, sidebar overlay dọc, trailing
-và footer, đẩy trang che chrome, iPhone dùng chrome Flutter.
+và footer, đẩy trang che chrome, guard với dialog (từ sidebar overlay dọc),
+iPhone dùng chrome Flutter. Hit test chạy trên cây view UIKit thật trong
+XCTest (`make ios-unit`), nhưng chỉ gọi `hitTest`, không phải chạm thật.
 
 ## Cài bản example
 
@@ -50,9 +52,17 @@ Nếu cần log: `fvm flutter run -d <UDID>` thay cho ba lệnh cuối.
 - [ ] **Dialog trên chrome:** mở một dialog / bottom sheet từ một trang. Chạm
       ngoài dialog thì đóng (chạm xuyên qua chrome native tới barrier), không
       chạm nhầm tab. Đẩy trang chi tiết: chrome native ẩn, pop thì hiện lại.
-- [ ] **Guard bị từ chối:** bật "unsaved changes" trong example, chạm hàng
-      sidebar khác rồi từ chối: hàng được chọn cũ vẫn sáng (không kẹt hàng
-      mới). Footer **không** đi qua guard (đúng thiết kế).
+- [ ] **Guard bị từ chối** (case **"Native chrome"**, không phải case
+      "Discard guard": case đó không có `sfSymbol` nên luôn vẽ chrome
+      Flutter): bật "Unsaved changes".
+      - Thanh tab native: chạm "Inbox" → hiện "Discard changes?", chạm
+        "Keep editing": vẫn ở Home, ô Home trên thanh tab vẫn sáng (không
+        nháy/kẹt ô Inbox). Chạm lại "Inbox" → "Discard": sang Inbox.
+      - Dọc, sidebar overlay: mở sidebar, bật lại "Unsaved changes" nếu cần,
+        chạm hàng "Inbox": sidebar **đóng trước**, dialog hiện trọn vẹn,
+        không bị sidebar/màn mờ che. "Keep editing": hàng/ô Home vẫn chọn.
+      - Footer **không** đi qua guard (đúng thiết kế).
+      (Simulator đã chạy tự động: `native_shell_test.dart`, "a dirty page".)
 - [ ] **Scene reconnect:** Stage Manager/App Exposé: đóng cửa sổ app (vuốt
       loại scene, không kill app) rồi mở lại từ icon. Chrome native quay lại
       đúng tab đã chọn và đúng số badge.

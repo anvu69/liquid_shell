@@ -4,7 +4,9 @@ import 'package:liquid_shell_example/support/demo_page.dart';
 
 /// Native iPadOS 26 chrome: the platform's own tab bar and sidebar. Every
 /// destination and the trailing action carry an SF Symbol, and the sidebar
-/// footer is native data. Elsewhere this case draws the Flutter chrome.
+/// footer is native data. "Unsaved changes" makes a tab change ask first,
+/// through `beforeDestinationChange`, for native and Flutter taps alike.
+/// Elsewhere this case draws the Flutter chrome.
 class NativeChromeCase extends StatefulWidget {
   /// Creates the case.
   const NativeChromeCase({super.key});
@@ -48,7 +50,11 @@ class _NativeChromeCaseState extends State<NativeChromeCase> {
     return LiquidShell(
       destinations: _destinations,
       selectedIndex: _index,
-      onDestinationSelected: (i) => setState(() => _index = i),
+      beforeDestinationChange: _confirmLeave, // "Discard changes?"
+      onDestinationSelected: (i) => setState(() {
+        if (i != _index) _dirty = false;
+        _index = i;
+      }),
       tabBarTrailing: LiquidTabAction(
         icon: const Icon(Icons.search),
         semanticLabel: 'Search',
@@ -64,10 +70,40 @@ class _NativeChromeCaseState extends State<NativeChromeCase> {
       ),
       body: DemoPage(
         title: _destinations[_index].label,
-        children: [Text('Searches: $_searches')],
+        children: [
+          Text('Searches: $_searches'),
+          SwitchListTile(
+            title: const Text('Unsaved changes'),
+            value: _dirty,
+            onChanged: (value) => setState(() => _dirty = value),
+          ),
+        ],
       ),
     );
   }
 
   // #enddocregion readme
+
+  bool _dirty = false;
+
+  Future<bool> _confirmLeave(int index) async {
+    if (!_dirty || index == _index) return true;
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Discard changes?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep editing'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Discard'),
+          ),
+        ],
+      ),
+    );
+    return discard ?? false;
+  }
 }

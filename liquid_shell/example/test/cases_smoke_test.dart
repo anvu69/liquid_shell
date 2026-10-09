@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell_example/cases/cases.dart';
 import 'package:liquid_shell_example/main.dart';
+import 'package:liquid_shell_example/support/demo_page.dart';
 
 /// The destination labels of the only [LiquidShell] on screen.
 List<String> shellLabels(WidgetTester tester) => [
@@ -204,6 +205,35 @@ void main() {
     await tester.tap(find.byTooltip('Search'));
     await tester.pumpAndSettle();
     expect(find.text('Searches: 1'), findsOneWidget);
+  });
+
+  testWidgets('native_chrome guards dirty edits: keep stays, discard leaves', (
+    tester,
+  ) async {
+    await _openCase(tester, 'native_chrome');
+    final shell = tester.widget<LiquidShell>(find.byType(LiquidShell));
+    expect(shell.beforeDestinationChange, isNotNull);
+
+    // Clean: no question.
+    await tester.tap(find.text('Inbox').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Discard changes?'), findsNothing);
+    expect(tester.widget<DemoPage>(find.byType(DemoPage)).title, 'Inbox');
+
+    await tester.tap(find.text('Unsaved changes'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Home').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Discard changes?'), findsOneWidget);
+    await tester.tap(find.text('Keep editing'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<DemoPage>(find.byType(DemoPage)).title, 'Inbox');
+
+    await tester.tap(find.text('Home').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Discard'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<DemoPage>(find.byType(DemoPage)).title, 'Home');
   });
 
   testWidgets(

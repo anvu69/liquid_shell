@@ -833,7 +833,11 @@ Widget build(BuildContext context) {
   return LiquidShell(
     destinations: _destinations,
     selectedIndex: _index,
-    onDestinationSelected: (i) => setState(() => _index = i),
+    beforeDestinationChange: _confirmLeave, // "Discard changes?"
+    onDestinationSelected: (i) => setState(() {
+      if (i != _index) _dirty = false;
+      _index = i;
+    }),
     tabBarTrailing: LiquidTabAction(
       icon: const Icon(Icons.search),
       semanticLabel: 'Search',
@@ -849,7 +853,14 @@ Widget build(BuildContext context) {
     ),
     body: DemoPage(
       title: _destinations[_index].label,
-      children: [Text('Searches: $_searches')],
+      children: [
+        Text('Searches: $_searches'),
+        SwitchListTile(
+          title: const Text('Unsaved changes'),
+          value: _dirty,
+          onChanged: (value) => setState(() => _dirty = value),
+        ),
+      ],
     ),
   );
 }
