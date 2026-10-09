@@ -1,0 +1,17 @@
+name: liquid_shell_workspace
+description: Workspace root for the liquid_shell federated packages. Not published.
+publish_to: none
+
+environment:
+  sdk: ^3.10.0
+
+workspace:
+  - liquid_shell
+  - liquid_shell/example
+  - liquid_shell_platform_interface
+  - liquid_shell_ios
+  - liquid_shell_android
+
+dev_dependencies:
+  test: ^1.26.0
+  very_good_analysis: 10.1.0

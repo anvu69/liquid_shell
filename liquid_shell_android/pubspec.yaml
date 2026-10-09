@@ -1,0 +1,31 @@
+name: liquid_shell_android
+description: The Android implementation of the liquid_shell plugin. Reads reduce transparency, battery saver and the system blur switch.
+version: 0.1.0-dev.1
+homepage: https://github.com/anvu69/liquid_shell/tree/main/liquid_shell_android
+repository: https://github.com/anvu69/liquid_shell/tree/main/liquid_shell_android
+issue_tracker: https://github.com/anvu69/liquid_shell/issues
+topics: [navigation, glassmorphism, adaptive-layout, tab-bar, sidebar]
+resolution: workspace
+
+environment:
+  sdk: ^3.10.0
+  flutter: ">=3.38.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  liquid_shell_platform_interface: ^0.1.0-dev.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  very_good_analysis: 10.1.0
+
+flutter:
+  plugin:
+    implements: liquid_shell
+    platforms:
+      android:
+        package: vn.lasoai.liquid_shell
+        pluginClass: LiquidShellPlugin
+        dartPluginClass: LiquidShellAndroid

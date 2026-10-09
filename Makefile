@@ -1,0 +1,99 @@
+# liquid_shell: one entry point per check. CI, the pre-commit hook and
+# contributors all call these targets, so "green" has exactly one definition.
+#
+# The SDK comes from fvm when it is installed (.fvmrc pins the floor, 3.38.10),
+# otherwise from the flutter on PATH (CI). Override with FLUTTER=... DART=...
+
+FVM := $(shell command -v fvm 2>/dev/null)
+FLUTTER ?= $(if $(FVM),fvm flutter,flutter)
+DART ?= $(if $(FVM),fvm dart,dart)
+
+PACKAGES := liquid_shell liquid_shell_platform_interface liquid_shell_ios liquid_shell_android
+EXAMPLE := liquid_shell/example
+# Packages whose lib/ must keep >= COVERAGE_MIN % line coverage (spec Q14).
+# A barrel-only package instruments 0 lines and stays out; every package whose
+# lib/ has more than directives must be listed, or tool/check_covered.dart
+# fails `make coverage`.
+COVERED := liquid_shell liquid_shell_platform_interface liquid_shell_ios liquid_shell_android
+COVERAGE_MIN := 90
+
+.PHONY: help get format format-check analyze test coverage goldens \
+        goldens-update provenance snippets verify pana publish-check \
+        android-unit integration-ios integration-android
+
+help: ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
+		| awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
+
+get: ## Resolve the whole pub workspace
+	$(FLUTTER) pub get
+
+format: ## Rewrite formatting in place (a fixer, not a gate)
+	$(DART) format .
+
+format-check: ## Formatting gate: check only, never rewrite
+	$(DART) format --output=none --set-exit-if-changed .
+
+analyze: ## Static analysis of every package, the example and tool/; infos and warnings are fatal
+	$(DART) analyze --fatal-infos --fatal-warnings $(PACKAGES) $(EXAMPLE) tool
+
+test: ## Unit and widget tests in every package and the example (no goldens)
+	@set -e; for p in $(PACKAGES) $(EXAMPLE); do \
+	  if [ -d $$p/test ]; then \
+	    echo "▸ test $$p"; \
+	    (cd $$p && $(FLUTTER) test --exclude-tags golden); \
+	  fi; \
+	done
+	$(DART) test tool/test
+
+coverage: ## Tests with coverage; fails below COVERAGE_MIN, with no tests, with no lib lines, or when COVERED misses a package with lib code
+	@$(DART) run tool/check_covered.dart "$(PACKAGES)" "$(COVERED)"
+	@set -e; \
+	trap 'for q in $(COVERED); do $(DART) run tool/gen_coverage_helper.dart $$q --remove; done' EXIT; \
+	for p in $(COVERED); do \
+	  echo "▸ coverage $$p"; \
+	  $(DART) run tool/gen_coverage_helper.dart $$p; \
+	  (cd $$p && $(FLUTTER) test --exclude-tags golden --coverage); \
+	  $(DART) run tool/check_coverage.dart $$p/coverage/lcov.info $(COVERAGE_MIN); \
+	done
+
+goldens: ## Golden tests (reference toolchain: macOS + Flutter 3.38.x)
+	@if [ -d $(EXAMPLE)/test/goldens ]; then \
+	  cd $(EXAMPLE) && $(FLUTTER) test --tags golden; \
+	else echo "▸ no goldens yet"; fi
+
+goldens-update: ## Regenerate every golden and doc image, then recompress them losslessly
+	FLUTTER="$(FLUTTER)" DART="$(DART)" tool/update_goldens.sh
+
+provenance: ## Fail on app names or banned dependencies outside docs/
+	tool/check_provenance.sh
+
+snippets: ## README snippets must equal their #docregion in example/lib/cases
+	@if [ -f tool/check_readme_snippets.dart ]; then \
+	  $(DART) run tool/check_readme_snippets.dart; \
+	else echo "▸ no snippet check yet"; fi
+
+verify: format-check analyze provenance test coverage goldens snippets ## Everything CI's blocking jobs run
+	@echo "✓ verify passed"
+
+pana: ## pana for each package (see docs/plans: pre-publish limits)
+	@set -e; for p in $(PACKAGES); do \
+	  echo "▸ pana $$p"; \
+	  $(DART) pub global run pana --no-warning $$p; \
+	done
+
+publish-check: ## pub publish --dry-run for each package
+	@set -e; for p in $(PACKAGES); do \
+	  echo "▸ publish --dry-run $$p"; \
+	  (cd $$p && $(FLUTTER) pub publish --dry-run); \
+	done
+
+android-unit: ## JVM unit tests of the Android plugin (SignalReaderTest)
+	cd $(EXAMPLE) && $(FLUTTER) build apk --debug --config-only
+	cd $(EXAMPLE)/android && ./gradlew :liquid_shell_android:testDebugUnitTest
+
+integration-ios: ## Signal channel round-trip on an iOS simulator
+	FLUTTER="$(FLUTTER)" tool/integration_ios.sh
+
+integration-android: ## Signal channel + every Android signal on an emulator
+	FLUTTER="$(FLUTTER)" tool/integration_android.sh

@@ -1,0 +1,184 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Flutter 3.38.x is the supported floor and blocks merges. Latest stable runs
+# as an early warning and never blocks (continue-on-error).
+jobs:
+  checks:
+    name: checks (${{ matrix.flutter }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - flutter: 3.38.x
+            experimental: false
+          - flutter: stable
+            experimental: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          # `a && '' || b` always yields b in Actions ('' is falsy), which sent
+          # flutter-version: stable to the action and failed setup. An empty
+          # version means the latest release on the channel.
+          flutter-version: ${{ matrix.flutter != 'stable' && matrix.flutter || '' }}
+          cache: true
+      - run: make get
+      # On the informational stable leg every check runs even after one
+      # fails, so a single run shows every stable incompatibility. The job
+      # still ends red. The 3.38.x leg keeps stopping at the first failure.
+      - run: make format-check
+        if: ${{ success() || (failure() && matrix.experimental) }}
+      - run: make analyze
+        if: ${{ success() || (failure() && matrix.experimental) }}
+      - run: make provenance
+        if: ${{ success() || (failure() && matrix.experimental) }}
+      - run: make test
+        if: ${{ success() || (failure() && matrix.experimental) }}
+      - run: make coverage
+        if: ${{ success() || (failure() && matrix.experimental) }}
+      - run: make snippets
+        if: ${{ success() || (failure() && matrix.experimental) }}
+
+  pana:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: make get
+      - run: dart pub global activate pana
+      # pana checks that `repository` on GitHub main contains this pubspec.
+      # On a branch that adds a package, main does not have it yet, so those
+      # 10 points are allowed off main only.
+      - name: pana liquid_shell_platform_interface (max score on main)
+        run: >
+          dart pub global run pana --no-warning
+          --exit-code-threshold ${{ github.ref == 'refs/heads/main' && '0' || '10' }}
+          liquid_shell_platform_interface
+      # These three depend on liquid_shell_platform_interface, which pana can
+      # only resolve from pub.dev. Informational until P6 publishes it first.
+      # One step each: in a single `bash -e` loop the first failure stopped
+      # the loop, so the other two were never scored.
+      - name: pana liquid_shell (informational until P6)
+        continue-on-error: true
+        run: dart pub global run pana --no-warning --exit-code-threshold 0 liquid_shell
+      - name: pana liquid_shell_ios (informational until P6)
+        continue-on-error: true
+        run: dart pub global run pana --no-warning --exit-code-threshold 0 liquid_shell_ios
+      - name: pana liquid_shell_android (informational until P6)
+        continue-on-error: true
+        run: dart pub global run pana --no-warning --exit-code-threshold 0 liquid_shell_android
+      - run: make publish-check
+
+  android-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.38.x
+          cache: true
+      - run: make get
+      - run: make android-unit
+
+  integration-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.38.x
+          cache: true
+      - run: make get
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          # The default (true) sets animator_duration_scale to 0, which the
+          # plugin reads as reduce transparency. The script also sets its own
+          # baseline of 1 and restores the starting value on exit.
+          disable-animations: false
+          script: tool/integration_android.sh
+
+  integration-ios:
+    runs-on: macos-latest
+    # A stuck simctl once held this job for the full 6 h limit. The script
+    # kills a drive after 10 min and retries once; this caps the whole job.
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.38.x
+          cache: true
+      - run: make get
+      - run: tool/integration_ios.sh
+        env:
+          IOS_RUNTIME: ""
+          IOS_DEVICES: auto
+
+  goldens:
+    name: goldens (${{ matrix.flutter }})
+    runs-on: macos-latest
+    timeout-minutes: 15
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - flutter: 3.38.x
+            experimental: false
+          - flutter: stable
+            experimental: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          # `a && '' || b` always yields b in Actions ('' is falsy), which sent
+          # flutter-version: stable to the action and failed setup. An empty
+          # version means the latest release on the channel.
+          flutter-version: ${{ matrix.flutter != 'stable' && matrix.flutter || '' }}
+          cache: true
+      - run: make get
+      - run: make goldens
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-failures-${{ matrix.flutter }}
+          path: liquid_shell/example/test/goldens/failures/

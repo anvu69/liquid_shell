@@ -1,0 +1,27 @@
+name: liquid_shell_example
+description: Example app for liquid_shell. One screen per documented case.
+publish_to: none
+version: 1.0.0+1
+resolution: workspace
+
+environment:
+  sdk: ^3.10.0
+  flutter: ">=3.38.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  liquid_shell: ^0.1.0-dev.1
+
+dev_dependencies:
+  flutter_driver:
+    sdk: flutter
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  liquid_shell_platform_interface: ^0.1.0-dev.1
+  very_good_analysis: 10.1.0
+
+flutter:
+  uses-material-design: true

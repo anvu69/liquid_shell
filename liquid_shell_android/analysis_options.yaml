@@ -1,0 +1,9 @@
+include: package:very_good_analysis/analysis_options.yaml
+
+# Newer Flutter (3.47+) adds these on `pub get` when they are missing,
+# which dirties git and fails `pub publish --dry-run`. Committed so every
+# toolchain sees a clean tree. Only build output and native code live here.
+analyzer:
+  exclude:
+    - build/**
+    - android/**

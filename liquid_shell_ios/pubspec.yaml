@@ -1,0 +1,30 @@
+name: liquid_shell_ios
+description: The iOS implementation of the liquid_shell plugin. Reads Reduce Transparency through UIAccessibility.
+version: 0.1.0-dev.1
+homepage: https://github.com/anvu69/liquid_shell/tree/main/liquid_shell_ios
+repository: https://github.com/anvu69/liquid_shell/tree/main/liquid_shell_ios
+issue_tracker: https://github.com/anvu69/liquid_shell/issues
+topics: [navigation, glassmorphism, adaptive-layout, tab-bar, sidebar]
+resolution: workspace
+
+environment:
+  sdk: ^3.10.0
+  flutter: ">=3.38.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  liquid_shell_platform_interface: ^0.1.0-dev.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  very_good_analysis: 10.1.0
+
+flutter:
+  plugin:
+    implements: liquid_shell
+    platforms:
+      ios:
+        pluginClass: LiquidShellPlugin
+        dartPluginClass: LiquidShellIOS

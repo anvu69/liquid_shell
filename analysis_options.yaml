@@ -1,0 +1,5 @@
+# Root options cover tool/ only. Every package has its own
+# analysis_options.yaml, because pana analyses a package on its own.
+# Do NOT exclude the packages here: in a pub workspace the root exclude
+# also applies to them and `make analyze` would silently check nothing.
+include: package:very_good_analysis/analysis_options.yaml

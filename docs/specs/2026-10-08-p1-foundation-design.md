@@ -261,6 +261,7 @@ class LiquidShell extends StatefulWidget {
   });
 
   /// All destinations, in display order. Indices refer to this list.
+  /// Labels must be unique (debug assert, §7).
   final List<LiquidDestination> destinations;
 
   /// The destination whose content `body` currently shows.
@@ -433,11 +434,14 @@ class LiquidShellScopeData {
   final EdgeInsets chromeInsets;
   final bool sidebarVisible;
   /// Shows or hides the sidebar. Ignored in compact (debug log).
+  /// Safe while a page builds: then applied after the frame (amended
+  /// 2026-10-09, final review I3).
   final ValueSetter<bool> setSidebarVisible;
   // == and hashCode compare every field except setSidebarVisible.
 }
 
-/// While mounted with enabled == true inside a shell, hides all chrome
+/// While mounted with enabled == true inside a shell AND on screen
+/// (Visibility.of && TickerMode.of, amended 2026-10-09), hides all chrome
 /// (bar, toggle, sidebar). For full-frame pages pushed inside a branch.
 /// Requests are reference-counted. Outside a shell it does nothing.
 class LiquidHideChrome extends StatefulWidget {
@@ -497,6 +501,7 @@ class LiquidChromeDetails {
 ```
 
 - The shell calls `chromeBuilder` once per visible slot, passing the widget it would have drawn as `defaultChrome`. Apps can wrap it or ignore it.
+- The builder's result is placed in a `Material(type: MaterialType.transparency)`, the same wrapper the default chrome uses, so its text gets the theme's `bodyMedium` style instead of `MaterialApp`'s red fallback style, and ink has a target (amended 2026-10-09, Task 14: the custom chrome case drew "Beta" in the fallback style).
 - Placement does not change. The tab-bar slot is aligned to the bottom (`bottomBar`) or the top (`topBar`, toggle included) and is **measured**, so `chromeInsets` stay correct for custom bars. The sidebar slot gets tight width `sidebarWidth` and full height.
 - `chromeBuilder` cannot move or reparent `body` (§5.6).
 
@@ -663,7 +668,7 @@ class EventChannelLiquidShellPlatform extends LiquidShellPlatform {
 
 ### 4.9 Exported vs internal
 
-Exported: everything in §4.1–4.7 plus `LiquidPlatformSignals`, **plus `LiquidTabBar` and `LiquidSidebar` as standalone public widgets (Q12 = Yes): each gets a documented constructor taking the same destinations / selection / badge / trailing / header / footer inputs the shell passes, its own tests, an example case and a README section.** Internal (`lib/src`, not exported): the sidebar toggle widget, the frosted and solid renderers, the bar height reporter, the signals controller, the large content viewer and the text-scale helpers.
+Exported: everything in §4.1–4.7 plus `LiquidPlatformSignals`, **plus `LiquidTabBar` and `LiquidSidebar` as standalone public widgets (Q12 = Yes): each gets a documented constructor taking the same destinations / selection / badge / trailing / header / footer inputs the shell passes, its own tests, an example case and a README section.** `LiquidTabBar` also takes `bool? narrow` and is exported with the constant `kLiquidNarrowWidth = 340` (Q17, §5.3): `narrow: true` uses the narrow pill padding; `null` (the default) means `MediaQuery.sizeOf(context).width < kLiquidNarrowWidth`. The shell always passes it explicitly from its own constraints. Neither `LiquidShellBreakpoints` nor `LiquidGlassTheme` gains a field: the pill margins are not themeable, so the threshold is a constant. Internal (`lib/src`, not exported): the sidebar toggle widget, the frosted and solid renderers, the bar height reporter, the signals controller, the large content viewer, the text-scale helpers and the narrow label fitter with its minimum `kLiquidMinLabelSize` = 10 (Q18; not exported, no public API change).
 
 Test-only hooks (`@visibleForTesting`, exported): `debugLiquidGlassCanBlurOverride` (a `bool?` top-level variable) and `debugResetLiquidGlassSignals()`.
 
@@ -678,7 +683,7 @@ Test-only hooks (`@visibleForTesting`, exported): `debugLiquidGlassCanBlurOverri
 | **Compact** | `w < B.regular` | never | bottom pill | glass circle at the pill's end | none | not shown | full frame; content runs under the bar |
 | **Regular, overlay** (portrait, or landscape narrower than `B.tiledSidebar`) | `w ≥ B.regular` and not tiled | hidden by default; when shown it **covers** the body and the top bar, with a dismissible barrier | top pill, centred | circle at the pill's end; when the sidebar is shown, the first sidebar row | 48pt circle at the top start when hidden; hide button in the sidebar header when shown | sidebar only | full frame, never resized |
 | **Regular, tiled** | `w ≥ B.tiledSidebar` and `w > h` | shown by default, **beside** the body | none while the sidebar is shown; top pill + toggle when it is hidden | sidebar row when shown; circle when hidden | as above | sidebar only | `w − sidebarWidth` wide while the sidebar is shown |
-| **Hidden** | any `LiquidHideChrome` active | none | none | none | none | — | full frame |
+| **Hidden** | any `LiquidHideChrome` active (mounted, enabled and on screen, §4.4) | none | none | none | none | — | full frame |
 
 iOS and Android behave identically. iPhone 393 → compact. iPhone Pro Max landscape 932 → regular overlay. iPad 11" portrait 834 → regular overlay. iPad 11" landscape 1194 → tiled. Android phone 412 → compact. Android tablet landscape 1280 → tiled.
 
@@ -691,6 +696,7 @@ iOS and Android behave identically. iPhone 393 → compact. iPhone Pro Max lands
 - When the presentation changes (compact ↔ overlay ↔ tiled, through rotation or resize), the value **resets** to the new presentation's default.
 - Changes come from: the toggle (show), the sidebar's hide button, the overlay barrier (tap), the overlay **closing itself after a selection is accepted**, `LiquidShellScopeData.setSidebarVisible`, and the system back gesture while the overlay is shown (Q10). A tiled sidebar does not close on selection.
 - In compact the state is `false` and setters are ignored.
+- **Timing (amended 2026-10-09, final review I3).** Pages call `setSidebarVisible` from `initState`, `didChangeDependencies` or `build`, which run inside the shell's `LayoutBuilder` while it lays out the body; marking the shell dirty then asserts "setState() called during build". Like hide-chrome requests, a call made while `SchedulerBinding.schedulerPhase == persistentCallbacks` applies in a post-frame callback; any other call applies at once. The compact check runs when the call applies. Applying is idempotent.
 - Show and hide are not animated in P1 (same as the app today).
 
 ### 5.3 Geometry and insets
@@ -699,7 +705,7 @@ Numbers are preserved from the app. `pad` = `MediaQuery.paddingOf` of the shell.
 
 | Element | Geometry |
 |---|---|
-| Bottom bar row | Horizontal margin 16. Bottom gap = 21 when the bottom system inset is a gesture area (always on iOS; on Android when `systemGestureInsets.bottom > 0`), otherwise `max(21, viewPadding.bottom + 8)` (Q9). The pill is 62 high at text scale 1. Compact cells stack the icon over the label. The trailing circle is the same height as the pill, square, 8 from the pill. |
+| Bottom bar row | Horizontal margin 16, or 8 when narrow (below). Bottom gap = 21 when the bottom system inset is a gesture area (always on iOS; on Android when `systemGestureInsets.bottom > 0`), otherwise `max(21, viewPadding.bottom + 8)` (Q9). The pill is 62 high at text scale 1. Compact cells stack the icon over the label. The trailing circle is the same height as the pill, square, 8 from the pill. |
 | Top bar row | Starts at `pad.top + 20`. The pill is 52 high. Cells put the icon beside the label. Margin 16; when the toggle is present, each side also reserves 20 + 48 + 8 so the pill stays centred. |
 | Toggle | 48 × 48 glass circle at `(start: 20, top: pad.top + 20)`. |
 | Sidebar | `sidebarWidth` wide, full height. Glass with `BorderRadius.zero` and a 1px end border in `outlineVariant`. Inner padding 16 horizontal, 24 vertical, plus `pad`. Order: header row `[sidebarHeader (expanded) │ hide button]`, trailing-action row (§5.4), destination rows in list order, spacer, `sidebarFooter`. Rows: 12 radius, 12 horizontal padding, 12 icon–label gap. Selected row: `primaryContainer` / `onPrimaryContainer`, w600; otherwise w500. |
@@ -712,6 +718,11 @@ Numbers are preserved from the app. `pad` = `MediaQuery.paddingOf` of the shell.
 | `bottomBar` | `bottom` = measured row height + bottom gap (83 before the first measurement) |
 | `topBar`, `sidebarOverlay` | `top` = `pad.top` + 20 + measured pill height (`pad.top + 72` before measurement) |
 | `sidebarTiled`, `hidden` | zero (the body is already beside the sidebar or the chrome is gone) |
+| any kind, bar **measured at 0** | zero. A `chromeBuilder` bar that collapses to 0pt draws nothing, so neither the bottom gap nor the `pad.top + 20` band is added for it (amended 2026-10-08, Task 10 review M4). Before the first measurement the initial extents still apply |
+
+**Narrow widths (Q17, amended 2026-10-08).** The shell is *narrow* when its constraint width `w < kLiquidNarrowWidth` (340). In the compact bottom bar a narrow shell uses a horizontal row margin of **8** instead of 16, and the pill's inner horizontal padding is **4** instead of 8 (vertical padding stays 4). Cell width with 5 tabs plus the trailing circle at 320 is then, at text scale 1, (320 − 2×8 − 62 − 8 − 2×4) / 5 = **45.2pt**, at or above the 44pt HIG hit target (40.4pt with the regular values). Larger text below the accessibility threshold grows the pill and the square trailing circle with it, so cells can drop under 44pt there (amended 2026-10-08, Task 10 re-review N3). At `w ≥ 340` nothing changes: (340 − 32 − 62 − 8 − 16) / 5 = 44.4pt. The top bar is unaffected (it only exists at `w ≥ B.regular`, and its pill padding is already 4). Standalone `LiquidTabBar` applies the same inner padding through its `narrow` flag (§4.9); its outer margins are the caller's. The flag defaults from `MediaQuery` width, which is the window: a bar in a pane narrower than the window (an in-app split view), and a `chromeBuilder` that builds its own `LiquidTabBar` in a shell narrower than the window, must pass `narrow` explicitly (Task 10 re-review N2).
+
+**Narrow labels (Q18, owner 2026-10-09: 1B).** In the narrow bottom bar (`narrow == true`) a label that does not fit its cell is fitted in three steps: (1) it takes the cell's 8pt side padding (the cell keeps the geometry above: `min(share, max(icon, label) + 16)`, never under 44 when the share allows); (2) it shrinks, as a uniform scale of the drawn label, down to `kLiquidMinLabelSize` = **10** logical pixels, or to its own size when the style is already smaller (it never grows); (3) only then does it ellipsize, at that minimum. The selected label uses the same style as the others; only its colour changes (amended 2026-10-09, label-fit review). The label is measured with its own style after the text scaler, as drawn. It keeps its unscaled line height, so fitting never changes the pill height. At text scale 1 the default label is 10pt, so there step 1 alone does the work: at 320 with "Home", "Explore", "Inbox", "Saved", "Settings" every label fits at 10pt (Inter: widest "Settings" 43.1pt in a 45.2pt cell). Step 2 acts between text scale 1 and the AX threshold, and with a theme `labelStyle` above 10pt. Regular width (`narrow == false`) and the top bar are unchanged: 8pt padding, ellipsis at the style's size.
 
 The bar is measured after layout and reported only once its height has been stable for 2 frames. The report is keyed by `(sizeClass, textScaler)`. This is ported from `_HeightReporter`. In tiled-shown, the body gets `MediaQuery` with `size.width = w − sidebarWidth` and the start padding set to 0, so pages beside the sidebar see their real width.
 
@@ -728,9 +739,11 @@ The bar is measured after layout and reported only once its height has been stab
    - `false`: do nothing; the overlay stays open.
    - The guard throws: same as `false`, plus `FlutterError.reportError` (§7).
    - The shell is unmounted while the guard is pending: drop the result.
+   - `destinations` changed while the guard was pending: an accepted selection goes to the destination with the requested label (the same index if it is still there, else its only match), or is dropped. Labels are therefore required to be unique (§7; Task 10 review M7, re-review N1).
 4. Programmatic changes to `selectedIndex` never call the guard.
 5. Reselect (`i == selectedIndex`) runs the same path.
 6. **`sidebarOnly` selected in compact.** The pill highlights nothing and the selection is kept. After the frame in which the layout becomes compact (or on the first frame if it starts compact), the shell calls `onSelectedDestinationHidden(selectedIndex)` once. It does not call it again until the layout leaves compact and comes back. In a regular layout with the sidebar hidden, the top pill also highlights nothing, and there is no callback, because the toggle can reveal the selection.
+7. **Programmatic switch and hidden chrome (amended 2026-10-09, final review I2).** A hide request counts only while its `LiquidHideChrome` is on screen (§4.4, §7). When the app changes `selectedIndex` (deep link, notification, `context.go`) away from a branch whose page hides the chrome, that branch goes off screen, its request stops counting and the chrome reappears after the frame, so the user always has navigation. Switching back hides it again. The criterion is `Visibility.of(context) && TickerMode.of(context)`, re-read in `didChangeDependencies`: it covers `IndexedStack` (`Visibility`), go_router's `StatefulShellRoute.indexedStack` (`Offstage` + `TickerMode`) and routes covered by an opaque route (`TickerMode`). `ModalRoute.isCurrent` was rejected because every branch navigator's top route is current; `Offstage` alone exposes nothing to descendants.
 
 ### 5.6 Per-tab state
 
@@ -779,6 +792,7 @@ Tab colours come from `ColorScheme`: the selected cell is `primary` on a `primar
 
 - Every cell and row is a button with `label` (plus the badge suffix) and `selected` (except while minimised). The toggle, hide button and trailing circle have tooltips and semantics from `strings` / `semanticLabel`.
 - AX text scale (`textScaler.scale(14) / 14 ≥ 1.6`): bar cells become icon-only. The label moves to semantics. Icon size is capped at 36. A long press shows the internal large content viewer (`UILargeContentViewer` analogue).
+- Below the AX threshold, narrow bottom-bar labels shrink to fit, never under 10pt, before they ellipsize (Q18, §5.3). The label in semantics is always the full text. Known trade-off (owner decision 1B): between text scale 1 and the AX threshold a narrow label can draw below the size the user chose, down to 10pt, and the large content viewer only starts at the AX threshold. The README states this.
 - All placements are directional (`start`/`end`). In RTL the toggle sits at the top right and the trailing circle sits at the pill's left.
 - The overlay sidebar is modal for screen readers: the barrier blocks the semantics of the content behind it.
 
@@ -803,7 +817,7 @@ Android 16/17's "Reduce blur effects" toggle has no confirmed public API. P1 rel
 
 ### 6.3 iOS (`LiquidShellPlugin.swift`)
 
-`FlutterPlugin` + `FlutterStreamHandler`. It observes `UIAccessibility.reduceTransparencyStatusDidChangeNotification` on the main queue. This is ported from `AppDelegate.swift:42-74` with the channel renamed. It ships for CocoaPods and Swift Package Manager (the same source in `Sources/liquid_shell_ios`), with an empty privacy manifest.
+`FlutterPlugin` + `FlutterStreamHandler`. It observes `UIAccessibility.reduceTransparencyStatusDidChangeNotification` on the main queue. This is ported from `AppDelegate.swift:42-74` with the channel renamed. It ships for CocoaPods and Swift Package Manager (the same source in `Sources/liquid_shell_ios`), with an empty privacy manifest. **Amended 2026-10-09 (final review I5, owner decision O2):** only CocoaPods has been built and run (every simulator and device run). `Package.swift` stays in the package, but the README says it is unverified until Flutter's SwiftPM build works on Xcode 27; the P6 checklist (§12.1) gates the release on a SwiftPM build.
 
 ### 6.4 Android (`LiquidShellPlugin.kt`, `SignalReader.kt`)
 
@@ -828,6 +842,8 @@ Every read is wrapped in `try/catch` (`SecurityException`, `SettingNotFoundExcep
 
 Glass always keeps rendering; a signal failure can only make the result *more* glassy, never blank.
 
+**Overriding `resolve` (amended 2026-10-09, final review I1).** `LiquidGlass` draws `policy.rendererFor(context, policy.resolve(context, signals))`, so a subclass that overrides `resolve` decides the tier of every glass under its scope. Within one build each registered renderer's `isSupported` is memoised, so it runs, and a throwing probe is reported, once per build however `resolve` and `rendererFor` combine. `LiquidGlassPolicy.==` also compares `runtimeType`, so swapping in a subclass with equal fields notifies `LiquidGlassScope` dependants.
+
 ## 7. Error handling
 
 | Case | Debug | Release |
@@ -835,7 +851,7 @@ Glass always keeps rendering; a signal failure can only make the result *more* g
 | Platform signal fails or is unsupported | `debugPrint` once | Treated as off (§6.5) |
 | `selectedIndex` out of range | `assert` with a message naming the range | Treated as `0` |
 | `destinations` empty | `assert` | Body only, no chrome |
-| More than 5, or zero, `everywhere` destinations (Q4) | `assert` | Draws them; cells shrink to fit |
+| More than 5, or zero, `everywhere` destinations (Q4) | `assert` | Draws them; cells shrink to fit. Up to 5 + trailing stay ≥ 44pt wide down to 320 at text scale 1 (Q17) |
 | Negative `LiquidBadge.count` | `assert` | Hidden, as for 0 |
 | `beforeDestinationChange` throws | `FlutterError.reportError(FlutterErrorDetails(exception, stack, library: 'liquid_shell', context: ErrorDescription('while running beforeDestinationChange')))`; selection refused | same |
 | Guard completes after unmount | ignored | ignored |
@@ -847,8 +863,10 @@ Glass always keeps rendering; a signal failure can only make the result *more* g
 | `LiquidShellScope.of` outside a shell | `assert` | `LiquidShellScopeData.none()` |
 | `setSidebarVisible` in compact | `debugPrint` | ignored |
 | `LiquidHideChrome` outside a shell | — | no-op |
+| `LiquidHideChrome` mounted but off screen: an inactive branch kept alive by `IndexedStack` (`Visibility`) or by go_router's `StatefulShellRoute.indexedStack` (`Offstage` + `TickerMode(false)`), or a route covered by an opaque route (`TickerMode(false)`) | — | Its request does not count; it counts again when it comes back on screen (amended 2026-10-09, final review I2) |
 | Bar height never settles | — | Initial extents (83 / `pad.top + 72`) stay in use |
 | `sidebarWidth` ≥ `breakpoints.regular` | `assert` | Used as given |
+| Duplicate `LiquidDestination.label`s (labels must be unique) | `assert` naming the repeated labels | Drawn as given; an accepted guarded selection whose destination moved may be dropped, because the guard re-finds it by label (§5.5) |
 
 Exceptions thrown by app callbacks (`onDestinationSelected`, `LiquidTabAction.onPressed`) and by app widgets (`chromeBuilder`, third-party `buildBackground`) are not caught. Flutter reports them as usual. The built-in renderers do not throw.
 
@@ -945,7 +963,7 @@ TDD applies to every task (red → green → commit), with per-task review and a
 - **Trailing action:** circle in the bottom and top bars; it survives minimisation.
 - **`beforeDestinationChange`:** accept → callback and overlay closes; refuse → no callback and overlay stays open; throw → no callback and `FlutterError.onError` receives `library: 'liquid_shell'`; a second tap while pending is ignored; unmount while pending does not call back; reselect runs the guard.
 - **Per-tab state:** a stateful counter inside `body` keeps its value across a sidebar toggle, compact ↔ regular, rotation, `LiquidHideChrome` on/off, adding and removing `chromeBuilder`, and a tier change.
-- **`LiquidHideChrome`:** hides every slot and zeroes the insets; reference counting with two instances; `enabled: false` is a no-op; outside a shell it is a no-op.
+- **`LiquidHideChrome`:** hides every slot and zeroes the insets; reference counting with two instances; `enabled: false` is a no-op; outside a shell it is a no-op. Off screen it does not count (final review I2): with branches kept by `IndexedStack` and by `Offstage` + `TickerMode`, a programmatic switch away from a branch whose page hides the chrome shows the chrome and switching back hides it; an inactive hiding branch never hides it; a hiding route covered by an opaque route stops hiding and hides again after the pop.
 - **`LiquidNoChrome` / `LiquidContentInset` / `contentPaddingOf`.**
 - **Selection range:** out-of-range `selectedIndex` asserts in debug. The release behaviour is tested through the pure resolver, which maps it to 0.
 - **Minimise:** reverse scroll minimises, forward expands, tap expands without changing tab, announcement sent (`tester.binding` semantics announcements), no `AnimatedSize` under `disableAnimations`.
@@ -954,7 +972,9 @@ TDD applies to every task (red → green → commit), with per-task review and a
 - **Semantics:** labels, `selected`, the minimised hint, the toggle and hide tooltips from `strings`, barrier label, AX text scale 2.0 → icon-only with a label in semantics and long press → large content viewer.
 - **System back** with the overlay shown closes it (Q10).
 - **Outside shadow:** pixel-capture test ported from `glass_surface_test.dart:258-300`.
-- **Custom chrome:** `chromeBuilder` receives `defaultChrome` and correct details per slot; a custom bar of height 100 is measured into `chromeInsets`.
+- **Custom chrome:** `chromeBuilder` receives `defaultChrome` and correct details per slot; a custom bar of height 100 is measured into `chromeInsets`; a custom bar of height 0 yields zero insets. Plain `Text` returned by the builder, in either slot, gets the theme's `bodyMedium` style, not the fallback style; standalone `LiquidTabBar` and `LiquidSidebar` text has no fallback style outside a `Material`. Every golden first fails if any `Text` resolves to a fallback style.
+- **Narrow widths (Q17):** at 320×568 with 5 tabs + trailing every cell is ≥ 44pt wide inside the real shell; 375 keeps margin 16 and padding 8; 339 is narrow and 340 is not; RTL mirrors it; standalone `LiquidTabBar` follows `narrow` and the `MediaQuery` default.
+- **Narrow labels (Q18):** at 320 a label that fits after taking the side padding draws at its own size with no ellipsis; at text scale 1.3 a label shrinks to fit and stays ≥ 10pt; a label too long at 10pt ellipsizes at exactly 10pt; the selected label fits; regular width keeps padding 8 and ellipsizes at the style's size; RTL behaves the same. In the example (Inter, iPhone, 320pt shell) all five labels of `NarrowWidthCase` fit untruncated at ≥ 10pt, selected or not.
 
 ### 10.3 Goldens: regression guard and doc images
 
@@ -962,8 +982,8 @@ TDD applies to every task (red → green → commit), with per-task review and a
 - Each golden writes to `liquid_shell/doc/images/<name>.png` (`matchesGoldenFile('../../../doc/images/<name>.png')`).
 - Harness `example/test/support/golden_harness.dart` is written fresh. It loads Inter (OFL 1.1, `example/test/fonts/` + `OFL.txt`) and MaterialIcons from the Flutter SDK cache. It sets the logical size, `devicePixelRatio = 2`, the safe-area padding per device, `Theme.platform`, and light/dark themes. It paints a deterministic wallpaper (`CustomPainter`, no image assets) so the glass is visible.
 - Devices: iPhone 393×852 (padding top 59, bottom 34); iPad 834×1194 and 1194×834 (top 24, bottom 20); Android 412×915 (top 24, gesture bottom 24).
-- `example/test/flutter_test_config.dart` installs a comparator that tolerates ≤ 0.5% differing pixels (Q11). It also sets `debugLiquidGlassCanBlurOverride = true`, because `flutter test` defaults to the Android platform and may report no shader filters; without the override, every golden would show the solid tier. `case_tier_solid` gets solid through `forcedTier`, not through this flag. Widget tests in `liquid_shell/test` set the same override in their own `flutter_test_config.dart`, except the tests that exercise it.
-- Golden list: `hero_{iphone,ipad_landscape,android}_{light,dark}` (6); one per case in §11 (`case_basic`, `case_badges`, `case_sidebar_only`, `case_sidebar_slots`, `case_trailing`, `case_guard`, `case_custom_chrome`, `case_custom_theme`, `case_tier_frosted`, `case_tier_solid`); form factors `ff_iphone`, `ff_ipad_portrait`, `ff_ipad_portrait_sidebar_open`, `ff_ipad_landscape`, `ff_android`. A `case_tier_liquid` golden is added in P4.
+- `example/test/flutter_test_config.dart` installs a comparator that tolerates ≤ 0.5% differing pixels (Q11); `example/test/golden_comparator_test.dart` pins that boundary (just under passes, just over fails; added 2026-10-09, Task 12 review). It also sets `debugLiquidGlassCanBlurOverride = true`, because `flutter test` defaults to the Android platform and may report no shader filters; without the override, every golden would show the solid tier. `case_tier_solid` gets solid through `forcedTier`, not through this flag. Widget tests in `liquid_shell/test` set the same override in their own `flutter_test_config.dart`, except the tests that exercise it.
+- Golden list: `hero_{iphone,ipad_landscape,android}_{light,dark}` (6); one per case in §11 (`case_basic`, `case_badges`, `case_sidebar_only`, `case_sidebar_slots`, `case_trailing`, `case_guard`, `case_custom_chrome`, `case_custom_theme`, `case_tier_frosted`, `case_tier_solid`, `case_narrow` (added 2026-10-09, Task 12)); form factors `ff_iphone`, `ff_ipad_portrait`, `ff_ipad_portrait_sidebar_open`, `ff_ipad_landscape`, `ff_android`. A `case_tier_liquid` golden is added in P4.
 
 ### 10.4 One command for images
 
@@ -977,6 +997,7 @@ TDD applies to every task (red → green → commit), with per-task review and a
   - `settings put global low_power 1` (after `cmd battery unplug`) → `powerSave`
   - `wm disable-blur 1` → `blurDisabled`
   Each run asserts the signal and the solid tier, then the script restores the settings. API 36 also records whether "Reduce blur effects" flips `blurDisabled` (§6.1).
+  **Baseline (amended 2026-10-09, final review I4).** Every run starts from a known baseline: `animator_duration_scale 1`, `low_power 0`, battery reset, `disable_window_blurs 0`. The script records `animator_duration_scale` at start and puts it back on exit (deleting it when it was unset). `reactivecircus/android-emulator-runner` disables animations by default, which the plugin reads as reduce transparency, so the CI step also sets `disable-animations: false`.
 - iOS (`tool/integration_ios.sh`, latest iOS simulator): channel round-trip and default value. Reduce Transparency has no supported `simctl` toggle, so toggling it is a manual check: flip it in Settings while the example runs, then save a screenshot to `docs/qa/` as evidence.
 - The screenshot driver for these runs is written fresh (§9).
 
@@ -997,7 +1018,7 @@ Matrix `flutter: [3.38.x, stable]` unless noted.
 
 ## 11. Example app
 
-`liquid_shell/example`: a case list on the home screen, and each entry opens one self-contained screen. Each case file has a `// #docregion readme` region, which is the README snippet.
+`liquid_shell/example`: a case list on the home screen, and each entry opens one self-contained screen. Each case file has a `// #docregion readme` region, which is the README snippet. A region is a set of members of the screen's `State` class (its fields, `build` and helpers), so it compiles when pasted into the `State` of a new `StatefulWidget` that imports `material.dart` and `liquid_shell.dart`, with the example's `DemoPage` and `kDemoDestinations` as stand-ins (amended 2026-10-09, Task 13). Every region compiles on its own (Task 13 review): the hide-chrome page is its own case, the guard's body is a plain page, and the trailing region includes its search page method, which is also the nested `no-chrome` region. The README quickstart is `lib/quickstart.dart`, a whole app (`main`, `MaterialApp`, `LiquidShell`) whose `quickstart` region compiles in a fresh `flutter create` project. `tool/check_readme_snippets.dart` fails on any region that no README or `doc/` snippet uses.
 
 | Case | File | Shows |
 |---|---|---|
@@ -1006,13 +1027,16 @@ Matrix `flutter: [3.38.x, stable]` unless noted.
 | `sidebarOnly` | `lib/cases/sidebar_only.dart` | Two sidebar-only destinations plus `onSelectedDestinationHidden` switching to tab 0 |
 | Sidebar header/footer | `lib/cases/sidebar_slots.dart` | App title header, profile-style footer |
 | Trailing ⌕ | `lib/cases/trailing_action.dart` | `LiquidTabAction` opening a search page that uses `LiquidNoChrome` |
-| "Discard changes?" guard | `lib/cases/discard_guard.dart` | `beforeDestinationChange` showing a dialog; a pushed detail page with `LiquidHideChrome` |
+| "Discard changes?" guard | `lib/cases/discard_guard.dart` | `beforeDestinationChange` showing a dialog, with an "Unsaved changes" switch |
+| Hide the chrome | `lib/cases/hide_chrome.dart` | A detail page pushed inside the branch's own `Navigator` (as a router's shell branch does) with `LiquidHideChrome` (split from the guard case 2026-10-09, Task 13 review) |
 | Custom chrome | `lib/cases/custom_chrome.dart` | `chromeBuilder` wrapping the default bar and replacing the sidebar |
 | Custom theme | `lib/cases/custom_theme.dart` | `LiquidGlassTheme` extension with brand tint, blur and label style; light/dark switch |
 | Forced tier | `lib/cases/forced_tier.dart` | Segmented liquid/frosted/solid via `LiquidGlassScope(policy: LiquidGlassPolicy(forcedTier: …))`; liquid shows frosted plus a note until P4 |
 | Form factors | `lib/cases/form_factors.dart` | The basic shell inside fixed frames (iPhone 393×852, iPad portrait 834×1194, iPad landscape 1194×834, Android 412×915), scaled to fit, so one device shows every layout |
+| Standalone widgets | `lib/cases/standalone_widgets.dart` | §4.9: `LiquidTabBar` at the bottom of the app's own `Scaffold` on a phone, `LiquidSidebar` beside the page from 700pt; no `LiquidShell` (added 2026-10-09, Task 13 review) |
+| Narrow width | `lib/cases/narrow_width.dart` | 5 tabs + a trailing action in a 320pt-wide shell: margin 8, pill padding 4, 45.2pt cells at text scale 1 (Q17), labels fitted untruncated (Q18); the shell decides from its own width, not the screen's (added 2026-10-08, Task 11). The case clips its 320pt shell, which stands for a narrow window, so the wallpaper discs stay inside it |
 
-Shared support: `lib/support/wallpaper.dart` (the same painter the goldens use) and `lib/support/demo_page.dart` (a long list). `example/test/cases_smoke_test.dart` pumps every case at phone and tablet sizes with no exceptions.
+Shared support: `lib/support/wallpaper.dart` (the same painter the goldens use; it does not clip, so on iPad the discs show through the tiled sidebar's glass, owner 2026-10-09: 2A) and `lib/support/demo_page.dart` (a long list). `example/test/cases_smoke_test.dart` pumps every case at phone and tablet sizes with no exceptions, and checks the guard, hide/no-chrome pages, the sidebar-only fallback, the custom sidebar leaving the primary scroll controller to the body, and the narrow-width cells.
 
 ## 12. Documentation
 
@@ -1022,13 +1046,17 @@ Shared support: `lib/support/wallpaper.dart` (the same painter the goldens use) 
 2. **Hero images**: a 2 × 3 grid, iPhone / iPad landscape / Android × light / dark (`doc/images/hero_*`).
 3. Features list (only what P1 ships) and platform table (iOS, Android; other platforms: frosted, no signals).
 4. Install (`flutter pub add liquid_shell`).
-5. **Quickstart**: about 10 lines, the basic case.
-6. **Cases**: one `###` section per §11 row, each with **one snippet** (its docregion) and **one image** (its golden). In order: badges, sidebar-only, sidebar slots, trailing action, guard, hide chrome / no chrome, custom chrome, custom theme, forced tier, form factors.
+5. **Quickstart**: a whole app from `example/lib/quickstart.dart` (`main`, `MaterialApp`, a two-tab `LiquidShell`), checked like every snippet; ~25 lines (a whole runnable app), of which the `LiquidShell` call is about 9.
+6. **Cases**: one `###` section per §11 row, each with **one snippet** (its docregion) and **one image** (its golden). In order: basic tabs, badges, sidebar-only, sidebar slots, trailing action, guard, hide chrome / no chrome, custom chrome, standalone tab bar and sidebar, custom theme, forced tier, form factors, narrow width.
 7. Layout rules: a short version of the §5.1 table.
 8. Accessibility and fallbacks: the signals table from §6.1.
-9. Links to `doc/`; roadmap (P2–P6 in one line each); license.
+9. Limitations (5-tab maximum, narrow label shrink between text scale 1 and 1.6, `PopScope` calls while the overlay sidebar is open, native iOS 26 chrome in P2, liquid tier in P4); links to `doc/`; roadmap (P2–P6 in one line each); license.
 
 Images use relative paths (`doc/images/…`). pub.dev rewrites them against `repository`, so they appear on pub.dev only once the public repo exists (P6).
+
+**P6 release checklist, images (added 2026-10-09, Task 13 review).** pub.dev never serves README images from the archive (`doc/images/` is in `.pubignore`); it rewrites relative URLs to `https://github.com/anvu69/liquid_shell/raw/main/liquid_shell/doc/images/…`, and only when pana's repository verification did not fail. Before `dart pub publish`: (1) the GitHub repo is public; (2) `liquid_shell/doc/images/*` is on `main`; (3) pana reports the repository as verified (no lost repository points). Relative images track `main`, so an older version's page shows the current images.
+
+**P6 release checklist, Swift Package Manager (added 2026-10-09, final review I5, owner decision O2).** Before `dart pub publish`, build and run the example with SwiftPM on the release toolchain (Flutter's SwiftPM support on Xcode 27): enable it for the example project only (`flutter: config: enable-swift-package-manager: true` in `liquid_shell/example/pubspec.yaml`, never the global `flutter config`), run `make integration-ios`, and fix `liquid_shell_ios/ios/liquid_shell_ios/Package.swift` if the build needs it (for example a `FlutterFramework` package dependency in newer plugin templates). When it passes, replace the "unverified" sentence in `liquid_shell_ios/README.md` with "Ships for CocoaPods and Swift Package Manager". If it cannot pass, keep the sentence and say so in the CHANGELOG.
 
 ### 12.2 `liquid_shell/doc/`
 
@@ -1088,3 +1116,5 @@ Every entry has a recommended default. If the owner says nothing, the default ap
 | Q14 | Coverage gate | **90% line coverage** for `liquid_shell/lib` and `liquid_shell_platform_interface/lib`, as a fixed floor, without ratchet files |
 | Q15 | Copyright line in the MIT `LICENSE` | **`Copyright (c) 2026 lasoai.vn`** |
 | Q16 | Native floors | **iOS 15.0 (owner, 2026-10-08: Xcode 27 rejects deployment targets below 15.0; matches the vankhan app, ADR there); Android `minSdk` = Flutter's default (`flutter.minSdkVersion`), `compileSdk` 36** |
+| Q17 | Narrow-width hit targets (owner 2026-10-08: C) | **Resolved 2026-10-08, option C.** At 320pt (iPad Slide Over, ⅓ Split View, small phones) 5 tabs + the trailing circle gave 40.4pt cells, under the 44pt HIG target. Below the constant `kLiquidNarrowWidth` = **340** (shell constraint width `w < 340`; exactly 340 is regular) the compact bottom row margin becomes **8** (was 16) and the pill's inner horizontal padding **4** (was 8). 5 tabs + trailing at 320 → **45.2pt** cells. Applied in `LiquidShell`'s compact layout and in standalone `LiquidTabBar` (`narrow` flag, default from `MediaQuery` width). A constant, not a `LiquidShellBreakpoints` / `LiquidGlassTheme` field, because the margins are not themeable. §4.9, §5.3 amended. No debug assert: the configuration is legal |
+| Q18 | Narrow tab labels truncate at 320 (owner 2026-10-09: 1B) | **Resolved 2026-10-09, option 1B: narrow labels auto-shrink.** At 320 with 5 tabs + trailing (45.2pt cells, Q17) the example's labels ellipsized ("Ho…", "Exp…", "Sav…", "Set…"). In the narrow bottom bar a label first takes the cell's 8pt side padding, then shrinks to `kLiquidMinLabelSize` = **10** logical pixels (or its own smaller size; it never grows), and only then ellipsizes. Implemented as a FittedBox-style uniform scale of the label's `Text` with a minimum scale, in an internal custom render object (`RenderFitLabel`, `fit_label.dart`; not a `FittedBox`) that supports intrinsic sizing, so the bar's `IntrinsicHeight` keeps working; the label keeps its unscaled line height. **Narrow only** (decision 2026-10-09, as the owner stated): regular width and the top bar keep padding 8 and ellipsize at the style's size. AX text scales are unchanged (icon-only cells, large content viewer). The selected label uses the same style as the others (only the colour changes); it is measured as drawn either way. Cell geometry (Q17) is unchanged. The minimum is an internal constant, not a parameter: no public API change (§4.9). §5.3, §5.10, §10.2, §11 amended. Supersedes the Task 12 review's suggestion to shorten the example labels |
