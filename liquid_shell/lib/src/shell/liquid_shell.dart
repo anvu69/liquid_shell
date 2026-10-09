@@ -861,7 +861,16 @@ class _LiquidShellState extends State<LiquidShell>
         owner &&
         state == null &&
         LiquidShellPlatform.instance.supportsNativeChrome;
-    if (!engaged && !pending) return null;
+    // Standby: another shell (pushed above, or nested) owns the native
+    // chrome, which this one would otherwise use. Draw no chrome, so no
+    // Flutter chrome shows beside the native one while the other shell's
+    // route slides in or out; this one engages when it owns it again.
+    final standby =
+        possible &&
+        !owner &&
+        (state?.installed ?? false) &&
+        !(state?.compact ?? true);
+    if (!engaged && !pending && !standby) return null;
 
     final kind = engaged
         ? nativeChromeKind(state: state!, hidden: _hideRequests > 0)

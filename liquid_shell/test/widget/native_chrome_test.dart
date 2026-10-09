@@ -655,10 +655,18 @@ void main() {
             ),
           )
           .ignore();
+      // Mid-push: the first shell no longer owns the native chrome, and it
+      // must not draw Flutter chrome beside the second one's.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(_flutterChrome(), isFalse);
       await tester.pumpAndSettle();
       expect(native.last.tabs.single.title, 'Starred');
 
       navigator.pop();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(_flutterChrome(), isFalse);
       await tester.pumpAndSettle();
       expect(native.last.tabs.first.title, 'Home');
       expect(native.last.visible, isTrue);

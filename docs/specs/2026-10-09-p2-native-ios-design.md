@@ -369,7 +369,7 @@ A window has one native chrome, and an app can have several shells. In the examp
 
 - calls `attach` once and listens to `nativeEvents`;
 - keeps a stack of claims. Each `LiquidShell` in `auto` claims on `initState` and releases on `dispose`, or when it switches to `off`. **The newest claim owns** the native chrome, and only its config is sent, deduplicated by `==`. When the owner releases, the previous claim's last config is sent. With no claim left, `LiquidNativeChromeConfig.dormant` is sent;
-- routes tap events to the owner only;
+- routes tap events to the owner only (a shell that is not the owner, but would otherwise engage, draws no chrome: no Flutter chrome beside the owner's native one while its route slides in or out);
 - sends nothing while the state is not installed.
 
 `debugResetLiquidNative()` replaces the host and the window-controls source between tests.
