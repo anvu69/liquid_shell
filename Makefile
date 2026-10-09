@@ -1,7 +1,7 @@
 # liquid_shell: one entry point per check. CI, the pre-commit hook and
 # contributors all call these targets, so "green" has exactly one definition.
 #
-# The SDK comes from fvm when it is installed (.fvmrc pins the floor, 3.38.10),
+# The SDK comes from fvm when it is installed (.fvmrc pins the floor, 3.44.6),
 # otherwise from the flutter on PATH (CI). Override with FLUTTER=... DART=...
 
 FVM := $(shell command -v fvm 2>/dev/null)
@@ -57,7 +57,7 @@ coverage: ## Tests with coverage; fails below COVERAGE_MIN, with no tests, with 
 	  $(DART) run tool/check_coverage.dart $$p/coverage/lcov.info $(COVERAGE_MIN); \
 	done
 
-goldens: ## Golden tests (reference toolchain: macOS + Flutter 3.38.x)
+goldens: ## Golden tests (reference toolchain: macOS + Flutter 3.44.x)
 	@if [ -d $(EXAMPLE)/test/goldens ]; then \
 	  cd $(EXAMPLE) && $(FLUTTER) test --tags golden; \
 	else echo "▸ no goldens yet"; fi

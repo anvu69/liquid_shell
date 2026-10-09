@@ -47,7 +47,7 @@ dependency.
 flutter pub add liquid_shell
 ```
 
-Requires Flutter 3.38 or later.
+Requires Flutter 3.44 or later.
 
 ## Quickstart
 

@@ -167,7 +167,7 @@ class _LiquidHideChromeState extends State<LiquidHideChrome> {
       _registry = registry;
     }
     // Both register a dependency, so a branch or route switch lands here.
-    _onScreen = Visibility.of(context) && TickerMode.of(context);
+    _onScreen = Visibility.of(context) && TickerMode.valuesOf(context).enabled;
     _sync();
   }
 

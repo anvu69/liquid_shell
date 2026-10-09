@@ -9,7 +9,7 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# Flutter 3.38.x is the supported floor and blocks merges. Latest stable runs
+# Flutter 3.44.x is the supported floor and blocks merges. Latest stable runs
 # as an early warning and never blocks (continue-on-error).
 jobs:
   checks:
@@ -21,7 +21,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - flutter: 3.38.x
+          - flutter: 3.44.x
             experimental: false
           - flutter: stable
             experimental: true
@@ -38,7 +38,7 @@ jobs:
       - run: make get
       # On the informational stable leg every check runs even after one
       # fails, so a single run shows every stable incompatibility. The job
-      # still ends red. The 3.38.x leg keeps stopping at the first failure.
+      # still ends red. The 3.44.x leg keeps stopping at the first failure.
       - run: make format-check
         if: ${{ success() || (failure() && matrix.experimental) }}
       - run: make analyze
@@ -98,7 +98,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.38.x
+          flutter-version: 3.44.x
           cache: true
       - run: make get
       - run: make android-unit
@@ -120,7 +120,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.38.x
+          flutter-version: 3.44.x
           cache: true
       - run: make get
       - uses: reactivecircus/android-emulator-runner@v2
@@ -144,7 +144,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.38.x
+          flutter-version: 3.44.x
           cache: true
       - run: make get
       - run: tool/integration_ios.sh
@@ -161,7 +161,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - flutter: 3.38.x
+          - flutter: 3.44.x
             experimental: false
           - flutter: stable
             experimental: true

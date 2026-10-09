@@ -26,10 +26,10 @@ the spec in `docs/specs/`, and the plan in `docs/plans/`.
   two integration helpers named in spec §9 from public docs without opening
   the originals. `make provenance` must stay green.
 - **Dependencies.** Flutter + our packages + `plugin_platform_interface`.
-  Nothing else at runtime. `very_good_analysis` pinned to 10.1.0.
+  Nothing else at runtime. `very_good_analysis` pinned to 10.3.0.
 - **Never loosen `analysis_options.yaml`** to get code through. Fix the code.
 - **Goldens** are regenerated only with `make goldens-update` on macOS +
-  Flutter 3.38.10. Never edit images by hand.
+  Flutter 3.44.6. Never edit images by hand.
 
 ## Commands
 
