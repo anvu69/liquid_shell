@@ -99,7 +99,12 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     traitOverrides.userInterfaceStyle = new.dark ? .dark : .light
     traitOverrides.layoutDirection = new.rtl ? .rightToLeft : .leftToRight
     config = new
+    // Under a Flutter dialog (Q8) the chrome is inert for touch and for
+    // VoiceOver alike: touches fall through to the barrier, and VoiceOver
+    // neither reads nor activates the tab bar, the sidebar or the footer.
     view.isUserInteractionEnabled = new.interactive
+    view.accessibilityElementsHidden = !new.interactive
+    footer.interactive = new.interactive
     if chromeVisible != wasVisible { setChromeVisible(chromeVisible, closingOverlay: overlayOpen) }
     syncFlutter()
   }

@@ -7,6 +7,12 @@ import UIKit
 final class SidebarFooterView: UIControl {
   var onTap: (() -> Void)?
 
+  /// False while a Flutter dialog covers the shell (Q8): VoiceOver neither
+  /// reads nor activates the footer. Touch is blocked by the shell's view.
+  var interactive = true {
+    didSet { accessibilityElementsHidden = !interactive }
+  }
+
   private let icon = UIImageView()
   private let title = UILabel()
   private let subtitle = UILabel()
@@ -63,6 +69,7 @@ final class SidebarFooterView: UIControl {
   }
 
   override func accessibilityActivate() -> Bool {
+    guard interactive else { return false }
     onTap?()
     return true
   }

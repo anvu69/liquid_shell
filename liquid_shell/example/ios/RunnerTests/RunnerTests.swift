@@ -262,6 +262,39 @@ final class NativeTabsTests: XCTestCase {
     settle()
     XCTAssertTrue(tabs.sidebar.isHidden, "dormant closes an overlay sidebar (spec §5.5 step 6)")
   }
+
+  private func footerView(_ tabs: NativeTabsController) throws -> SidebarFooterView {
+    try XCTUnwrap(tabs.sidebar.bottomBarView as? SidebarFooterView)
+  }
+
+  /// Q8: under a Flutter dialog the chrome is inert for VoiceOver too.
+  func testANonInteractiveChromeIsHiddenFromVoiceOver() throws {
+    let tabs = try installedShell(footer: true)
+    let footer = try footerView(tabs)
+    XCTAssertFalse(tabs.view.accessibilityElementsHidden)
+    XCTAssertFalse(footer.accessibilityElementsHidden)
+
+    tabs.apply(config(interactive: false, footer: true))
+    XCTAssertTrue(tabs.view.accessibilityElementsHidden, "tab bar and sidebar")
+    XCTAssertTrue(footer.accessibilityElementsHidden, "footer")
+
+    tabs.apply(config(footer: true))
+    XCTAssertFalse(tabs.view.accessibilityElementsHidden)
+    XCTAssertFalse(footer.accessibilityElementsHidden)
+  }
+
+  func testVoiceOverCannotActivateTheFooterUnderADialog() throws {
+    let tabs = try installedShell(footer: true)
+    let footer = try footerView(tabs)
+
+    tabs.apply(config(interactive: false, footer: true))
+    XCTAssertFalse(footer.accessibilityActivate())
+    XCTAssertFalse(events.sent.contains("footer"), "no footer callback under a dialog")
+
+    tabs.apply(config(footer: true))
+    XCTAssertTrue(footer.accessibilityActivate())
+    XCTAssertEqual(events.sent.filter { $0 == "footer" }.count, 1)
+  }
 }
 
 /// What `attach` reports when no scene of this engine connected after the
