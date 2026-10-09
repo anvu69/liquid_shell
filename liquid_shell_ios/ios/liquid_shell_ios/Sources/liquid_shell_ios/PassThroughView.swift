@@ -7,8 +7,9 @@ import UIKit
 ///
 /// Tracked debt: "background" means the selected tab's host view and its
 /// ancestors up to and including the tab bar controller's view. That is
-/// public API, but a new iOS that reshapes the view tree breaks it, so the
-/// native integration test runs on every Xcode/iOS bump.
+/// public API, but a new iOS that reshapes the view tree breaks it. The
+/// example's XCTests hit-test UIKit's real tree on the newest simulator;
+/// real touches are checked by hand on every Xcode/iOS bump.
 @available(iOS 26.0, *)
 final class PassThroughView: UIView {
   weak var shell: NativeTabsController?

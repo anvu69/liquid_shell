@@ -107,8 +107,13 @@ native chrome (Android, web, desktop) answer at once.
 - Strings the system draws, such as the VoiceOver label of the sidebar
   button, follow the device language, not your app's.
 - Touches on the transparent part of the native chrome go to Flutter. That
-  depends on UIKit's view tree; check every new iOS with
-  `make integration-ios-native`.
+  depends on UIKit's view tree. `make ios-unit` hit-tests the real tab bar
+  and sidebar views on a simulator: beside and below the pill, beside a
+  tiled sidebar and in the content reach Flutter; tab bar items, sidebar
+  rows, the sidebar's empty area, the footer and the overlay's dimming view
+  stay with UIKit. Those are `hitTest` calls, not touch events, so on every
+  new iOS also tap and scroll by hand right under the pill and at the
+  sidebar's edge.
 - The container replaces the window's root view controller. A plugin that
   casts `rootViewController` to `FlutterViewController` breaks while it is
   installed. Leave `LiquidShellNativeChrome` out if you use one.

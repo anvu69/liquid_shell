@@ -41,6 +41,12 @@ Nếu cần log: `fvm flutter run -d <UDID>` thay cho ba lệnh cuối.
 - [ ] **VoiceOver:** bật VO. Đọc đúng tên các tab, nút bật/tắt sidebar, nút
       ⌕ (trailing) và footer ("Ann Lee ..."). Vuốt qua được hết, footer kích
       hoạt được. (Nhãn nút sidebar do hệ thống, theo ngôn ngữ máy.)
+- [ ] **Chạm và cuộn thật quanh chrome native** (XCTest chỉ gọi `hitTest`,
+      không gửi chạm thật): chạm và cuộn nội dung **ngay dưới** pill, sát
+      **hai bên** pill, và sát **mép** sidebar tiled (ngang). Nội dung
+      Flutter nhận chạm/cuộn; pill, hàng sidebar, vùng trống của sidebar và
+      footer vẫn là của UIKit. Lặp lại ở dọc với sidebar overlay: chạm vùng
+      mờ đóng sidebar, không chạm xuyên xuống nội dung.
 - [ ] **Dialog trên chrome:** mở một dialog / bottom sheet từ một trang. Chạm
       ngoài dialog thì đóng (chạm xuyên qua chrome native tới barrier), không
       chạm nhầm tab. Đẩy trang chi tiết: chrome native ẩn, pop thì hiện lại.

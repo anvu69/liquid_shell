@@ -267,24 +267,31 @@ final class NativeTabsTests: XCTestCase {
   /// orientation (a landscape screenshot run leaves it there), and iPadOS 26
   /// refuses to rotate it from a test (`requestGeometryUpdate`: "the current
   /// windowing mode does not allow" it; `XCUIDevice`: UI tests only).
-  private func portraitWindow(root: UIViewController) throws -> UIWindow {
+  /// `landscape`: the same window turned on its side (wide enough for UIKit
+  /// to tile the sidebar), whatever the simulator's orientation.
+  private func portraitWindow(
+    root: UIViewController, landscape: Bool = false
+  ) throws -> UIWindow {
     let scene = try XCTUnwrap(
       UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
     let window = UIWindow(windowScene: scene)
     let bounds = scene.coordinateSpace.bounds
+    let short = min(bounds.width, bounds.height)
+    let long = max(bounds.width, bounds.height)
     window.frame = CGRect(
-      x: 0, y: 0, width: min(bounds.width, bounds.height),
-      height: max(bounds.width, bounds.height))
+      x: 0, y: 0, width: landscape ? long : short, height: landscape ? short : long)
     window.rootViewController = root
     window.isHidden = false
     return window
   }
 
   /// A shell installed in its own window with the first config applied.
-  private func installedShell(footer: Bool = false) throws -> NativeTabsController {
+  private func installedShell(
+    footer: Bool = false, landscape: Bool = false
+  ) throws -> NativeTabsController {
     let flutter = UIViewController()
     let tabs = NativeTabsController(flutter: flutter, events: events)
-    let window = try portraitWindow(root: UIViewController())
+    let window = try portraitWindow(root: UIViewController(), landscape: landscape)
     window.rootViewController = ShellContainerController(tabs: tabs, flutter: flutter)
     self.window = window
     tabs.apply(config(footer: footer))
@@ -335,6 +342,148 @@ final class NativeTabsTests: XCTestCase {
     tabs.apply(config())
     settle()
     XCTAssertEqual(tabs.currentState().sidebar, .hidden, "the overlay does not come back")
+  }
+
+  // MARK: - Hit testing on UIKit's real view tree (spec §5.3)
+
+  /// Opens the sidebar and waits for UIKit's open animation to end: while
+  /// the tab bar morphs into the sidebar (about 1.25s on iOS 26.5) the
+  /// sidebar's own view is still hidden.
+  private func openSidebar(_ tabs: NativeTabsController) {
+    tabs.setSidebarVisible(true)
+    let deadline = Date().addingTimeInterval(4)
+    repeat {
+      RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+    } while labelCentre("Inbox", in: sidebarView(tabs) ?? UIView(), tabs) == nil
+      && Date() < deadline
+    settle()
+  }
+
+  /// The sidebar's view (`UITabBarController.Sidebar` has no public one):
+  /// the ancestor of the footer that is a direct child of the tab container.
+  private func sidebarView(_ tabs: NativeTabsController) -> UIView? {
+    func all(_ view: UIView) -> [UIView] { [view] + view.subviews.flatMap(all) }
+    return all(tabs.view).first { view in
+      view.subviews.contains { $0 is UICollectionView && "\(type(of: $0))".contains("Sidebar") }
+        || "\(type(of: view))".contains("Outline")
+    }
+  }
+
+  /// Where a touch at [point] (container coordinates) lands.
+  private func hit(_ tabs: NativeTabsController, _ point: CGPoint) throws -> UIView? {
+    try XCTUnwrap(tabs.parent?.view).hitTest(point, with: nil)
+  }
+
+  /// A UIKit view of the native chrome, not the Flutter view below it.
+  private func isNative(_ view: UIView?, _ tabs: NativeTabsController) -> Bool {
+    guard let view else { return false }
+    return view !== tabs.flutter.view && view.isDescendant(of: tabs.view)
+  }
+
+  /// The centre, in container coordinates, of the on-screen label [text]
+  /// inside [container] (a label with no hidden ancestor), if any.
+  private func labelCentre(
+    _ text: String, in container: UIView, _ tabs: NativeTabsController
+  ) -> CGPoint? {
+    func labels(_ view: UIView) -> [UILabel] {
+      ((view as? UILabel).map { [$0] } ?? []) + view.subviews.flatMap(labels)
+    }
+    func shown(_ view: UIView) -> Bool {
+      var node: UIView? = view
+      while let current = node {
+        if current.isHidden || current.alpha < 0.01 { return false }
+        node = current.superview
+      }
+      return true
+    }
+    guard let root = tabs.parent?.view,
+      let label = labels(container).first(where: { $0.text == text && shown($0) })
+    else { return nil }
+    return label.convert(CGPoint(x: label.bounds.midX, y: label.bounds.midY), to: root)
+  }
+
+  private func centreOfLabel(
+    _ text: String, in container: UIView, _ tabs: NativeTabsController
+  ) throws -> CGPoint {
+    try XCTUnwrap(labelCentre(text, in: container, tabs), "no visible \(text) label")
+  }
+
+  /// The floating tab bar: its items stay with UIKit; beside the pill,
+  /// just below the bar row and in the content, touches reach Flutter.
+  func testTouchesBesideAndBelowThePillReachFlutter() throws {
+    let tabs = try installedShell()
+    let root = try XCTUnwrap(tabs.parent?.view)
+    let inbox = try centreOfLabel("Inbox", in: tabs.view, tabs)
+    let barBottom = tabs.selectedViewController?.view.safeAreaInsets.top ?? 0
+    XCTAssertGreaterThan(barBottom, inbox.y, "precondition: the bar row is in the safe area")
+
+    XCTAssertTrue(isNative(try hit(tabs, inbox), tabs), "a tab bar item")
+    XCTAssertTrue(
+      try hit(tabs, CGPoint(x: 40, y: inbox.y)) === tabs.flutter.view, "beside the pill")
+    XCTAssertTrue(
+      try hit(tabs, CGPoint(x: root.bounds.width - 40, y: inbox.y)) === tabs.flutter.view,
+      "beside the pill, trailing side")
+    XCTAssertTrue(
+      try hit(tabs, CGPoint(x: inbox.x, y: barBottom + 4)) === tabs.flutter.view,
+      "just below the bar row")
+    XCTAssertTrue(
+      try hit(tabs, CGPoint(x: root.bounds.midX, y: root.bounds.midY)) === tabs.flutter.view,
+      "the centre")
+    XCTAssertTrue(
+      try hit(tabs, CGPoint(x: root.bounds.midX, y: root.bounds.height - 4)) === tabs.flutter.view,
+      "the bottom edge")
+
+    // Under a dialog the pill lets touches through to its barrier; hidden,
+    // it is not there at all.
+    tabs.apply(config(interactive: false))
+    XCTAssertTrue(try hit(tabs, inbox) === tabs.flutter.view, "inert under a dialog")
+    tabs.apply(config(hidden: true))
+    settle()
+    XCTAssertTrue(try hit(tabs, inbox) === tabs.flutter.view, "hidden")
+  }
+
+  /// The portrait overlay sidebar: its rows, its empty area below the rows
+  /// and its footer stay with UIKit (spec §5.3: "the sidebar"), and so does
+  /// the dimming view beside it, whose tap closes the overlay.
+  func testTheOverlaySidebarAndItsDimmingKeepTheirTouches() throws {
+    let tabs = try installedShell(footer: true)
+    let root = try XCTUnwrap(tabs.parent?.view)
+    openSidebar(tabs)
+    XCTAssertEqual(tabs.currentState().sidebar, .overlay, "precondition: a portrait iPad overlays")
+    let footer = try footerView(tabs)
+    let row = try centreOfLabel("Inbox", in: try XCTUnwrap(sidebarView(tabs)), tabs)
+    let footerTop = footer.convert(footer.bounds, to: root).minY
+    XCTAssertGreaterThan(footerTop - row.y, 200, "precondition: empty sidebar below the rows")
+
+    XCTAssertTrue(isNative(try hit(tabs, row), tabs), "a sidebar row")
+    XCTAssertTrue(
+      isNative(try hit(tabs, CGPoint(x: row.x, y: (row.y + footerTop) / 2)), tabs),
+      "the sidebar's empty area")
+    XCTAssertTrue(
+      isNative(try hit(tabs, CGPoint(x: row.x, y: footerTop + 20)), tabs), "the footer")
+    XCTAssertTrue(
+      isNative(try hit(tabs, CGPoint(x: root.bounds.width - 40, y: root.bounds.midY)), tabs),
+      "the dimming view")
+  }
+
+  /// Landscape tiles the sidebar: its rows stay with UIKit, and the content
+  /// beside it reaches Flutter.
+  func testBesideATiledSidebarTouchesReachFlutter() throws {
+    let tabs = try installedShell(landscape: true)
+    let root = try XCTUnwrap(tabs.parent?.view)
+    openSidebar(tabs)
+    XCTAssertEqual(tabs.currentState().sidebar, .tiled, "precondition: a landscape iPad tiles")
+    let sidebarEdge = tabs.selectedViewController?.view.safeAreaInsets.left ?? 0
+    let row = try centreOfLabel("Inbox", in: try XCTUnwrap(sidebarView(tabs)), tabs)
+    XCTAssertLessThan(row.x, sidebarEdge, "precondition: the row is in the sidebar")
+
+    XCTAssertTrue(isNative(try hit(tabs, row), tabs), "a sidebar row")
+    XCTAssertTrue(
+      try hit(tabs, CGPoint(x: sidebarEdge + 4, y: root.bounds.midY)) === tabs.flutter.view,
+      "just beside the sidebar")
+    XCTAssertTrue(
+      try hit(tabs, CGPoint(x: (sidebarEdge + root.bounds.width) / 2, y: root.bounds.midY))
+        === tabs.flutter.view, "the content's centre")
   }
 
   /// A shell installed by the installer, as a scene connection does.

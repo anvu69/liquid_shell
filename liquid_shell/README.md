@@ -956,8 +956,10 @@ content viewer (see [Custom chrome](#custom-chrome)).
   chrome from the first frame.
 - **Native chrome hit testing follows UIKit's view tree.** Touches on the
   transparent part of the native chrome go to Flutter; a future iOS that
-  reshapes `UITabBarController`'s views can break that, so check each new
-  iOS release with `make integration-ios-native`.
+  reshapes `UITabBarController`'s views can break that. `make ios-unit`
+  hit-tests UIKit's real tab bar and sidebar on a simulator (calls to
+  `hitTest`, not real touch events); check real taps and scrolling by hand
+  on each new iOS release.
 - **One native chrome per window.** The newest `LiquidShell` owns it. A
   shell nested in another shell's body (sub-tabs) takes it from the outer
   one, which then shows no navigation; give a nested shell
