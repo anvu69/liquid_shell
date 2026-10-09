@@ -391,6 +391,7 @@ The shell reads its own `ModalRoute`:
 | Situation | Signal | Native config |
 |---|---|---|
 | A page route pushed above the shell (opaque, a `PageRoute`) | the shell route's `secondaryAnimation` is `forward` or `completed` | `hidden: true` from the first frame of the push. `hidden: false` when the pop starts (`reverse`) or after it |
+| An opaque route that does not drive `secondaryAnimation`: a `fullscreenDialog` page, a `PageRouteBuilder`, a router's custom-transition or no-transition page (`canTransitionTo` is false for them) | the shell's `TickerMode` is off: the Overlay turns it off for entries below a settled opaque route, as for P1's `LiquidHideChrome` | `hidden: true` once the push settles (the chrome stays visible, non-interactive, during the push animation). `hidden: false` when the pop starts: the route is no longer opaque while it animates |
 | A dialog, popup or sheet above the shell (not a `PageRoute`: it does not drive `secondaryAnimation`) | `!ModalRoute.isCurrent` | `interactive: false`. Touches on the chrome area fall through to Flutter's barrier |
 | Nothing above | — | `hidden` as hide-chrome requests say; `interactive: true` |
 

@@ -435,6 +435,38 @@ void main() {
       expect(native.last.visible, isTrue);
     });
 
+    // Routes that never drive the shell route's secondaryAnimation: the
+    // Overlay turns the shell's tickers off once the page covers it.
+    final noSecondary = <String, Route<void> Function()>{
+      'a fullscreenDialog page': () => MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (_) => const LiquidNoChrome(child: Text('above')),
+      ),
+      'a PageRouteBuilder page': () => PageRouteBuilder<void>(
+        pageBuilder: (_, _, _) => const LiquidNoChrome(child: Text('above')),
+      ),
+    };
+    for (final MapEntry(key: name, value: route) in noSecondary.entries) {
+      testWidgets('$name above hides the chrome until it pops', (
+        tester,
+      ) async {
+        final native = installFakeNative();
+        await _pumpNative(tester);
+        final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+        navigator.push(route()).ignore();
+        await tester.pumpAndSettle();
+        expect(native.last.hidden, isTrue);
+        expect(native.last.visible, isFalse);
+
+        navigator.pop();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+        expect(native.last.hidden, isFalse);
+        await tester.pumpAndSettle();
+        expect(native.last.visible, isTrue);
+      });
+    }
+
     testWidgets('a dialog above makes the chrome non-interactive', (
       tester,
     ) async {

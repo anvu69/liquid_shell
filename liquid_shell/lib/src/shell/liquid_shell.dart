@@ -185,7 +185,8 @@ class _LiquidShellState extends State<LiquidShell>
   NativeChromeClaim? _claim;
   ModalRoute<Object?>? _route;
   bool _routeCurrent = true;
-  bool _covered = false;
+  bool _coveredByPush = false;
+  bool _tickersOff = false;
   bool _nativeEngaged = false;
   LiquidNativeShellState? _nativeState;
   LiquidNativeChromeConfig? _nativeConfig;
@@ -211,8 +212,15 @@ class _LiquidShellState extends State<LiquidShell>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // A page route pushed above the shell drives our secondary animation
-    // (dialogs and popups do not): forward or completed means covered.
+    // Two signals that a page covers the shell (spec P2 §7.4):
+    // - a page route pushed above drives our secondary animation (dialogs
+    //   and popups do not): forward or completed hides from the first frame
+    //   of the push;
+    // - the Overlay turns our tickers off once an opaque route covers us.
+    //   That also catches the routes that never drive the secondary
+    //   animation (a fullscreenDialog, a PageRouteBuilder, a router's
+    //   custom transition page) and an offstage branch, as P1's
+    //   LiquidHideChrome does.
     final route = ModalRoute.of(context);
     if (!identical(route, _route)) {
       _route?.secondaryAnimation?.removeStatusListener(_onCoverChanged);
@@ -220,13 +228,22 @@ class _LiquidShellState extends State<LiquidShell>
       route?.secondaryAnimation?.addStatusListener(_onCoverChanged);
     }
     _routeCurrent = route?.isCurrent ?? true;
-    _covered = route?.secondaryAnimation?.status.isForwardOrCompleted ?? false;
+    _coveredByPush =
+        route?.secondaryAnimation?.status.isForwardOrCompleted ?? false;
+    // A dependency: the change rebuilds us. The layout builder still runs
+    // under an obstructed entry (Flutter >= 3.44), so the config is sent.
+    _tickersOff = !TickerMode.valuesOf(context).enabled;
   }
 
   void _onCoverChanged(AnimationStatus status) {
     final covered = status.isForwardOrCompleted;
-    if (covered != _covered && mounted) setState(() => _covered = covered);
+    if (covered != _coveredByPush && mounted) {
+      setState(() => _coveredByPush = covered);
+    }
   }
+
+  /// Whether a page covers the shell, so the native chrome must hide.
+  bool get _covered => _coveredByPush || _tickersOff;
 
   void _rebuild() {
     if (mounted) _outsideBuild(() => mounted ? setState(() {}) : null);
