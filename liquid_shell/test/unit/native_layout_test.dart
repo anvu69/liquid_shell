@@ -85,6 +85,10 @@ void main() {
     expect(nativeChromeScreenPossible(const Size(440, 956)), isFalse);
     // Unknown screen: possible (wait for the platform, as before).
     expect(nativeChromeScreenPossible(Size.zero), isTrue);
+    // A display not described yet (ratio 0): the caller's size / ratio is
+    // NaN (empty) or infinite. Unknown too, never a NaN comparison.
+    expect(nativeChromeScreenPossible(Size.zero / 0), isTrue);
+    expect(nativeChromeScreenPossible(const Size(2388, 1668) / 0), isTrue);
   });
 
   test('nativeDescribable needs every symbol, the trailing one too', () {

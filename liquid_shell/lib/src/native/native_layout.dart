@@ -53,13 +53,16 @@ bool nativeChromePossible({
 /// Whether a screen of [screen] logical pixels can be an iPad's: its short
 /// side is at least 744pt (iPad mini), while every iPhone's is under 500pt
 /// in either orientation. Window size does not matter, only the screen's:
-/// an iPad window in Split View is still on an iPad. An unknown (empty)
-/// screen counts as possible. Pure.
+/// an iPad window in Split View is still on an iPad. An unknown screen
+/// (empty, or not finite: a display whose pixel ratio is still 0) counts
+/// as possible. Pure.
 ///
 /// Native chrome installs only on iPad, so a shell on any other screen
 /// never waits for the platform's answer (pending).
 bool nativeChromeScreenPossible(Size screen) =>
-    screen.isEmpty || screen.shortestSide >= kNativeChromeMinScreenSide;
+    !screen.isFinite ||
+    screen.isEmpty ||
+    screen.shortestSide >= kNativeChromeMinScreenSide;
 
 /// The short side of the smallest iPad screen (iPad mini), in points.
 const double kNativeChromeMinScreenSide = 744;
