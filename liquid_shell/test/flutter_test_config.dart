@@ -13,6 +13,7 @@ Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   tearDown(() {
     debugLiquidGlassCanBlurOverride = null;
     debugResetLiquidGlassSignals();
+    debugResetLiquidNative();
   });
   await testMain();
 }

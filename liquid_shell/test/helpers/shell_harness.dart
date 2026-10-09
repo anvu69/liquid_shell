@@ -44,6 +44,8 @@ class TestShell extends StatefulWidget {
     this.strings = const LiquidShellStrings(),
     this.pageBuilder,
     this.offstageBranches = false,
+    this.nativeChrome = LiquidNativeChrome.auto,
+    this.nativeSidebarFooter,
     super.key,
   });
 
@@ -66,6 +68,9 @@ class TestShell extends StatefulWidget {
   /// (`Offstage` + `TickerMode`) instead of with an `IndexedStack`
   /// (`Visibility`).
   final bool offstageBranches;
+
+  final LiquidNativeChrome nativeChrome;
+  final LiquidNativeSidebarFooter? nativeSidebarFooter;
 
   @override
   State<TestShell> createState() => TestShellState();
@@ -92,6 +97,8 @@ class TestShellState extends State<TestShell> {
     chromeBuilder: widget.chromeBuilder,
     minimizeOnScroll: widget.minimizeOnScroll,
     strings: widget.strings,
+    nativeChrome: widget.nativeChrome,
+    nativeSidebarFooter: widget.nativeSidebarFooter,
     body: widget.offstageBranches
         ? Stack(
             fit: StackFit.expand,

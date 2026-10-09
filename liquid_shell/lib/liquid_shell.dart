@@ -2,7 +2,7 @@
 library;
 
 export 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart'
-    show LiquidPlatformSignals;
+    show LiquidPlatformSignals, LiquidWindowControls;
 
 export 'src/chrome/sidebar.dart';
 export 'src/chrome/tab_bar.dart'
@@ -19,6 +19,9 @@ export 'src/glass/renderer.dart';
 export 'src/glass/signals_controller.dart'
     show debugLiquidGlassCanBlurOverride, debugResetLiquidGlassSignals;
 export 'src/glass/tier.dart';
+export 'src/native/native_chrome.dart';
+export 'src/native/native_reset.dart';
+export 'src/native/window_controls.dart' show LiquidWindowControlsClearance;
 export 'src/shell/breakpoints.dart';
 export 'src/shell/chrome_builder.dart';
 export 'src/shell/liquid_shell.dart';

@@ -1,8 +1,10 @@
 import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
+import 'package:liquid_shell/src/native/window_controls.dart';
 import 'package:liquid_shell/src/shell/breakpoints.dart';
 import 'package:liquid_shell/src/shell/shell_layout.dart';
+import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
 /// What the nearest `LiquidShell` tells its body.
 @immutable
@@ -14,15 +16,21 @@ class LiquidShellScopeData {
     required this.chromeInsets,
     required this.sidebarVisible,
     required this.setSidebarVisible,
+    this.nativeChrome = false,
+    this.windowControls = LiquidWindowControls.zero,
   });
 
-  /// No shell: compact, hidden chrome, zero insets, no sidebar.
-  factory LiquidShellScopeData.none() => const LiquidShellScopeData(
+  /// No shell: compact, hidden chrome, zero insets, no sidebar. Window
+  /// controls belong to the window, not the shell, so they pass through.
+  factory LiquidShellScopeData.none({
+    LiquidWindowControls windowControls = LiquidWindowControls.zero,
+  }) => LiquidShellScopeData(
     sizeClass: LiquidSizeClass.compact,
     chromeKind: LiquidChromeKind.hidden,
     chromeInsets: EdgeInsets.zero,
     sidebarVisible: false,
     setSidebarVisible: _ignore,
+    windowControls: windowControls,
   );
 
   static void _ignore(bool visible) {}
@@ -45,9 +53,18 @@ class LiquidShellScopeData {
   /// `build`): the change then applies right after that frame.
   final ValueSetter<bool> setSidebarVisible;
 
+  /// Whether the platform draws the chrome (iPadOS 26 native chrome). The
+  /// insets then come from the platform's safe area: [chromeInsets] top is
+  /// the top padding while the native tab bar shows.
+  final bool nativeChrome;
+
+  /// The iPadOS 26 window controls, zero elsewhere. Rows at the top of a
+  /// page clear them with `LiquidWindowControlsClearance`.
+  final LiquidWindowControls windowControls;
+
   /// Field by field, except [setSidebarVisible] (spec §4.4). The setter is an
   /// action, not state: pages depend on what the shell shows, so equality
-  /// covers the four values only. Two scopes that show the same thing are
+  /// covers the values only. Two scopes that show the same thing are
   /// equal whatever function they carry, e.g. [LiquidShellScopeData.none]
   /// and data built with any other setter (closures equal only themselves).
   @override
@@ -56,11 +73,19 @@ class LiquidShellScopeData {
       other.sizeClass == sizeClass &&
       other.chromeKind == chromeKind &&
       other.chromeInsets == chromeInsets &&
-      other.sidebarVisible == sidebarVisible;
+      other.sidebarVisible == sidebarVisible &&
+      other.nativeChrome == nativeChrome &&
+      other.windowControls == windowControls;
 
   @override
-  int get hashCode =>
-      Object.hash(sizeClass, chromeKind, chromeInsets, sidebarVisible);
+  int get hashCode => Object.hash(
+    sizeClass,
+    chromeKind,
+    chromeInsets,
+    sidebarVisible,
+    nativeChrome,
+    windowControls,
+  );
 }
 
 /// Receives hide-chrome requests. Implemented by the shell's state.
@@ -206,8 +231,9 @@ class _LiquidHideChromeState extends State<LiquidHideChrome> {
 
 /// For pages pushed ABOVE the shell (on the root navigator): publishes
 /// [LiquidShellScopeData.none] to [child], so its insets ignore the chrome
-/// underneath.
-class LiquidNoChrome extends StatelessWidget {
+/// underneath. The window controls still pass through: they belong to the
+/// window.
+class LiquidNoChrome extends StatefulWidget {
   /// Creates the wrapper.
   const LiquidNoChrome({required this.child, super.key});
 
@@ -215,11 +241,35 @@ class LiquidNoChrome extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => ShellScopeMarker(
-    data: LiquidShellScopeData.none(),
-    registry: null,
-    child: child,
-  );
+  State<LiquidNoChrome> createState() => _LiquidNoChromeState();
+}
+
+class _LiquidNoChromeState extends State<LiquidNoChrome> {
+  final WindowControlsSource _controls = WindowControlsSource.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _controls.acquire();
+  }
+
+  @override
+  void dispose() {
+    _controls.release();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<LiquidWindowControls>(
+        valueListenable: _controls.value,
+        builder: (context, controls, child) => ShellScopeMarker(
+          data: LiquidShellScopeData.none(windowControls: controls),
+          registry: null,
+          child: child!,
+        ),
+        child: widget.child,
+      );
 }
 
 /// `Padding(LiquidShellScope.contentPaddingOf(context))`, for content that

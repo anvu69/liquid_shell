@@ -9,12 +9,17 @@ import 'package:liquid_shell/src/chrome/sidebar_toggle.dart';
 import 'package:liquid_shell/src/chrome/tab_bar.dart';
 import 'package:liquid_shell/src/destinations/destination.dart';
 import 'package:liquid_shell/src/destinations/tab_action.dart';
+import 'package:liquid_shell/src/native/native_chrome.dart';
+import 'package:liquid_shell/src/native/native_host.dart';
+import 'package:liquid_shell/src/native/native_layout.dart';
+import 'package:liquid_shell/src/native/window_controls.dart';
 import 'package:liquid_shell/src/shell/bar_measure.dart';
 import 'package:liquid_shell/src/shell/breakpoints.dart';
 import 'package:liquid_shell/src/shell/chrome_builder.dart';
 import 'package:liquid_shell/src/shell/shell_layout.dart';
 import 'package:liquid_shell/src/shell/shell_scope.dart';
 import 'package:liquid_shell/src/shell/strings.dart';
+import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
 /// Decides whether a user selection may proceed. Return `false` to cancel.
 typedef LiquidBeforeDestinationChange = Future<bool> Function(int index);
@@ -55,6 +60,10 @@ String _repeatedLabels(List<LiquidDestination> destinations) {
 /// inside a route, for example as a `MaterialApp.home` or a router's shell
 /// route, not in `MaterialApp.builder`. Without them the chrome fails a
 /// debug assert.
+///
+/// On iPadOS 26 at regular width, in an app that opted in, the chrome is
+/// the platform's own `UITabBarController` sidebar and tab bar
+/// ([nativeChrome]); everywhere else it is drawn in Flutter.
 class LiquidShell extends StatefulWidget {
   /// Creates a shell.
   const LiquidShell({
@@ -72,6 +81,8 @@ class LiquidShell extends StatefulWidget {
     this.sidebarWidth = 300,
     this.minimizeOnScroll = true,
     this.strings = const LiquidShellStrings(),
+    this.nativeChrome = LiquidNativeChrome.auto,
+    this.nativeSidebarFooter,
     super.key,
   });
 
@@ -140,6 +151,17 @@ class LiquidShell extends StatefulWidget {
   /// Every user-visible string.
   final LiquidShellStrings strings;
 
+  /// Whether the platform may draw the chrome (spec P2 §5.1). With
+  /// [LiquidNativeChrome.auto] the shell uses native chrome when the
+  /// platform installed it, its width is regular, it has no [chromeBuilder],
+  /// and every destination (and [tabBarTrailing]) has an `sfSymbol`.
+  /// Native chrome shows neither [sidebarHeader] nor [sidebarFooter]; see
+  /// [nativeSidebarFooter].
+  final LiquidNativeChrome nativeChrome;
+
+  /// The native sidebar's footer. The Flutter sidebar uses [sidebarFooter].
+  final LiquidNativeSidebarFooter? nativeSidebarFooter;
+
   @override
   State<LiquidShell> createState() => _LiquidShellState();
 }
@@ -157,10 +179,118 @@ class _LiquidShellState extends State<LiquidShell>
   int _hideRequests = 0;
   bool _hiddenSelectionReported = false;
 
+  // --- native chrome (spec P2 §7) ----------------------------------------
+  final NativeChromeHost _host = NativeChromeHost.instance;
+  final WindowControlsSource _windowControls = WindowControlsSource.instance;
+  NativeChromeClaim? _claim;
+  ModalRoute<Object?>? _route;
+  bool _routeCurrent = true;
+  bool _covered = false;
+  bool _nativeEngaged = false;
+  LiquidNativeShellState? _nativeState;
+  LiquidNativeChromeConfig? _nativeConfig;
+  bool _nativeSendScheduled = false;
+  bool _loggedNotDescribable = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _windowControls.acquire();
+    _windowControls.value.addListener(_rebuild);
+    _host.addListener(_rebuild);
+    _host.state.addListener(_rebuild);
+    _syncClaim();
+  }
+
+  @override
+  void didUpdateWidget(LiquidShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.nativeChrome != widget.nativeChrome) _syncClaim();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // A page route pushed above the shell drives our secondary animation
+    // (dialogs and popups do not): forward or completed means covered.
+    final route = ModalRoute.of(context);
+    if (!identical(route, _route)) {
+      _route?.secondaryAnimation?.removeStatusListener(_onCoverChanged);
+      _route = route;
+      route?.secondaryAnimation?.addStatusListener(_onCoverChanged);
+    }
+    _routeCurrent = route?.isCurrent ?? true;
+    _covered = route?.secondaryAnimation?.status.isForwardOrCompleted ?? false;
+  }
+
+  void _onCoverChanged(AnimationStatus status) {
+    final covered = status.isForwardOrCompleted;
+    if (covered != _covered && mounted) setState(() => _covered = covered);
+  }
+
+  void _rebuild() {
+    if (mounted) _outsideBuild(() => mounted ? setState(() {}) : null);
+  }
+
+  /// Claims the native chrome in `auto`, gives it back in `off`.
+  void _syncClaim() {
+    if (widget.nativeChrome == LiquidNativeChrome.auto) {
+      _claim ??= _host.claim(_onNativeEvent);
+    } else {
+      _claim?.release();
+      _claim = null;
+    }
+  }
+
   @override
   void dispose() {
+    _route?.secondaryAnimation?.removeStatusListener(_onCoverChanged);
+    _claim?.release();
+    _host.removeListener(_rebuild);
+    _host.state.removeListener(_rebuild);
+    _windowControls.value.removeListener(_rebuild);
+    _windowControls.release();
     _minimized.dispose();
     super.dispose();
+  }
+
+  /// Native taps (spec P2 §7.3). A destination tap takes the same path as
+  /// a Flutter tap, guard included; native does not select until we answer.
+  void _onNativeEvent(LiquidNativeEvent event) {
+    if (!mounted) return;
+    switch (event) {
+      case LiquidNativeDestinationTapped(:final index):
+        // Checked at the boundary: an index from the platform.
+        if (index < 0 || index >= widget.destinations.length) return;
+        _onSelect(index);
+      case LiquidNativeTrailingTapped():
+        widget.tabBarTrailing?.onPressed();
+      case LiquidNativeFooterTapped():
+        widget.nativeSidebarFooter?.onPressed();
+      case LiquidNativeStateChanged() || LiquidWindowControlsChanged():
+        break;
+    }
+  }
+
+  /// Sends the latest native config after the frame: never during build,
+  /// at most once per frame, deduplicated by the host.
+  void _scheduleNativeSend(LiquidNativeChromeConfig config) {
+    _nativeConfig = config;
+    if (_nativeSendScheduled) return;
+    _nativeSendScheduled = true;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      _nativeSendScheduled = false;
+      final latest = _nativeConfig;
+      if (mounted && latest != null) _claim?.update(latest);
+    });
+  }
+
+  /// After a refused or dropped selection: the native chrome may already
+  /// show the tapped tab (a selection UIKit made without asking), so send
+  /// the current one again.
+  void _resyncNative() {
+    final config = _nativeConfig;
+    if (_nativeEngaged && config != null) _claim?.update(config, force: true);
   }
 
   // --- hide chrome -------------------------------------------------------
@@ -197,6 +327,10 @@ class _LiquidShellState extends State<LiquidShell>
 
   void _applySidebarVisible(bool visible) {
     if (!mounted) return;
+    if (_nativeEngaged) {
+      _claim?.setSidebarVisible(visible: visible);
+      return;
+    }
     if (_presentation == ShellPresentation.compact) {
       if (kDebugMode) {
         debugPrint(
@@ -242,15 +376,21 @@ class _LiquidShellState extends State<LiquidShell>
       } finally {
         _guardPending = false;
       }
-      if (!mounted || !accepted) return;
+      if (!mounted) return;
+      if (!accepted) return _resyncNative();
       // The list may have changed while the guard ran: find the requested
       // destination in the current one, or drop the selection.
       final current = _currentIndexOf(requested, index);
-      if (current == null) return;
+      if (current == null) return _resyncNative();
       index = current;
     }
     widget.onDestinationSelected(index);
-    if (mounted && _presentation == ShellPresentation.overlay) {
+    if (!mounted) return;
+    if (_nativeEngaged) {
+      if (_nativeState?.sidebar == LiquidNativeSidebar.overlay) {
+        _setSidebarVisible(false);
+      }
+    } else if (_presentation == ShellPresentation.overlay) {
       _setSidebarVisible(false);
     }
   }
@@ -355,6 +495,8 @@ class _LiquidShellState extends State<LiquidShell>
   Widget _buildLayout(BuildContext context, BoxConstraints constraints) {
     final size = constraints.biggest;
     final presentation = presentationFor(size, widget.breakpoints);
+    final native = _resolveNative(context, presentation);
+    if (native != null) return native;
     _sidebarVisible = sidebarVisibleFor(
       previous: _presentation,
       current: presentation,
@@ -503,6 +645,11 @@ class _LiquidShellState extends State<LiquidShell>
         );
       case LiquidChromeKind.topBar || LiquidChromeKind.sidebarOverlay:
         final toggle = kind == LiquidChromeKind.topBar;
+        // iPadOS 26 windowed: the row starts past the window controls; the
+        // pill keeps equal reserves on both sides so it stays centred.
+        final indent = _windowControls.value.value.indentFor(
+          rowTop: kTopBarGap,
+        );
         children.add(
           Positioned(
             left: 0,
@@ -516,7 +663,9 @@ class _LiquidShellState extends State<LiquidShell>
                     Padding(
                       padding: EdgeInsets.symmetric(
                         horizontal:
-                            _kBarMargin + (toggle ? _kToggleReserve : 0),
+                            _kBarMargin +
+                            (toggle ? _kToggleReserve : 0) +
+                            indent,
                       ),
                       child: Center(
                         heightFactor: 1,
@@ -532,7 +681,7 @@ class _LiquidShellState extends State<LiquidShell>
                     ),
                     if (toggle)
                       PositionedDirectional(
-                        start: kSidebarToggleInset,
+                        start: kSidebarToggleInset + indent,
                         top: 0,
                         child: SidebarToggle(
                           onPressed: () => _setSidebarVisible(true),
@@ -606,10 +755,144 @@ class _LiquidShellState extends State<LiquidShell>
           chromeInsets: insets,
           sidebarVisible: sidebarShown,
           setSidebarVisible: _setSidebarVisible,
+          windowControls: _windowControls.value.value,
         ),
         registry: this,
         // One backdrop read for all chrome glass (budget rule, §5.8).
         child: BackdropGroup(child: Stack(children: children)),
+      ),
+    );
+  }
+
+  /// The native chrome layout, or null to draw Flutter chrome (spec P2 §7).
+  ///
+  /// Also sends this shell's config to the platform when it owns the
+  /// native chrome, engaged or not, so the platform hides it when this
+  /// shell falls back to Flutter chrome.
+  Widget? _resolveNative(BuildContext context, ShellPresentation presentation) {
+    final claim = _claim;
+    final state = _host.state.value;
+    _nativeState = state;
+    final owner = claim?.isOwner ?? false;
+    final describable = nativeDescribable(
+      widget.destinations,
+      widget.tabBarTrailing,
+    );
+    final engaged = nativeChromeEngaged(
+      mode: widget.nativeChrome,
+      owner: owner,
+      state: state,
+      presentation: presentation,
+      hasChromeBuilder: widget.chromeBuilder != null,
+      describable: describable,
+    );
+    if (kDebugMode &&
+        !describable &&
+        (state?.installed ?? false) &&
+        !_loggedNotDescribable) {
+      _loggedNotDescribable = true;
+      debugPrint(
+        'liquid_shell: native chrome needs an sfSymbol on every destination '
+        'and on tabBarTrailing; drawing Flutter chrome.',
+      );
+    }
+    final wasEngaged = _nativeEngaged;
+    _nativeEngaged = engaged;
+    if (engaged != wasEngaged) _presentation = null;
+    final media = MediaQuery.of(context);
+    final rtl = Directionality.of(context) == TextDirection.rtl;
+    final selected = resolveSelectedIndex(
+      widget.selectedIndex,
+      widget.destinations.length,
+    );
+    if (owner) {
+      final theme = Theme.of(context);
+      _scheduleNativeSend(
+        nativeConfigFor(
+          engaged: engaged,
+          destinations: widget.destinations,
+          selectedIndex: selected,
+          trailing: widget.tabBarTrailing,
+          footer: widget.nativeSidebarFooter,
+          tint: theme.colorScheme.primary,
+          dark: theme.brightness == Brightness.dark,
+          rtl: rtl,
+          hidden: _hideRequests > 0 || _covered,
+          interactive: _routeCurrent,
+        ),
+      );
+    }
+    // Pending: the platform may install native chrome but has not answered
+    // yet. Draw no chrome rather than flash the Flutter one (a frame or two).
+    final pending =
+        widget.nativeChrome == LiquidNativeChrome.auto &&
+        owner &&
+        state == null &&
+        LiquidShellPlatform.instance.supportsNativeChrome;
+    if (!engaged && !pending) return null;
+
+    final kind = engaged
+        ? nativeChromeKind(state: state!, hidden: _hideRequests > 0)
+        : LiquidChromeKind.hidden;
+    final insets = nativeChromeInsets(
+      kind: kind,
+      topPadding: media.padding.top,
+    );
+    // Tiled: UIKit does not resize the Flutter view; it reports the
+    // sidebar's width as the start padding. Make it real width here.
+    final tiled = kind == LiquidChromeKind.sidebarTiled;
+    final bodyStart = tiled
+        ? (rtl ? media.padding.right : media.padding.left)
+        : 0.0;
+    var bodyMedia = media.copyWith(
+      size: Size(media.size.width - bodyStart, media.size.height),
+    );
+    if (tiled) {
+      bodyMedia = bodyMedia.removePadding(removeLeft: !rtl, removeRight: rtl);
+    }
+    final overlay = kind == LiquidChromeKind.sidebarOverlay;
+    return PopScope(
+      // System back closes an overlay sidebar first (P1 Q10, natively too).
+      canPop: !overlay,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && overlay) _setSidebarVisible(false);
+      },
+      child: ShellScopeMarker(
+        data: LiquidShellScopeData(
+          sizeClass: LiquidSizeClass.regular,
+          chromeKind: kind,
+          chromeInsets: insets,
+          sidebarVisible: state?.sidebarVisible ?? false,
+          setSidebarVisible: _setSidebarVisible,
+          nativeChrome: engaged,
+          windowControls: _windowControls.value.value,
+        ),
+        registry: this,
+        // The same chain as the Flutter layout (BackdropGroup → Stack →
+        // body first), so switching between native and Flutter chrome
+        // never moves the body (§5.6).
+        child: BackdropGroup(
+          child: Stack(
+            children: [
+              PositionedDirectional(
+                start: bodyStart,
+                top: 0,
+                end: 0,
+                bottom: 0,
+                child: MediaQuery(
+                  data: bodyMedia,
+                  child: KeyedSubtree(
+                    key: _bodyKey,
+                    child: NotificationListener<UserScrollNotification>(
+                      onNotification: (n) => false,
+                      child: widget.body,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
