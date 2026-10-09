@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:ui' show FlutterView;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
@@ -70,9 +72,19 @@ final class WindowControlsSource with WidgetsBindingObserver {
   }
 }
 
-/// Moves [child] past the iPadOS 26 window controls when its row sits in
-/// their band: a start padding of `LiquidWindowControls.indentFor(rowTop:)`
+/// Moves [child] past the iPadOS 26 window controls when its row is under
+/// them: a start padding of `LiquidWindowControls.indentFor(rowTop:)`
 /// (spec P2 §8.3).
+///
+/// The cluster sits in the window's top-leading corner, so a row is under
+/// it only when both hold:
+/// - vertically, [rowTop] is above `LiquidWindowControls.top`;
+/// - horizontally, the row's start edge is less than
+///   `LiquidWindowControls.leading` from the window's safe-area start edge.
+///   A page beside a tiled sidebar starts past the cluster and never moves.
+///
+/// The horizontal position is measured after layout, so a row that mounts
+/// under a non-zero cluster settles on its second frame, without animating.
 ///
 /// Use it on a page's top row, for example a large title. Works anywhere,
 /// inside a shell or not. Animates over 200ms, and jumps when the platform
@@ -100,6 +112,16 @@ class _LiquidWindowControlsClearanceState
     extends State<LiquidWindowControlsClearance> {
   final WindowControlsSource _source = WindowControlsSource.instance;
 
+  /// The row's start edge from the window's safe-area start edge; null
+  /// until the first layout has been measured.
+  double? _start;
+
+  /// The first measurement applies at once instead of animating.
+  bool _jump = false;
+  bool _measureScheduled = false;
+  late FlutterView _view;
+  TextDirection _direction = TextDirection.ltr;
+
   @override
   void initState() {
     super.initState();
@@ -112,24 +134,94 @@ class _LiquidWindowControlsClearanceState
     super.dispose();
   }
 
+  /// Measures the row's position after the frame (never during layout,
+  /// when ancestors may not have placed it yet).
+  void _scheduleMeasure() {
+    if (_measureScheduled) return;
+    _measureScheduled = true;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      _measureScheduled = false;
+      _jump = false;
+      final box = mounted ? context.findRenderObject() : null;
+      if (box is! RenderBox || !box.attached || !box.hasSize) return;
+      final start = _startOf(box);
+      if (start != _start) {
+        setState(() {
+          _jump = _start == null;
+          _start = start;
+        });
+      }
+    });
+  }
+
+  double _startOf(RenderBox box) {
+    final ratio = _view.devicePixelRatio;
+    final padding = _view.padding;
+    if (_direction == TextDirection.rtl) {
+      final right = box.localToGlobal(Offset(box.size.width, 0)).dx;
+      return _view.physicalSize.width / ratio - right - padding.right / ratio;
+    }
+    return box.localToGlobal(Offset.zero).dx - padding.left / ratio;
+  }
+
   @override
-  Widget build(BuildContext context) =>
-      ValueListenableBuilder<LiquidWindowControls>(
+  Widget build(BuildContext context) {
+    _view = View.of(context);
+    _direction = Directionality.maybeOf(context) ?? TextDirection.ltr;
+    _scheduleMeasure();
+    return _LayoutProbe(
+      onLayout: _scheduleMeasure,
+      child: ValueListenableBuilder<LiquidWindowControls>(
         valueListenable: _source.value,
         builder: (context, controls, child) {
+          // Unmeasured: assume under the cluster (the common top row).
+          final start = _start;
+          final under = start == null || start < controls.leading;
           final padding = EdgeInsetsDirectional.only(
-            start: controls.indentFor(rowTop: widget.rowTop),
+            start: under ? controls.indentFor(rowTop: widget.rowTop) : 0,
           );
           if (MediaQuery.disableAnimationsOf(context)) {
             return Padding(padding: padding, child: child);
           }
           return AnimatedPadding(
             padding: padding,
-            duration: const Duration(milliseconds: 200),
+            duration: _jump ? Duration.zero : const Duration(milliseconds: 200),
             curve: Curves.easeOut,
             child: child,
           );
         },
         child: widget.child,
-      );
+      ),
+    );
+  }
+}
+
+/// Calls [onLayout] after every layout of its child: a row moves when its
+/// constraints change (a sidebar tiles beside the body, the window resizes).
+class _LayoutProbe extends SingleChildRenderObjectWidget {
+  const _LayoutProbe({required this.onLayout, required super.child});
+
+  final VoidCallback onLayout;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderLayoutProbe(onLayout);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderLayoutProbe renderObject,
+  ) => renderObject.onLayout = onLayout;
+}
+
+class _RenderLayoutProbe extends RenderProxyBox {
+  _RenderLayoutProbe(this.onLayout);
+
+  VoidCallback onLayout;
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    onLayout();
+  }
 }

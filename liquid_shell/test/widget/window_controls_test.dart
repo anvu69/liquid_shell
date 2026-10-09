@@ -29,6 +29,11 @@ Widget _row({double rowTop = 0}) => MaterialApp(
   ),
 );
 
+Widget _titlePage(int index) => Align(
+  alignment: AlignmentDirectional.topStart,
+  child: LiquidWindowControlsClearance(child: Text('Title $index')),
+);
+
 void main() {
   group('LiquidWindowControlsClearance', () {
     testWidgets('no platform support: no indent', (tester) async {
@@ -83,6 +88,33 @@ void main() {
       expect(tester.getTopLeft(find.text('Title')).dx, 0);
     });
 
+    testWidgets('a new row past the cluster settles at once, no slide', (
+      tester,
+    ) async {
+      _installWindowed();
+      await tester.pumpWidget(_row());
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(find.text('Title')).dx, 66);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Padding(
+            padding: const EdgeInsets.only(left: 200),
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: LiquidWindowControlsClearance(
+                key: UniqueKey(),
+                child: const Text('Title'),
+              ),
+            ),
+          ),
+        ),
+      );
+      // First frame: not measured yet. Second: measured, applied at once.
+      await tester.pump();
+      expect(tester.getTopLeft(find.text('Title')).dx, 200);
+    });
+
     testWidgets('a metrics change reads the controls again', (tester) async {
       final native = _installWindowed();
       await tester.pumpWidget(_row());
@@ -92,6 +124,67 @@ void main() {
       addTearDown(tester.view.reset);
       await tester.pumpAndSettle();
       expect(native.controlReads, greaterThan(reads));
+    });
+  });
+
+  group('page titles: only rows under the cluster move', () {
+    /// A shell whose pages are a top-left title in the clearance.
+    const titled = TestShell(pageBuilder: _titlePage);
+
+    double titleX(WidgetTester tester) =>
+        tester.getTopLeft(find.text('Title 0')).dx;
+
+    testWidgets('tiled: the page sits past the sidebar, not under it', (
+      tester,
+    ) async {
+      _installWindowed();
+      await pumpShell(tester, titled, size: kTabletLandscape);
+      // The body starts at the sidebar's edge; the title stays there.
+      expect(titleX(tester), 300);
+    });
+
+    testWidgets('RTL tiled: the cluster is on the right; neither moves', (
+      tester,
+    ) async {
+      _installWindowed();
+      await pumpShell(
+        tester,
+        titled,
+        size: kTabletLandscape,
+        direction: TextDirection.rtl,
+      );
+      expect(
+        tester.getTopRight(find.text('Title 0')).dx,
+        kTabletLandscape.width - 300,
+      );
+    });
+
+    testWidgets('overlay window: the title moves past the cluster', (
+      tester,
+    ) async {
+      _installWindowed();
+      await pumpShell(tester, titled, size: kTabletPortrait);
+      expect(titleX(tester), 66);
+    });
+
+    testWidgets('a resize that tiles the sidebar moves the title back', (
+      tester,
+    ) async {
+      _installWindowed();
+      await pumpShell(tester, titled, size: kTabletPortrait);
+      expect(titleX(tester), 66);
+      await resize(tester, kTabletLandscape);
+      expect(titleX(tester), 300);
+      await resize(tester, kTabletPortrait);
+      expect(titleX(tester), 66);
+    });
+
+    testWidgets('compact window: the title moves past the cluster', (
+      tester,
+    ) async {
+      _installWindowed();
+      await pumpShell(tester, titled, size: const Size(600, 800));
+      expect(titleX(tester), 66);
     });
   });
 
