@@ -13,7 +13,10 @@ import UIKit
 final class NativeTabsController: UITabBarController, UITabBarControllerDelegate,
   UITabBarController.Sidebar.Delegate
 {
-  let flutter: FlutterViewController
+  /// The Flutter view controller. Only its view and safe area are touched,
+  /// so `UIViewController` is enough, and tests host the shell without an
+  /// engine.
+  let flutter: UIViewController
   private let events: NativeShellFlutterApiProtocol
 
   private var destinationTabs: [UITab] = []
@@ -36,7 +39,7 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   private var lastControls: (leading: Double, top: Double)?
   private var rereadScheduled = false
 
-  init(flutter: FlutterViewController, events: NativeShellFlutterApiProtocol) {
+  init(flutter: UIViewController, events: NativeShellFlutterApiProtocol) {
     self.flutter = flutter
     self.events = events
     super.init(nibName: nil, bundle: nil)
@@ -77,6 +80,9 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   func apply(_ new: NativeChromeConfig) {
     loadViewIfNeeded()
     let wasVisible = chromeVisible
+    // Read before `config` changes: once the new config hides the chrome,
+    // `currentSidebar()` reports `.hidden` and an open overlay is missed.
+    let overlayOpen = currentSidebar() == .overlay
     rebuildTabsIfNeeded(new)
     for (tab, spec) in zip(destinationTabs, new.tabs) {
       tab.title = spec.title
@@ -94,7 +100,7 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     traitOverrides.layoutDirection = new.rtl ? .rightToLeft : .leftToRight
     config = new
     view.isUserInteractionEnabled = new.interactive
-    if chromeVisible != wasVisible { setChromeVisible(chromeVisible) }
+    if chromeVisible != wasVisible { setChromeVisible(chromeVisible, closingOverlay: overlayOpen) }
     syncFlutter()
   }
 
@@ -145,9 +151,10 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     if sidebar.bottomBarView !== footer { sidebar.bottomBarView = footer }
   }
 
-  private func setChromeVisible(_ visible: Bool) {
+  private func setChromeVisible(_ visible: Bool, closingOverlay overlayOpen: Bool) {
     // An overlay sidebar is transient: it does not come back with the chrome.
-    if !visible, currentSidebar() == .overlay { sidebar.isHidden = true }
+    // A tiled one keeps its state.
+    if !visible, overlayOpen { sidebar.isHidden = true }
     view.isHidden = !visible
     guard visible, !UIAccessibility.isReduceMotionEnabled else { return }
     view.alpha = 0

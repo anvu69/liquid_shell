@@ -11,9 +11,10 @@ import UIKit
 @available(iOS 26.0, *)
 final class ShellContainerController: UIViewController {
   let tabs: NativeTabsController
-  let flutter: FlutterViewController
+  /// The Flutter view controller (`UIViewController`: see `NativeTabsController.flutter`).
+  let flutter: UIViewController
 
-  init(tabs: NativeTabsController, flutter: FlutterViewController) {
+  init(tabs: NativeTabsController, flutter: UIViewController) {
     self.tabs = tabs
     self.flutter = flutter
     super.init(nibName: nil, bundle: nil)

@@ -145,3 +145,121 @@ final class PassThroughTests: XCTestCase {
     XCTAssertFalse(PassThroughView.isBackground(transition, selected: nil, tabsView: tabsView))
   }
 }
+
+/// Records every native → Dart call; every send succeeds.
+final class RecordingEvents: NativeShellFlutterApiProtocol {
+  var sent: [String] = []
+
+  func onDestinationTapped(
+    index indexArg: Int64, completion: @escaping (Result<Void, PigeonError>) -> Void
+  ) {
+    sent.append("destination \(indexArg)")
+    completion(.success(()))
+  }
+
+  func onTrailingTapped(completion: @escaping (Result<Void, PigeonError>) -> Void) {
+    sent.append("trailing")
+    completion(.success(()))
+  }
+
+  func onFooterTapped(completion: @escaping (Result<Void, PigeonError>) -> Void) {
+    sent.append("footer")
+    completion(.success(()))
+  }
+
+  func onStateChanged(
+    state stateArg: NativeShellState, completion: @escaping (Result<Void, PigeonError>) -> Void
+  ) {
+    sent.append("state")
+    completion(.success(()))
+  }
+
+  func onWindowControlsChanged(
+    controls controlsArg: NativeWindowControls,
+    completion: @escaping (Result<Void, PigeonError>) -> Void
+  ) {
+    sent.append("controls")
+    completion(.success(()))
+  }
+}
+
+/// The UIKit half of the shell (`NativeTabsController` inside the container)
+/// in a real window of the test host. A plain view controller stands in for
+/// the Flutter one: the shell only moves its view and sets its safe area.
+@available(iOS 26.0, *)
+final class NativeTabsTests: XCTestCase {
+  private var window: UIWindow?
+  private var events = RecordingEvents()
+
+  override func tearDown() {
+    window?.isHidden = true
+    window?.rootViewController = nil
+    window = nil
+    super.tearDown()
+  }
+
+  private func config(
+    engaged: Bool = true, hidden: Bool = false, interactive: Bool = true,
+    footer: Bool = false
+  ) -> NativeChromeConfig {
+    NativeChromeConfig(
+      engaged: engaged,
+      tabs: [
+        NativeTab(title: "Home", sfSymbol: "house", sidebarOnly: false),
+        NativeTab(title: "Inbox", sfSymbol: "tray", sidebarOnly: false),
+      ],
+      selectedIndex: 0,
+      footer: footer
+        ? NativeFooter(
+          title: "Ann Lee", subtitle: "Account", sfSymbol: "person.crop.circle",
+          semanticLabel: "Account, Ann Lee")
+        : nil,
+      tintArgb: 0xFF00_7AFF, dark: false, rtl: false, hidden: hidden, interactive: interactive)
+  }
+
+  /// Lets UIKit finish layout and any sidebar transition.
+  private func settle() {
+    RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+  }
+
+  /// A shell installed in its own window with the first config applied.
+  private func installedShell(footer: Bool = false) throws -> NativeTabsController {
+    let scene = try XCTUnwrap(
+      UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+    let flutter = UIViewController()
+    let tabs = NativeTabsController(flutter: flutter, events: events)
+    let window = UIWindow(windowScene: scene)
+    window.rootViewController = ShellContainerController(tabs: tabs, flutter: flutter)
+    window.isHidden = false
+    self.window = window
+    tabs.apply(config(footer: footer))
+    settle()
+    return tabs
+  }
+
+  func testHidingTheChromeClosesAnOverlaySidebar() throws {
+    let tabs = try installedShell()
+    tabs.setSidebarVisible(true)
+    settle()
+    XCTAssertEqual(tabs.currentState().sidebar, .overlay, "precondition: a portrait iPad overlays")
+
+    tabs.apply(config(hidden: true))
+    settle()
+    XCTAssertTrue(tabs.sidebar.isHidden, "hiding closes an overlay sidebar (spec §5.5 step 6)")
+
+    tabs.apply(config())
+    settle()
+    XCTAssertEqual(tabs.currentState().sidebar, .hidden, "the overlay does not come back")
+  }
+
+  func testGoingDormantClosesAnOverlaySidebar() throws {
+    let tabs = try installedShell()
+    tabs.setSidebarVisible(true)
+    settle()
+    XCTAssertEqual(tabs.currentState().sidebar, .overlay, "precondition: a portrait iPad overlays")
+
+    tabs.apply(config(engaged: false))
+    settle()
+    XCTAssertTrue(tabs.sidebar.isHidden, "dormant closes an overlay sidebar (spec §5.5 step 6)")
+  }
+}
