@@ -50,6 +50,32 @@ void main() {
     });
   });
 
+  group('nativeChromePossible (what Dart knows before the platform)', () {
+    bool possible({
+      LiquidNativeChrome mode = LiquidNativeChrome.auto,
+      ShellPresentation presentation = ShellPresentation.tiled,
+      bool hasChromeBuilder = false,
+      bool describable = true,
+    }) => nativeChromePossible(
+      mode: mode,
+      presentation: presentation,
+      hasChromeBuilder: hasChromeBuilder,
+      describable: describable,
+    );
+
+    test('auto, regular, no chromeBuilder, describable → possible', () {
+      expect(possible(), isTrue);
+      expect(possible(presentation: ShellPresentation.overlay), isTrue);
+    });
+
+    test('each failing condition rules it out', () {
+      expect(possible(mode: LiquidNativeChrome.off), isFalse);
+      expect(possible(presentation: ShellPresentation.compact), isFalse);
+      expect(possible(hasChromeBuilder: true), isFalse);
+      expect(possible(describable: false), isFalse);
+    });
+  });
+
   test('nativeDescribable needs every symbol, the trailing one too', () {
     const home = LiquidDestination(
       icon: Icon(Icons.home),

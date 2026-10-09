@@ -795,6 +795,12 @@ class _LiquidShellState extends State<LiquidShell>
       widget.destinations,
       widget.tabBarTrailing,
     );
+    final possible = nativeChromePossible(
+      mode: widget.nativeChrome,
+      presentation: presentation,
+      hasChromeBuilder: widget.chromeBuilder != null,
+      describable: describable,
+    );
     final engaged = nativeChromeEngaged(
       mode: widget.nativeChrome,
       owner: owner,
@@ -840,9 +846,12 @@ class _LiquidShellState extends State<LiquidShell>
       );
     }
     // Pending: the platform may install native chrome but has not answered
-    // yet. Draw no chrome rather than flash the Flutter one (a frame or two).
+    // yet, and this shell would use it. Draw no chrome rather than flash
+    // the Flutter one (a frame or two). A shell that could not use native
+    // chrome anyway (compact width, a missing sfSymbol, a chromeBuilder)
+    // draws Flutter chrome from its first frame.
     final pending =
-        widget.nativeChrome == LiquidNativeChrome.auto &&
+        possible &&
         owner &&
         state == null &&
         LiquidShellPlatform.instance.supportsNativeChrome;
@@ -876,7 +885,8 @@ class _LiquidShellState extends State<LiquidShell>
       },
       child: ShellScopeMarker(
         data: LiquidShellScopeData(
-          sizeClass: LiquidSizeClass.regular,
+          // Regular: native and pending both need a regular presentation.
+          sizeClass: sizeClassOf(presentation),
           chromeKind: kind,
           chromeInsets: insets,
           sidebarVisible: state?.sidebarVisible ?? false,

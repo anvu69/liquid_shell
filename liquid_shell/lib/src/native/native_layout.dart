@@ -21,11 +21,31 @@ bool nativeChromeEngaged({
   required bool hasChromeBuilder,
   required bool describable,
 }) =>
-    mode == LiquidNativeChrome.auto &&
+    nativeChromePossible(
+      mode: mode,
+      presentation: presentation,
+      hasChromeBuilder: hasChromeBuilder,
+      describable: describable,
+    ) &&
     owner &&
     state != null &&
     state.installed &&
-    !state.compact &&
+    !state.compact;
+
+/// The conditions of [nativeChromeEngaged] that the shell knows without the
+/// platform: the app allows it, the shell's width is regular, it has no
+/// custom Flutter chrome, and it can be drawn natively. Pure.
+///
+/// While the platform has not answered (pending), only a shell for which
+/// this holds waits with no chrome; every other one draws Flutter chrome
+/// from its first frame.
+bool nativeChromePossible({
+  required LiquidNativeChrome mode,
+  required ShellPresentation presentation,
+  required bool hasChromeBuilder,
+  required bool describable,
+}) =>
+    mode == LiquidNativeChrome.auto &&
     presentation != ShellPresentation.compact &&
     !hasChromeBuilder &&
     describable;

@@ -200,6 +200,42 @@ void main() {
       expect(native.last.engaged, isTrue);
     });
 
+    // Pending only where native chrome is possible: everywhere else the
+    // answer is already known to be Flutter chrome, so draw it at once.
+    testWidgets('pending at phone width: the Flutter tab bar, compact', (
+      tester,
+    ) async {
+      installFakeNative().attachGate = Completer<LiquidNativeShellState>();
+      await _pumpNative(tester, size: kPhone, settle: false);
+      expect(find.byType(LiquidTabBar), findsOneWidget);
+      final scope = _scope(tester);
+      expect(scope.sizeClass, LiquidSizeClass.compact);
+      expect(scope.chromeKind, LiquidChromeKind.bottomBar);
+    });
+
+    testWidgets('pending on an iPad app that has not opted in (no '
+        'sfSymbols): Flutter chrome on the first frame', (tester) async {
+      installFakeNative().attachGate = Completer<LiquidNativeShellState>();
+      await _pumpNative(tester, shell: const TestShell(), settle: false);
+      expect(_flutterChrome(), isTrue);
+      expect(_scope(tester).chromeKind, isNot(LiquidChromeKind.hidden));
+    });
+
+    testWidgets('pending with a chromeBuilder: Flutter chrome at once', (
+      tester,
+    ) async {
+      installFakeNative().attachGate = Completer<LiquidNativeShellState>();
+      await _pumpNative(
+        tester,
+        shell: TestShell(
+          destinations: kNative,
+          chromeBuilder: (context, details, chrome) => chrome,
+        ),
+        settle: false,
+      );
+      expect(_flutterChrome(), isTrue);
+    });
+
     testWidgets('the state flipping to compact falls back, and back again', (
       tester,
     ) async {
