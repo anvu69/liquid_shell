@@ -1,29 +1,60 @@
-# P2 manual QA: native iPadOS chrome (Task 5)
+# P2: kiểm tay của owner (VK-346)
 
-Simulator: iPad Air 11-inch (M4), iOS 26.5, Xcode 27.0, Flutter 3.44.6;
-iPhone 17 Pro, iOS 26.5. Both created for the run and deleted after it.
+Chạy trên **iPad Air (iPadOS 27)** thật và **iPhone 16 Plus** thật. Agent
+không có GUI/VoiceOver/xoay máy nên các mục dưới là phần còn lại của Task 5.
+Đã có sẵn trên simulator (iPad 26.5): pill native, sidebar overlay dọc, trailing
+và footer, đẩy trang che chrome, iPhone dùng chrome Flutter.
 
-The agent session that ran Task 5 had no GUI access: `simctl` has no
-rotation, iPadOS 26 refuses `requestGeometryUpdate` from the app ("the
-current windowing mode does not allow programmatic changes to interface
-orientation"), `XCUIDevice` is for UI test bundles only, and AppleScript had
-no assistive access to Simulator.app. Every check below that needs a
-rotation, a gesture, VoiceOver or a window resize is left for the owner's
-Task 6 pass.
+## Cài bản example
 
-| Check | Result | Evidence |
-|---|---|---|
-| Native pill `[sidebar \| Home \| Inbox ③ \| Settings \| ⌕]` | pass | `liquid_shell/doc/images/native_ipad_portrait.png` |
-| Portrait overlay sidebar with Search, the four rows and the "Ann Lee" footer | pass | `liquid_shell/doc/images/native_ipad_sidebar.png` |
-| Trailing ⌕ and footer act (native tap path, `debugTap`) | pass | `native_shell_test.dart`, iPad run `+6` |
-| Push a page above the shell → native chrome hides, back after the pop | pass | `native_shell_test.dart` |
-| iPhone: Flutter chrome, `notIPad` | pass | iPhone run `+6` |
-| Scene destroyed and reconnected → native chrome back | pass | Task 5 report (probe with multiple scenes enabled for the probe only) |
-| Portrait overlay open → content under the dimming view does not jump | not run | needs a tap on the sidebar toggle |
-| Landscape → sidebar tiled, content narrows | not run | no rotation (see above); no landscape doc image yet |
-| Refused guard → tapped sidebar row does not stay highlighted (Q4) | not run | needs a row tap |
-| Split View ⅓ → Flutter bottom bar only | not run | needs window resizing |
-| Floating window → page title clears the `•••` | not run | needs windowing; Task 1 values in `spike.md` |
-| VoiceOver reads tab names, the toggle, ⌕ and the footer | not run | needs VoiceOver |
-| Hot restart keeps the native chrome right | not run | needs an interactive `flutter run` |
-| Same smoke on an iOS 27.0 iPad simulator | not run | Task 6 |
+```bash
+cd liquid_shell/example
+fvm flutter build ios --release          # hoặc --debug
+xcrun devicectl list devices             # lấy <UDID> của iPad đang cắm
+xcrun devicectl device install app --device <UDID> build/ios/iphoneos/Runner.app
+xcrun devicectl device process launch --device <UDID> vn.lasoai.liquidShellExample
+```
+
+Nếu cần log: `fvm flutter run -d <UDID>` thay cho ba lệnh cuối.
+
+## iPad Air (iPadOS 27)
+
+Đánh dấu `[x]` khi đạt; ghi lại nếu không đạt (kèm ảnh/quay màn hình).
+
+- [ ] **Ảnh ngang (landscape):** xoay ngang. Sidebar tiled (không overlay),
+      nội dung hẹp lại, không nhảy. Chụp màn hình, lưu thành
+      `liquid_shell/doc/images/native_ipad_landscape.png` rồi báo lại.
+- [ ] **Dọc:** chạm nút sidebar. Sidebar overlay mở, nội dung bên dưới màn mờ
+      **không** dịch chuyển. Chạm một hàng: tab đổi, sidebar đóng.
+- [ ] **Resize cửa sổ / clearance:** bật cửa sổ nổi (floating), kéo đổi kích
+      thước nhiều cỡ. Tiêu đề trang (hàng trên cùng) **tránh** nút `•••` /
+      đóng-thu nhỏ; ở full screen không bị thụt. Trong sidebar tiled, tiêu đề
+      trang không bị đẩy. Lúc đẩy/pop trang, tiêu đề không trượt lạ.
+- [ ] **Split View:** mở cùng app ở 1/3 màn hình: chỉ còn thanh dưới Flutter
+      (không có chrome native). Kéo lên 1/2 và 2/3: quay lại native khi đủ
+      rộng. Không thấy hai chrome cùng lúc.
+- [ ] **VoiceOver:** bật VO. Đọc đúng tên các tab, nút bật/tắt sidebar, nút
+      ⌕ (trailing) và footer ("Ann Lee ..."). Vuốt qua được hết, footer kích
+      hoạt được. (Nhãn nút sidebar do hệ thống, theo ngôn ngữ máy.)
+- [ ] **Dialog trên chrome:** mở một dialog / bottom sheet từ một trang. Chạm
+      ngoài dialog thì đóng (chạm xuyên qua chrome native tới barrier), không
+      chạm nhầm tab. Đẩy trang chi tiết: chrome native ẩn, pop thì hiện lại.
+- [ ] **Guard bị từ chối:** bật "unsaved changes" trong example, chạm hàng
+      sidebar khác rồi từ chối: hàng được chọn cũ vẫn sáng (không kẹt hàng
+      mới). Footer **không** đi qua guard (đúng thiết kế).
+- [ ] **Scene reconnect:** Stage Manager/App Exposé: đóng cửa sổ app (vuốt
+      loại scene, không kill app) rồi mở lại từ icon. Chrome native quay lại
+      đúng tab đã chọn và đúng số badge.
+- [ ] **Hot restart** (nếu chạy `flutter run`): bấm `R`, chrome native vẫn
+      đúng (không trống, không lệch tab).
+- [ ] **Không nháy chrome Flutter** lúc mở app lạnh (chỉ trống 1-2 frame).
+
+## iPhone 16 Plus
+
+- [ ] Mở app: chrome **Flutter** (thanh dưới glass), không có sidebar native.
+- [ ] Xoay ngang: vẫn chrome Flutter, không nháy trống ở lúc mở.
+- [ ] Đẩy trang chi tiết rồi quay lại: không lỗi; tab/badge đúng.
+
+## Báo kết quả
+
+Gửi lại: danh sách mục đạt/không đạt, ảnh landscape, và bất kỳ mục nào lạ.

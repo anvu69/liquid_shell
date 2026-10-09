@@ -101,6 +101,17 @@ If you keep branches alive some other way, wrap the inactive ones in
 `Visibility(visible: false, maintainState: true, ...)` or
 `TickerMode(enabled: false)`.
 
+### With native iPadOS chrome
+
+Native chrome (iPadOS 26, see [native_chrome.md](native_chrome.md)) follows
+the same table. It also watches the shell's own route: a page pushed above
+the shell hides the native chrome while it covers the shell, and a dialog or
+sheet above the shell makes the native chrome ignore touches. Both work only
+for routes on a navigator **above** the shell. A modal shown on a branch's
+own navigator sits under the native chrome: show modals on the root
+navigator (`showDialog` does by default; pass `useRootNavigator: true` to
+`showModalBottomSheet`), or wrap the page in `LiquidHideChrome`.
+
 ## Leaving a page with unsaved work
 
 `beforeDestinationChange` runs before every user selection (not before

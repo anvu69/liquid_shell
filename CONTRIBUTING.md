@@ -19,6 +19,9 @@
 | `make goldens-update` | Regenerate goldens and `liquid_shell/doc/images`, then recompress them losslessly with `tool/compress_pngs.dart` (macOS + 3.44 only) |
 | `make android-unit` | Kotlin JVM tests of the Android plugin |
 | `make integration-ios` / `make integration-android` | Signal channel tests on a simulator / emulator |
+| `make integration-ios-native` | Native iPadOS 26 shell on an iPad (installs) and an iPhone (does not) simulator; saves screenshots |
+| `make ios-unit IOS_UNIT_DEVICE=<udid>` | XCTest of `liquid_shell_ios` (example `RunnerTests`) on one simulator |
+| `make pigeon` / `make pigeon-check` | Regenerate the native channel / fail when the generated files drift (part of `verify`) |
 | `make pana` / `make publish-check` | pub.dev scoring and publish dry-run |
 
 ## Coverage gate
@@ -85,5 +88,8 @@ bug fix starts with a test that reproduces the bug.
 ## Dependencies
 
 Runtime dependencies are Flutter, our own federated packages and
-`plugin_platform_interface` only. Adding anything else needs a spec change.
+`plugin_platform_interface` only, plus `meta` in `liquid_shell_ios`, which
+the Pigeon-generated channel imports and the Flutter SDK pins (P2 spec
+§6.1). Adding anything else needs a spec change. `pigeon` is a dev
+dependency of `liquid_shell_ios`, pinned exactly.
 `very_good_analysis` stays pinned to `10.3.0`.

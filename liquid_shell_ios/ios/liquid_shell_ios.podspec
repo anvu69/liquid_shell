@@ -1,9 +1,10 @@
 Pod::Spec.new do |s|
   s.name             = 'liquid_shell_ios'
   s.version          = '0.1.0'
-  s.summary          = 'iOS signals for the liquid_shell Flutter plugin.'
+  s.summary          = 'iOS side of the liquid_shell Flutter plugin.'
   s.description      = <<-DESC
-Streams Reduce Transparency to liquid_shell so its glass can fall back to a solid fill.
+Streams Reduce Transparency to liquid_shell, installs the native iPadOS 26
+tab bar and sidebar, and reads the iPadOS window controls.
                        DESC
   s.homepage         = 'https://github.com/anvu69/liquid_shell'
   s.license          = { :file => '../LICENSE' }

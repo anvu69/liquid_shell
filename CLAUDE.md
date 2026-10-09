@@ -25,8 +25,12 @@ the spec in `docs/specs/`, and the plan in `docs/plans/`.
 - **Provenance.** Re-type ported code in English with new names. Rewrite the
   two integration helpers named in spec §9 from public docs without opening
   the originals. `make provenance` must stay green.
-- **Dependencies.** Flutter + our packages + `plugin_platform_interface`.
-  Nothing else at runtime. `very_good_analysis` pinned to 10.3.0.
+- **Dependencies.** Flutter + our packages + `plugin_platform_interface`,
+  plus `meta` in `liquid_shell_ios` (imported by the Pigeon-generated
+  channel; pinned by the Flutter SDK). Nothing else at runtime.
+  `very_good_analysis` pinned to 10.3.0; `pigeon` pinned to 27.3.0 (dev).
+- **Generated channel.** Edit `liquid_shell_ios/pigeons/native_shell.dart`,
+  run `make pigeon`, commit the source and both generated files.
 - **Never loosen `analysis_options.yaml`** to get code through. Fix the code.
 - **Goldens** are regenerated only with `make goldens-update` on macOS +
   Flutter 3.44.6. Never edit images by hand.
@@ -39,5 +43,8 @@ make verify     # everything blocking CI runs; green before any PR
 make goldens-update
 make android-unit
 make integration-ios
+make integration-ios-native   # native iPadOS shell, iPad + iPhone simulators
+make ios-unit IOS_UNIT_DEVICE=<udid>   # XCTest of liquid_shell_ios
+make pigeon                   # regenerate the native channel
 make integration-android
 ```
