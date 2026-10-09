@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
+import 'package:liquid_shell/src/shell/shell_layout.dart';
+import 'package:liquid_shell/src/shell/shell_scope.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
 /// The process-wide window-controls value (spec P2 §8.2).
@@ -83,8 +85,13 @@ final class WindowControlsSource with WidgetsBindingObserver {
 ///   `LiquidWindowControls.leading` from the window's safe-area start edge.
 ///   A page beside a tiled sidebar starts past the cluster and never moves.
 ///
-/// The horizontal position is measured after layout, so a row that mounts
-/// under a non-zero cluster settles on its second frame, without animating.
+/// The horizontal position is measured after layout, and only while the
+/// enclosing route is at rest: a route transition moves the page with a
+/// paint transform, and a row measured mid-push would look past the
+/// cluster. Until its first measurement a row counts as under the cluster,
+/// except in a shell with a tiled sidebar, where the body starts past it;
+/// a row that mounts elsewhere settles on its second frame, without
+/// animating.
 ///
 /// Use it on a page's top row, for example a large title. Works anywhere,
 /// inside a shell or not. Animates over 200ms, and jumps when the platform
@@ -122,6 +129,9 @@ class _LiquidWindowControlsClearanceState
   late FlutterView _view;
   TextDirection _direction = TextDirection.ltr;
 
+  /// The enclosing route, watched so the row is measured when it settles.
+  ModalRoute<Object?>? _route;
+
   @override
   void initState() {
     super.initState();
@@ -130,8 +140,31 @@ class _LiquidWindowControlsClearanceState
 
   @override
   void dispose() {
+    _watchRoute(null);
     _source.release();
     super.dispose();
+  }
+
+  void _watchRoute(ModalRoute<Object?>? route) {
+    if (identical(route, _route)) return;
+    _route?.animation?.removeStatusListener(_onRouteStatus);
+    _route?.secondaryAnimation?.removeStatusListener(_onRouteStatus);
+    _route = route;
+    route?.animation?.addStatusListener(_onRouteStatus);
+    route?.secondaryAnimation?.addStatusListener(_onRouteStatus);
+  }
+
+  void _onRouteStatus(AnimationStatus status) {
+    if (_routeAtRest) _scheduleMeasure();
+  }
+
+  /// No transition moves the page: it is fully pushed and nothing above it
+  /// is coming or going. Outside any route, always.
+  bool get _routeAtRest {
+    final route = _route;
+    if (route == null) return true;
+    return (route.animation?.isCompleted ?? true) &&
+        (route.secondaryAnimation?.isDismissed ?? true);
   }
 
   /// Measures the row's position after the frame (never during layout,
@@ -142,7 +175,10 @@ class _LiquidWindowControlsClearanceState
     SchedulerBinding.instance.addPostFrameCallback((_) {
       _measureScheduled = false;
       _jump = false;
-      final box = mounted ? context.findRenderObject() : null;
+      // Mid-transition the position includes the route's transform; keep
+      // the last value and measure again when the route settles.
+      if (!mounted || !_routeAtRest) return;
+      final box = context.findRenderObject();
       if (box is! RenderBox || !box.attached || !box.hasSize) return;
       final start = _startOf(box);
       if (start != _start) {
@@ -168,15 +204,22 @@ class _LiquidWindowControlsClearanceState
   Widget build(BuildContext context) {
     _view = View.of(context);
     _direction = Directionality.maybeOf(context) ?? TextDirection.ltr;
+    _watchRoute(ModalRoute.of(context));
+    // Beside a tiled sidebar the body starts past the cluster: a new row
+    // there is never drawn under it, not even for its first frame.
+    final tiled =
+        LiquidShellScope.maybeOf(context)?.chromeKind ==
+        LiquidChromeKind.sidebarTiled;
     _scheduleMeasure();
     return _LayoutProbe(
       onLayout: _scheduleMeasure,
       child: ValueListenableBuilder<LiquidWindowControls>(
         valueListenable: _source.value,
         builder: (context, controls, child) {
-          // Unmeasured: assume under the cluster (the common top row).
+          // Unmeasured: assume under the cluster (the common top row),
+          // unless the shell tiles its sidebar.
           final start = _start;
-          final under = start == null || start < controls.leading;
+          final under = start == null ? !tiled : start < controls.leading;
           final padding = EdgeInsetsDirectional.only(
             start: under ? controls.indentFor(rowTop: widget.rowTop) : 0,
           );

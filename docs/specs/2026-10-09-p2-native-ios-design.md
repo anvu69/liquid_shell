@@ -167,9 +167,12 @@ class LiquidWindowControls {
 
 /// Start padding of indentFor(rowTop:) around a top row that is under the
 /// cluster, animated over 200ms (none under reduce motion). Under means
-/// rowTop < top and the row's start edge, measured after layout, is less
-/// than `leading` from the WINDOW's safe-area start edge: a page beside a
-/// tiled sidebar never moves. Works inside or outside a shell.
+/// rowTop < top and the row's start edge, measured after layout while the
+/// enclosing route is at rest (a transition's transform would make a row
+/// under the cluster look past it mid-push), is less than `leading` from
+/// the WINDOW's safe-area start edge: a page beside a tiled sidebar never
+/// moves, and a new row in a tiled shell counts as past the cluster from
+/// its first frame. Works inside or outside a shell.
 class LiquidWindowControlsClearance extends StatefulWidget {
   const LiquidWindowControlsClearance({required this.child, this.rowTop = 0, super.key});
   final double rowTop;    // the row's top edge below MediaQuery.paddingOf(context).top
@@ -438,7 +441,7 @@ Values reach Dart three ways:
 | P1 top bar row (`topBar`, `sidebarOverlay` underlay) | `indent = controls.indentFor(rowTop: kTopBarGap)`. The toggle moves to `start: 20 + indent`, and the pill's horizontal reserve grows by `indent` **on both sides**, so it stays centred (VK-342 §3.5 (c)) |
 | Flutter sidebar header row (`LiquidSidebar`, also standalone) | Wrapped in `LiquidWindowControlsClearance(rowTop: 24)` (24 = the sidebar's top padding) |
 | P1 bottom bar | Unaffected: it is at the bottom |
-| Page large titles | Apps wrap the title row in `LiquidWindowControlsClearance(rowTop: contentPaddingOf(context).top − paddingOf(context).top)`. The example's `DemoPage` does, so every case shows it. Rows below the band never move (Music's look), and neither do rows that start past the cluster horizontally: beside a tiled sidebar (Flutter or native) the page starts at the sidebar's edge, so its title stays put. The check uses the row's position in the window, not in the page |
+| Page large titles | Apps wrap the title row in `LiquidWindowControlsClearance(rowTop: contentPaddingOf(context).top − paddingOf(context).top)`. The example's `DemoPage` does, so every case shows it. Rows below the band never move (Music's look), and neither do rows that start past the cluster horizontally: beside a tiled sidebar (Flutter or native) the page starts at the sidebar's edge, so its title stays put. The check uses the row's position in the window, not in the page, read only while the page's route is at rest (no push, pop or route above it moving), so a title does not slide during a transition. Until it is first read, a row counts as under the cluster, except in a shell with a tiled sidebar |
 | Native chrome | UIKit adapts its own bar and sidebar; Flutter's safe area includes them, so the value reads about 0 |
 | P3 (later) | The back button / title bar and the search page read `LiquidShellScope.of(context).windowControls` or use the clearance widget. Nothing else is needed from P2 |
 

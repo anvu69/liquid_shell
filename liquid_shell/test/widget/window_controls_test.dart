@@ -179,6 +179,86 @@ void main() {
       expect(titleX(tester), 66);
     });
 
+    testWidgets('tiled: a newly built page title is past the sidebar from '
+        'its first frame', (tester) async {
+      _installWindowed();
+      // One page at a time, built on selection, like a lazy router branch.
+      var index = 0;
+      await pumpShell(
+        tester,
+        StatefulBuilder(
+          builder: (context, setState) => LiquidShell(
+            destinations: kDestinations,
+            selectedIndex: index,
+            onDestinationSelected: (i) => setState(() => index = i),
+            body: KeyedSubtree(key: ValueKey(index), child: _titlePage(index)),
+          ),
+        ),
+        size: kTabletLandscape,
+      );
+      expect(titleX(tester), 300);
+      await tester.tap(find.text('Inbox'));
+      await tester.pump();
+      expect(tester.getTopLeft(find.text('Title 1')).dx, 300);
+    });
+
+    // A route transition moves the page with a paint transform. Measured
+    // through it, a title under the cluster looked past it mid-push and
+    // slid 66 → 0 → 66.
+    final pushes = <String, Route<void> Function(Widget page)>{
+      'a MaterialPageRoute (iOS slide)': (page) =>
+          MaterialPageRoute<void>(builder: (_) => page),
+      'a slow PageRouteBuilder slide': (page) => PageRouteBuilder<void>(
+        transitionDuration: const Duration(milliseconds: 600),
+        pageBuilder: (_, _, _) => page,
+        transitionsBuilder: (_, animation, _, child) => SlideTransition(
+          position: Tween(
+            begin: const Offset(1, 0),
+            end: Offset.zero,
+          ).animate(animation),
+          child: child,
+        ),
+      ),
+    };
+    for (final MapEntry(key: name, value: route) in pushes.entries) {
+      testWidgets('$name: a title under the cluster keeps its indent on '
+          'every frame of the push', (tester) async {
+        _installWindowed();
+        tester.view
+          ..devicePixelRatio = 1
+          ..physicalSize = kTabletPortrait;
+        addTearDown(tester.view.reset);
+        // The home page already shows a title, so the controls are known
+        // before the push, as in an app.
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ThemeData(platform: TargetPlatform.iOS),
+            home: _titlePage(0),
+          ),
+        );
+        await tester.pumpAndSettle();
+        const pageKey = Key('pushed page');
+        tester
+            .state<NavigatorState>(find.byType(Navigator))
+            .push(
+              route(SizedBox.expand(key: pageKey, child: _titlePage(1))),
+            )
+            .ignore();
+        double indent() =>
+            tester.getTopLeft(find.text('Title 1')).dx -
+            tester.getTopLeft(find.byKey(pageKey)).dx;
+        final seen = <double>[];
+        await tester.pump();
+        for (var ms = 0; ms < 1000; ms += 20) {
+          await tester.pump(const Duration(milliseconds: 20));
+          seen.add(indent());
+        }
+        await tester.pumpAndSettle();
+        seen.add(indent());
+        expect(seen, everyElement(closeTo(66, 0.01)));
+      });
+    }
+
     testWidgets('compact window: the title moves past the cluster', (
       tester,
     ) async {
