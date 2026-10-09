@@ -289,7 +289,7 @@ This differs from VK-242, which let UIKit select and resynced only on refusal (Q
 | Scene connects, rule fails | No install; the reason is kept for `attach` and logged in debug |
 | Plugin registered after the scene connected | `registeredLate`; never installs into a visible window |
 | Scene disconnects (ours) | Release the controller and the FVC reference; observers stay armed; `attach` reports not installed |
-| Scene reconnects | The armed observer installs again in the new window (if the rule passes) |
+| Scene reconnects | The armed observer installs again in the new window (if the rule passes). The fresh controller has no config; its first layout sends `onStateChanged`, and Dart answers every state report by forgetting its dedupe value and sending the owner's config whole, with `force` (tabs, then the selection, in one apply) |
 | Dart hot restart | The native chrome survives. Dart's new host calls `attach`, and the first config is sent with `force` (configure-then-select, §3.2) |
 | Engine detach | The installer's observers and the Pigeon handlers are removed; the P1 signals observer is removed |
 | Last shell unmounts | Dart sends `dormant`; the container hides its chrome and gives Flutter the whole window |

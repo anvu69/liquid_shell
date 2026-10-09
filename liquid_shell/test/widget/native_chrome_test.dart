@@ -260,6 +260,28 @@ void main() {
     });
   });
 
+  group('scene reconnect (spec P2 §5.7)', () {
+    testWidgets('a state report re-sends the whole config, selection too', (
+      tester,
+    ) async {
+      final native = installFakeNative();
+      await _pumpNative(tester);
+      native.emitNative(const LiquidNativeDestinationTapped(1));
+      await tester.pumpAndSettle();
+      final shown = native.last;
+      expect(shown.selectedIndex, 1);
+      final before = native.configs.length;
+
+      // A reconnected scene gets a fresh native controller with no config.
+      // Its first layout reports the state, unchanged: the shell's config
+      // is unchanged too, and must still reach it.
+      native.pushState(kInstalled);
+      await tester.pumpAndSettle();
+      expect(native.configs.length, before + 1);
+      expect(native.last, shown);
+    });
+  });
+
   group('layout', () {
     testWidgets('tiled: the body loses the sidebar width and its padding', (
       tester,
