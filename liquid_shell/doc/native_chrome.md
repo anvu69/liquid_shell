@@ -55,8 +55,10 @@ a compact one, one without symbols, one with a `chromeBuilder`, and any
 shell on a screen whose shorter side is under 744 points. That last rule is
 a shortcut for iPhones: no iPhone is that large in either orientation, so an
 iPhone, even in landscape, never waits. The screen's size is used, not the
-window's, so an iPad window in Split View still waits. Platforms without
-native chrome (Android, web, desktop) answer at once.
+window's, so an iPad window in Split View still waits, and so does an iPad
+app on a Mac ("Designed for iPad"): the Mac's display passes the size check,
+and the platform then answers `iPadAppOnMac`. Platforms without native
+chrome (Android, web, desktop) answer at once.
 
 ## How it behaves
 

@@ -963,7 +963,10 @@ content viewer (see [Custom chrome](#custom-chrome)).
 - **A frame or two without chrome at start on iPad.** Whether the app opted
   in is known only natively, so on an iPad screen a shell that could use
   native chrome draws none until the platform answers, even in an app
-  without the Info.plist key. iPhone and every other platform draw their
+  without the Info.plist key. The same holds for an iPad app running on a
+  Mac ("Designed for iPad"): the Mac's display passes the iPad screen-size
+  check, so the shell waits for the platform's answer (`iPadAppOnMac`) and
+  then draws Flutter chrome. iPhone and every other platform draw their
   chrome from the first frame.
 - **Native chrome hit testing follows UIKit's view tree.** Touches on the
   transparent part of the native chrome go to Flutter; a future iOS that
