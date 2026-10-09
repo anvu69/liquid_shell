@@ -316,6 +316,25 @@ final class NativeTabsTests: XCTestCase {
     XCTAssertTrue(tabs.sidebar.isHidden, "dormant closes an overlay sidebar (spec §5.5 step 6)")
   }
 
+  /// A guard's dialog is drawn in the Flutter view, below the overlay
+  /// sidebar and its dimming view: a non-interactive config (a dialog
+  /// above the shell, or a guard pending) closes the overlay first.
+  func testANonInteractiveConfigClosesAnOverlaySidebar() throws {
+    let tabs = try installedShell()
+    tabs.setSidebarVisible(true)
+    settle()
+    XCTAssertEqual(tabs.currentState().sidebar, .overlay, "precondition: a portrait iPad overlays")
+
+    tabs.apply(config(interactive: false))
+    settle()
+    XCTAssertTrue(tabs.sidebar.isHidden, "nothing native covers the dialog")
+    XCTAssertTrue(tabs.chromeVisible, "the chrome itself stays, inert")
+
+    tabs.apply(config())
+    settle()
+    XCTAssertEqual(tabs.currentState().sidebar, .hidden, "the overlay does not come back")
+  }
+
   /// A shell installed by the installer, as a scene connection does.
   private func installedByInstaller() throws -> (NativeShellInstaller, UIWindow) {
     let scene = try XCTUnwrap(

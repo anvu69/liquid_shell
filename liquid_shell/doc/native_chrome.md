@@ -66,7 +66,8 @@ native chrome (Android, web, desktop) answer at once.
 - **Selection.** A tap on a native tab or sidebar row only proposes it. The
   shell runs `beforeDestinationChange`, calls `onDestinationSelected`, and
   then selects the tab natively. A refused tap leaves the native selection
-  where it was.
+  where it was. While the guard runs, the native chrome ignores touches and
+  an overlay sidebar closes, so the guard's dialog is never drawn under it.
 - **Footer.** `LiquidNativeSidebarFooter.onPressed` runs after the native
   side closes an overlay sidebar. It does **not** go through
   `beforeDestinationChange`: if it navigates away from unsaved work, guard it

@@ -110,6 +110,10 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     view.isUserInteractionEnabled = new.interactive
     view.accessibilityElementsHidden = !new.interactive
     footer.interactive = new.interactive
+    // The dialog (or the pending guard's dialog) is drawn in the Flutter
+    // view, below an overlay sidebar and its dimming view: close the
+    // overlay, which is transient. A tiled sidebar stays.
+    if overlayOpen, !new.interactive { sidebar.isHidden = true }
     if chromeVisible != wasVisible { setChromeVisible(chromeVisible, closingOverlay: overlayOpen) }
     syncFlutter()
   }
@@ -293,7 +297,9 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     }
     if let index = destinationTabs.firstIndex(where: { $0 === tab }) {
       // Propose, do not select: Dart runs the guard, then answers with
-      // `update`, which selects the tab and closes an overlay sidebar.
+      // `update`, which selects the tab and closes an overlay sidebar. A
+      // config sent while the guard runs is non-interactive and closes the
+      // overlay before the guard's dialog shows.
       send("onDestinationTapped") { self.events.onDestinationTapped(index: Int64(index), completion: $0) }
       return false
     }

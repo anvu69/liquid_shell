@@ -278,7 +278,7 @@ After each sync, the native side publishes `NativeShellState` (dedupe; a failed 
 2. **Selection.** `selectedTab = destinationTabs[selectedIndex]` under `applyingFromDart`, when it differs.
 3. **Footer.** `sidebar.bottomBarView` = footer view, or `nil`.
 4. **Style.** `view.tintColor` = `tintArgb` (the shell sends `colorScheme.primary`). `traitOverrides.userInterfaceStyle` follows the app's theme brightness, not the device's (VK-250 lesson). `traitOverrides.layoutDirection` follows the shell's `Directionality`.
-5. **Interaction.** `view.isUserInteractionEnabled = interactive`, `view.accessibilityElementsHidden = !interactive` and the footer's own `interactive` flag: under a Flutter dialog (Q8) the chrome is inert for touch and for VoiceOver alike, and VoiceOver cannot activate the footer.
+5. **Interaction.** `view.isUserInteractionEnabled = interactive`, `view.accessibilityElementsHidden = !interactive` and the footer's own `interactive` flag: under a Flutter dialog (Q8) the chrome is inert for touch and for VoiceOver alike, and VoiceOver cannot activate the footer. A non-interactive config also closes an overlay sidebar: the dialog is drawn in the Flutter view, below the sidebar and its dimming view (final review I1).
 6. **Visibility.** `visible = engaged && !hidden`. Hiding closes an overlay sidebar, because it is transient. A tiled sidebar keeps its state for when the chrome returns. Showing fades in over 0.2 s, and does not fade under Reduce Motion. The view starts hidden: before the first `update` nothing native is visible, so the splash screen never shows an empty tab bar.
 
 ### 5.6 Selection: propose, then accept
@@ -384,7 +384,7 @@ A window has one native chrome, and an app can have several shells. In the examp
 Native destination taps (index range-checked) call the shell's one `_select(i)` path from P1 §5.5:
 
 - **single flight:** a tap while a guard is pending is dropped;
-- **guard:** `beforeDestinationChange(i)` runs, and a throw is reported and treated as a refusal;
+- **guard:** `beforeDestinationChange(i)` runs, and a throw is reported and treated as a refusal. While it runs, the config is `interactive: false`, so an overlay sidebar closes natively (§5.5 step 5) before the guard's dialog shows;
 - **accepted:** `onDestinationSelected(i)` runs. If the native sidebar is an overlay, the shell then asks the platform to close it. The app's new `selectedIndex` reaches the platform in the next config;
 - **after every native destination tap**, whatever came of it (accepted, refused, dropped by single flight or because the destination vanished while the guard ran, or accepted but ignored by the app): the next frame's config is sent with `force`, even when it equals the last one. With propose-accept nothing changed natively, but the `didSelectTab` safety-net path may have changed it, and the forced send puts it back;
 - **reselect** (`i == selectedIndex`) runs the same path, so apps pop the branch to its root;

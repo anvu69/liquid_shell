@@ -518,6 +518,42 @@ void main() {
       expect(native.sidebarCalls, [false]);
     });
 
+    testWidgets('while the guard runs the chrome is inert, so the native '
+        'overlay closes before its dialog shows', (tester) async {
+      final native = installFakeNative(
+        state: const LiquidNativeShellState(
+          installed: true,
+          sidebar: LiquidNativeSidebar.overlay,
+        ),
+      );
+      final gate = Completer<bool>();
+      final selections = <int>[];
+      await _pumpNative(
+        tester,
+        size: kTabletPortrait,
+        shell: TestShell(
+          destinations: kNative,
+          selections: selections,
+          guard: (i) => gate.future,
+        ),
+      );
+      expect(native.last.interactive, isTrue);
+      native.emitNative(const LiquidNativeDestinationTapped(1));
+      await tester.pump();
+      await tester.pump();
+      // The guard has shown nothing on a route yet (or shows it elsewhere):
+      // the pending guard alone makes the config inert, which closes an
+      // overlay sidebar natively.
+      expect(native.last.interactive, isFalse);
+      expect(native.last.selectedIndex, 0);
+
+      gate.complete(false);
+      await tester.pumpAndSettle();
+      expect(selections, isEmpty);
+      expect(native.last.interactive, isTrue);
+      expect(native.last.selectedIndex, 0);
+    });
+
     testWidgets('a refused tap re-sends the current selection', (tester) async {
       final native = installFakeNative();
       final selections = <int>[];

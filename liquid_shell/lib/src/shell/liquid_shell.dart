@@ -387,7 +387,7 @@ class _LiquidShellState extends State<LiquidShell>
     final guard = widget.beforeDestinationChange;
     if (guard != null) {
       final requested = widget.destinations[index].label;
-      _guardPending = true;
+      _setGuardPending(true);
       var accepted = false;
       try {
         accepted = await guard(index);
@@ -401,7 +401,7 @@ class _LiquidShellState extends State<LiquidShell>
           ),
         );
       } finally {
-        _guardPending = false;
+        _setGuardPending(false);
       }
       if (!mounted) return;
       if (!accepted) return;
@@ -420,6 +420,14 @@ class _LiquidShellState extends State<LiquidShell>
     } else if (_presentation == ShellPresentation.overlay) {
       _setSidebarVisible(false);
     }
+  }
+
+  /// The native chrome is inert while a guard runs (spec P2 §7.3): its
+  /// dialog is drawn in the Flutter view, under an overlay sidebar, which
+  /// UIKit closes for a non-interactive config.
+  void _setGuardPending(bool pending) {
+    _guardPending = pending;
+    if (_nativeEngaged) _rebuild();
   }
 
   /// Where the destination labelled [label], once at [index], is now: the
@@ -852,7 +860,7 @@ class _LiquidShellState extends State<LiquidShell>
           dark: theme.brightness == Brightness.dark,
           rtl: rtl,
           hidden: _hideRequests > 0 || _covered,
-          interactive: _routeCurrent,
+          interactive: _routeCurrent && !_guardPending,
         ),
       );
     }
