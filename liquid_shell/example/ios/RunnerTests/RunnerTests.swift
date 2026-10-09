@@ -222,18 +222,22 @@ final class RecordingEvents: NativeShellFlutterApiProtocol {
 @available(iOS 26.0, *)
 final class NativeTabsTests: XCTestCase {
   private var window: UIWindow?
+  private var extraWindows: [UIWindow] = []
   private var events = RecordingEvents()
 
   override func tearDown() {
-    window?.isHidden = true
-    window?.rootViewController = nil
+    for window in [window].compactMap({ $0 }) + extraWindows {
+      window.isHidden = true
+      window.rootViewController = nil
+    }
     window = nil
+    extraWindows = []
     super.tearDown()
   }
 
   private func config(
     engaged: Bool = true, hidden: Bool = false, interactive: Bool = true,
-    footer: Bool = false
+    footer: Bool = false, selected: Int64 = 0
   ) -> NativeChromeConfig {
     NativeChromeConfig(
       engaged: engaged,
@@ -241,7 +245,7 @@ final class NativeTabsTests: XCTestCase {
         NativeTab(title: "Home", sfSymbol: "house", sidebarOnly: false),
         NativeTab(title: "Inbox", sfSymbol: "tray", sidebarOnly: false),
       ],
-      selectedIndex: 0,
+      selectedIndex: selected,
       footer: footer
         ? NativeFooter(
           title: "Ann Lee", subtitle: "Account", sfSymbol: "person.crop.circle",
@@ -255,15 +259,31 @@ final class NativeTabsTests: XCTestCase {
     RunLoop.current.run(until: Date().addingTimeInterval(0.5))
   }
 
-  /// A shell installed in its own window with the first config applied.
-  private func installedShell(footer: Bool = false) throws -> NativeTabsController {
+  /// A shown window of the test host's scene, portrait whatever the
+  /// simulator's orientation: in landscape UIKit tiles the sidebar, and the
+  /// overlay tests need it over the content. A simulator keeps its last
+  /// orientation (a landscape screenshot run leaves it there), and iPadOS 26
+  /// refuses to rotate it from a test (`requestGeometryUpdate`: "the current
+  /// windowing mode does not allow" it; `XCUIDevice`: UI tests only).
+  private func portraitWindow(root: UIViewController) throws -> UIWindow {
     let scene = try XCTUnwrap(
       UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+    let window = UIWindow(windowScene: scene)
+    let bounds = scene.coordinateSpace.bounds
+    window.frame = CGRect(
+      x: 0, y: 0, width: min(bounds.width, bounds.height),
+      height: max(bounds.width, bounds.height))
+    window.rootViewController = root
+    window.isHidden = false
+    return window
+  }
+
+  /// A shell installed in its own window with the first config applied.
+  private func installedShell(footer: Bool = false) throws -> NativeTabsController {
     let flutter = UIViewController()
     let tabs = NativeTabsController(flutter: flutter, events: events)
-    let window = UIWindow(windowScene: scene)
+    let window = try portraitWindow(root: UIViewController())
     window.rootViewController = ShellContainerController(tabs: tabs, flutter: flutter)
-    window.isHidden = false
     self.window = window
     tabs.apply(config(footer: footer))
     settle()
@@ -305,7 +325,8 @@ final class NativeTabsTests: XCTestCase {
     window.rootViewController = flutter
     window.isHidden = false
     self.window = window
-    let installer = NativeShellInstaller(events: events, ownViewController: { flutter })
+    let installer = NativeShellInstaller(
+      events: events, ownViewController: { flutter }, ownsFlutter: { $0 === flutter })
     installer.install(flutter, in: window)
     settle()
     return (installer, window)
@@ -355,12 +376,40 @@ final class NativeTabsTests: XCTestCase {
     window.rootViewController = flutter
     window.isHidden = false
     self.window = window
-    let installer = NativeShellInstaller(events: events, ownViewController: { flutter })
+    let installer = NativeShellInstaller(
+      events: events, ownViewController: { flutter }, ownsFlutter: { $0 === flutter })
     XCTAssertFalse(try installer.attach().installed)
 
     installer.install(flutter, in: window)
     settle()
     XCTAssertTrue(events.sent.contains("state"))
+  }
+
+  /// A scene reconnect with the engine alive: the new shell shows Dart's
+  /// last config at once, also one Dart sent while no shell was installed
+  /// (spec §5.7).
+  func testAReinstallAfterASceneReconnectAppliesTheLastConfig() throws {
+    let (installer, window) = try installedByInstaller()
+    try installer.update(config: config())
+    // The scene goes away: its window and shell are released.
+    window.rootViewController = UIViewController()
+    settle()
+    try installer.update(config: config(selected: 1))
+
+    let scene = try XCTUnwrap(window.windowScene)
+    let next = UIWindow(windowScene: scene)
+    let flutter = UIViewController()
+    next.rootViewController = flutter
+    next.isHidden = false
+    extraWindows.append(next)
+    installer.install(flutter, in: next)
+    settle()
+
+    let shell = try tabs(in: next)
+    XCTAssertEqual(shell.config, config(selected: 1))
+    XCTAssertTrue(shell.chromeVisible)
+    XCTAssertFalse(shell.view.isHidden)
+    XCTAssertEqual(shell.selectedTab?.identifier, "destination1")
   }
 
   private func footerView(_ tabs: NativeTabsController) throws -> SidebarFooterView {
@@ -406,6 +455,7 @@ final class InstallerReasonTests: XCTestCase {
     NativeShellInstaller(
       events: RecordingEvents(),
       ownViewController: { nil },
+      ownsFlutter: { _ in true },
       readFacts: { registeredLate, rootIsFlutter in
         InstallFacts(
           isPad: isPad, osAtLeast26: true, isiOSAppOnMac: false, enabledInInfoPlist: enabled,
@@ -433,5 +483,109 @@ final class InstallerReasonTests: XCTestCase {
   func testAnEarlierFailingFactStillWins() throws {
     XCTAssertEqual(try reason(installer(isPad: false, flutterViewOnScreen: true)), .notIPad)
     XCTAssertEqual(try reason(installer(enabled: false, flutterViewOnScreen: true)), .notEnabled)
+  }
+}
+
+/// Real Flutter engines in the test host: which engine's scene the
+/// installer may claim (spec §5.1 fact 7), and where a Flutter view is
+/// already on screen.
+@available(iOS 26.0, *)
+final class InstallerEngineTests: XCTestCase {
+  private var engines: [FlutterEngine] = []
+  private var windows: [UIWindow] = []
+
+  override func tearDown() {
+    for window in windows {
+      window.isHidden = true
+      window.rootViewController = nil
+    }
+    windows = []
+    engines.forEach { $0.destroyContext() }
+    engines = []
+    super.tearDown()
+  }
+
+  private func engine(_ name: String) throws -> FlutterEngine {
+    let engine = FlutterEngine(name: name, project: nil, allowHeadlessExecution: true)
+    XCTAssertTrue(engine.run())
+    engines.append(engine)
+    return engine
+  }
+
+  /// [engine]'s plugin, published under its registrar key as
+  /// `register(with:)` does.
+  private func publishedPlugin(on engine: FlutterEngine) throws -> LiquidShellPlugin {
+    let plugin = LiquidShellPlugin()
+    try XCTUnwrap(engine.registrar(forPlugin: LiquidShellPlugin.registrarKey)).publish(plugin)
+    return plugin
+  }
+
+  private func window(root: UIViewController) throws -> UIWindow {
+    let scene = try XCTUnwrap(
+      UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+    let window = UIWindow(windowScene: scene)
+    window.rootViewController = root
+    window.isHidden = false
+    windows.append(window)
+    return window
+  }
+
+  private func installer(owns: @escaping (UIViewController) -> Bool) -> NativeShellInstaller {
+    NativeShellInstaller(
+      events: RecordingEvents(),
+      // At willConnect the registrar's view controller is still nil.
+      ownViewController: { nil },
+      ownsFlutter: owns,
+      readFacts: { registeredLate, rootIsFlutter in
+        InstallFacts(
+          isPad: true, osAtLeast26: true, isiOSAppOnMac: false, enabledInInfoPlist: true,
+          disabledByEnvironment: false, registeredLate: registeredLate,
+          rootIsFlutter: rootIsFlutter)
+      },
+      flutterViewOnScreen: { false })
+  }
+
+  func testOnlyThePluginItsEnginePublishedOwnsAFlutterViewController() throws {
+    let app = try engine("app")
+    let appPlugin = try publishedPlugin(on: app)
+    // A second, headless engine (background work, add-to-app) with its
+    // own copy of the plugin.
+    let headlessPlugin = try publishedPlugin(on: try engine("headless"))
+    let flutter = FlutterViewController(engine: app, nibName: nil, bundle: nil)
+
+    XCTAssertTrue(LiquidShellPlugin.owns(flutter, plugin: appPlugin))
+    XCTAssertFalse(LiquidShellPlugin.owns(flutter, plugin: headlessPlugin))
+    XCTAssertFalse(LiquidShellPlugin.owns(UIViewController(), plugin: appPlugin))
+  }
+
+  func testAHeadlessEnginesInstallerLeavesTheScreenOfAnotherEngineAlone() throws {
+    let app = try engine("app")
+    let appPlugin = try publishedPlugin(on: app)
+    let headlessPlugin = try publishedPlugin(on: try engine("headless"))
+    let flutter = FlutterViewController(engine: app, nibName: nil, bundle: nil)
+    let window = try window(root: flutter)
+
+    let headless = installer { LiquidShellPlugin.owns($0, plugin: headlessPlugin) }
+    headless.connect(window: window, scene: window.windowScene)
+    XCTAssertTrue(window.rootViewController === flutter, "not claimed by the headless engine")
+    XCTAssertEqual(try headless.attach().installed, false)
+
+    let own = installer { LiquidShellPlugin.owns($0, plugin: appPlugin) }
+    own.connect(window: window, scene: window.windowScene)
+    XCTAssertTrue(window.rootViewController is ShellContainerController, "claimed by its engine")
+  }
+
+  /// A Flutter view inside our container is on screen too: a plugin that
+  /// registers after the shell was installed (another engine, a late
+  /// registration) must see it.
+  func testAFlutterViewInsideTheShellContainerIsOnScreen() throws {
+    let flutter = UIViewController()
+    let tabs = NativeTabsController(flutter: flutter, events: RecordingEvents())
+    let window = try window(root: ShellContainerController(tabs: tabs, flutter: flutter))
+    RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+    XCTAssertTrue(NativeShellInstaller.isFlutterViewOnScreen(in: [window]))
+
+    let empty = try self.window(root: UIViewController())
+    XCTAssertFalse(NativeShellInstaller.isFlutterViewOnScreen(in: [empty]))
   }
 }

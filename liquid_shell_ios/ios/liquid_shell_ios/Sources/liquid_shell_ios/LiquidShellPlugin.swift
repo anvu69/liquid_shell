@@ -24,11 +24,28 @@ public final class LiquidShellPlugin: NSObject, FlutterPlugin, FlutterStreamHand
     let messenger = registrar.messenger()
     let installer = NativeShellInstaller(
       events: NativeShellFlutterApi(binaryMessenger: messenger),
-      ownViewController: { [weak registrar] in registrar?.viewController })
+      ownViewController: { [weak registrar] in registrar?.viewController },
+      // Weak: the engine keeps the plugin, the plugin the installer.
+      ownsFlutter: { [weak plugin] flutter in
+        plugin.map { LiquidShellPlugin.owns(flutter, plugin: $0) } ?? false
+      })
     NativeShellHostApiSetup.setUp(binaryMessenger: messenger, api: installer)
     installer.start()
     plugin.installer = installer
     registrar.publish(plugin)
+  }
+
+  /// The key the plugin registrant registers this plugin under.
+  static let registrarKey = "LiquidShellPlugin"
+
+  /// Whether [flutter] is a view controller of the engine that [plugin]
+  /// registered with: that engine published [plugin] under
+  /// [registrarKey]. Unlike `registrar.viewController`, this is known when
+  /// the scene connects, so a second engine (headless, add-to-app) never
+  /// claims another engine's scene.
+  static func owns(_ flutter: UIViewController, plugin: LiquidShellPlugin) -> Bool {
+    guard let registry = flutter as? FlutterPluginRegistry else { return false }
+    return registry.valuePublished(byPlugin: registrarKey) === plugin
   }
 
   public func detachFromEngine(for registrar: FlutterPluginRegistrar) {

@@ -8,8 +8,12 @@ import UIKit
 /// Flutter chrome, and Dart learns why from `attach()`.
 final class NativeShellInstaller: NSObject, NativeShellHostApi {
   private let events: NativeShellFlutterApiProtocol
-  /// The engine's own view controller, to ignore scenes of other engines.
+  /// The engine's own view controller, once known (not yet when the scene
+  /// connects): where window controls are read before a scene connects.
   private let ownViewController: () -> UIViewController?
+  /// Whether a Flutter view controller belongs to this installer's engine,
+  /// to ignore scenes of other engines (`LiquidShellPlugin.owns`).
+  private let ownsFlutter: (UIViewController) -> Bool
   /// The install facts, given the two the installer works out itself.
   /// Injectable for tests.
   private let readFacts: (_ registeredLate: Bool, _ rootIsFlutter: Bool) -> InstallFacts
@@ -33,16 +37,22 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
   /// Dart called `attach`, so native → Dart calls have a receiver. Kept
   /// here, not in the shell: a reinstall after a scene reconnect inherits it.
   private var dartAttached = false
+  /// Dart's last config, also one sent while no shell was installed. A
+  /// reinstall after a scene reconnect applies it at once, so the chrome
+  /// is back before Dart answers the new shell's first state report.
+  private var lastConfig: NativeChromeConfig?
 
   init(
     events: NativeShellFlutterApiProtocol,
     ownViewController: @escaping () -> UIViewController?,
+    ownsFlutter: @escaping (UIViewController) -> Bool,
     readFacts: @escaping (_ registeredLate: Bool, _ rootIsFlutter: Bool) -> InstallFacts =
       NativeShellInstaller.systemFacts(registeredLate:rootIsFlutter:),
     flutterViewOnScreen: @escaping () -> Bool = NativeShellInstaller.isFlutterViewOnScreen
   ) {
     self.events = events
     self.ownViewController = ownViewController
+    self.ownsFlutter = ownsFlutter
     self.readFacts = readFacts
     self.flutterViewOnScreen = flutterViewOnScreen
   }
@@ -65,10 +75,24 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
   /// A Flutter view already in a window means the scene connected before
   /// the plugin registered: detaching it now would lose its surface.
   static func isFlutterViewOnScreen() -> Bool {
-    UIApplication.shared.connectedScenes
-      .compactMap { $0 as? UIWindowScene }
-      .flatMap(\.windows)
-      .contains { ($0.rootViewController as? FlutterViewController)?.viewIfLoaded?.window != nil }
+    isFlutterViewOnScreen(
+      in: UIApplication.shared.connectedScenes
+        .compactMap { $0 as? UIWindowScene }
+        .flatMap(\.windows))
+  }
+
+  /// Whether one of [windows] shows a Flutter view: as the root, or inside
+  /// an installed shell container (another engine's, or ours before a
+  /// re-registration).
+  static func isFlutterViewOnScreen(in windows: [UIWindow]) -> Bool {
+    windows.contains { window in
+      let root = window.rootViewController
+      if root is FlutterViewController { return root?.viewIfLoaded?.window != nil }
+      if #available(iOS 26.0, *), let container = root as? ShellContainerController {
+        return container.flutter.viewIfLoaded?.window != nil
+      }
+      return false
+    }
   }
 
   /// Arms the scene observers. Called from `register(with:)`, which runs
@@ -104,10 +128,16 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
   private func connect(_ scene: UIWindowScene?) {
     guard let scene else { return }
     let sceneWindow = (scene.delegate as? UIWindowSceneDelegate)?.window ?? nil
-    let root = (scene.windows.first ?? sceneWindow)?.rootViewController
+    connect(window: scene.windows.first ?? sceneWindow, scene: scene)
+  }
+
+  /// The install decision for [window], the first window of [scene].
+  /// Internal for tests.
+  func connect(window: UIWindow?, scene: UIWindowScene?) {
+    let root = window?.rootViewController
     let flutter = root as? FlutterViewController
     // Another engine's scene: not ours to touch.
-    if let flutter, let own = ownViewController(), own !== flutter { return }
+    if let flutter, !ownsFlutter(flutter) { return }
     if let flutter { self.flutter = flutter }
     self.scene = scene
     if let reason = InstallPolicy.decide(readFacts(registeredLate, flutter != nil)) {
@@ -117,9 +147,7 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
       #endif
       return
     }
-    guard #available(iOS 26.0, *), let flutter,
-      let window = scene.windows.first ?? sceneWindow
-    else { return }
+    guard #available(iOS 26.0, *), let flutter, let window else { return }
     install(flutter, in: window)
   }
 
@@ -134,12 +162,15 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
     flutter.view.removeFromSuperview()
     window.rootViewController = ShellContainerController(tabs: tabs, flutter: flutter)
     shell = tabs
+    if let lastConfig { tabs.apply(lastConfig) }
   }
 
   private func disconnect(_ scene: UIScene?) {
     guard let scene, scene === self.scene else { return }
     // A reconnect gets a fresh install from the willConnect observer, which
-    // stays armed; until then Dart sees "not installed".
+    // stays armed, with `lastConfig` applied; until then Dart sees "not
+    // installed". Dart's forced re-send after the new shell's first state
+    // report confirms it.
     shell = nil
     flutter = nil
     self.scene = nil
@@ -165,6 +196,7 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
   }
 
   func update(config: NativeChromeConfig) throws {
+    lastConfig = config
     if #available(iOS 26.0, *) { tabs?.apply(config) }
   }
 

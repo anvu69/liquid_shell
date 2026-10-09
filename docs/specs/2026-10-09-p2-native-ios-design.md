@@ -74,7 +74,7 @@ All comments are in English, all names are new, and there are no VK or B referen
 |---|---|
 | **I1 dirty-guard data loss** (VK-242 review I1): landscape sidebar taps and footer taps changed branches without asking the form's `PopScope`, so a half-filled form was lost | Native taps only *propose* a selection. Dart runs the shell's single `_select` path, including `beforeDestinationChange` and reselect, then answers (§7.3). Pages pushed above the shell hide the native chrome while they cover it, so no native control is tappable beside them (§7.4). The footer is an app callback, like P1's trailing action, and its doc says to guard it (Q5) |
 | **`_afterRootPages`** walk (vankhan `adaptive_shell.dart`) | Generalised into P1's `beforeDestinationChange`, which now also guards native taps. A router-specific root-pages walk stays in P5's go_router adapter |
-| **Configure-then-select** ordering (VK-242 review, strengths) | Structural. One `update(config)` carries tabs, selection, footer, tint, appearance and visibility. Native applies them in a fixed order: tabs, selection, footer, style, visibility (§5.5). A selection can never land on tabs that do not exist yet. The first `update` after `attach` (start-up, hot restart) is forced |
+| **Configure-then-select** ordering (VK-242 review, strengths) | Structural. One `update(config)` carries tabs, selection, footer, tint, appearance and visibility. Native applies them in a fixed order: tabs, selection, footer, style, interaction, visibility (§5.5). A selection can never land on tabs that do not exist yet. The first `update` after `attach` (start-up, hot restart) is forced |
 | **Send-failure logging** (both directions) | Native → Dart: every send logs with `NSLog`, and a failed state or window-controls send forgets its dedupe value so the next layout pass re-sends it. Dart → native: `PlatformException` is caught at the iOS package boundary and logged once per method in debug. A failed `attach` reports `channelError` → Flutter chrome (§11) |
 | **Scene reconnect not reinstalling** (review M1) | The scene observers stay armed for the installer's life. `didDisconnect` of our scene releases the controller. `attach` reports "not installed" for a controller whose window is gone. The next `willConnect` installs again (§5.7) |
 | **"Designed for iPad" on Mac installs the shell** (review M2) | `isiOSAppOnMac \|\| isMacCatalystApp` → `iPadAppOnMac`, no install |
@@ -230,9 +230,9 @@ The plugin's `register(with:)` arms a `UIScene.willConnectNotification` observer
 | 4 | `Info.plist` `LiquidShellNativeChrome == true` (Q2) | `notEnabled` |
 | 5 | env `LIQUID_SHELL_NATIVE_OFF != "1"` | `disabledByEnvironment` |
 | 6 | the plugin registered before any Flutter view of this app was in a window | `registeredLate` |
-| 7 | the scene window's root is a `FlutterViewController` (this engine's, per `registrar.viewController`, when that is known) | `rootNotFlutter` |
+| 7 | the scene window's root is a `FlutterViewController` of this engine: its engine published this plugin instance (`LiquidShellPlugin.owns`, `valuePublished(byPlugin:)`). `registrar.viewController` cannot decide it: it is still nil at `willConnect` (measured on iOS 26.5) | `rootNotFlutter` |
 
-The install step detaches the FVC from the root role, then sets `window.rootViewController = ShellContainerController(tabs:flutter:)`. Doing it in this order avoids `UIViewControllerHierarchyInconsistency`. A scene whose root FVC belongs to another engine is ignored.
+The install step detaches the FVC from the root role, then sets `window.rootViewController = ShellContainerController(tabs:flutter:)`. Doing it in this order avoids `UIViewControllerHierarchyInconsistency`. A scene whose root FVC belongs to another engine is ignored, so a second engine that registers the plugin (headless background work, add-to-app) never claims the app's scene; a simulator probe with a headless engine registered before the scene confirmed it. For fact 6, a Flutter view inside an installed `ShellContainerController` counts as on screen, like one that is the root.
 
 **The width rule.** "Install" puts the container in the window on every qualifying iPad. That is the only time it can happen. Whether the native chrome is *used* is decided on every frame by Dart (§7.1). It needs the platform's horizontal size class to be regular **and** the shell's own width to be at least `breakpoints.regular`. Below either, the container is **dormant**: the tab bar controller's view is hidden, the Flutter view fills the window with no added safe area, and every touch falls through. P1's Flutter chrome draws as on any other device (Q3).
 
@@ -278,7 +278,7 @@ After each sync, the native side publishes `NativeShellState` (dedupe; a failed 
 2. **Selection.** `selectedTab = destinationTabs[selectedIndex]` under `applyingFromDart`, when it differs.
 3. **Footer.** `sidebar.bottomBarView` = footer view, or `nil`.
 4. **Style.** `view.tintColor` = `tintArgb` (the shell sends `colorScheme.primary`). `traitOverrides.userInterfaceStyle` follows the app's theme brightness, not the device's (VK-250 lesson). `traitOverrides.layoutDirection` follows the shell's `Directionality`.
-5. **Interaction.** `view.isUserInteractionEnabled = interactive`.
+5. **Interaction.** `view.isUserInteractionEnabled = interactive`, `view.accessibilityElementsHidden = !interactive` and the footer's own `interactive` flag: under a Flutter dialog (Q8) the chrome is inert for touch and for VoiceOver alike, and VoiceOver cannot activate the footer.
 6. **Visibility.** `visible = engaged && !hidden`. Hiding closes an overlay sidebar, because it is transient. A tiled sidebar keeps its state for when the chrome returns. Showing fades in over 0.2 s, and does not fade under Reduce Motion. The view starts hidden: before the first `update` nothing native is visible, so the splash screen never shows an empty tab bar.
 
 ### 5.6 Selection: propose, then accept
@@ -294,8 +294,8 @@ This differs from VK-242, which let UIKit select and resynced only on refusal (Q
 | Scene connects, rule passes | Install synchronously (§5.1); the chrome stays hidden until the first `update` |
 | Scene connects, rule fails | No install; the reason is kept for `attach` and logged in debug |
 | Plugin registered after the scene connected | `registeredLate`; never installs into a visible window |
-| Scene disconnects (ours) | Release the controller and the FVC reference; observers stay armed; `attach` reports not installed |
-| Scene reconnects | The armed observer installs again in the new window (if the rule passes). The fresh controller has no config; its first layout sends `onStateChanged`, and Dart answers every state report by forgetting its dedupe value and sending the owner's config whole, with `force` (tabs, then the selection, in one apply) |
+| Scene disconnects (ours) | Release the controller and the FVC reference; observers stay armed; `attach` reports not installed. The installer keeps Dart's last config, including any `update` that arrives while nothing is installed |
+| Scene reconnects | The armed observer installs again in the new window (if the rule passes), and the installer applies Dart's last config to the fresh controller at once, so a surviving engine gets its chrome back before any Dart round trip (XCTest `testAReinstallAfterASceneReconnectAppliesTheLastConfig`). Dart also answers every state report, including the fresh controller's first, by forgetting its dedupe value and sending the owner's config whole, with `force` (tabs, then the selection, in one apply); the two agree, and the second apply is idempotent. On the iOS 26.5 simulator a destroyed and reconnected scene of the example (storyboard + `FlutterSceneDelegate`) came back with a new view controller and implicit engine, so a new installer and a new Dart attach; the native chrome was back |
 | Dart hot restart | The native chrome survives. Dart's new host calls `attach`, and the first config is sent with `force` (configure-then-select, §3.2) |
 | Engine detach | The installer's observers and the Pigeon handlers are removed; the P1 signals observer is removed |
 | Last shell unmounts | Dart sends `dormant`; the container hides its chrome and gives Flutter the whole window |
@@ -470,7 +470,7 @@ TDD per task (red → green → commit), a review per task, and a review of the 
 
 ### 9.3 Swift (XCTest, `make ios-unit`)
 
-`ShellMathTests` (7), `InstallPolicyTests` (3), `PassThroughTests` (1) and the rounded-corner case (1). They run in the example's `RunnerTests` with `-parallel-testing-enabled NO`, so Xcode does not clone the simulator.
+`ShellMathTests` (7), `InstallPolicyTests` (3), `PassThroughTests` (1) and the rounded-corner case (1). They run in the example's `RunnerTests` with `-parallel-testing-enabled NO`, so Xcode does not clone the simulator. Later tasks added the UIKit shell in a window of the test host (`NativeTabsTests`: overlay closing, inert chrome under a dialog, attach and the reconnect replay), the installer's reasons (`InstallerReasonTests`) and real engines (`InstallerEngineTests`: only the plugin an engine published owns its view controller; a headless engine's installer leaves another engine's scene alone; a Flutter view inside the container is on screen). The overlay tests give their window an explicit portrait frame: a simulator keeps its last orientation, and iPadOS 26 refuses to rotate it from a unit test (`requestGeometryUpdate` is refused in the current windowing mode, `XCUIDevice` is for UI tests only). CI runs them in the `ios-unit` job (§9.6).
 
 ### 9.4 Integration (`liquid_shell/example/integration_test/native_shell_test.dart`, `make integration-ios-native`)
 

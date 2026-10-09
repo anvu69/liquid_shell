@@ -85,11 +85,13 @@ final class NativeChromeHost extends ChangeNotifier {
     switch (event) {
       case LiquidNativeStateChanged(:final state):
         _setState(state);
-        // After a scene reconnect the platform builds a fresh controller
-        // with no config; its first layout reports the state, which may
-        // equal the last one. Forget what was sent and send the owner's
-        // config whole (tabs, then the selection, in one apply). State
-        // reports are rare and the native apply is idempotent.
+        // After a scene reconnect the platform builds a fresh controller;
+        // its first layout reports the state, which may equal the last
+        // one. The iOS installer already applied the last config it got;
+        // forget what was sent and send the owner's config whole anyway
+        // (tabs, then the selection, in one apply), so the native chrome
+        // matches this shell whatever the platform kept. State reports are
+        // rare and the native apply is idempotent.
         _sent = null;
         _sendOwner(force: true);
       case LiquidWindowControlsChanged():
