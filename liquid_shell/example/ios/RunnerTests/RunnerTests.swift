@@ -263,3 +263,42 @@ final class NativeTabsTests: XCTestCase {
     XCTAssertTrue(tabs.sidebar.isHidden, "dormant closes an overlay sidebar (spec §5.5 step 6)")
   }
 }
+
+/// What `attach` reports when no scene of this engine connected after the
+/// plugin registered (spec §5.7, §11).
+final class InstallerReasonTests: XCTestCase {
+  private func installer(
+    isPad: Bool = true, enabled: Bool = true, flutterViewOnScreen: Bool
+  ) -> NativeShellInstaller {
+    NativeShellInstaller(
+      events: RecordingEvents(),
+      ownViewController: { nil },
+      readFacts: { registeredLate, rootIsFlutter in
+        InstallFacts(
+          isPad: isPad, osAtLeast26: true, isiOSAppOnMac: false, enabledInInfoPlist: enabled,
+          disabledByEnvironment: false, registeredLate: registeredLate,
+          rootIsFlutter: rootIsFlutter)
+      },
+      flutterViewOnScreen: { flutterViewOnScreen })
+  }
+
+  private func reason(_ installer: NativeShellInstaller) throws -> NativeUnavailableReason? {
+    installer.start()
+    defer { installer.stop() }
+    return try installer.attach().unavailableReason
+  }
+
+  func testAPluginRegisteredAfterItsSceneConnectedReportsRegisteredLate() throws {
+    XCTAssertEqual(try reason(installer(flutterViewOnScreen: true)), .registeredLate)
+  }
+
+  func testNoSceneOfThisEngineConnectedReportsRootNotFlutter() throws {
+    // Add-to-app, or a scene whose root is another engine's view controller.
+    XCTAssertEqual(try reason(installer(flutterViewOnScreen: false)), .rootNotFlutter)
+  }
+
+  func testAnEarlierFailingFactStillWins() throws {
+    XCTAssertEqual(try reason(installer(isPad: false, flutterViewOnScreen: true)), .notIPad)
+    XCTAssertEqual(try reason(installer(enabled: false, flutterViewOnScreen: true)), .notEnabled)
+  }
+}

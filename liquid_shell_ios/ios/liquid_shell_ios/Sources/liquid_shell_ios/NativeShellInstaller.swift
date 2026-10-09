@@ -10,9 +10,16 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
   private let events: NativeShellFlutterApiProtocol
   /// The engine's own view controller, to ignore scenes of other engines.
   private let ownViewController: () -> UIViewController?
+  /// The install facts, given the two the installer works out itself.
+  /// Injectable for tests.
+  private let readFacts: (_ registeredLate: Bool, _ rootIsFlutter: Bool) -> InstallFacts
+  /// Whether a Flutter view of this app is already in a window. Injectable
+  /// for tests.
+  private let flutterViewOnScreen: () -> Bool
   private var observers: [NSObjectProtocol] = []
   private var registeredLate = false
-  private var reason: NativeUnavailableReason = .notIPad
+  /// Why the shell is not installed; seeded by `start()`.
+  private var reason: NativeUnavailableReason = .rootNotFlutter
 
   /// The Flutter view controller seen at scene connection, installed or not
   /// (window controls are read from it either way).
@@ -23,10 +30,39 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
 
   init(
     events: NativeShellFlutterApiProtocol,
-    ownViewController: @escaping () -> UIViewController?
+    ownViewController: @escaping () -> UIViewController?,
+    readFacts: @escaping (_ registeredLate: Bool, _ rootIsFlutter: Bool) -> InstallFacts =
+      NativeShellInstaller.systemFacts(registeredLate:rootIsFlutter:),
+    flutterViewOnScreen: @escaping () -> Bool = NativeShellInstaller.isFlutterViewOnScreen
   ) {
     self.events = events
     self.ownViewController = ownViewController
+    self.readFacts = readFacts
+    self.flutterViewOnScreen = flutterViewOnScreen
+  }
+
+  /// The facts of this device, OS, bundle and process (spec §5.1).
+  static func systemFacts(registeredLate: Bool, rootIsFlutter: Bool) -> InstallFacts {
+    InstallFacts(
+      isPad: UIDevice.current.userInterfaceIdiom == .pad,
+      osAtLeast26: { if #available(iOS 26.0, *) { return true } else { return false } }(),
+      isiOSAppOnMac: ProcessInfo.processInfo.isiOSAppOnMac
+        || ProcessInfo.processInfo.isMacCatalystApp,
+      enabledInInfoPlist: Bundle.main.object(forInfoDictionaryKey: InstallPolicy.infoPlistKey)
+        as? Bool == true,
+      disabledByEnvironment: ProcessInfo.processInfo.environment[
+        InstallPolicy.disableEnvironmentKey] == "1",
+      registeredLate: registeredLate,
+      rootIsFlutter: rootIsFlutter)
+  }
+
+  /// A Flutter view already in a window means the scene connected before
+  /// the plugin registered: detaching it now would lose its surface.
+  static func isFlutterViewOnScreen() -> Bool {
+    UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+      .flatMap(\.windows)
+      .contains { ($0.rootViewController as? FlutterViewController)?.viewIfLoaded?.window != nil }
   }
 
   /// Arms the scene observers. Called from `register(with:)`, which runs
@@ -34,12 +70,11 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
   /// `UIScene.willConnectNotification`.
   func start() {
     guard observers.isEmpty else { return }
-    // A Flutter view already in a window means the scene connected before
-    // the plugin registered: detaching it now would lose its surface.
-    registeredLate = UIApplication.shared.connectedScenes
-      .compactMap { $0 as? UIWindowScene }
-      .flatMap(\.windows)
-      .contains { ($0.rootViewController as? FlutterViewController)?.viewIfLoaded?.window != nil }
+    registeredLate = flutterViewOnScreen()
+    // What `attach` reports if no scene of this engine connects (late
+    // registration, add-to-app, another engine's scene): every fact known
+    // now, with no Flutter root yet. A connect refines it.
+    reason = InstallPolicy.decide(readFacts(registeredLate, false)) ?? .rootNotFlutter
     let center = NotificationCenter.default
     // `queue: nil`: runs synchronously while the scene connects. One run
     // loop turn later the Flutter view is already the visible root, and
@@ -69,18 +104,7 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
     if let flutter, let own = ownViewController(), own !== flutter { return }
     if let flutter { self.flutter = flutter }
     self.scene = scene
-    let facts = InstallFacts(
-      isPad: UIDevice.current.userInterfaceIdiom == .pad,
-      osAtLeast26: { if #available(iOS 26.0, *) { return true } else { return false } }(),
-      isiOSAppOnMac: ProcessInfo.processInfo.isiOSAppOnMac
-        || ProcessInfo.processInfo.isMacCatalystApp,
-      enabledInInfoPlist: Bundle.main.object(forInfoDictionaryKey: InstallPolicy.infoPlistKey)
-        as? Bool == true,
-      disabledByEnvironment: ProcessInfo.processInfo.environment[
-        InstallPolicy.disableEnvironmentKey] == "1",
-      registeredLate: registeredLate,
-      rootIsFlutter: flutter != nil)
-    if let reason = InstallPolicy.decide(facts) {
+    if let reason = InstallPolicy.decide(readFacts(registeredLate, flutter != nil)) {
       self.reason = reason
       #if DEBUG
         NSLog("[liquid_shell] native shell not installed: %@", String(describing: reason))
