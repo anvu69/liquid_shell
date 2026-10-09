@@ -72,6 +72,37 @@ run() {
     --dart-define=RUN_NAME="android_$name" "$@"
 }
 
+power_dump() { adb shell dumpsys power | tr -d '\r'; }
+
+# Dumps are captured first: under pipefail, `grep -q` closing the pipe early
+# would fail the check through adb's SIGPIPE.
+unplugged() { grep -q 'mIsPowered=false' <<< "$(power_dump)"; }
+
+battery_saver_on() {
+  local dump
+  dump=$(power_dump)
+  if grep -q 'Battery Saver is currently:' <<< "$dump"; then
+    grep -q 'Battery Saver is currently: ON' <<< "$dump"
+  else # an image without battery saving stats: trust the setting
+    [ "$(adb shell settings get global low_power | tr -d '\r')" = 1 ]
+  fi
+}
+
+# wait_for DESCRIPTION CHECK: polls CHECK for up to 30 s, then fails with
+# the power state, so a device that ignores the request is named as such
+# instead of surfacing as a test failure.
+wait_for() {
+  local what=$1 check=$2 i
+  for i in $(seq 30); do
+    if "$check"; then return 0; fi
+    sleep 1
+  done
+  echo "✗ timed out after 30 s waiting for $what" >&2
+  power_dump | grep -E 'mIsPowered=|mSettingBatterySaverEnabled=|Battery Saver is currently' >&2 || true
+  adb shell dumpsys battery | tr -d '\r' | grep -E 'powered|level' >&2 || true
+  exit 1
+}
+
 blur_default=false
 if [ "$api" -ge 31 ] &&
   [ "$(adb shell getprop ro.surface_flinger.supports_background_blur | tr -d '\r')" != 1 ]; then
@@ -87,8 +118,17 @@ adb shell settings put global animator_duration_scale 0
 run reduceTransparency --dart-define=EXPECT_REDUCE_TRANSPARENCY=true
 baseline
 
+# The setting alone is not proof: a run once saw powerSave false (and blurs
+# on) on CI. Battery saver cannot be on while the device counts as powered,
+# and a manual one is dropped when a plugged device is at or above the
+# sticky auto-disable threshold (90 %). So the level goes to 50, the script
+# waits for the unplug to land before turning saver on, and waits for the
+# system to report it on before launching the app.
+adb shell cmd battery set level 50
 adb shell cmd battery unplug
+wait_for "the device to count as unplugged" unplugged
 adb shell settings put global low_power 1
+wait_for "battery saver to be on" battery_saver_on
 # Battery saver also disables window blurs on API 31+, so blurDisabled is
 # not asserted in this run.
 run powerSave --dart-define=EXPECT_POWER_SAVE=true
