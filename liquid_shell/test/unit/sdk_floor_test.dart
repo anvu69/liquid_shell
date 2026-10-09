@@ -1,6 +1,6 @@
-// Risk probe (spec §14, plan Task 1): the Flutter 3.38 floor must provide
+// Risk probe (spec §14, plan Task 1): the Flutter 3.44 floor must provide
 // every engine/framework API the glass and the minimised tab bar rely on.
-// This file only compiles if they exist, so CI's 3.38.x job guards the floor.
+// This file only compiles if they exist, so CI's 3.44.x job guards the floor.
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';

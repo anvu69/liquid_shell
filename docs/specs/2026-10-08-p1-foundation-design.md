@@ -148,11 +148,11 @@ Every package uses this environment block:
 
 ```yaml
 environment:
-  sdk: ^3.10.0
-  flutter: ">=3.38.0"
+  sdk: ^3.12.0
+  flutter: ">=3.44.0"
 ```
 
-The floor is set by `SemanticsService.sendAnnouncement` (Flutter 3.38), which the minimised tab bar uses (§5.7). Owner's answer C.
+The API floor is `SemanticsService.sendAnnouncement` (Flutter 3.38), which the minimised tab bar uses (§5.7). **Amended 2026-10-09 (VK-388): the owner raised the floor to Flutter 3.44 / Dart 3.12** ("Nâng flutter lên 3.44"), replacing the earlier 3.38 floor (owner's answer C). See Q19.
 
 All four packages start at version `0.1.0-dev.1`. P6 sets `0.1.0`. Shared fields: `homepage`/`repository: https://github.com/anvu69/liquid_shell/tree/main/<package>`, `issue_tracker: https://github.com/anvu69/liquid_shell/issues`, `topics: [navigation, glassmorphism, adaptive-layout, tab-bar, sidebar]`, `resolution: workspace`.
 
@@ -168,7 +168,7 @@ dependencies:
   liquid_shell_android: ^0.1.0-dev.1    # endorsed
 dev_dependencies:
   flutter_test: { sdk: flutter }
-  very_good_analysis: 10.1.0
+  very_good_analysis: 10.3.0
 flutter:
   plugin:
     platforms:
@@ -211,12 +211,12 @@ flutter:
         dartPluginClass: LiquidShellAndroid
 ```
 
-**`liquid_shell/example/pubspec.yaml`**: `publish_to: none`. Depends on `liquid_shell`. Dev-depends on `flutter_test`, `integration_test` and `very_good_analysis: 10.1.0`.
+**`liquid_shell/example/pubspec.yaml`**: `publish_to: none`. Depends on `liquid_shell`. Dev-depends on `flutter_test`, `integration_test` and `very_good_analysis: 10.3.0`.
 
 Rules:
 - **Runtime dependencies are Flutter only**, plus our own federated packages and `plugin_platform_interface` (BSD-3, from the Flutter team). There is no third-party UI, i18n, router, logger or equality package.
 - Every package's `analysis_options.yaml` includes `package:very_good_analysis/analysis_options.yaml` directly, never a file outside the package.
-- `very_good_analysis` is pinned to **10.1.0**. It is the last release whose SDK constraint (`^3.10.0`) resolves on Dart 3.10. Releases 10.2 and later need Dart 3.11 or 3.12. Pinning the exact version keeps the lint set the same on the 3.38 and stable CI jobs.
+- `very_good_analysis` is pinned to **10.3.0** (amended 2026-10-09, VK-388). It is the newest release whose SDK constraint (`^3.12.0`) resolves on the 3.44 floor; 11.x needs Dart 3.13. It was 10.1.0 only because of the old 3.38 floor. Pinning the exact version keeps the lint set the same on the floor and stable CI jobs.
 - Native floors: iOS 15.0 (Xcode 27 rejects lower deployment targets); Android `minSdk` = `flutter.minSdkVersion` and `compileSdk` 36 (Q16).
 - `liquid_shell/.pubignore` excludes `doc/images/` and `test/goldens/failures/`. README images resolve through `repository` on pub.dev (§12.1).
 
@@ -1003,13 +1003,13 @@ TDD applies to every task (red → green → commit), with per-task review and a
 
 ### 10.6 CI (GitHub Actions, `.github/workflows/ci.yaml`)
 
-Matrix `flutter: [3.38.x, stable]` unless noted.
+Matrix `flutter: [3.44.x, stable]` unless noted.
 
 | Job | Runner | Steps |
 |---|---|---|
 | `checks` | ubuntu-latest | `flutter pub get` (workspace) → `dart format --output=none --set-exit-if-changed .` → `flutter analyze --fatal-infos` → `flutter test --exclude-tags golden --coverage` per package → `tool/check_provenance.sh` → `tool/check_readme_snippets.dart` |
 | `android-unit` | ubuntu-latest | `./gradlew :liquid_shell_android:testDebugUnitTest` from `example/android` |
-| `goldens` | macos-latest | `flutter test --tags golden` in `example`. Blocking on 3.38.x; `continue-on-error` on stable (Q11). Failure diffs are uploaded as an artifact |
+| `goldens` | macos-latest | `flutter test --tags golden` in `example`. Blocking on 3.44.x; `continue-on-error` on stable (Q11). Failure diffs are uploaded as an artifact |
 | `integration-android` | ubuntu-latest (KVM, `reactivecircus/android-emulator-runner`, API 34) | `tool/integration_android.sh` |
 | `integration-ios` | macos-latest | `tool/integration_ios.sh` |
 | `pana` | ubuntu-latest, stable only | `dart pub global activate pana`; `pana --exit-code-threshold 0` for each of the 4 packages; `flutter pub publish --dry-run` for each |
@@ -1082,7 +1082,7 @@ Images use relative paths (`doc/images/…`). pub.dev rewrites them against `rep
 | `BackdropGroup` / `BackdropFilter.grouped` or `ImageFilter.isShaderFilterSupported` may be missing or behave differently on Flutter 3.38 | Plan task 1 verifies them on 3.38.x. If missing: plain `BackdropFilter`, and `canBlur` derived from the Android API level (≤ 28 → false) |
 | Blur cost on low-end Android (jank, battery) | Solid on power save, blur-disabled and no-Impeller; one backdrop group per shell; never on list cells. P4 adds adaptive quality |
 | Android signals: "Reduce blur effects" has no public API; `high_text_contrast_enabled` is an undocumented key; OEM variance | Every read is `try/catch` → off; API 36 emulator check recorded (§10.5); documented as best-effort in `tiers.md` |
-| Goldens differ across OS and Flutter versions | One reference toolchain (macOS + 3.38.x), 0.5% tolerance, stable goldens non-blocking (Q11) |
+| Goldens differ across OS and Flutter versions | One reference toolchain (macOS + 3.44.x), 0.5% tolerance, stable goldens non-blocking (Q11) |
 | pana max score with federated packages, SwiftPM, workspace and `resolution: workspace` | `pana` + `publish --dry-run` in CI from the first task. Fallback: drop the workspace for `pubspec_overrides.yaml` path overrides |
 | Bottom pill over Android 3-button navigation | Gap rule (§5.3, Q9), Android goldens with gesture and 3-button padding |
 | Android look changes for Văn Khấn users (Material → glass) when P5 migrates | Owner decision A; `chromeBuilder` escape hatch; flagged again in the P5 spec |
@@ -1102,7 +1102,7 @@ Every entry has a recommended default. If the owner says nothing, the default ap
 |---|---|---|
 | Q1 | Tiled vs overlay: orientation only, or orientation plus a minimum width? | Tiled only when **landscape and width ≥ 1024** (`LiquidShellBreakpoints.tiledSidebar`). Phones in landscape (≈ 900) get the overlay, so the body is never squeezed below compact |
 | Q2 | Sidebar visibility: per branch (as the app does today) or one shell-wide state? | **One shell-wide state.** Default shown when tiled, hidden when overlay, reset when the presentation changes. Apps change it with `LiquidShellScopeData.setSidebarVisible` (Văn Khấn's rituals rule moves there in P5) |
-| Q3 | Keep minimise-on-scroll in P1? It is existing app behaviour, not a listed feature | **Yes, `minimizeOnScroll: true`.** It is ported as is, and its `sendAnnouncement` is what sets the 3.38 floor |
+| Q3 | Keep minimise-on-scroll in P1? It is existing app behaviour, not a listed feature | **Yes, `minimizeOnScroll: true`.** It is ported as is, and its `sendAnnouncement` is what set the original 3.38 floor (now 3.44, Q19) |
 | Q4 | Limit on `everywhere` (tab bar) destinations | **Assert 1–5** in debug; release draws them all with shrinking cells. `sidebarOnly` is unlimited |
 | Q5 | Where the trailing action lives while the sidebar is shown | **First sidebar row** (icon + `semanticLabel`). P3 replaces it with a search field |
 | Q6 | Does "no Impeller → solid" apply beyond Android? | **Android only.** Web and desktop keep frosted (they have no signals and blur works there) |
@@ -1110,7 +1110,7 @@ Every entry has a recommended default. If the owner says nothing, the default ap
 | Q8 | Should iOS Low Power Mode force solid? | **No.** The design lists only reduce transparency for iOS, and the system glass ignores Low Power Mode |
 | Q9 | Bottom gap on Android with 3-button navigation | **21 over gesture areas, otherwise `max(21, viewPadding.bottom + 8)`** |
 | Q10 | System back while the overlay sidebar is shown | **Closes the sidebar** (`PopScope` on the shell's route). P5 re-checks this with go_router |
-| Q11 | Golden reference toolchain | **macOS runner + Flutter 3.38.x is blocking**; stable runs non-blocking; 0.5% pixel tolerance. Images are regenerated on macOS with `tool/update_goldens.sh` |
+| Q11 | Golden reference toolchain | **macOS runner + Flutter 3.44.x is blocking**; stable runs non-blocking; 0.5% pixel tolerance. Images are regenerated on macOS with `tool/update_goldens.sh` |
 | Q12 | Export the tab bar and sidebar as standalone widgets? | **Yes (owner, 2026-10-08).** Export `LiquidTabBar` and `LiquidSidebar` as public, documented, tested widgets so apps can compose their own chrome; `chromeBuilder` still hands over `defaultChrome` |
 | Q13 | Automated README snippet check | **Yes**, `tool/check_readme_snippets.dart` in CI (small script, prevents doc drift) |
 | Q14 | Coverage gate | **90% line coverage** for `liquid_shell/lib` and `liquid_shell_platform_interface/lib`, as a fixed floor, without ratchet files |
@@ -1118,3 +1118,4 @@ Every entry has a recommended default. If the owner says nothing, the default ap
 | Q16 | Native floors | **iOS 15.0 (owner, 2026-10-08: Xcode 27 rejects deployment targets below 15.0; matches the vankhan app, ADR there); Android `minSdk` = Flutter's default (`flutter.minSdkVersion`), `compileSdk` 36** |
 | Q17 | Narrow-width hit targets (owner 2026-10-08: C) | **Resolved 2026-10-08, option C.** At 320pt (iPad Slide Over, ⅓ Split View, small phones) 5 tabs + the trailing circle gave 40.4pt cells, under the 44pt HIG target. Below the constant `kLiquidNarrowWidth` = **340** (shell constraint width `w < 340`; exactly 340 is regular) the compact bottom row margin becomes **8** (was 16) and the pill's inner horizontal padding **4** (was 8). 5 tabs + trailing at 320 → **45.2pt** cells. Applied in `LiquidShell`'s compact layout and in standalone `LiquidTabBar` (`narrow` flag, default from `MediaQuery` width). A constant, not a `LiquidShellBreakpoints` / `LiquidGlassTheme` field, because the margins are not themeable. §4.9, §5.3 amended. No debug assert: the configuration is legal |
 | Q18 | Narrow tab labels truncate at 320 (owner 2026-10-09: 1B) | **Resolved 2026-10-09, option 1B: narrow labels auto-shrink.** At 320 with 5 tabs + trailing (45.2pt cells, Q17) the example's labels ellipsized ("Ho…", "Exp…", "Sav…", "Set…"). In the narrow bottom bar a label first takes the cell's 8pt side padding, then shrinks to `kLiquidMinLabelSize` = **10** logical pixels (or its own smaller size; it never grows), and only then ellipsizes. Implemented as a FittedBox-style uniform scale of the label's `Text` with a minimum scale, in an internal custom render object (`RenderFitLabel`, `fit_label.dart`; not a `FittedBox`) that supports intrinsic sizing, so the bar's `IntrinsicHeight` keeps working; the label keeps its unscaled line height. **Narrow only** (decision 2026-10-09, as the owner stated): regular width and the top bar keep padding 8 and ellipsize at the style's size. AX text scales are unchanged (icon-only cells, large content viewer). The selected label uses the same style as the others (only the colour changes); it is measured as drawn either way. Cell geometry (Q17) is unchanged. The minimum is an internal constant, not a parameter: no public API change (§4.9). §5.3, §5.10, §10.2, §11 amended. Supersedes the Task 12 review's suggestion to shorten the example labels |
+| Q19 | SDK floor (Q-SDK; owner 2026-10-09: "Nâng flutter lên 3.44") | **Resolved 2026-10-09 (VK-388): floor is Flutter ≥ 3.44.0 / Dart ^3.12.0**, replacing the earlier 3.38 / Dart 3.10 floor. `.fvmrc` pins 3.44.6, the golden reference (Q11); CI floor leg is 3.44.x; `very_good_analysis` moves 10.1.0 → 10.3.0 |

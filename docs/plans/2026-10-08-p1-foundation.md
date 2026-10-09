@@ -30,6 +30,8 @@ Copied from the spec; every task implicitly includes them.
 
 ## Toolchain decision (Flutter 3.38 locally)
 
+> **Superseded 2026-10-09 (VK-388):** the owner raised the floor to Flutter 3.44 (3.44.6 in `.fvmrc`, Dart 3.12, `very_good_analysis` 10.3.0). The text below records the original 3.38 plan and is kept as history.
+
 `fvm install 3.38.10 --setup` works on this machine (70 s, then `flutter precache --ios --android` for the engine artifacts). The repo pins it in `.fvmrc`; the `Makefile` calls `fvm flutter` when fvm is installed and plain `flutter` otherwise (CI). So **the local loop runs on 3.38.10**, the same as the blocking CI job and the golden reference. The dry run also ran the whole `liquid_shell` suite, analyze and every golden on **3.44.6** (the app's toolchain): all green, goldens inside the 0.5% tolerance. Latest stable (3.47.6 today) is covered only by the non-blocking CI jobs.
 
 Executor setup, once:

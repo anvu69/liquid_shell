@@ -2,12 +2,12 @@
 
 ## Toolchain
 
-- Flutter **3.38.10** is the floor and the golden reference (`.fvmrc`).
+- Flutter **3.44.6** is the floor and the golden reference (`.fvmrc`).
   With [fvm](https://fvm.app) installed, `make` uses it automatically:
-  `fvm install 3.38.10`, then `make get`.
-- Without fvm, put a Flutter 3.38.x on `PATH`, or run
+  `fvm install 3.44.6`, then `make get`.
+- Without fvm, put a Flutter 3.44.x on `PATH`, or run
   `make verify FLUTTER=/path/to/flutter DART=/path/to/dart`.
-- Goldens are only valid on macOS with Flutter 3.38.x (spec Q11).
+- Goldens are only valid on macOS with Flutter 3.44.x (spec Q11).
 
 ## Commands
 
@@ -16,7 +16,7 @@
 | `make get` | Resolve the pub workspace (all packages and the example) |
 | `make format` | Rewrite formatting in place |
 | `make verify` | format-check, analyze, provenance, tests, coverage ≥ 90 %, goldens, README snippets. **Must be green before a PR.** |
-| `make goldens-update` | Regenerate goldens and `liquid_shell/doc/images`, then recompress them losslessly with `tool/compress_pngs.dart` (macOS + 3.38 only) |
+| `make goldens-update` | Regenerate goldens and `liquid_shell/doc/images`, then recompress them losslessly with `tool/compress_pngs.dart` (macOS + 3.44 only) |
 | `make android-unit` | Kotlin JVM tests of the Android plugin |
 | `make integration-ios` / `make integration-android` | Signal channel tests on a simulator / emulator |
 | `make pana` / `make publish-check` | pub.dev scoring and publish dry-run |
@@ -86,4 +86,4 @@ bug fix starts with a test that reproduces the bug.
 
 Runtime dependencies are Flutter, our own federated packages and
 `plugin_platform_interface` only. Adding anything else needs a spec change.
-`very_good_analysis` stays pinned to `10.1.0`.
+`very_good_analysis` stays pinned to `10.3.0`.
