@@ -109,11 +109,22 @@ android-unit: ## JVM unit tests of the Android plugin (SignalReaderTest)
 	cd $(EXAMPLE) && $(FLUTTER) build apk --debug --config-only
 	cd $(EXAMPLE)/android && ./gradlew :liquid_shell_android:testDebugUnitTest
 
+# A red run must exit, not hang. With xcodebuild's default
+# `-collect-test-diagnostics on-failure` (a sysdiagnose-like bundle after a
+# failure) a red run here stalled past 7 minutes; with `never` it exits in
+# seconds. Test timeouts stop a stuck test, and tool/with_timeout.sh stops
+# the whole run, build included (exit 124).
+IOS_UNIT_TIMEOUT ?= 900
+
 ios-unit: ## XCTest of liquid_shell_ios (example RunnerTests) on an iPad simulator; IOS_UNIT_DEVICE=<udid>
 	cd $(EXAMPLE) && $(FLUTTER) build ios --config-only --simulator --debug
-	cd $(EXAMPLE)/ios && xcodebuild test -workspace Runner.xcworkspace -scheme Runner \
+	cd $(EXAMPLE)/ios && $(CURDIR)/tool/with_timeout.sh $(IOS_UNIT_TIMEOUT) \
+	  xcodebuild test -workspace Runner.xcworkspace -scheme Runner \
 	  -destination "id=$${IOS_UNIT_DEVICE:?set IOS_UNIT_DEVICE to a simulator UDID}" \
-	  -only-testing:RunnerTests -parallel-testing-enabled NO -quiet
+	  -only-testing:RunnerTests -parallel-testing-enabled NO \
+	  -collect-test-diagnostics never \
+	  -test-timeouts-enabled YES -default-test-execution-time-allowance 60 \
+	  -maximum-test-execution-time-allowance 120 -quiet
 
 integration-ios: ## Signal channel round-trip on an iOS simulator
 	FLUTTER="$(FLUTTER)" tool/integration_ios.sh
