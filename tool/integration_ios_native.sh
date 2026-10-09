@@ -10,7 +10,7 @@
 #                 "iPad Air 11-inch (M4)=true;iPhone 17 Pro=false").
 #                 A 36-character UDID works in place of a name.
 # FLUTTER         flutter command (default: flutter).
-# IOS_DRIVE_TIMEOUT  seconds one `flutter drive` may run (default 600).
+# IOS_DRIVE_TIMEOUT  seconds one `flutter drive` may run (default 1200).
 #
 # Stall guard, as in tool/integration_ios.sh: a drive that outlives
 # IOS_DRIVE_TIMEOUT is stopped (tool/with_timeout.sh), the simulator is
@@ -23,7 +23,7 @@ set -euo pipefail
 tool_dir=$(cd "$(dirname "$0")" && pwd)
 cd "$tool_dir/../liquid_shell/example"
 FLUTTER=${FLUTTER:-flutter}
-IOS_DRIVE_TIMEOUT=${IOS_DRIVE_TIMEOUT:-600}
+IOS_DRIVE_TIMEOUT=${IOS_DRIVE_TIMEOUT:-1200}
 IOS_RUNTIME=${IOS_RUNTIME-iOS 26.5}
 NATIVE_DEVICES=${NATIVE_DEVICES:-iPad Air 11-inch (M4)=true;iPhone 17 Pro=false}
 

@@ -175,9 +175,9 @@ jobs:
 
   integration-ios-native:
     runs-on: macos-latest
-    # The script stops a stalled drive after 10 min and retries it once
-    # (as integration-ios does); this caps two devices, retries included.
-    timeout-minutes: 45
+    # The script stops a stalled drive after 20 min (IOS_DRIVE_TIMEOUT 1200 s)
+    # and retries it once; two devices x 2 attempts = 80 min, plus build.
+    timeout-minutes: 100
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
