@@ -129,6 +129,11 @@ class LiquidNativeTab {
 
   @override
   int get hashCode => Object.hash(title, sfSymbol, badge, sidebarOnly);
+
+  @override
+  String toString() =>
+      'LiquidNativeTab(title: $title, sfSymbol: $sfSymbol, badge: $badge, '
+      'sidebarOnly: $sidebarOnly)';
 }
 
 /// A native action item: the trailing tab bar action.
@@ -151,6 +156,9 @@ class LiquidNativeAction {
 
   @override
   int get hashCode => Object.hash(title, sfSymbol);
+
+  @override
+  String toString() => 'LiquidNativeAction(title: $title, sfSymbol: $sfSymbol)';
 }
 
 /// The native sidebar footer.
@@ -186,6 +194,11 @@ class LiquidNativeFooter {
 
   @override
   int get hashCode => Object.hash(title, subtitle, sfSymbol, semanticLabel);
+
+  @override
+  String toString() =>
+      'LiquidNativeFooter(title: $title, subtitle: $subtitle, '
+      'sfSymbol: $sfSymbol, semanticLabel: $semanticLabel)';
 }
 
 /// Everything the native chrome shows, sent whole on every change.
@@ -274,6 +287,13 @@ class LiquidNativeChromeConfig {
     hidden,
     interactive,
   );
+
+  @override
+  String toString() =>
+      'LiquidNativeChromeConfig(engaged: $engaged, tabs: $tabs, '
+      'selectedIndex: $selectedIndex, trailing: $trailing, footer: $footer, '
+      'tintArgb: 0x${tintArgb.toRadixString(16).padLeft(8, '0')}, '
+      'dark: $dark, rtl: $rtl, hidden: $hidden, interactive: $interactive)';
 }
 
 /// Something the native side reports.
@@ -297,18 +317,41 @@ final class LiquidNativeDestinationTapped extends LiquidNativeEvent {
 
   @override
   int get hashCode => index.hashCode;
+
+  @override
+  String toString() => 'LiquidNativeDestinationTapped($index)';
 }
 
 /// The user tapped the native trailing action.
 final class LiquidNativeTrailingTapped extends LiquidNativeEvent {
   /// Creates the event.
   const LiquidNativeTrailingTapped();
+
+  /// Every instance is equal: the event carries no value.
+  @override
+  bool operator ==(Object other) => other is LiquidNativeTrailingTapped;
+
+  @override
+  int get hashCode => (LiquidNativeTrailingTapped).hashCode;
+
+  @override
+  String toString() => 'LiquidNativeTrailingTapped()';
 }
 
 /// The user tapped the native sidebar footer.
 final class LiquidNativeFooterTapped extends LiquidNativeEvent {
   /// Creates the event.
   const LiquidNativeFooterTapped();
+
+  /// Every instance is equal: the event carries no value.
+  @override
+  bool operator ==(Object other) => other is LiquidNativeFooterTapped;
+
+  @override
+  int get hashCode => (LiquidNativeFooterTapped).hashCode;
+
+  @override
+  String toString() => 'LiquidNativeFooterTapped()';
 }
 
 /// The native shell changed (sidebar shown or hidden, size class).
@@ -318,6 +361,16 @@ final class LiquidNativeStateChanged extends LiquidNativeEvent {
 
   /// The new state.
   final LiquidNativeShellState state;
+
+  @override
+  bool operator ==(Object other) =>
+      other is LiquidNativeStateChanged && other.state == state;
+
+  @override
+  int get hashCode => state.hashCode;
+
+  @override
+  String toString() => 'LiquidNativeStateChanged($state)';
 }
 
 /// The window controls changed.
@@ -327,4 +380,14 @@ final class LiquidWindowControlsChanged extends LiquidNativeEvent {
 
   /// The new value.
   final LiquidWindowControls controls;
+
+  @override
+  bool operator ==(Object other) =>
+      other is LiquidWindowControlsChanged && other.controls == controls;
+
+  @override
+  int get hashCode => controls.hashCode;
+
+  @override
+  String toString() => 'LiquidWindowControlsChanged($controls)';
 }

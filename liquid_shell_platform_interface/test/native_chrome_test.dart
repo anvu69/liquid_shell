@@ -259,4 +259,103 @@ void main() {
     expect(const LiquidNativeTrailingTapped(), isA<LiquidNativeEvent>());
     expect(const LiquidNativeFooterTapped(), isA<LiquidNativeEvent>());
   });
+
+  test('events that carry a value compare by it, not by identity', () {
+    // Built at run time (no const canonicalisation), as the channel does.
+    LiquidNativeEvent state({required bool installed}) =>
+        LiquidNativeStateChanged(LiquidNativeShellState(installed: installed));
+    LiquidNativeEvent controls(double leading) =>
+        LiquidWindowControlsChanged(LiquidWindowControls(leading: leading));
+    expect(state(installed: true), state(installed: true));
+    expect(
+      state(installed: true).hashCode,
+      state(installed: true).hashCode,
+    );
+    expect(state(installed: true), isNot(state(installed: false)));
+    expect(controls(66), controls(66));
+    expect(controls(66).hashCode, controls(66).hashCode);
+    expect(controls(66), isNot(controls(9)));
+  });
+
+  test('argument-less events are equal to any instance of their type', () {
+    // Calling a tear-off builds a new, non-canonical instance.
+    const trailing = LiquidNativeTrailingTapped.new;
+    const footer = LiquidNativeFooterTapped.new;
+    expect(trailing(), trailing());
+    expect(trailing().hashCode, trailing().hashCode);
+    expect(footer(), footer());
+    expect(footer().hashCode, footer().hashCode);
+    expect(trailing(), isNot(footer()));
+  });
+
+  test('toString names the type and every field', () {
+    expect(
+      const LiquidNativeTab(
+        title: 'Home',
+        sfSymbol: 'house',
+        badge: '3',
+      ).toString(),
+      'LiquidNativeTab(title: Home, sfSymbol: house, badge: 3, '
+      'sidebarOnly: false)',
+    );
+    expect(
+      const LiquidNativeAction(
+        title: 'Search',
+        sfSymbol: 'magnifyingglass',
+      ).toString(),
+      'LiquidNativeAction(title: Search, sfSymbol: magnifyingglass)',
+    );
+    expect(
+      const LiquidNativeFooter(
+        title: 'Ann',
+        subtitle: 'Profile',
+        sfSymbol: 'person',
+        semanticLabel: 'Ann, profile',
+      ).toString(),
+      'LiquidNativeFooter(title: Ann, subtitle: Profile, sfSymbol: person, '
+      'semanticLabel: Ann, profile)',
+    );
+    final config = const LiquidNativeChromeConfig(
+      engaged: true,
+      tabs: [_tab],
+      selectedIndex: 2,
+      tintArgb: 0xFF3D5AFE,
+    ).toString();
+    expect(config, startsWith('LiquidNativeChromeConfig(engaged: true, '));
+    for (final field in [
+      'tabs: [LiquidNativeTab(title: Home',
+      'selectedIndex: 2',
+      'trailing: null',
+      'footer: null',
+      'tintArgb: 0xff3d5afe',
+      'dark: false',
+      'rtl: false',
+      'hidden: false',
+      'interactive: true',
+    ]) {
+      expect(config, contains(field));
+    }
+    expect(
+      const LiquidNativeDestinationTapped(2).toString(),
+      'LiquidNativeDestinationTapped(2)',
+    );
+    expect(
+      const LiquidNativeTrailingTapped().toString(),
+      'LiquidNativeTrailingTapped()',
+    );
+    expect(
+      const LiquidNativeFooterTapped().toString(),
+      'LiquidNativeFooterTapped()',
+    );
+    expect(
+      const LiquidNativeStateChanged(
+        LiquidNativeShellState.unavailable,
+      ).toString(),
+      'LiquidNativeStateChanged(${LiquidNativeShellState.unavailable})',
+    );
+    expect(
+      const LiquidWindowControlsChanged(LiquidWindowControls.zero).toString(),
+      'LiquidWindowControlsChanged(${LiquidWindowControls.zero})',
+    );
+  });
 }
