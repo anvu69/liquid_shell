@@ -375,6 +375,8 @@ A window has one native chrome, and an app can have several shells. In the examp
 - routes tap events to the owner only (a shell that is not the owner, but would otherwise engage, draws no chrome: no Flutter chrome beside the owner's native one while its route slides in or out);
 - sends nothing while the state is not installed.
 
+**Nested shells.** A shell inside another shell's body (sub-tabs) claims after the outer one, so it owns the native chrome, and the outer shell goes into standby: while the inner shell is mounted, the outer shell's navigation is gone (and with the inner shell in an offstage branch, no chrome shows at all). This is documented, not solved: the dartdoc of `nativeChrome` and the README Limitations tell apps to give a nested shell `nativeChrome: off`. Handing ownership to the newest claim whose `TickerMode` is enabled would fix only the offstage case; it is an owner decision for a later phase.
+
 `debugResetLiquidNative()` replaces the host and the window-controls source between tests.
 
 ### 7.3 Selection and the guard

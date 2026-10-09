@@ -157,6 +157,11 @@ class LiquidShell extends StatefulWidget {
   /// and every destination (and [tabBarTrailing]) has an `sfSymbol`.
   /// Native chrome shows neither [sidebarHeader] nor [sidebarFooter]; see
   /// [nativeSidebarFooter].
+  ///
+  /// A window has one native chrome, and the newest shell owns it. A shell
+  /// nested in another shell's body (sub-tabs) would take it from the outer
+  /// shell, which then shows no navigation: give the inner shell
+  /// [LiquidNativeChrome.off].
   final LiquidNativeChrome nativeChrome;
 
   /// The native sidebar's footer. The Flutter sidebar uses [sidebarFooter].

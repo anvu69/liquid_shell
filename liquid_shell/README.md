@@ -827,6 +827,10 @@ content viewer (see [Custom chrome](#custom-chrome)).
 - **Flutter-drawn chrome on iOS 26.** The tab bar and sidebar are drawn by
   Flutter on every platform. Native iOS 26 chrome (`UITabBarController`,
   the iPadOS window controls) comes in P2.
+- **One native chrome per window.** The newest `LiquidShell` owns it. A
+  shell nested in another shell's body (sub-tabs) takes it from the outer
+  one, which then shows no navigation; give a nested shell
+  `nativeChrome: LiquidNativeChrome.off`.
 - **No liquid tier yet.** Forcing `LiquidGlassTier.liquid` draws frosted.
   The liquid tier comes in P4 (and a native iOS 26 renderer in P2).
 - **Android signals are best effort.** Each one that cannot be read

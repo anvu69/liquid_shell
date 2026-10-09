@@ -711,6 +711,11 @@ void main() {
         await _pumpNative(tester);
         final navigator = tester.state<NavigatorState>(find.byType(Navigator));
         navigator.push(route()).ignore();
+        // Mid-push the chrome still shows (§7.4), but it is already inert:
+        // no native tap can change the branch under the page coming in.
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+        expect(native.last.interactive, isFalse);
         await tester.pumpAndSettle();
         expect(native.last.hidden, isTrue);
         expect(native.last.visible, isFalse);

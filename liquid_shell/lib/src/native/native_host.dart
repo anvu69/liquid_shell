@@ -22,8 +22,10 @@ final class NativeChromeHost extends ChangeNotifier {
     instance = NativeChromeHost._();
   }
 
-  /// Keys of the debug logs already printed. Process-wide, not per host:
-  /// every test (and every hot restart's new host) would print them again.
+  /// Keys of the debug logs already printed. Static, not per host, so the
+  /// hosts that tests replace do not print them again. Statics live as long
+  /// as the isolate: a log prints once per run (again after a hot
+  /// restart) and once per test file.
   static final Set<String> _logged = {};
 
   /// Prints [message] in debug builds, once per process for [key].
