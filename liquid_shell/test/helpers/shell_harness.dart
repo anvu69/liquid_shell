@@ -147,11 +147,13 @@ class TestPageState extends State<TestPage> {
   );
 }
 
-/// Pumps [shell] in a MaterialApp on a window of [size] logical pixels.
+/// Pumps [shell] in a MaterialApp on a window of [size] logical pixels, on
+/// a screen of [screen] logical pixels (default: the window fills it).
 Future<void> pumpShell(
   WidgetTester tester,
   Widget shell, {
   Size size = kPhone,
+  Size? screen,
   EdgeInsets padding = const EdgeInsets.only(top: 59, bottom: 34),
   EdgeInsets? gestureInsets,
   TargetPlatform platform = TargetPlatform.iOS,
@@ -178,6 +180,10 @@ Future<void> pumpShell(
         ? FakeViewPadding.zero
         : FakeViewPadding(bottom: gestureInsets.bottom);
   addTearDown(tester.view.reset);
+  tester.view.display
+    ..devicePixelRatio = 1
+    ..size = screen ?? size;
+  addTearDown(tester.view.display.reset);
   final base =
       theme ??
       ThemeData(

@@ -76,6 +76,17 @@ void main() {
     });
   });
 
+  test('nativeChromeScreenPossible: an iPad screen, not an iPhone one', () {
+    // iPad mini (744 × 1133) is the smallest iPad.
+    expect(nativeChromeScreenPossible(const Size(744, 1133)), isTrue);
+    expect(nativeChromeScreenPossible(const Size(1194, 834)), isTrue);
+    // iPhone 17 Pro Max, either way round: 440pt short side.
+    expect(nativeChromeScreenPossible(const Size(956, 440)), isFalse);
+    expect(nativeChromeScreenPossible(const Size(440, 956)), isFalse);
+    // Unknown screen: possible (wait for the platform, as before).
+    expect(nativeChromeScreenPossible(Size.zero), isTrue);
+  });
+
   test('nativeDescribable needs every symbol, the trailing one too', () {
     const home = LiquidDestination(
       icon: Icon(Icons.home),

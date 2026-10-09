@@ -859,13 +859,16 @@ class _LiquidShellState extends State<LiquidShell>
     // Pending: the platform may install native chrome but has not answered
     // yet, and this shell would use it. Draw no chrome rather than flash
     // the Flutter one (a frame or two). A shell that could not use native
-    // chrome anyway (compact width, a missing sfSymbol, a chromeBuilder)
-    // draws Flutter chrome from its first frame.
+    // chrome anyway (compact width, a missing sfSymbol, a chromeBuilder, a
+    // screen that is no iPad's, such as an iPhone in landscape) draws
+    // Flutter chrome from its first frame.
+    final display = View.of(context).display;
     final pending =
         possible &&
         owner &&
         state == null &&
-        LiquidShellPlatform.instance.supportsNativeChrome;
+        LiquidShellPlatform.instance.supportsNativeChrome &&
+        nativeChromeScreenPossible(display.size / display.devicePixelRatio);
     // Standby: another shell (pushed above, or nested) owns the native
     // chrome, which this one would otherwise use. Draw no chrome, so no
     // Flutter chrome shows beside the native one while the other shell's

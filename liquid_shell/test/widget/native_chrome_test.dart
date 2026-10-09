@@ -44,12 +44,14 @@ Future<void> _pumpNative(
   WidgetTester tester, {
   Widget? shell,
   Size size = kTabletLandscape,
+  Size? screen,
   EdgeInsets padding = _nativePadding,
   bool settle = true,
 }) => pumpShell(
   tester,
   shell ?? const TestShell(destinations: kNative),
   size: size,
+  screen: screen,
   padding: padding,
   settle: settle,
 );
@@ -245,6 +247,29 @@ void main() {
       final scope = _scope(tester);
       expect(scope.sizeClass, LiquidSizeClass.compact);
       expect(scope.chromeKind, LiquidChromeKind.bottomBar);
+    });
+
+    // Every iPhone screen is under 744pt on its short side, every iPad
+    // (mini included) at least that: no iPhone can install native chrome,
+    // so one in landscape (a regular-width shell) does not wait for it.
+    testWidgets('pending on an iPhone in landscape: the Flutter chrome on '
+        'the first frame', (tester) async {
+      installFakeNative().attachGate = Completer<LiquidNativeShellState>();
+      await _pumpNative(tester, size: kPhoneLandscape, settle: false);
+      expect(_flutterChrome(), isTrue);
+      expect(_scope(tester).chromeKind, isNot(LiquidChromeKind.hidden));
+    });
+
+    testWidgets('pending in an iPad window narrower than its screen still '
+        'waits', (tester) async {
+      installFakeNative().attachGate = Completer<LiquidNativeShellState>();
+      await _pumpNative(
+        tester,
+        size: const Size(744, 834),
+        screen: kTabletLandscape,
+        settle: false,
+      );
+      expect(_flutterChrome(), isFalse);
     });
 
     testWidgets('pending on an iPad app that has not opted in (no '
