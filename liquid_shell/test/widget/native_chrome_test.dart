@@ -402,16 +402,105 @@ void main() {
       expect(native.last.selectedIndex, 0);
     });
 
-    testWidgets('reselect runs the same path', (tester) async {
+    testWidgets('reselect runs the same path and re-sends the selection', (
+      tester,
+    ) async {
       final native = installFakeNative();
       final selections = <int>[];
       await _pumpNative(
         tester,
         shell: TestShell(destinations: kNative, selections: selections),
       );
+      final before = native.configs.length;
       native.emitNative(const LiquidNativeDestinationTapped(0));
       await tester.pumpAndSettle();
       expect(selections, [0]);
+      // The config is unchanged, but UIKit's safety net may show another
+      // tab: the current one is sent again.
+      expect(native.configs.length, before + 1);
+      expect(native.last.selectedIndex, 0);
+    });
+
+    testWidgets('single flight: a tap during the guard is dropped and the '
+        'selection re-sent', (tester) async {
+      final native = installFakeNative();
+      final gate = Completer<bool>();
+      final guarded = <int>[];
+      final selections = <int>[];
+      await _pumpNative(
+        tester,
+        shell: TestShell(
+          destinations: kNative,
+          selections: selections,
+          guard: (i) {
+            guarded.add(i);
+            return gate.future;
+          },
+        ),
+      );
+      native.emitNative(const LiquidNativeDestinationTapped(1));
+      await tester.pump();
+      final before = native.configs.length;
+      native.emitNative(const LiquidNativeDestinationTapped(3));
+      await tester.pump();
+      await tester.pump();
+      expect(guarded, [1]);
+      expect(native.configs.length, before + 1);
+      expect(native.last.selectedIndex, 0);
+
+      gate.complete(true);
+      await tester.pumpAndSettle();
+      expect(selections, [1]);
+      expect(native.last.selectedIndex, 1);
+    });
+
+    testWidgets('a guard that throws refuses, and the selection is re-sent', (
+      tester,
+    ) async {
+      final native = installFakeNative();
+      final selections = <int>[];
+      await _pumpNative(
+        tester,
+        shell: TestShell(
+          destinations: kNative,
+          selections: selections,
+          guard: (i) async => throw StateError('form check failed'),
+        ),
+      );
+      final before = native.configs.length;
+      native.emitNative(const LiquidNativeDestinationTapped(1));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isA<StateError>());
+      expect(selections, isEmpty);
+      expect(native.configs.length, before + 1);
+      expect(native.last.selectedIndex, 0);
+    });
+
+    testWidgets('a destination gone while the guard ran: dropped, re-sent', (
+      tester,
+    ) async {
+      final native = installFakeNative();
+      final gate = Completer<bool>();
+      final selections = <int>[];
+      Widget shell(List<LiquidDestination> destinations) => TestShell(
+        destinations: destinations,
+        selections: selections,
+        guard: (i) => gate.future,
+      );
+      await _pumpNative(tester, shell: shell(kNative));
+      native.emitNative(const LiquidNativeDestinationTapped(2));
+      await tester.pump();
+      // 'Reports' disappears while the guard is pending.
+      await _pumpNative(
+        tester,
+        shell: shell([kNative[0], kNative[1], kNative[3]]),
+      );
+      final before = native.configs.length;
+      gate.complete(true);
+      await tester.pumpAndSettle();
+      expect(selections, isEmpty);
+      expect(native.configs.length, before + 1);
+      expect(native.last.selectedIndex, 0);
     });
 
     testWidgets('an out-of-range index from the platform is ignored', (

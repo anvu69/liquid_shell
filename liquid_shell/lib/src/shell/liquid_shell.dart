@@ -191,6 +191,7 @@ class _LiquidShellState extends State<LiquidShell>
   LiquidNativeShellState? _nativeState;
   LiquidNativeChromeConfig? _nativeConfig;
   bool _nativeSendScheduled = false;
+  bool _forceNativeSend = false;
   bool _loggedNotDescribable = false;
 
   @override
@@ -279,7 +280,7 @@ class _LiquidShellState extends State<LiquidShell>
       case LiquidNativeDestinationTapped(:final index):
         // Checked at the boundary: an index from the platform.
         if (index < 0 || index >= widget.destinations.length) return;
-        _onSelect(index);
+        unawaited(_select(index).whenComplete(_resyncNativeAfterFrame));
       case LiquidNativeTrailingTapped():
         widget.tabBarTrailing?.onPressed();
       case LiquidNativeFooterTapped():
@@ -298,16 +299,21 @@ class _LiquidShellState extends State<LiquidShell>
     SchedulerBinding.instance.addPostFrameCallback((_) {
       _nativeSendScheduled = false;
       final latest = _nativeConfig;
-      if (mounted && latest != null) _claim?.update(latest);
+      final force = _forceNativeSend;
+      _forceNativeSend = false;
+      if (mounted && latest != null) _claim?.update(latest, force: force);
     });
   }
 
-  /// After a refused or dropped selection: the native chrome may already
-  /// show the tapped tab (a selection UIKit made without asking), so send
-  /// the current one again.
-  void _resyncNative() {
-    final config = _nativeConfig;
-    if (_nativeEngaged && config != null) _claim?.update(config, force: true);
+  /// After every native destination tap, whatever came of it (accepted,
+  /// refused, dropped by single flight or because the destination vanished,
+  /// or accepted but ignored by the app): the native chrome may already
+  /// show the tapped tab (a selection UIKit made without asking), so the
+  /// next frame's config is sent even when it equals the last one.
+  void _resyncNativeAfterFrame() {
+    if (!mounted) return;
+    _forceNativeSend = true;
+    _rebuild();
   }
 
   // --- hide chrome -------------------------------------------------------
@@ -394,11 +400,11 @@ class _LiquidShellState extends State<LiquidShell>
         _guardPending = false;
       }
       if (!mounted) return;
-      if (!accepted) return _resyncNative();
+      if (!accepted) return;
       // The list may have changed while the guard ran: find the requested
       // destination in the current one, or drop the selection.
       final current = _currentIndexOf(requested, index);
-      if (current == null) return _resyncNative();
+      if (current == null) return;
       index = current;
     }
     widget.onDestinationSelected(index);

@@ -381,7 +381,7 @@ Native destination taps (index range-checked) call the shell's one `_select(i)` 
 - **single flight:** a tap while a guard is pending is dropped;
 - **guard:** `beforeDestinationChange(i)` runs, and a throw is reported and treated as a refusal;
 - **accepted:** `onDestinationSelected(i)` runs. If the native sidebar is an overlay, the shell then asks the platform to close it. The app's new `selectedIndex` reaches the platform in the next config;
-- **refused or dropped** (the destination vanished while the guard ran): the current config is sent again with `force`. With propose-accept nothing changed natively, but the `didSelectTab` safety-net path may have changed it, and the forced send puts it back;
+- **after every native destination tap**, whatever came of it (accepted, refused, dropped by single flight or because the destination vanished while the guard ran, or accepted but ignored by the app): the next frame's config is sent with `force`, even when it equals the last one. With propose-accept nothing changed natively, but the `didSelectTab` safety-net path may have changed it, and the forced send puts it back;
 - **reselect** (`i == selectedIndex`) runs the same path, so apps pop the branch to its root;
 - **trailing** → `tabBarTrailing.onPressed`; **footer** → `nativeSidebarFooter.onPressed`. Neither runs the guard (Q5).
 
