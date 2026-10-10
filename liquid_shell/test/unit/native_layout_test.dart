@@ -12,12 +12,14 @@ bool _engaged({
   LiquidNativeShellState? state = _installed,
   bool hasChromeBuilder = false,
   bool describable = true,
+  bool glassTierForced = false,
 }) => nativeChromeEngaged(
   mode: mode,
   owner: owner,
   state: state,
   hasChromeBuilder: hasChromeBuilder,
   describable: describable,
+  glassTierForced: glassTierForced,
 );
 
 void main() {
@@ -42,6 +44,7 @@ void main() {
       );
       expect(_engaged(hasChromeBuilder: true), isFalse);
       expect(_engaged(describable: false), isFalse);
+      expect(_engaged(glassTierForced: true), isFalse);
     });
   });
 
@@ -50,10 +53,12 @@ void main() {
       LiquidNativeChrome mode = LiquidNativeChrome.auto,
       bool hasChromeBuilder = false,
       bool describable = true,
+      bool glassTierForced = false,
     }) => nativeChromePossible(
       mode: mode,
       hasChromeBuilder: hasChromeBuilder,
       describable: describable,
+      glassTierForced: glassTierForced,
     );
 
     test('auto, no chromeBuilder, describable → possible', () {
@@ -64,6 +69,7 @@ void main() {
       expect(possible(mode: LiquidNativeChrome.off), isFalse);
       expect(possible(hasChromeBuilder: true), isFalse);
       expect(possible(describable: false), isFalse);
+      expect(possible(glassTierForced: true), isFalse);
     });
   });
 

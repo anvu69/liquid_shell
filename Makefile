@@ -70,8 +70,9 @@ goldens: ## Golden tests (reference toolchain: macOS + Flutter 3.44.x)
 goldens-update: ## Regenerate every golden and doc image, then recompress them losslessly
 	FLUTTER="$(FLUTTER)" DART="$(DART)" tool/update_goldens.sh
 
-provenance: ## Fail on app names or banned dependencies outside docs/
+provenance: ## Fail on app names or banned dependencies outside docs/, or glass outside LiquidGlass
 	tool/check_provenance.sh
+	tool/check_glass_seam.sh
 
 snippets: ## README snippets must equal their #docregion in example/lib/cases
 	@if [ -f tool/check_readme_snippets.dart ]; then \
