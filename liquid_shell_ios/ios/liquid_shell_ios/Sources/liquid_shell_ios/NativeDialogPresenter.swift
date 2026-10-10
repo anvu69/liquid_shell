@@ -12,6 +12,8 @@ final class NativeDialogPresenter: NSObject, NativeDialogHostApi {
   private let flutterViewController: () -> UIViewController?
   private let osAtLeast26: () -> Bool
   private let disabledByEnvironment: () -> Bool
+  /// Runs a block when a transition ends; false when UIKit did not queue it.
+  private let afterTransition: TransitionWait
   /// The newest dialog this presenter shows (debug hooks).
   private weak var current: UIAlertController?
   private var currentCompletion: DialogCompletion?
@@ -27,12 +29,22 @@ final class NativeDialogPresenter: NSObject, NativeDialogHostApi {
     },
     disabledByEnvironment: @escaping () -> Bool = {
       ProcessInfo.processInfo.environment[InstallPolicy.disableEnvironmentKey] == "1"
+    },
+    afterTransition: @escaping TransitionWait = { coordinator, then in
+      coordinator.animate(alongsideTransition: nil) { _ in then() }
     }
   ) {
     self.flutterViewController = flutterViewController
     self.osAtLeast26 = osAtLeast26
     self.disabledByEnvironment = disabledByEnvironment
+    self.afterTransition = afterTransition
   }
+
+  /// Queues a block for the end of a transition. Returns UIKit's answer:
+  /// false when the block was not queued and will never run.
+  typealias TransitionWait = (
+    _ coordinator: UIViewControllerTransitionCoordinator, _ then: @escaping () -> Void
+  ) -> Bool
 
   /// The view controller to present from: follow `presentedViewController`
   /// from [root] while the next one is not leaving.
@@ -183,12 +195,21 @@ final class NativeDialogPresenter: NSObject, NativeDialogHostApi {
       let coordinator = top.presentedViewController?.transitionCoordinator
         ?? top.transitionCoordinator
     {
-      coordinator.animate(alongsideTransition: nil) { [weak self, weak window] _ in
+      let retry = { [weak self, weak window] in
         guard let self, let window else {
           done.finish(.unavailable(.noWindow))
           return
         }
         self.show(alert, kind: kind, in: window, done: done, waits: waits - 1)
+      }
+      // A cancelled transition still runs the block; the retry then finds
+      // the new top. When UIKit does not queue it at all, the block would
+      // never run and the alert, unshown, would answer "dismissed": retry
+      // once the transition's time is up instead. Out of waits, `present`
+      // either shows the alert or is refused, and Dart falls back.
+      if !afterTransition(coordinator, retry) {
+        DispatchQueue.main.asyncAfter(
+          deadline: .now() + coordinator.transitionDuration, execute: retry)
       }
       return
     }

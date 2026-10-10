@@ -1310,7 +1310,8 @@ final class NativeDialogPresenterTests: XCTestCase {
   }
 
   private func request(
-    kind: NativeDialogKind = .alert, anchor: NativeRect? = nil, requireGlass: Bool = true
+    kind: NativeDialogKind = .alert, anchor: NativeRect? = nil, requireGlass: Bool = true,
+    rtl: Bool = false
   ) -> NativeDialogRequest {
     NativeDialogRequest(
       kind: kind, title: "Discard changes?", message: "Your edits will be lost.",
@@ -1320,7 +1321,7 @@ final class NativeDialogPresenterTests: XCTestCase {
         NativeDialogAction(label: "Later", style: .standard, enabled: false),
       ],
       preferredIndex: kind == .alert ? 1 : nil, anchor: anchor, tintArgb: 0xFF00_7AFF,
-      dark: true, rtl: false, requireGlass: requireGlass)
+      dark: true, rtl: rtl, requireGlass: requireGlass)
   }
 
   private func present(
@@ -1451,6 +1452,41 @@ final class NativeDialogPresenterTests: XCTestCase {
     let shown = try XCTUnwrap(root.presentedViewController as? UIAlertController)
     XCTAssertEqual(shown.preferredStyle, .actionSheet)
     XCTAssertTrue(second.all.isEmpty)
+  }
+
+  /// UIKit may decline to queue the wait (`animate(alongsideTransition:
+  /// completion:)` returns false) and then never runs it. The presenter
+  /// still asks the user: it retries after the transition, and never
+  /// answers "dismissed" for a dialog nobody saw.
+  func testAWaitUIKitDoesNotQueueRetriesAfterTheTransition() throws {
+    var declined = 0
+    let dialogs = NativeDialogPresenter(
+      flutterViewController: { [root] in root }, osAtLeast26: { true },
+      disabledByEnvironment: { false },
+      afterTransition: { _, _ in
+        declined += 1
+        return false
+      })
+    _ = present(dialogs, request())
+    settle()
+    let first = try XCTUnwrap(root.presentedViewController as? UIAlertController)
+    first.dismiss(animated: true)
+    let second = autoreleasepool { present(dialogs, request(kind: .actionSheet)) }
+    settle(1.5)
+    XCTAssertGreaterThan(declined, 0, "the second request met the first one's transition")
+    XCTAssertTrue(second.all.isEmpty, "answered \(second.all) without asking the user")
+    let shown = try XCTUnwrap(root.presentedViewController as? UIAlertController)
+    XCTAssertEqual(shown.preferredStyle, .actionSheet)
+  }
+
+  /// `rtl: true` lays the alert out right to left (iOS 17+: a trait
+  /// override; earlier: the view's semantic content attribute).
+  func testAnRtlRequestLaysTheAlertOutRightToLeft() throws {
+    _ = present(presenter(), request(rtl: true))
+    settle()
+    let alert = try XCTUnwrap(root.presentedViewController as? UIAlertController)
+    XCTAssertEqual(alert.traitCollection.layoutDirection, .rightToLeft)
+    XCTAssertEqual(root.traitCollection.layoutDirection, .leftToRight)
   }
 
   func testARefusedPresentationIsUnavailableSoDartFallsBack() throws {
