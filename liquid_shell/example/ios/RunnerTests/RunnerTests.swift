@@ -1331,6 +1331,18 @@ final class NativeDialogPresenterTests: XCTestCase {
     XCTAssertNil(root.presentedViewController)
   }
 
+  /// A Flutter view that is loaded but not in a window (add-to-app before
+  /// showing): answered at once, exactly once, so Dart falls back.
+  func testALoadedViewOutsideAWindowAnswersNoWindowOnce() {
+    let detached = UIViewController()
+    detached.loadViewIfNeeded()
+    let answers = present(presenter(flutter: detached), request())
+    XCTAssertEqual(answers.all, [.unavailable(.noWindow)])
+    settle()
+    XCTAssertEqual(answers.all, [.unavailable(.noWindow)])
+    XCTAssertNil(root.presentedViewController)
+  }
+
   func testWithoutRequiringGlassAnOldOSPresents() throws {
     let answers = present(presenter(os26: false), request(requireGlass: false))
     settle()

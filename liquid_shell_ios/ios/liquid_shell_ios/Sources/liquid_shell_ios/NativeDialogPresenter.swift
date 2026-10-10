@@ -48,14 +48,14 @@ final class NativeDialogPresenter: NSObject, NativeDialogHostApi {
     let done = DialogCompletion { completion(.success($0)) }
     let flutter = flutterViewController()
     let window = flutter?.viewIfLoaded?.window
-    if let reason = DialogMath.unavailableReason(
+    let reason = DialogMath.unavailableReason(
       disabledByEnvironment: disabledByEnvironment(), requireGlass: request.requireGlass,
       osAtLeast26: osAtLeast26(), hasWindow: window != nil)
-    {
-      done.finish(.unavailable(reason))
+    // One exit for every "cannot present": no path leaves the future pending.
+    guard reason == nil, let flutter, let window else {
+      done.finish(.unavailable(reason ?? .noWindow))
       return
     }
-    guard let flutter, let window else { return }
     let alert = build(request, sourceView: flutter.view, done: done)
     show(alert, kind: request.kind, in: window, done: done, waits: 3)
   }
