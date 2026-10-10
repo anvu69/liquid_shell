@@ -8,6 +8,9 @@
   orientation.
 - No `notIPad` reason any more: the install rule has no idiom fact, so the
   shell installs on iPhone as on iPad.
+- On iOS 27 the trailing search tab stays a separate circle after the
+  compact bar's pill when the app is built with the iOS 27 SDK (Xcode 27);
+  built with an older SDK, iOS 27 may draw it inside the pill.
 - Window controls read from the iPadOS 26 corner-adaptation region.
 - `LiquidShellIOS` replaces the bare event-channel platform; the Pigeon
   channel is generated from `pigeons/native_shell.dart`.

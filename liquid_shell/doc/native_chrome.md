@@ -107,7 +107,10 @@ without native chrome (Android, web, desktop) answer at once.
   (`UISearchTab`) with your label and symbol: a separate round button at
   the end of the compact bar, the trailing end of the top bar, the first
   sidebar row. A tap only calls `onPressed`; the system search field
-  never opens. Give it a search-like action and symbol.
+  never opens. Give it a search-like action and symbol. On iOS 27 the
+  separate round button needs an app built with the iOS 27 SDK (Xcode 27):
+  built with an older SDK, iOS 27 may draw ⌕ inside the bar's pill as one
+  more item.
 - **Sidebar look.** The sidebar is UIKit's own. On iPadOS 26 it floats over
   the content as a Liquid Glass panel; on iPadOS 27 it is a full-height
   panel flush with the screen edge, as in Apple's own apps (Photos, Health).
