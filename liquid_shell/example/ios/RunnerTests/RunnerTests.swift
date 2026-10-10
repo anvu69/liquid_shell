@@ -156,6 +156,21 @@ final class InstallPolicyTests: XCTestCase {
   }
 }
 
+final class WindowControlsReaderTests: XCTestCase {
+  /// Window controls are an iPadOS windowing feature. A landscape iPhone
+  /// (iOS 26.5, iPhone 17 Pro) reads a phantom 18pt top from its
+  /// corner-adapted safe area: an iPhone has none, whatever the read says.
+  func testAnIPhoneHasNoWindowControls() {
+    let measured = NativeWindowControls(leading: 0, top: 18)
+    let read = WindowControlsReader.read(UIView(), measure: { _ in measured })
+    if UIDevice.current.userInterfaceIdiom == .phone {
+      XCTAssertEqual(read, NativeWindowControls(leading: 0, top: 0))
+    } else {
+      XCTAssertEqual(read, measured, "an iPad reads its cluster")
+    }
+  }
+}
+
 @available(iOS 26.0, *)
 final class PassThroughTests: XCTestCase {
   func testBackgroundIsNilTheTabsViewAndTheSelectedHostChain() {
