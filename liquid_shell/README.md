@@ -390,45 +390,50 @@ or `.system` for UIKit's alert on every iOS.
 
 <?code-excerpt "native_alerts.dart (readme)"?>
 ```dart
-Future<DemoChoice?> _alert() => showLiquidAlert<DemoChoice>(
+// True for "Discard"; false for "Keep editing" or a dismissal.
+Future<bool?> _confirmDiscard({
+  LiquidDialogPresentation presentation = LiquidDialogPresentation.auto,
+}) => showLiquidAlert<bool>(
   context,
   title: 'Discard changes?',
   message: 'Your edits will be lost.',
   actions: const [
     LiquidAlertAction(
       label: 'Keep editing',
-      value: DemoChoice.keep,
+      value: false,
       style: LiquidAlertActionStyle.cancel,
     ),
     LiquidAlertAction(
       label: 'Discard',
-      value: DemoChoice.discard,
+      value: true,
       style: LiquidAlertActionStyle.destructive,
     ),
   ],
-  presentation: _presentation,
+  presentation: presentation,
 );
 
 // Pass the tapped button's context: on iPad the sheet points at it.
-Future<DemoChoice?> _actionSheet(BuildContext button) =>
-    showLiquidActionSheet<DemoChoice>(
-      button,
-      title: 'Photo',
-      actions: const [
-        LiquidAlertAction(
-          label: 'Delete photo',
-          value: DemoChoice.delete,
-          style: LiquidAlertActionStyle.destructive,
-        ),
-        LiquidAlertAction(label: 'Share', value: DemoChoice.share),
-        LiquidAlertAction(
-          label: 'Cancel',
-          value: DemoChoice.cancel,
-          style: LiquidAlertActionStyle.cancel,
-        ),
-      ],
-      presentation: _presentation,
-    );
+Future<String?> _photoAction(
+  BuildContext button, {
+  LiquidDialogPresentation presentation = LiquidDialogPresentation.auto,
+}) => showLiquidActionSheet<String>(
+  button,
+  title: 'Photo',
+  actions: const [
+    LiquidAlertAction(
+      label: 'Delete photo',
+      value: 'delete',
+      style: LiquidAlertActionStyle.destructive,
+    ),
+    LiquidAlertAction(label: 'Share', value: 'share'),
+    LiquidAlertAction(
+      label: 'Cancel',
+      value: 'cancel',
+      style: LiquidAlertActionStyle.cancel,
+    ),
+  ],
+  presentation: presentation,
+);
 ```
 
 | | iOS 26+ | iOS 15–25 | Android |

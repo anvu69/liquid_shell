@@ -94,47 +94,66 @@ class _NativeAlertsCaseState extends State<NativeAlertsCase> {
     if (mounted) setState(() => _result = _label(choice));
   }
 
+  // The README's snippet: self-contained, so it compiles pasted into any
+  // State. The case passes its switch as [presentation].
   // #docregion readme
-  Future<DemoChoice?> _alert() => showLiquidAlert<DemoChoice>(
+  // True for "Discard"; false for "Keep editing" or a dismissal.
+  Future<bool?> _confirmDiscard({
+    LiquidDialogPresentation presentation = LiquidDialogPresentation.auto,
+  }) => showLiquidAlert<bool>(
     context,
     title: 'Discard changes?',
     message: 'Your edits will be lost.',
     actions: const [
       LiquidAlertAction(
         label: 'Keep editing',
-        value: DemoChoice.keep,
+        value: false,
         style: LiquidAlertActionStyle.cancel,
       ),
       LiquidAlertAction(
         label: 'Discard',
-        value: DemoChoice.discard,
+        value: true,
         style: LiquidAlertActionStyle.destructive,
       ),
     ],
-    presentation: _presentation,
+    presentation: presentation,
   );
 
   // Pass the tapped button's context: on iPad the sheet points at it.
-  Future<DemoChoice?> _actionSheet(BuildContext button) =>
-      showLiquidActionSheet<DemoChoice>(
-        button,
-        title: 'Photo',
-        actions: const [
-          LiquidAlertAction(
-            label: 'Delete photo',
-            value: DemoChoice.delete,
-            style: LiquidAlertActionStyle.destructive,
-          ),
-          LiquidAlertAction(label: 'Share', value: DemoChoice.share),
-          LiquidAlertAction(
-            label: 'Cancel',
-            value: DemoChoice.cancel,
-            style: LiquidAlertActionStyle.cancel,
-          ),
-        ],
-        presentation: _presentation,
-      );
+  Future<String?> _photoAction(
+    BuildContext button, {
+    LiquidDialogPresentation presentation = LiquidDialogPresentation.auto,
+  }) => showLiquidActionSheet<String>(
+    button,
+    title: 'Photo',
+    actions: const [
+      LiquidAlertAction(
+        label: 'Delete photo',
+        value: 'delete',
+        style: LiquidAlertActionStyle.destructive,
+      ),
+      LiquidAlertAction(label: 'Share', value: 'share'),
+      LiquidAlertAction(
+        label: 'Cancel',
+        value: 'cancel',
+        style: LiquidAlertActionStyle.cancel,
+      ),
+    ],
+    presentation: presentation,
+  );
   // #enddocregion readme
+
+  Future<DemoChoice?> _alert() async =>
+      switch (await _confirmDiscard(presentation: _presentation)) {
+        true => DemoChoice.discard,
+        false => DemoChoice.keep,
+        null => null,
+      };
+
+  Future<DemoChoice?> _actionSheet(BuildContext button) async {
+    final action = await _photoAction(button, presentation: _presentation);
+    return action == null ? null : DemoChoice.values.byName(action);
+  }
 
   Future<DemoChoice?> _threeActions() => showLiquidAlert<DemoChoice>(
     context,
