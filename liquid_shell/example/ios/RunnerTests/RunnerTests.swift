@@ -1457,15 +1457,20 @@ final class NativeDialogPresenterTests: XCTestCase {
   /// UIKit may decline to queue the wait (`animate(alongsideTransition:
   /// completion:)` returns false) and then never runs it. The presenter
   /// still asks the user: it retries after the transition, and never
-  /// answers "dismissed" for a dialog nobody saw.
+  /// answers "dismissed" for a dialog nobody saw. Only the first wait is
+  /// declined; later ones are UIKit's, so the outcome does not depend on
+  /// the runner's speed.
   func testAWaitUIKitDoesNotQueueRetriesAfterTheTransition() throws {
     var declined = 0
     let dialogs = NativeDialogPresenter(
       flutterViewController: { [root] in root }, osAtLeast26: { true },
       disabledByEnvironment: { false },
-      afterTransition: { _, _ in
-        declined += 1
-        return false
+      afterTransition: { coordinator, then in
+        guard declined > 0 else {
+          declined += 1
+          return false
+        }
+        return coordinator.animate(alongsideTransition: nil) { _ in then() }
       })
     _ = present(dialogs, request())
     settle()
@@ -1473,7 +1478,7 @@ final class NativeDialogPresenterTests: XCTestCase {
     first.dismiss(animated: true)
     let second = autoreleasepool { present(dialogs, request(kind: .actionSheet)) }
     settle(1.5)
-    XCTAssertGreaterThan(declined, 0, "the second request met the first one's transition")
+    XCTAssertEqual(declined, 1, "the second request met the first one's transition")
     XCTAssertTrue(second.all.isEmpty, "answered \(second.all) without asking the user")
     let shown = try XCTUnwrap(root.presentedViewController as? UIAlertController)
     XCTAssertEqual(shown.preferredStyle, .actionSheet)
