@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:liquid_shell/src/glass/drift_guard.dart';
 import 'package:liquid_shell/src/glass/liquid_optics.dart';
+import 'package:liquid_shell/src/glass/shader_program.dart';
 
 /// Builds the filter of one liquid surface from its [shader], whose
 /// uniforms are already set, and the logical blur sigma.
@@ -192,6 +193,7 @@ class RenderLiquidBackdrop extends RenderProxyBox {
   }
 
   ui.FragmentShader? _shader;
+  bool _lensFailed = false;
   Float32List? _uniforms;
   ui.ImageFilter? _filter;
   Rect? _paintedRect;
@@ -292,19 +294,9 @@ class RenderLiquidBackdrop extends RenderProxyBox {
     );
     ui.FragmentShader? retired;
     if (_filter == null || !_sameFloats(uniforms, _uniforms)) {
-      // A fresh shader per change: ImageFilter.shader equality compares
-      // the shader object, so mutating the current one could leave the
-      // layer's filter unchanged (spec §5.3).
-      final shader = _program.fragmentShader();
-      for (var i = 0; i < uniforms.length; i++) {
-        shader.setFloat(LiquidOptics.firstIndex + i, uniforms[i]);
-      }
-      _filter = (debugLiquidFilterFactory ?? liquidLensFilter)(
-        shader,
-        _params.blurSigma,
-      );
       retired = _shader;
-      _shader = shader;
+      _shader = null;
+      _filter = _lensFailed ? _blurOnly() : _lens(uniforms);
       _uniforms = uniforms;
     }
     _paintedRect = geometry.rect;
@@ -316,6 +308,37 @@ class RenderLiquidBackdrop extends RenderProxyBox {
     retired?.dispose();
     context.pushLayer(layer!, super.paint, offset);
   }
+
+  /// A fresh shader per change: ImageFilter.shader equality compares the
+  /// shader object, so mutating the current one could leave the layer's
+  /// filter unchanged (spec §5.3).
+  ui.ImageFilter _lens(Float32List uniforms) {
+    ui.FragmentShader? shader;
+    try {
+      shader = _program.fragmentShader();
+      for (var i = 0; i < uniforms.length; i++) {
+        shader.setFloat(LiquidOptics.firstIndex + i, uniforms[i]);
+      }
+      final filter = (debugLiquidFilterFactory ?? liquidLensFilter)(
+        shader,
+        _params.blurSigma,
+      );
+      _shader = shader;
+      return filter;
+    } on Object catch (error, stack) {
+      // The engine cannot draw the lens: blur alone until the glass
+      // rebuilds as frosted (spec §14).
+      shader?.dispose();
+      _lensFailed = true;
+      LiquidShaderProgram.instance.disable(error, stack);
+      return _blurOnly();
+    }
+  }
+
+  ui.ImageFilter _blurOnly() => ui.ImageFilter.blur(
+    sigmaX: _params.blurSigma,
+    sigmaY: _params.blurSigma,
+  );
 
   static bool _sameFloats(Float32List a, Float32List? b) {
     if (b == null || a.length != b.length) return false;

@@ -198,6 +198,49 @@ void main() {
     expect(_fills(tester, glassTheme.tint), isEmpty);
   });
 
+  testWidgets('a lens filter that throws → frosted for the session (§14)', (
+    tester,
+  ) async {
+    debugLiquidGlassCanRefractOverride = true;
+    debugLiquidFilterFactory = (shader, sigma) =>
+        throw UnsupportedError('no shader filters');
+    addTearDown(() => debugLiquidFilterFactory = null);
+    await tester.runAsync(LiquidGlass.precache);
+    // Two lenses fail in the same frame.
+    await tester.pumpWidget(
+      _app(
+        child: const SizedBox(
+          width: 120,
+          height: 40,
+          child: LiquidGlass(child: SizedBox.expand()),
+        ),
+      ),
+    );
+    // Reported once: a second report would make this "Multiple exceptions".
+    expect(tester.takeException(), isA<UnsupportedError>());
+    // Until the rebuild, each lens draws its blur alone.
+    final sigma = glassTheme.liquidBlurSigma;
+    for (final render in tester.renderObjectList<RenderLiquidBackdrop>(
+      find.byType(LiquidBackdrop),
+    )) {
+      expect(
+        render.layer!.filter,
+        ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+      );
+    }
+
+    await tester.pumpAndSettle();
+    expect(find.byType(LiquidBackdrop), findsNothing);
+    expect(find.byType(BackdropFilter), findsNWidgets(2));
+
+    // For the rest of the session, even after another precache.
+    await tester.runAsync(LiquidGlass.precache);
+    await tester.pumpWidget(_app(child: const SizedBox(width: 121)));
+    await tester.pumpAndSettle();
+    expect(find.byType(LiquidBackdrop), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('frosted until the program loads, then liquid; child kept', (
     tester,
   ) async {
