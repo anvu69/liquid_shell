@@ -4,6 +4,7 @@
 - **Date:** 2026-10-09
 - **Status:** draft for the owner. The owner approves this spec and the plan `docs/plans/2026-10-09-p2-native-ios.md` together. Open choices are in §13, each with a recommended default; if the owner says nothing, the default applies.
 - **Amended:** 2026-10-10, after the owner's device test (VK-403). §14 records decisions D1–D4, the VK-403 root cause and the fix design, and supersedes every earlier statement it contradicts; those places carry a *Superseded (§14)* note. The plan's Task 7 implements it.
+- **Amended:** 2026-10-10, after the P2 build on iPad (VK-405). §15 records E1 (every example shell case native) and E2 (a debug hint for a missing `sfSymbol`). The plan's Task 8 implements it.
 - **Branch:** `VK-346-p2-native-ios`, from `main` at `8f437df` (P1 merged, VK-388 floor raise merged).
 - **Floor:** Flutter 3.44.6 / Dart 3.12 (VK-388), iOS 15.0, `very_good_analysis` 10.3.0.
 - **Sources:**
@@ -373,7 +374,7 @@ When the shell is engaged, its build keeps P1's body chain exactly: `PopScope �
 
 **Not engaged but owner.** The shell still sends its config with `engaged: false`, so the platform hides its chrome while the shell draws the Flutter one (~~compact width,~~ missing symbols, a `chromeBuilder`). This is the double-chrome guard.
 
-A debug log fires once per process when the device supports native chrome but the app has not opted in (`notEnabled`), and once per process when native chrome is installed but a symbol is missing on a shell that asked for it (`auto`, no `chromeBuilder`).
+A debug log fires once per process when the device supports native chrome but the app has not opted in (`notEnabled`), and once per process when native chrome is installed but a symbol is missing on a shell that asked for it (`auto`, no `chromeBuilder`). *Superseded (§15): the missing-symbol log is one line per shell, also while pending, and names what lacks a symbol.*
 
 ### 7.2 Ownership
 
@@ -558,7 +559,7 @@ These jobs are added to `.github/workflows/ci.yaml`:
 | Native → Dart send fails | `NSLog` | dedupe value cleared, re-sent on the next sync |
 | Destination index out of range from native | — | dropped |
 | Window controls negative / NaN / ∞ | — | 0 (both sides) |
-| A destination or the trailing action has no `sfSymbol` | `debugPrint` once | Flutter chrome, `engaged: false` sent |
+| A destination or the trailing action has no `sfSymbol` | `debugPrint` once per shell, naming them (*Superseded (§15)*) | Flutter chrome, `engaged: false` sent |
 | `chromeBuilder` set | — | Flutter chrome |
 | Guard throws on a native tap | `FlutterError.reportError` (P1) | refused, current selection re-sent |
 | Shell unmounted while the guard runs | — | result dropped (P1) |
@@ -679,3 +680,26 @@ Supersedes the width rule (§5.1) and the width conditions of §7.1.
 | **The flush iPadOS 27 sidebar reads as "flat grey"** | It is the system's style (Photos, Health); documented, not overridden |
 | **UIKit shows `.sidebarOnly` tabs at compact width** | Native leaves them out while compact; XCTest pins it |
 | **Emptying and refilling UIKit's tabs loses the compact bar** | Dormant keeps the tabs; XCTest pins it |
+
+## 15. Owner decisions E1–E2 (2026-10-10, after the P2 build on iPad)
+
+The owner tested the P2 build on an iPad and wrote: "Example Native Chrome ở tabbar thu nhỏ đã có hiệu ứng Liquid Glass, nhưng các Example khác chưa áp dụng" (the Native chrome example's minimised tab bar has the Liquid Glass effect, but the other examples do not use it). The cause is the example, not the library: native chrome engages only when every destination and the trailing action have an `sfSymbol` (§7.1, `nativeDescribable`), and only `NativeChromeCase` set them. The owner approved E1 and E2 with "Ok hết" (Plane VK-405). This section supersedes the "once per process" debug log of §7.1 and §11; those places carry a *Superseded (§15)* note. The plan's **Task 8** implements it.
+
+| E | Decision |
+|---|---|
+| E1 | Every example case with a real shell gets SF Symbols on every destination and on the trailing action, so it runs native on iOS 26: basic tabs, badges, sidebar-only, sidebar slots, trailing action, discard guard, hide chrome. The cases that are Flutter by nature keep the Flutter chrome and say so on screen ("Drawn by Flutter" and a one-line reason): custom chrome, forced tier, custom theme, standalone widgets, form factors, narrow width. |
+| E2 | In debug builds only, the library logs ONE line when native chrome would be possible but a destination or the trailing action lacks an `sfSymbol`. |
+
+### 15.1 Design
+
+- **Symbols.** `kDemoDestinations` (Home `house`, Explore `map`, Settings `gear`) carries them, so every case built on it describes itself; the cases with their own destinations name theirs (badges: `tray`, `bubble.left.and.bubble.right`, `bell`; sidebar-only: `chart.bar`, `archivebox`; the trailing search: `magnifyingglass`). Sidebar slots also gets a `nativeSidebarFooter`: the native sidebar shows neither Flutter slot (§4.1).
+- **Flutter by nature.** A shell whose point is the Flutter chrome opts out with `nativeChrome: LiquidNativeChrome.off` (custom theme, forced tier, narrow width, the four framed shells of form factors: a window has one native chrome). Custom chrome has a `chromeBuilder`; standalone widgets have no shell. Each screen shows a small note: "Drawn by Flutter" and why. The reason is a field of the case-list entry (`ExampleCase.drawnByFlutter`); the case list provides it above the case, and `DemoPage` (or the form-factors list) shows it under the title. The note is outside the README regions and the golden widgets, so snippets stay pasteable and goldens do not move.
+- **One case, two settings.** Form factors stops reusing `BasicTabsCase` (which is native now) and frames its own small shell with `nativeChrome: off`.
+- **E2 hint.** `LiquidShell` logs at most one `debugPrint` line per shell `State` (not per process), in debug only, when `nativeChrome` is `auto`, there is no `chromeBuilder`, the platform installed native chrome or has not answered yet on a platform that supports it (pending), and `nativeDescribable` is false. The line names the destinations (by label) and the trailing action (by `semanticLabel`) that lack an `sfSymbol`, and says how to silence it (`nativeChrome: LiquidNativeChrome.off`). A rebuild never repeats it. It replaces the once-per-process `notDescribable` log; the `notEnabled` log stays once per process.
+- **Docs.** The `sfSymbol` dartdocs say native chrome needs it; CHANGELOG `0.1.0-dev.2` notes the hint.
+
+### 15.2 Tests
+
+- Example smoke: with a fake native platform (installed), every shell case engages native chrome and logs nothing; every Flutter-by-nature case keeps the Flutter chrome and shows "Drawn by Flutter"; the two lists cover `kCases` exactly.
+- Widget (`native_chrome_test.dart`, `FakeNativePlatform`): the line names the missing destinations and the trailing action; installed and pending both log; `off`, a `chromeBuilder`, an unavailable platform and a describable shell do not; a rebuild does not log again; two shells log one line each.
+- Integration (`make integration-ios-native`, iPad and iPhone simulators, iOS 26.5): `BasicTabsCase` and `BadgesCase` draw native chrome.

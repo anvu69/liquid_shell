@@ -8424,3 +8424,51 @@ Run on 2026-10-10 on a copy of this branch at `3404385`: `/private/tmp/claude-50
 - **Spec §14 coverage:** D1 install rule → 7a Step 3; engagement, kind, inset, pending, standby, size class → 7b; `UISearchTab` → 7a Step 5; sidebar-only at compact → 7a Step 5 and 7b (`_reportHiddenSelection`); size-class transitions → 7a (`testResizingAcrossTheSizeClassRepublishesTheState`) and 7b (`a window resized across the size class …`); window controls under the compact bar → 7a and 7b; modals above the compact bar → 7b; dormant keeps the tabs → 7a; hit testing → 7a; guard flow and badges unchanged (integration guard test on iPhone, badge in the iPhone screenshot); VK-403 guards → 7a (`testATiledSidebarIsFluttersStartSafeArea`) and 7c (sidebar test); minimize on scroll → out, documented; D2–D4 → order and the merge gate, no code.
 - **Placeholders:** none; every code step is a patch that ran.
 - **Names:** `nativeChromeEngaged`/`nativeChromePossible` lose `presentation` in every caller (`liquid_shell.dart`, the unit test); `nativeChromeInsets(padding:)` everywhere; `LiquidNativeUnavailableReason.notIPad` has no remaining reference outside `docs/` history.
+
+## Addendum 2026-10-10: Task 8 (VK-405, owner decisions E1–E2)
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax.
+
+**Goal:** Every example case with a real shell runs native on iOS 26, the Flutter-by-nature cases say why they do not (E1), and the library tells a developer in debug which destinations block native chrome (E2). Spec: §15.
+
+**Architecture:** Example-only for E1: symbols on `kDemoDestinations` and on the cases' own destinations, `nativeChrome: off` where the Flutter chrome is the point, and a `drawnByFlutter` reason on the case-list entry, shown by `DemoPage` through an inherited `DrawnByFlutter`. E2 replaces the once-per-process `notDescribable` log in `_LiquidShellState._resolveNative` with a once-per-`State` line built by a pure `nativeSymbolHint` in `native_layout.dart`.
+
+**Tech Stack:** as Task 7. Simulators: own iPad Air 11-inch (M3) and iPhone 17 Pro, iOS 26.5.
+
+Commits: `feat(example): native chrome in every shell case (VK-405)` and `feat: debug hint when sfSymbol blocks native chrome (VK-405)`, each with a blank line and `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. `make verify` and `bash .githooks/pre-commit` before each.
+
+### File map (Task 8)
+
+| Path | Change |
+|---|---|
+| `liquid_shell/example/lib/support/demo_page.dart` | Symbols on `kDemoDestinations`; `DemoPage` shows `DrawnByFlutterNote` under its title |
+| `liquid_shell/example/lib/support/drawn_by_flutter.dart` (new) | `DrawnByFlutter` (inherited reason) and `DrawnByFlutterNote` |
+| `liquid_shell/example/lib/cases/{basic_tabs,badges,sidebar_only,sidebar_slots,trailing_action}.dart` | `sfSymbol`s; sidebar slots gets a `nativeSidebarFooter` |
+| `liquid_shell/example/lib/cases/{custom_theme,forced_tier,narrow_width}.dart` | `nativeChrome: LiquidNativeChrome.off` |
+| `liquid_shell/example/lib/cases/form_factors.dart` | Its own framed shell with `nativeChrome: off`; the note at the top |
+| `liquid_shell/example/lib/cases/cases.dart`, `lib/main.dart` | `ExampleCase.drawnByFlutter`; the list wraps each case in `DrawnByFlutter` |
+| `liquid_shell/example/test/cases_smoke_test.dart`, `test/flutter_test_config.dart` | Fake native platform: native vs Flutter per case; reset the native host |
+| `liquid_shell/example/integration_test/native_shell_test.dart` | `BasicTabsCase` and `BadgesCase` draw native chrome |
+| `liquid_shell/lib/src/native/native_layout.dart`, `lib/src/shell/liquid_shell.dart` | `nativeSymbolHint`; one line per shell, installed or pending |
+| `liquid_shell/lib/src/destinations/{destination,tab_action}.dart` | Dartdoc: native chrome needs `sfSymbol` |
+| `liquid_shell/test/unit/native_layout_test.dart`, `test/widget/native_chrome_test.dart` | Tests of the hint |
+| `liquid_shell/README.md`, `liquid_shell/doc/native_chrome.md`, `liquid_shell/CHANGELOG.md` | Snippets (`--fix`), case notes, troubleshooting, changelog |
+
+### Task 8a: Every shell case native (E1)
+
+- [ ] **Step 1: Red.** In `cases_smoke_test.dart` install a fake platform (`supportsNativeChrome: true`, `attachNativeChrome` → installed) and assert, per case: the ids `basic badges sidebar_only sidebar_slots trailing guard hide_chrome native_chrome` show `LiquidShellScope.nativeChrome == true`, no `LiquidTabBar`/`LiquidSidebar`, and no "Drawn by Flutter"; the ids `custom_chrome custom_theme forced_tier form_factors narrow standalone` show Flutter chrome and "Drawn by Flutter" once; the two sets equal the ids of `kCases`. Replace the `native_chrome`-only "can be drawn natively" test, which the loop covers. Reset the native host in `flutter_test_config.dart`'s `tearDown`. Run `cd liquid_shell/example && fvm flutter test test/cases_smoke_test.dart`: the native ids fail (Flutter chrome) and the note is missing.
+- [ ] **Step 2: Green.** Symbols (spec §15.1), `nativeChrome: off` on custom theme, forced tier, narrow width and the form-factor frames, `DrawnByFlutter` + `ExampleCase.drawnByFlutter` with one-line reasons. Re-run: green; `make test` green (goldens untouched: run `make goldens`).
+- [ ] **Step 3: Docs.** `dart run tool/check_readme_snippets.dart --fix`, then `make snippets`. README "Cases": the shell cases carry symbols and run native on iOS 26; the Flutter-only ones say why. Form factors: "a basic shell". Check every case-list subtitle.
+- [ ] **Step 4: Integration.** Add "basic tabs and badges draw native chrome" to `native_shell_test.dart`; run `make integration-ios-native` with `NATIVE_DEVICES` set to the own iPad and iPhone UDIDs.
+- [ ] **Step 5: Commit** `feat(example): native chrome in every shell case (VK-405)`.
+
+### Task 8b: The debug hint (E2)
+
+- [ ] **Step 1: Red.** Unit: `nativeSymbolHint(destinations, trailing)` returns null when describable, else one line naming the labels without a symbol and the trailing action's `semanticLabel`. Widget (`FakeNativePlatform`): installed → one line naming `Home`, `Inbox`, `Reports`, `Settings` and `Search`; pending (`attachGate`) → one line; a rebuild (`setState`, a new selection) → still one; two shells → two lines; `off`, a `chromeBuilder`, the default platform and `kNative` → none. Run: the unit test fails to compile; the widget tests fail (the old line names nothing and pending logs nothing).
+- [ ] **Step 2: Green.** `_LiquidShellState` gets `bool _symbolHintLogged`; in `_resolveNative`, `if (kDebugMode && !_symbolHintLogged && auto && no chromeBuilder && (installed || pending-capable))`, print `nativeSymbolHint` once. Drop the `notDescribable` `debugLogOnce`.
+- [ ] **Step 3: Docs.** Dartdoc on both `sfSymbol`s; `doc/native_chrome.md` troubleshooting; CHANGELOG `0.1.0-dev.2`.
+- [ ] **Step 4: Commit** `feat: debug hint when sfSymbol blocks native chrome (VK-405)`.
+
+### Task 8c: Owner build
+
+- [ ] Profile build for the owner's devices: a temporary pbxproj edit (team `7T48W99FC5`, bundle id `vn.lasoai.liquidshell.example`), `fvm flutter build ios --profile`, revert, `git status` clean. Do not install. `Runner.app` stays at `liquid_shell/example/build/ios/iphoneos/Runner.app`.
