@@ -438,12 +438,33 @@ void main() {
       expect(hint, contains('tabBarTrailing "Search"'));
     });
 
-    testWidgets('pending: logged before the platform answers', (tester) async {
+    testWidgets('pending, then installed: one line once it answers', (
+      tester,
+    ) async {
       final logs = await _logsOf(() async {
-        installFakeNative().attachGate = Completer<LiquidNativeShellState>();
+        final native = installFakeNative()
+          ..attachGate = Completer<LiquidNativeShellState>();
         await _pumpNative(tester, shell: const TestShell(), settle: false);
+        native.attachGate!.complete(kInstalled);
+        await tester.pumpAndSettle();
       });
       expect(hints(logs), hasLength(1));
+    });
+
+    testWidgets('pending, then not installed: never logs', (tester) async {
+      final logs = await _logsOf(() async {
+        final native = installFakeNative()
+          ..attachGate = Completer<LiquidNativeShellState>();
+        await _pumpNative(tester, shell: const TestShell(), settle: false);
+        native.attachGate!.complete(
+          const LiquidNativeShellState(
+            installed: false,
+            unavailableReason: LiquidNativeUnavailableReason.notEnabled,
+          ),
+        );
+        await tester.pumpAndSettle();
+      });
+      expect(hints(logs), isEmpty);
     });
 
     testWidgets('a rebuild does not log it again', (tester) async {
@@ -479,24 +500,57 @@ void main() {
       expect(hints(logs), hasLength(2));
     });
 
-    testWidgets('quiet where native chrome is impossible anyway, and for a '
-        'describable shell', (tester) async {
+    testWidgets('quiet on the default platform (no native chrome)', (
+      tester,
+    ) async {
       final logs = await _logsOf(() async {
-        // The default platform: no native chrome.
         await _pumpNative(tester, shell: const TestShell());
-        await tester.pumpWidget(const SizedBox());
-        debugResetLiquidNative();
+      });
+      expect(hints(logs), isEmpty);
+    });
+
+    testWidgets('quiet when the platform answers not installed', (
+      tester,
+    ) async {
+      final logs = await _logsOf(() async {
+        installFakeNative(
+          state: const LiquidNativeShellState(
+            installed: false,
+            unavailableReason: LiquidNativeUnavailableReason.notEnabled,
+          ),
+        );
+        await _pumpNative(tester, shell: const TestShell());
+      });
+      expect(hints(logs), isEmpty);
+    });
+
+    testWidgets('quiet for nativeChrome: off', (tester) async {
+      final logs = await _logsOf(() async {
         installFakeNative();
         await _pumpNative(
           tester,
           shell: const TestShell(nativeChrome: LiquidNativeChrome.off),
         );
+      });
+      expect(hints(logs), isEmpty);
+    });
+
+    testWidgets('quiet with a chromeBuilder', (tester) async {
+      final logs = await _logsOf(() async {
+        installFakeNative();
         await _pumpNative(
           tester,
           shell: TestShell(
             chromeBuilder: (context, details, chrome) => chrome,
           ),
         );
+      });
+      expect(hints(logs), isEmpty);
+    });
+
+    testWidgets('quiet for a describable shell', (tester) async {
+      final logs = await _logsOf(() async {
+        installFakeNative();
         await _pumpNative(tester);
       });
       expect(hints(logs), isEmpty);

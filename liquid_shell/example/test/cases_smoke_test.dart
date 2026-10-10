@@ -247,7 +247,15 @@ void main() {
             ..devicePixelRatio = 1
             ..physicalSize = size;
           addTearDown(tester.view.reset);
+          // Every native case is describable: the missing-symbol hint
+          // stays quiet.
+          final logs = <String>[];
+          final original = debugPrint;
+          debugPrint = (message, {wrapWidth}) => logs.add(message ?? '');
+          addTearDown(() => debugPrint = original);
           await _openCase(tester, id);
+          debugPrint = original;
+          expect(logs.where((l) => l.contains('sfSymbol')), isEmpty);
           expect(tester.takeException(), isNull);
           final page = tester.element(find.byType(DemoPage).first);
           expect(LiquidShellScope.of(page).nativeChrome, isTrue);

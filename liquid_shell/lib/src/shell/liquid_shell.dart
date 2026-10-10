@@ -836,8 +836,9 @@ class _LiquidShellState extends State<LiquidShell>
 
   /// In debug, once per shell: names what lacks an `sfSymbol` when only
   /// that keeps this shell from native chrome (spec P2 §15, E2): `auto`, no
-  /// `chromeBuilder`, and the platform installed native chrome or may still
-  /// (pending).
+  /// `chromeBuilder`, and the platform answered that native chrome is
+  /// installed. While the answer is pending nothing is logged: the device
+  /// may not support it, and the once-per-shell line would be spent.
   void _debugHintMissingSymbols({
     required LiquidNativeShellState? state,
     required bool describable,
@@ -847,10 +848,7 @@ class _LiquidShellState extends State<LiquidShell>
         widget.chromeBuilder != null) {
       return;
     }
-    final available = state == null
-        ? LiquidShellPlatform.instance.supportsNativeChrome
-        : state.installed;
-    if (!available) return;
+    if (state == null || !state.installed) return;
     final hint = nativeSymbolHint(widget.destinations, widget.tabBarTrailing);
     if (hint == null) return;
     _symbolHintLogged = true;
