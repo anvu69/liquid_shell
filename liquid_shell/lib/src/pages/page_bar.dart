@@ -85,28 +85,33 @@ class FlutterPageBar extends StatelessWidget {
           left: 0,
           right: 0,
           height: kPageBarExtent,
-          child: LiquidWindowControlsClearance(
-            rowTop: barTop - media.padding.top,
-            child: Row(
-              children: [
-                const SizedBox(width: 16),
-                if (canPop) const LiquidBackButton(),
-                Expanded(
-                  child: large
-                      ? const SizedBox.shrink()
-                      : Text(
-                          title,
-                          textAlign: TextAlign.center,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
+          // Like the shell's chrome: the titles get the theme's text style
+          // even with no Material above the page (a page that is not a
+          // Scaffold, or one whose Scaffold is its child).
+          child: _Typography(
+            child: LiquidWindowControlsClearance(
+              rowTop: barTop - media.padding.top,
+              child: Row(
+                children: [
+                  const SizedBox(width: 16),
+                  if (canPop) const LiquidBackButton(),
+                  Expanded(
+                    child: large
+                        ? const SizedBox.shrink()
+                        : Text(
+                            title,
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ),
-                ),
-                // Keeps an inline title centred against the back button.
-                SizedBox(width: canPop ? 16 + LiquidBackButton.size : 16),
-              ],
+                  ),
+                  // Keeps an inline title centred against the back button.
+                  SizedBox(width: canPop ? 16 + LiquidBackButton.size : 16),
+                ],
+              ),
             ),
           ),
         ),
@@ -116,14 +121,16 @@ class FlutterPageBar extends StatelessWidget {
             start: 16,
             end: 16,
             height: kLargeTitleExtent,
-            child: Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.headlineLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
+            child: _Typography(
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.headlineLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ),
@@ -131,4 +138,17 @@ class FlutterPageBar extends StatelessWidget {
       ],
     );
   }
+}
+
+/// A transparent [Material], as the tab bar and the sidebar use: its
+/// `DefaultTextStyle` is the theme's body style, never the red,
+/// double-underlined fallback.
+class _Typography extends StatelessWidget {
+  const _Typography({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) =>
+      Material(type: MaterialType.transparency, child: child);
 }

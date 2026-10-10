@@ -110,8 +110,8 @@ EdgeInsets _padding(BuildContext context) =>
     LiquidShellScope.contentPaddingOf(context) +
     const EdgeInsets.symmetric(horizontal: 16);
 
-/// A wallpaper page: the glass has something to show. The [LiquidPage]
-/// sits inside the [Material], so its Flutter bar's title has a text style.
+/// A wallpaper page: the glass has something to show. The wallpaper sits
+/// behind the page bar; the content gets its own [Material].
 class _Page extends StatelessWidget {
   const _Page({required this.title, required this.child});
 
@@ -119,14 +119,14 @@ class _Page extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => Material(
-    type: MaterialType.transparency,
-    child: Stack(
-      children: [
-        const Positioned.fill(child: Wallpaper()),
-        LiquidPage(title: title, child: child),
-      ],
-    ),
+  Widget build(BuildContext context) => Stack(
+    children: [
+      const Positioned.fill(child: Wallpaper()),
+      LiquidPage(
+        title: title,
+        child: Material(type: MaterialType.transparency, child: child),
+      ),
+    ],
   );
 }
 

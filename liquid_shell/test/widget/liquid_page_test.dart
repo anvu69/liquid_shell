@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
@@ -233,6 +235,47 @@ void main() {
     expect(bar.canPop, isFalse);
     expect(find.byType(LiquidBackButton), findsNothing);
     expect(find.text('Search'), findsOneWidget);
+  });
+
+  testWidgets('the bar titles carry a text style without a Material above', (
+    tester,
+  ) async {
+    // MaterialApp's fallback (no Material): red, double-underlined text.
+    void expectStyled(String title) {
+      final style = DefaultTextStyle.of(
+        tester.element(
+          find.descendant(
+            of: find.byType(FlutterPageBar),
+            matching: find.text(title),
+          ),
+        ),
+      ).style;
+      expect(style.debugLabel ?? '', isNot(contains('fallback style')));
+      expect(style.decoration, isNot(TextDecoration.underline));
+    }
+
+    final navigator = GlobalKey<NavigatorState>();
+    await _pump(
+      tester,
+      home: Navigator(
+        key: navigator,
+        onGenerateRoute: (_) => MaterialPageRoute<void>(
+          builder: (_) =>
+              const LiquidPage(title: 'Large', child: SizedBox.expand()),
+        ),
+      ),
+    );
+    expectStyled('Large');
+    unawaited(
+      navigator.currentState!.push(
+        MaterialPageRoute<void>(
+          builder: (_) =>
+              const LiquidPage(title: 'Inline', child: SizedBox.expand()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expectStyled('Inline');
   });
 
   testWidgets('a pushed page gets the glass back button, which pops', (
