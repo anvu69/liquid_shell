@@ -69,7 +69,9 @@ run() {
     --driver=test_driver/integration_test.dart \
     --target=integration_test/signals_test.dart \
     -d "$ANDROID_SERIAL" \
-    --dart-define=RUN_NAME="android_$name" "$@"
+    --dart-define=RUN_NAME="android_$name" \
+    --dart-define=EXPECT_LOW_END="$low_end" \
+    --dart-define=EXPECT_GLES_ONLY="$gles_only" "$@"
 }
 
 power_dump() { adb shell dumpsys power | tr -d '\r'; }
@@ -108,6 +110,19 @@ if [ "$api" -ge 31 ] &&
   [ "$(adb shell getprop ro.surface_flinger.supports_background_blur | tr -d '\r')" != 1 ]; then
   blur_default=true # no GPU blur on this image: the system reports it disabled
 fi
+
+# Device facts behind lowEnd and glesOnly (spec 2026-10-10 §7.1), read the
+# way the plugin reads them: MemTotal is ActivityManager's totalMem.
+mem_kb=$(adb shell cat /proc/meminfo | tr -d '\r' | awk '/^MemTotal:/ {print $2}')
+low_ram=$(adb shell getprop ro.config.low_ram | tr -d '\r')
+low_end=false
+if [ "$low_ram" = true ] || [ "$mem_kb" -lt 3145728 ]; then low_end=true; fi
+gles_only=false
+if [ "$api" -ge 29 ] &&
+  [ "$(adb shell pm has-feature android.hardware.vulkan.version 4198400 | tr -d '\r')" != true ]; then
+  gles_only=true
+fi
+echo "▸ MemTotal ${mem_kb} kB (low end: $low_end), Vulkan 1.1 missing: $gles_only"
 
 run default \
   --dart-define=EXPECT_REDUCE_TRANSPARENCY=false \

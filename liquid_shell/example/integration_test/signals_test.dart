@@ -3,6 +3,8 @@
 // tool/integration_ios.sh and tool/integration_android.sh pass the expected
 // value of each signal with --dart-define. An empty value means "do not
 // check this field" (for example, battery saver also disables window blurs).
+import 'dart:ui' as ui;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,16 +18,35 @@ const _expectReduceTransparency = String.fromEnvironment(
 );
 const _expectPowerSave = String.fromEnvironment('EXPECT_POWER_SAVE');
 const _expectBlurDisabled = String.fromEnvironment('EXPECT_BLUR_DISABLED');
+const _expectLowEnd = String.fromEnvironment('EXPECT_LOW_END');
+const _expectGlesOnly = String.fromEnvironment('EXPECT_GLES_ONLY');
 
 /// Names the screenshot of this run, for example `android_powerSave`.
 const _runName = String.fromEnvironment('RUN_NAME', defaultValue: 'run');
 
-/// Solid is expected when the run switched any signal on.
-final bool _expectSolid = [
-  _expectReduceTransparency,
-  _expectPowerSave,
-  _expectBlurDisabled,
-].contains('true');
+/// The tier the run's signals ask for (spec 2026-10-10 §6.3), mirroring
+/// what the script switched on. An empty expectation counts as off.
+LiquidGlassTier _expectedTier() {
+  bool on(String value) => value == 'true';
+  final reduce = on(_expectReduceTransparency);
+  final powerSave = on(_expectPowerSave);
+  final blurDisabled = on(_expectBlurDisabled);
+  if (reduce || (blurDisabled && !powerSave)) return LiquidGlassTier.solid;
+  if (powerSave ||
+      on(_expectLowEnd) ||
+      on(_expectGlesOnly) ||
+      !ui.ImageFilter.isShaderFilterSupported) {
+    return LiquidGlassTier.frosted;
+  }
+  return LiquidGlassTier.liquid;
+}
+
+/// Whether the internal liquid backdrop is on screen. It is not exported,
+/// so it is matched by type name.
+bool _liquidShown() => find
+    .byWidgetPredicate((w) => w.runtimeType.toString() == 'LiquidBackdrop')
+    .evaluate()
+    .isNotEmpty;
 
 void _check(String expected, {required bool actual, required String name}) {
   if (expected.isEmpty) return;
@@ -64,9 +85,12 @@ void main() {
       actual: signals.blurDisabled,
       name: 'blurDisabled',
     );
+    _check(_expectLowEnd, actual: signals.lowEnd, name: 'lowEnd');
+    _check(_expectGlesOnly, actual: signals.glesOnly, name: 'glesOnly');
   });
 
   testWidgets('the shell draws the tier the signals ask for', (tester) async {
+    await LiquidGlass.precache();
     // nativeChrome off: on an iPad 26 the example opts into native chrome,
     // which has no Flutter glass to look at.
     await tester.pumpWidget(
@@ -83,10 +107,16 @@ void main() {
     // The first channel event arrives asynchronously, then the tier fades.
     await Future<void>.delayed(const Duration(seconds: 1));
     await tester.pumpAndSettle();
-    expect(
-      find.byType(BackdropFilter),
-      _expectSolid ? findsNothing : findsWidgets,
-    );
+    switch (_expectedTier()) {
+      case LiquidGlassTier.solid:
+        expect(find.byType(BackdropFilter), findsNothing);
+        expect(_liquidShown(), isFalse);
+      case LiquidGlassTier.frosted:
+        expect(find.byType(BackdropFilter), findsWidgets);
+        expect(_liquidShown(), isFalse);
+      case LiquidGlassTier.liquid:
+        expect(_liquidShown(), isTrue);
+    }
 
     if (defaultTargetPlatform == TargetPlatform.android) {
       await binding.convertFlutterSurfaceToImage();
