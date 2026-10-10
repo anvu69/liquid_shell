@@ -1,0 +1,105 @@
+import 'package:flutter/widgets.dart';
+
+/// One registered `LiquidPage` (spec P3b §8.4): what the native bar needs
+/// and where the page is.
+@immutable
+class PageEntry {
+  /// Creates an entry.
+  const PageEntry({
+    required this.title,
+    required this.largeTitle,
+    required this.route,
+    required this.navigator,
+    required this.sequence,
+    required this.onScreen,
+    required this.current,
+    required this.active,
+  });
+
+  /// Navigation bar title.
+  final String title;
+
+  /// Large title; null: the platform default.
+  final bool? largeTitle;
+
+  /// The page's route.
+  final ModalRoute<Object?>? route;
+
+  /// The navigator holding [route].
+  final NavigatorState? navigator;
+
+  /// Creation order: push order within a navigator.
+  final int sequence;
+
+  /// Tickers on: not covered by an opaque route, not in a hidden branch.
+  final bool onScreen;
+
+  /// [route] was current when the entry was taken.
+  final bool current;
+
+  /// [route] was active (in the history, not popping) when taken.
+  final bool active;
+
+  /// The page the user sees.
+  bool get isTop => onScreen && (route?.isCurrent ?? false);
+
+  /// Whether [other] describes the same page in the same state.
+  bool sameAs(PageEntry other) =>
+      other.title == title &&
+      other.largeTitle == largeTitle &&
+      identical(other.route, route) &&
+      identical(other.navigator, navigator) &&
+      other.sequence == sequence &&
+      other.onScreen == onScreen &&
+      other.current == current &&
+      other.active == active;
+}
+
+/// A page's registration.
+abstract interface class PageHandle {
+  /// The page's state changed (title, route, on screen).
+  void update(PageEntry entry);
+
+  /// The page's first vertical scroll view scrolled to [offset].
+  void scrolled(double offset);
+
+  /// The page left the tree.
+  void unregister();
+}
+
+/// Where pages register: the shell.
+// The port the shell's state implements, like `HideChromeRegistry`; a test
+// registry stands in for it.
+// ignore: one_member_abstracts
+abstract interface class PageRegistry {
+  /// Registers a page.
+  PageHandle registerPage(PageEntry entry);
+}
+
+/// The selected tab's stack (spec P3b §8.4): every active page in the top
+/// page's navigator, in push order. Empty when no page is on top.
+///
+/// The top page stands for its route: another page in the same route sits
+/// in a hidden branch (an `IndexedStack` inside one route), not below it.
+List<PageEntry> pageStackFor(
+  Iterable<PageEntry> entries, {
+  required bool Function(PageEntry) isTop,
+}) {
+  PageEntry? top;
+  for (final entry in entries) {
+    if (isTop(entry) && (top == null || entry.sequence > top.sequence)) {
+      top = entry;
+    }
+  }
+  if (top == null) return const [];
+  final navigator = top.navigator;
+  final route = top.route;
+  return [
+    for (final entry in entries)
+      if (identical(entry, top) ||
+          (identical(entry.navigator, navigator) &&
+              !identical(entry.route, route) &&
+              (entry.route?.isActive ?? false)))
+        entry,
+  ]..sort((a, b) => a.sequence.compareTo(b.sequence));
+}
