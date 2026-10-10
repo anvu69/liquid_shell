@@ -2,6 +2,7 @@
 
 
 > **Owner approved every recommended default, Q1–Q13 (2026-10-09: "Duyệt").**
+> **Amended 2026-10-10:** Task 7 (the addendum at the end) implements the owner's decisions D1–D4 after the device test (spec §14). It supersedes the iPad-only install and engagement lines of the Global Constraints, and P2 merges only after it (D4).
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Port vankhan's native iPadOS 26 shell (VK-242) into `liquid_shell_ios`, drive it from `LiquidShell(nativeChrome:)` with P1's guard and insets, and expose the iPadOS 26 window controls through `LiquidShellScope` (spec `docs/specs/2026-10-09-p2-native-ios-design.md`).
@@ -6399,3 +6400,2027 @@ The whole plan was executed on a copy before it was written (2026-10-09), and ev
 - Task 3 names used by the tests: `ShellMath.minimumClusterLeading`, `fallbackClusterTop`, `InstallFacts` fields.
 - Task 4 names used later: `debugResetLiquidNative`, `LiquidWindowControlsClearance(rowTop:)`.
 - The Pigeon types (`NativeChromeConfig`, `NativeShellState` and so on) are used identically in Dart (`configToNative`, `stateFromNative`) and Swift (`apply`, `currentState`).
+
+---
+
+## Addendum 2026-10-10: Task 7 (VK-403, owner decisions D1–D4)
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax.
+
+**Goal:** Put the native Liquid Glass tab bar on every iOS 26 iPhone and iPad, compact windows included (D1), and pin the VK-403 findings with regression tests, before P2 merges (D4). Spec: `docs/specs/2026-10-09-p2-native-ios-design.md` §14.
+
+**Architecture:** No new moving parts. The install rule loses its iPad fact. Dart engages native chrome at both size classes and follows UIKit's size class: compact is the `bottomBar` kind, inset by the bottom safe area that UIKit's floating bar adds to the tab host and §5.4's copy hands to Flutter. Native turns the trailing action into a search-role `UISearchTab`, leaves sidebar-only tabs out of the compact bar, reads the window controls under the compact bar, and keeps its tabs through a dormant spell. A sheet or dialog above the shell hides the compact bar, which would otherwise cover it. VK-403 itself was no layout bug (spec §14.2), so it gets regression guards, not a fix.
+
+**Tech Stack:** as Tasks 2–5. Simulators: iPhone 17 Pro (iOS 26.5), iPad Air 11-inch (M3) on iOS 26.5 and iOS 27.0.
+
+**Global Constraints:** the plan's Global Constraints apply, with two lines replaced by D1:
+
+- Native shell installs only on: iOS ≥ 26 (iPhone or iPad), not an iPad app on Mac, `LiquidShellNativeChrome = true` in Info.plist, no `LIQUID_SHELL_NATIVE_OFF=1`, registered before the Flutter view was on screen, scene root is a `FlutterViewController` (spec §14.3).
+- Native chrome is used when `nativeChrome == auto` && owner && installed && no `chromeBuilder` && every destination (and the trailing action) has an `sfSymbol`. Width and size class do not gate it; UIKit's size class picks the bar (spec §14.3).
+
+Commit scopes and the trailer are unchanged: `<type>(<scope>): <summary> (VK-346)`, a blank line, `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Run `bash .githooks/pre-commit` before each commit. Create your own simulators and delete them afterwards:
+
+```bash
+PHONE=$(xcrun simctl create "t7 iPhone" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro com.apple.CoreSimulator.SimRuntime.iOS-26-5)
+IPAD=$(xcrun simctl create "t7 iPad 26.5" com.apple.CoreSimulator.SimDeviceType.iPad-Air-11-inch-M3 com.apple.CoreSimulator.SimRuntime.iOS-26-5)
+IPAD27=$(xcrun simctl create "t7 iPad 27" com.apple.CoreSimulator.SimDeviceType.iPad-Air-11-inch-M3 com.apple.CoreSimulator.SimRuntime.iOS-27-0)
+for d in $PHONE $IPAD $IPAD27; do xcrun simctl boot $d; xcrun simctl bootstatus $d -b; done
+```
+
+The steps give each change as a patch made in the dry run (base: this branch at `3404385`). Save a block to a file and run `git apply <file>`, or type it in; `git apply --check` passed for every block against `3404385`.
+
+### File map (Task 7)
+
+| Path | Sub-task | Change |
+|---|---|---|
+| `liquid_shell/example/ios/RunnerTests/RunnerTests.swift` | 7a | Compact, search-tab, sidebar-only, dormant, size-class and VK-403 tiled tests; iPad-only tests skip on iPhone |
+| `liquid_shell_platform_interface/test/native_chrome_test.dart` | 7a | `notIPad` → `osTooOld` in one `!=` case |
+| `liquid_shell_ios/pigeons/native_shell.dart`, both generated files, `liquid_shell_ios/lib/src/mapping.dart`, `liquid_shell_platform_interface/lib/src/native_chrome.dart` | 7a | `notIPad` removed |
+| `.../Sources/liquid_shell_ios/InstallPolicy.swift`, `NativeShellInstaller.swift` | 7a | No idiom fact |
+| `.../Sources/liquid_shell_ios/NativeTabsController.swift` | 7a | `UISearchTab`, `showTabs`, dormant keeps tabs, compact window controls |
+| `liquid_shell/lib/src/native/native_layout.dart`, `liquid_shell/lib/src/shell/liquid_shell.dart`, `liquid_shell/lib/src/native/window_controls.dart`, `native_host.dart`, `native_chrome.dart` | 7b | Engagement at both size classes, `bottomBar` kind and inset, pending everywhere, compact window controls, compact hides under modals, hidden selection |
+| `liquid_shell/test/unit/native_layout_test.dart`, `test/widget/native_chrome_test.dart`, `test/widget/window_controls_test.dart` | 7b | Tests of the above |
+| `liquid_shell/example/integration_test/native_shell_test.dart`, `tool/integration_ios_native.sh`, `.github/workflows/ci.yaml` | 7c | iPhone expects native, compact checks, VK-403 layout check, CI |
+| `liquid_shell/doc/native_chrome.md`, `liquid_shell/README.md`, `liquid_shell/CHANGELOG.md`, `liquid_shell_ios/CHANGELOG.md`, `docs/qa/p2/manual.md` | 7c | iOS-wide wording, compact behaviour, iPadOS 27 sidebar look, owner checklist |
+
+### Task 7a: The channel and the native shell (Swift, XCTest)
+
+**Files:** see the file map, rows 7a.
+
+**Interfaces:**
+- Consumes: Task 3's `NativeTabsController`, `InstallPolicy`, `InstallFacts`, `NativeShellInstaller`, the XCTest helpers in `RunnerTests.swift` (`installedShell`, `settle`, `hit`, `isNative`, `labelCentre`, `openSidebar`).
+- Produces: `InstallFacts` without `isPad`; `NativeUnavailableReason`/`LiquidNativeUnavailableReason` without `notIPad`; `NativeShellState.compact == true` on every iPhone and every compact iPad window, with the chrome visible; the trailing tab is a `UISearchTab`; `NativeTabsController.windowControls()` reads under the compact bar; a config with no tabs leaves UIKit's tabs alone.
+
+- [ ] **Step 1: Write the XCTests**
+
+Apply to `RunnerTests.swift` and the interface test:
+
+```diff
+diff --git a/liquid_shell/example/ios/RunnerTests/RunnerTests.swift b/liquid_shell/example/ios/RunnerTests/RunnerTests.swift
+index a08c171..d4e811d 100644
+--- a/liquid_shell/example/ios/RunnerTests/RunnerTests.swift
++++ b/liquid_shell/example/ios/RunnerTests/RunnerTests.swift
+@@ -127,7 +127,7 @@ final class ArgbColorTests: XCTestCase {
+ 
+ final class InstallPolicyTests: XCTestCase {
+   private let ok = InstallFacts(
+-    isPad: true, osAtLeast26: true, isiOSAppOnMac: false, enabledInInfoPlist: true,
++    osAtLeast26: true, isiOSAppOnMac: false, enabledInInfoPlist: true,
+     disabledByEnvironment: false, registeredLate: false, rootIsFlutter: true)
+ 
+   func testInstallsWhenEveryFactHolds() {
+@@ -148,8 +148,6 @@ final class InstallPolicyTests: XCTestCase {
+     XCTAssertEqual(InstallPolicy.decide(facts), .iPadAppOnMac)
+     facts.osAtLeast26 = false
+     XCTAssertEqual(InstallPolicy.decide(facts), .osTooOld)
+-    facts.isPad = false
+-    XCTAssertEqual(InstallPolicy.decide(facts), .notIPad)
+   }
+ 
+   func testKeysAreThePublishedNames() {
+@@ -239,15 +237,16 @@ final class NativeTabsTests: XCTestCase {
+ 
+   private func config(
+     engaged: Bool = true, hidden: Bool = false, interactive: Bool = true,
+-    footer: Bool = false, selected: Int64 = 0
++    footer: Bool = false, trailing: Bool = false, reports: Bool = false, selected: Int64 = 0
+   ) -> NativeChromeConfig {
+     NativeChromeConfig(
+       engaged: engaged,
+       tabs: [
+         NativeTab(title: "Home", sfSymbol: "house", sidebarOnly: false),
+         NativeTab(title: "Inbox", sfSymbol: "tray", sidebarOnly: false),
+-      ],
++      ] + (reports ? [NativeTab(title: "Reports", sfSymbol: "chart.bar", sidebarOnly: true)] : []),
+       selectedIndex: selected,
++      trailing: trailing ? NativeAction(title: "Search", sfSymbol: "magnifyingglass") : nil,
+       footer: footer
+         ? NativeFooter(
+           title: "Ann Lee", subtitle: "Account", sfSymbol: "person.crop.circle",
+@@ -286,20 +285,33 @@ final class NativeTabsTests: XCTestCase {
+   }
+ 
+   /// A shell installed in its own window with the first config applied.
++  /// `sizeClass`: the container's horizontal size class, overriding the
++  /// window's (a compact iPad window, or a regular one on an iPhone).
+   private func installedShell(
+-    footer: Bool = false, landscape: Bool = false
++    footer: Bool = false, trailing: Bool = false, reports: Bool = false,
++    landscape: Bool = false, sizeClass: UIUserInterfaceSizeClass? = nil
+   ) throws -> NativeTabsController {
+     let flutter = UIViewController()
+     let tabs = NativeTabsController(flutter: flutter, events: events)
+     let window = try portraitWindow(root: UIViewController(), landscape: landscape)
+-    window.rootViewController = ShellContainerController(tabs: tabs, flutter: flutter)
++    let container = ShellContainerController(tabs: tabs, flutter: flutter)
++    if let sizeClass { container.traitOverrides.horizontalSizeClass = sizeClass }
++    window.rootViewController = container
+     self.window = window
+-    tabs.apply(config(footer: footer))
++    tabs.apply(config(footer: footer, trailing: trailing, reports: reports))
+     settle()
+     return tabs
+   }
+ 
++  /// The overlay, tiled and top-bar tests need a regular-width iPad: an
++  /// iPhone window is compact, where UIKit draws the bottom tab bar.
++  private func requireIPad() throws {
++    try XCTSkipUnless(
++      UIDevice.current.userInterfaceIdiom == .pad, "an iPad layout (overlay, tiled, top bar)")
++  }
++
+   func testHidingTheChromeClosesAnOverlaySidebar() throws {
++    try requireIPad()
+     let tabs = try installedShell()
+     tabs.setSidebarVisible(true)
+     settle()
+@@ -315,6 +327,7 @@ final class NativeTabsTests: XCTestCase {
+   }
+ 
+   func testGoingDormantClosesAnOverlaySidebar() throws {
++    try requireIPad()
+     let tabs = try installedShell()
+     tabs.setSidebarVisible(true)
+     settle()
+@@ -329,6 +342,7 @@ final class NativeTabsTests: XCTestCase {
+   /// sidebar and its dimming view: a non-interactive config (a dialog
+   /// above the shell, or a guard pending) closes the overlay first.
+   func testANonInteractiveConfigClosesAnOverlaySidebar() throws {
++    try requireIPad()
+     let tabs = try installedShell()
+     tabs.setSidebarVisible(true)
+     settle()
+@@ -411,6 +425,7 @@ final class NativeTabsTests: XCTestCase {
+   /// The floating tab bar: its items stay with UIKit; beside the pill,
+   /// just below the bar row and in the content, touches reach Flutter.
+   func testTouchesBesideAndBelowThePillReachFlutter() throws {
++    try requireIPad()
+     let tabs = try installedShell()
+     let root = try XCTUnwrap(tabs.parent?.view)
+     let inbox = try centreOfLabel("Inbox", in: tabs.view, tabs)
+@@ -446,6 +461,7 @@ final class NativeTabsTests: XCTestCase {
+   /// and its footer stay with UIKit (spec §5.3: "the sidebar"), and so does
+   /// the dimming view beside it, whose tap closes the overlay.
+   func testTheOverlaySidebarAndItsDimmingKeepTheirTouches() throws {
++    try requireIPad()
+     let tabs = try installedShell(footer: true)
+     let root = try XCTUnwrap(tabs.parent?.view)
+     openSidebar(tabs)
+@@ -469,6 +485,7 @@ final class NativeTabsTests: XCTestCase {
+   /// Landscape tiles the sidebar: its rows stay with UIKit, and the content
+   /// beside it reaches Flutter.
+   func testBesideATiledSidebarTouchesReachFlutter() throws {
++    try requireIPad()
+     let tabs = try installedShell(landscape: true)
+     let root = try XCTUnwrap(tabs.parent?.view)
+     openSidebar(tabs)
+@@ -544,6 +561,7 @@ final class NativeTabsTests: XCTestCase {
+   /// Dart as a cluster, pushed or read. Once the chrome hides (a page
+   /// covers the shell) Flutter has the whole window and the read counts.
+   func testWindowControlsAreZeroWhileTheNativeChromeIsVisible() throws {
++    try requireIPad()
+     let (installer, window) = try installedByInstaller()
+     let shell = try tabs(in: window)
+     let windowed = NativeWindowControls(leading: 66, top: 44)
+@@ -607,6 +625,169 @@ final class NativeTabsTests: XCTestCase {
+     XCTAssertEqual(shell.selectedTab?.identifier, "destination1")
+   }
+ 
++  // MARK: - Compact: UIKit's floating tab bar at the bottom (owner D1)
++
++  /// iPhone, or an iPad window too narrow for the top bar: the native bar
++  /// is UIKit's compact floating tab bar at the bottom. The Flutter view
++  /// keeps the whole window; the bar's height reaches Flutter as its
++  /// bottom safe area, and UIKit reports compact with no sidebar.
++  func testACompactShellShowsTheBottomTabBarInFluttersBottomSafeArea() throws {
++    let tabs = try installedShell(trailing: true, sizeClass: .compact)
++    let root = try XCTUnwrap(tabs.parent?.view)
++    let host = try XCTUnwrap(tabs.selectedViewController?.view)
++    let state = tabs.currentState()
++    XCTAssertTrue(state.compact)
++    XCTAssertEqual(state.sidebar, .hidden)
++    XCTAssertEqual(tabs.flutter.view.frame, root.bounds, "Flutter keeps the whole window")
++    XCTAssertGreaterThan(
++      host.safeAreaInsets.bottom, root.safeAreaInsets.bottom + 40, "the bar is in the host's safe area")
++    XCTAssertEqual(
++      tabs.flutter.view.safeAreaInsets.bottom, host.safeAreaInsets.bottom,
++      "and so in Flutter's")
++    let inbox = try centreOfLabel("Inbox", in: tabs.view, tabs)
++    XCTAssertGreaterThan(inbox.y, root.bounds.height - host.safeAreaInsets.bottom, "a bottom bar")
++  }
++
++  /// The compact bar's items stay with UIKit; the content, and the row
++  /// just above the bar, reach Flutter. The bar's own top, not the safe
++  /// area's: on iPadOS 27 the pill rises 5pt above the 72pt safe area.
++  func testTouchesAboveTheCompactBarReachFlutter() throws {
++    let tabs = try installedShell(trailing: true, sizeClass: .compact)
++    let root = try XCTUnwrap(tabs.parent?.view)
++    let barTop = tabs.tabBar.convert(tabs.tabBar.bounds, to: root).minY
++    let inbox = try centreOfLabel("Inbox", in: tabs.view, tabs)
++
++    XCTAssertTrue(isNative(try hit(tabs, inbox), tabs), "a tab bar item")
++    XCTAssertTrue(
++      try hit(tabs, CGPoint(x: inbox.x, y: barTop - 4)) === tabs.flutter.view,
++      "just above the bar")
++    XCTAssertTrue(
++      try hit(tabs, CGPoint(x: root.bounds.midX, y: root.bounds.midY)) === tabs.flutter.view,
++      "the centre")
++    XCTAssertTrue(
++      try hit(tabs, CGPoint(x: root.bounds.midX, y: 4)) === tabs.flutter.view, "the top edge")
++    tabs.apply(config(interactive: false, trailing: true))
++    XCTAssertTrue(try hit(tabs, inbox) === tabs.flutter.view, "inert under a dialog")
++  }
++
++  /// Compact has no sidebar, so a sidebar-only destination is left out of
++  /// the compact bar (as P1 leaves it out of the Flutter one) and comes
++  /// back at regular width, selected again if Dart still selects it.
++  /// Neither is a user's selection: nothing is proposed to Dart.
++  func testASidebarOnlyDestinationIsLeftOutOfTheCompactBar() throws {
++    let tabs = try installedShell(reports: true, sizeClass: .compact)
++    let container = try XCTUnwrap(tabs.parent)
++    func shown() -> [String] { tabs.tabs.map(\.identifier) }
++    XCTAssertEqual(shown(), ["destination0", "destination1"])
++    XCTAssertNil(labelCentre("Reports", in: tabs.view, tabs))
++
++    tabs.apply(config(reports: true, selected: 2))
++    settle()
++    XCTAssertEqual(tabs.selectedTab?.identifier, "destination0", "hidden: not selectable")
++
++    container.traitOverrides.horizontalSizeClass = .regular
++    settle()
++    XCTAssertEqual(shown(), ["destination0", "destination1", "destination2"])
++    XCTAssertEqual(tabs.selectedTab?.identifier, "destination2", "Dart's selection, back")
++    XCTAssertFalse(events.sent.contains { $0.hasPrefix("destination") })
++  }
++
++  /// The last shell leaving sends the dormant config (no tabs), and the
++  /// next shell's config follows (a route replaced, a test re-pumped). The
++  /// dormant spell must not empty UIKit's tabs: emptied and refilled, the
++  /// compact bar came back hidden under the content, with the host's (and
++  /// so Flutter's) bottom safe area down to the home indicator (iPhone,
++  /// iOS 26.5, Task 7 dry run).
++  func testADormantSpellKeepsTheTabsSoTheCompactBarComesBack() throws {
++    let tabs = try installedShell(trailing: true, sizeClass: .compact)
++    let root = try XCTUnwrap(tabs.parent?.view)
++    let shown = tabs.tabs.map(\.identifier)
++
++    tabs.apply(
++      NativeChromeConfig(
++        engaged: false, tabs: [], selectedIndex: 0, tintArgb: 0xFF00_7AFF, dark: false,
++        rtl: false, hidden: false, interactive: true))
++    settle()
++    XCTAssertFalse(tabs.chromeVisible)
++    XCTAssertEqual(tabs.tabs.map(\.identifier), shown, "dormant leaves the tabs alone")
++
++    tabs.apply(config(trailing: true))
++    settle()
++    let host = try XCTUnwrap(tabs.selectedViewController?.view)
++    XCTAssertGreaterThan(host.safeAreaInsets.bottom, root.safeAreaInsets.bottom + 40)
++    XCTAssertEqual(tabs.flutter.view.safeAreaInsets.bottom, host.safeAreaInsets.bottom)
++  }
++
++  /// Compact has no sidebar: Dart's request is ignored.
++  func testTheSidebarStaysClosedWhenCompact() throws {
++    let tabs = try installedShell(sizeClass: .compact)
++    tabs.setSidebarVisible(true)
++    settle()
++    XCTAssertEqual(tabs.currentState().sidebar, .hidden)
++  }
++
++  /// The compact bar is at the bottom and does not clear the window
++  /// controls at the top: Flutter content must, so the read reaches Dart.
++  func testWindowControlsAreReadUnderACompactBar() throws {
++    let tabs = try installedShell(sizeClass: .compact)
++    let windowed = NativeWindowControls(leading: 66, top: 44)
++    tabs.readWindowControls = { _ in windowed }
++    tabs.dartAttached = true
++    tabs.syncFlutter()
++    XCTAssertTrue(tabs.chromeVisible)
++    XCTAssertEqual(events.controls.last, windowed, "pushed")
++    XCTAssertEqual(tabs.windowControls(), windowed, "read")
++  }
++
++  /// The trailing action is a search-role tab (`UISearchTab`): the
++  /// separate ⌕ at the end of the compact bar, the trailing end of the top
++  /// bar, the first sidebar row. A tap only calls the app.
++  func testTheTrailingActionIsASearchTabThatOnlyCallsTheApp() throws {
++    let tabs = try installedShell(trailing: true, sizeClass: .compact)
++    let search = try XCTUnwrap(tabs.tabs.first as? UISearchTab)
++    XCTAssertEqual(search.title, "Search")
++    XCTAssertFalse(tabs.tabBarController(tabs, shouldSelectTab: search))
++    XCTAssertEqual(events.sent.last, "trailing")
++    XCTAssertEqual(tabs.selectedTab?.identifier, "destination0", "nothing selected")
++  }
++
++  /// A window resized across the size-class boundary (Stage Manager,
++  /// Split View): UIKit swaps the bar, and Dart hears the new state.
++  func testResizingAcrossTheSizeClassRepublishesTheState() throws {
++    let tabs = try installedShell(sizeClass: .regular)
++    let container = try XCTUnwrap(tabs.parent)
++    tabs.dartAttached = true
++    tabs.syncFlutter()
++    XCTAssertFalse(tabs.currentState().compact)
++    let before = events.sent.filter { $0 == "state" }.count
++
++    container.traitOverrides.horizontalSizeClass = .compact
++    settle()
++    XCTAssertTrue(tabs.currentState().compact)
++    XCTAssertEqual(events.sent.filter { $0 == "state" }.count, before + 1)
++    XCTAssertEqual(tabs.flutter.view.frame, container.view.bounds)
++
++    container.traitOverrides.horizontalSizeClass = .regular
++    settle()
++    XCTAssertFalse(tabs.currentState().compact)
++    XCTAssertEqual(events.sent.filter { $0 == "state" }.count, before + 2)
++  }
++
++  /// VK-403 guard: a tiled sidebar does not resize the Flutter view; its
++  /// width reaches Flutter as the start safe area (Dart then lays the body
++  /// out beside it). Measured equal on iPadOS 26.5 and 27.0.
++  func testATiledSidebarIsFluttersStartSafeArea() throws {
++    try requireIPad()
++    let tabs = try installedShell(landscape: true)
++    let root = try XCTUnwrap(tabs.parent?.view)
++    openSidebar(tabs)
++    XCTAssertEqual(tabs.currentState().sidebar, .tiled, "precondition: a landscape iPad tiles")
++    let host = try XCTUnwrap(tabs.selectedViewController?.view)
++    XCTAssertGreaterThan(host.safeAreaInsets.left, 200, "the sidebar's width")
++    XCTAssertEqual(tabs.flutter.view.frame, root.bounds)
++    XCTAssertEqual(tabs.flutter.view.safeAreaInsets.left, host.safeAreaInsets.left)
++  }
++
+   private func footerView(_ tabs: NativeTabsController) throws -> SidebarFooterView {
+     try XCTUnwrap(tabs.sidebar.bottomBarView as? SidebarFooterView)
+   }
+@@ -645,7 +826,7 @@ final class NativeTabsTests: XCTestCase {
+ /// plugin registered (spec §5.7, §11).
+ final class InstallerReasonTests: XCTestCase {
+   private func installer(
+-    isPad: Bool = true, enabled: Bool = true, flutterViewOnScreen: Bool
++    enabled: Bool = true, flutterViewOnScreen: Bool
+   ) -> NativeShellInstaller {
+     NativeShellInstaller(
+       events: RecordingEvents(),
+@@ -653,7 +834,7 @@ final class InstallerReasonTests: XCTestCase {
+       ownsFlutter: { _ in true },
+       readFacts: { registeredLate, rootIsFlutter in
+         InstallFacts(
+-          isPad: isPad, osAtLeast26: true, isiOSAppOnMac: false, enabledInInfoPlist: enabled,
++          osAtLeast26: true, isiOSAppOnMac: false, enabledInInfoPlist: enabled,
+           disabledByEnvironment: false, registeredLate: registeredLate,
+           rootIsFlutter: rootIsFlutter)
+       },
+@@ -676,7 +857,6 @@ final class InstallerReasonTests: XCTestCase {
+   }
+ 
+   func testAnEarlierFailingFactStillWins() throws {
+-    XCTAssertEqual(try reason(installer(isPad: false, flutterViewOnScreen: true)), .notIPad)
+     XCTAssertEqual(try reason(installer(enabled: false, flutterViewOnScreen: true)), .notEnabled)
+   }
+ }
+@@ -733,7 +913,7 @@ final class InstallerEngineTests: XCTestCase {
+       ownsFlutter: owns,
+       readFacts: { registeredLate, rootIsFlutter in
+         InstallFacts(
+-          isPad: true, osAtLeast26: true, isiOSAppOnMac: false, enabledInInfoPlist: true,
++          osAtLeast26: true, isiOSAppOnMac: false, enabledInInfoPlist: true,
+           disabledByEnvironment: false, registeredLate: registeredLate,
+           rootIsFlutter: rootIsFlutter)
+       },
+diff --git a/liquid_shell_platform_interface/test/native_chrome_test.dart b/liquid_shell_platform_interface/test/native_chrome_test.dart
+index 0d9ff7c..d95d0f6 100644
+--- a/liquid_shell_platform_interface/test/native_chrome_test.dart
++++ b/liquid_shell_platform_interface/test/native_chrome_test.dart
+@@ -48,7 +48,7 @@ void main() {
+         isNot(
+           const LiquidNativeShellState(
+             installed: true,
+-            unavailableReason: LiquidNativeUnavailableReason.notIPad,
++            unavailableReason: LiquidNativeUnavailableReason.osTooOld,
+           ),
+         ),
+       );
+```
+
+- [ ] **Step 2: Run them and watch the build fail for the right reason**
+
+Run: `make ios-unit IOS_UNIT_DEVICE=$IPAD`
+Expected: `Testing failed: Missing argument for parameter 'isPad' in call` and `** TEST FAILED **` (the tests already build `InstallFacts` without the idiom fact).
+
+- [ ] **Step 3: Remove the idiom fact and `notIPad`**
+
+```diff
+diff --git a/liquid_shell_ios/ios/liquid_shell_ios/Sources/liquid_shell_ios/InstallPolicy.swift b/liquid_shell_ios/ios/liquid_shell_ios/Sources/liquid_shell_ios/InstallPolicy.swift
+index eda01fa..a18f946 100644
+--- a/liquid_shell_ios/ios/liquid_shell_ios/Sources/liquid_shell_ios/InstallPolicy.swift
++++ b/liquid_shell_ios/ios/liquid_shell_ios/Sources/liquid_shell_ios/InstallPolicy.swift
+@@ -1,8 +1,8 @@
+ import Foundation
+ 
+-/// What decides whether the native shell is installed (spec §5.1).
++/// What decides whether the native shell is installed (spec §5.1). Every
++/// iPhone and iPad qualifies (owner D1): there is no idiom fact.
+ struct InstallFacts: Equatable {
+-  var isPad: Bool
+   var osAtLeast26: Bool
+   var isiOSAppOnMac: Bool
+   var enabledInInfoPlist: Bool
+@@ -21,7 +21,6 @@ enum InstallPolicy {
+ 
+   /// nil: install. Otherwise why not.
+   static func decide(_ facts: InstallFacts) -> NativeUnavailableReason? {
+-    if !facts.isPad { return .notIPad }
+     if !facts.osAtLeast26 { return .osTooOld }
+     if facts.isiOSAppOnMac { return .iPadAppOnMac }
+     if !facts.enabledInInfoPlist { return .notEnabled }
+diff --git a/liquid_shell_ios/ios/liquid_shell_ios/Sources/liquid_shell_ios/NativeShellInstaller.swift b/liquid_shell_ios/ios/liquid_shell_ios/Sources/liquid_shell_ios/NativeShellInstaller.swift
+index 7793801..8436520 100644
+--- a/liquid_shell_ios/ios/liquid_shell_ios/Sources/liquid_shell_ios/NativeShellInstaller.swift
++++ b/liquid_shell_ios/ios/liquid_shell_ios/Sources/liquid_shell_ios/NativeShellInstaller.swift
+@@ -60,7 +60,6 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
+   /// The facts of this device, OS, bundle and process (spec §5.1).
+   static func systemFacts(registeredLate: Bool, rootIsFlutter: Bool) -> InstallFacts {
+     InstallFacts(
+-      isPad: UIDevice.current.userInterfaceIdiom == .pad,
+       osAtLeast26: { if #available(iOS 26.0, *) { return true } else { return false } }(),
+       isiOSAppOnMac: ProcessInfo.processInfo.isiOSAppOnMac
+         || ProcessInfo.processInfo.isMacCatalystApp,
+diff --git a/liquid_shell_ios/lib/src/mapping.dart b/liquid_shell_ios/lib/src/mapping.dart
+index 32d57c4..bccc6fb 100644
+--- a/liquid_shell_ios/lib/src/mapping.dart
++++ b/liquid_shell_ios/lib/src/mapping.dart
+@@ -16,7 +16,6 @@ LiquidNativeShellState stateFromNative(
+   },
+   unavailableReason: switch (state.unavailableReason) {
+     null => null,
+-    NativeUnavailableReason.notIPad => LiquidNativeUnavailableReason.notIPad,
+     NativeUnavailableReason.osTooOld => LiquidNativeUnavailableReason.osTooOld,
+     NativeUnavailableReason.iPadAppOnMac =>
+       LiquidNativeUnavailableReason.iPadAppOnMac,
+diff --git a/liquid_shell_ios/pigeons/native_shell.dart b/liquid_shell_ios/pigeons/native_shell.dart
+index a515e02..442c1aa 100644
+--- a/liquid_shell_ios/pigeons/native_shell.dart
++++ b/liquid_shell_ios/pigeons/native_shell.dart
+@@ -22,7 +22,6 @@ enum NativeSidebar { hidden, overlay, tiled }
+ 
+ /// Why the native shell is not installed.
+ enum NativeUnavailableReason {
+-  notIPad,
+   osTooOld,
+   iPadAppOnMac,
+   notEnabled,
+diff --git a/liquid_shell_platform_interface/lib/src/native_chrome.dart b/liquid_shell_platform_interface/lib/src/native_chrome.dart
+index 75ddcf6..cfdab3d 100644
+--- a/liquid_shell_platform_interface/lib/src/native_chrome.dart
++++ b/liquid_shell_platform_interface/lib/src/native_chrome.dart
+@@ -19,10 +19,7 @@ enum LiquidNativeUnavailableReason {
+   /// The platform has no native chrome (Android, web, desktop, tests).
+   unsupportedPlatform,
+ 
+-  /// Not an iPad.
+-  notIPad,
+-
+-  /// iPadOS before 26.
++  /// iOS or iPadOS before 26.
+   osTooOld,
+ 
+   /// An iPad app running on a Mac ("Designed for iPad").
+```
+
+Then regenerate both ends of the channel: `make pigeon` (rewrites `liquid_shell_ios/lib/src/native_shell_api.g.dart` and `NativeShellApi.g.swift`; `NativeUnavailableReason` loses `notIPad`).
+
+- [ ] **Step 4: Run the XCTests: the new native behaviour is still red**
+
+Run: `make ios-unit IOS_UNIT_DEVICE=$PHONE`
+Expected: `** TEST FAILED **` with exactly these failing tests (the dry run's messages):
+- `testTheTrailingActionIsASearchTabThatOnlyCallsTheApp`: `XCTUnwrap failed: expected non-nil value of type "UISearchTab"`;
+- `testWindowControlsAreReadUnderACompactBar`: `XCTAssertEqual failed: ("Optional(NativeWindowControls(leading: 0.0, top: 0.0))") is not equal to ("Optional(NativeWindowControls(leading: 66.0, top: 44.0))")`;
+- `testASidebarOnlyDestinationIsLeftOutOfTheCompactBar`: the compact bar still lists `destination2`;
+- `testADormantSpellKeepsTheTabsSoTheCompactBarComesBack`: `XCTAssertEqual failed: ("[]") is not equal to (["trailing", "destination0", "destination1"]) - dormant leaves the tabs alone`.
+
+The compact bottom-bar, hit-test, size-class and tiled tests pass already: they pin UIKit behaviour the shell relies on (the tiled one is the VK-403 guard).
+
+- [ ] **Step 5: The native shell at both size classes**
+
+```diff
+diff --git a/liquid_shell_ios/ios/liquid_shell_ios/Sources/liquid_shell_ios/NativeTabsController.swift b/liquid_shell_ios/ios/liquid_shell_ios/Sources/liquid_shell_ios/NativeTabsController.swift
+index 4cfccfb..ef1eff3 100644
+--- a/liquid_shell_ios/ios/liquid_shell_ios/Sources/liquid_shell_ios/NativeTabsController.swift
++++ b/liquid_shell_ios/ios/liquid_shell_ios/Sources/liquid_shell_ios/NativeTabsController.swift
+@@ -3,7 +3,9 @@ import UIKit
+ 
+ /// The transparent `UITabBarController(.tabSidebar)` over the Flutter view
+ /// (spec §5): tab bar, sidebar toggle, sidebar, trailing action and footer
+-/// are real UIKit.
++/// are real UIKit. Regular width shows the top bar and the sidebar; compact
++/// width (every iPhone, a narrow iPad window) shows UIKit's floating tab
++/// bar at the bottom (owner D1).
+ ///
+ /// Sources of truth: Dart owns the selection (a tap only proposes it,
+ /// `onDestinationTapped`, and Dart answers with `update`); UIKit owns the
+@@ -20,7 +22,10 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
+   private let events: NativeShellFlutterApiProtocol
+ 
+   private var destinationTabs: [UITab] = []
+-  private var trailingTab: UITab?
++  /// The trailing action: a search-role tab, the separate ⌕ at the end of
++  /// the compact bar, the trailing end of the top bar, the first sidebar
++  /// row. It is never selected (`shouldSelectTab`).
++  private var trailingTab: UISearchTab?
+   /// Sidebar-only flags plus "has trailing": a change rebuilds the tabs.
+   private var structure: [Bool] = []
+   private let footer = SidebarFooterView()
+@@ -70,6 +75,10 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
+     footer.onTap = { [weak self] in self?.footerTapped() }
+     registerForTraitChanges([UITraitHorizontalSizeClass.self]) {
+       (self: NativeTabsController, _: UITraitCollection) in
++      if let config = self.config {
++        self.showTabs(config)
++        self.select(Int(config.selectedIndex))
++      }
+       self.syncFlutter()
+     }
+   }
+@@ -90,17 +99,23 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
+     // Read before `config` changes: once the new config hides the chrome,
+     // `currentSidebar()` reports `.hidden` and an open overlay is missed.
+     let overlayOpen = currentSidebar() == .overlay
+-    rebuildTabsIfNeeded(new)
+-    for (tab, spec) in zip(destinationTabs, new.tabs) {
+-      tab.title = spec.title
+-      tab.image = UIImage(systemName: spec.sfSymbol)
+-      tab.badgeValue = spec.badge
+-    }
+-    if let tab = trailingTab, let action = new.trailing {
+-      tab.title = action.title
+-      tab.image = UIImage(systemName: action.sfSymbol)
++    // The dormant config has no tabs: it hides the chrome and leaves the
++    // tabs alone. Emptied and refilled, UIKit brought the compact bar back
++    // hidden, with no bar in the host's safe area (iOS 26.5).
++    if !new.tabs.isEmpty {
++      rebuildTabsIfNeeded(new)
++      for (tab, spec) in zip(destinationTabs, new.tabs) {
++        tab.title = spec.title
++        tab.image = UIImage(systemName: spec.sfSymbol)
++        tab.badgeValue = spec.badge
++      }
++      if let tab = trailingTab, let action = new.trailing {
++        tab.title = action.title
++        tab.image = UIImage(systemName: action.sfSymbol)
++      }
++      showTabs(new)
++      select(Int(new.selectedIndex))
+     }
+-    select(Int(new.selectedIndex))
+     setFooter(new.footer)
+     view.tintColor = UIColor(argb: new.tintArgb)
+     traitOverrides.userInterfaceStyle = new.dark ? .dark : .light
+@@ -125,6 +140,8 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
+     sidebar.isHidden = !visible
+   }
+ 
++  /// Creates the tabs when the structure changes; `showTabs` hands them to
++  /// UIKit.
+   private func rebuildTabsIfNeeded(_ new: NativeChromeConfig) {
+     let wanted = new.tabs.map(\.sidebarOnly) + [new.trailing != nil]
+     guard wanted != structure else { return }
+@@ -138,20 +155,33 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
+       return tab
+     }
+     trailingTab = new.trailing.map { _ in
+-      let tab = UITab(title: "", image: nil, identifier: "trailing") { _ in
+-        TabHostController()
+-      }
+-      // Pinned: the trailing end of the tab bar, the first sidebar row.
+-      tab.preferredPlacement = .pinned
+-      return tab
++      // Pinned by default: the trailing end of the bar, the first sidebar row.
++      UISearchTab { _ in TabHostController() }
+     }
++  }
++
++  /// The tabs UIKit shows. Compact has no sidebar, and UIKit's compact bar
++  /// shows a `.sidebarOnly` tab anyway (`UITab.isHidden` does not hide it
++  /// there, iOS 26.5): leave sidebar-only destinations out, as P1's bar
++  /// does, and put them back at regular width. Dart tells the app about a
++  /// hidden selection (`onSelectedDestinationHidden`). Not a user's
++  /// selection: nothing is proposed to Dart.
++  private func showTabs(_ config: NativeChromeConfig) {
++    guard !config.tabs.isEmpty else { return }
++    let compact = traitCollection.horizontalSizeClass == .compact
++    let shown = zip(destinationTabs, config.tabs).filter { !(compact && $1.sidebarOnly) }.map(\.0)
++    let wanted = (trailingTab.map { [$0] } ?? []) + shown
++    guard wanted.map(ObjectIdentifier.init) != tabs.map(ObjectIdentifier.init) else { return }
+     applyingFromDart = true
+-    setTabs((trailingTab.map { [$0] } ?? []) + destinationTabs, animated: false)
++    setTabs(wanted, animated: false)
+     applyingFromDart = false
+   }
+ 
++  /// Selects destination [index] when UIKit shows it (a sidebar-only one
++  /// is left out of the compact bar).
+   private func select(_ index: Int) {
+-    guard destinationTabs.indices.contains(index), selectedTab !== destinationTabs[index]
++    guard destinationTabs.indices.contains(index), selectedTab !== destinationTabs[index],
++      tabs.contains(where: { $0 === destinationTabs[index] })
+     else { return }
+     applyingFromDart = true
+     selectedTab = destinationTabs[index]
+@@ -255,14 +285,16 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
+   }
+ 
+   /// The window controls Flutter must clear (spec §8.1). None while the
+-  /// native chrome is visible: UIKit's tab bar and sidebar make room for
+-  /// the cluster themselves, as its navigation bar does, and Flutter
+-  /// content starts below the bar row or beside the sidebar. The corner
+-  /// read is meaningless there: Flutter's safe top (the bar row) is below
+-  /// the cluster, so the vertical delta is 0 and the leading one alone
+-  /// would read as a cluster (`ShellMath.fallbackClusterTop`).
++  /// regular native chrome is visible: UIKit's top bar and sidebar make
++  /// room for the cluster themselves, as its navigation bar does, and
++  /// Flutter content starts below the bar row or beside the sidebar. The
++  /// corner read is meaningless there: Flutter's safe top (the bar row) is
++  /// below the cluster, so the vertical delta is 0 and the leading one
++  /// alone would read as a cluster (`ShellMath.fallbackClusterTop`). The
++  /// compact bar is at the bottom: the top is Flutter's, so it is read.
+   func windowControls() -> NativeWindowControls {
+-    if chromeVisible { return NativeWindowControls(leading: 0, top: 0) }
++    let compact = traitCollection.horizontalSizeClass == .compact
++    if chromeVisible, !compact { return NativeWindowControls(leading: 0, top: 0) }
+     return readWindowControls(flutter.viewIfLoaded)
+   }
+ 
+```
+
+- [ ] **Step 6: Run the XCTests green on an iPhone and two iPads**
+
+Run:
+```bash
+make ios-unit IOS_UNIT_DEVICE=$PHONE
+make ios-unit IOS_UNIT_DEVICE=$IPAD
+make ios-unit IOS_UNIT_DEVICE=$IPAD27
+```
+Expected: each ends without `** TEST FAILED **` (exit 0). Without `-quiet` the dry run counted **43 tests, 0 failures** on each iPad and **43 tests, 8 skipped, 0 failures** on the iPhone (the overlay, tiled and top-bar tests need a regular-width iPad).
+
+If a run reports `Restarting after unexpected exit` and `flutter: Test failed`, the app was last built by `flutter drive` with an integration test as its entry point: `make ios-unit` runs `flutter build ios --config-only` first for that reason; a bare `xcodebuild test` does not.
+
+- [ ] **Step 7: Dart side of the channel**
+
+Run: `fvm flutter test liquid_shell_platform_interface liquid_shell_ios`
+Expected: `+33: All tests passed!` and `+12: All tests passed!` (the mapping test iterates `NativeUnavailableReason.values`, so it follows the enum).
+
+- [ ] **Step 8: Commit**
+
+```bash
+bash .githooks/pre-commit && git add liquid_shell/example/ios/RunnerTests/RunnerTests.swift \
+  liquid_shell_platform_interface liquid_shell_ios && \
+git commit -m "feat(ios): native tab bar on every iOS 26 iPhone and iPad, with a search tab (VK-346)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+### Task 7b: `liquid_shell`: native chrome at both size classes (Dart)
+
+**Files:** see the file map, rows 7b.
+
+**Interfaces:**
+- Consumes: 7a's `LiquidNativeShellState.compact` (true on every iPhone), `LiquidNativeChromeConfig.hidden`; P1's `LiquidChromeKind.bottomBar`, `LiquidSizeClass`, `ShellPresentation`, `_reportHiddenSelection`.
+- Produces: `nativeChromeEngaged({mode, owner, state, hasChromeBuilder, describable})` and `nativeChromePossible({mode, hasChromeBuilder, describable})` without `presentation`; `nativeChromeKind` → `bottomBar` when `state.compact`; `nativeChromeInsets({kind, required EdgeInsets padding})`; `nativeChromeScreenPossible` and `kNativeChromeMinScreenSide` removed; `LiquidShellScopeData.sizeClass` follows UIKit once engaged; `windowControls` in the scope (and `LiquidWindowControlsClearance`) zero only for native regular chrome.
+
+- [ ] **Step 1: Write the tests**
+
+```diff
+diff --git a/liquid_shell/test/unit/native_layout_test.dart b/liquid_shell/test/unit/native_layout_test.dart
+index 0ba4262..9c99a17 100644
+--- a/liquid_shell/test/unit/native_layout_test.dart
++++ b/liquid_shell/test/unit/native_layout_test.dart
+@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
+ import 'package:flutter_test/flutter_test.dart';
+ import 'package:liquid_shell/liquid_shell.dart';
+ import 'package:liquid_shell/src/native/native_layout.dart';
+-import 'package:liquid_shell/src/shell/shell_layout.dart';
+ import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
+ 
+ const _installed = LiquidNativeShellState(installed: true);
+@@ -11,23 +10,26 @@ bool _engaged({
+   LiquidNativeChrome mode = LiquidNativeChrome.auto,
+   bool owner = true,
+   LiquidNativeShellState? state = _installed,
+-  ShellPresentation presentation = ShellPresentation.tiled,
+   bool hasChromeBuilder = false,
+   bool describable = true,
+ }) => nativeChromeEngaged(
+   mode: mode,
+   owner: owner,
+   state: state,
+-  presentation: presentation,
+   hasChromeBuilder: hasChromeBuilder,
+   describable: describable,
+ );
+ 
+ void main() {
+   group('nativeChromeEngaged', () {
+-    test('every condition holds → engaged', () {
++    test('every condition holds → engaged, at either size class (D1)', () {
+       expect(_engaged(), isTrue);
+-      expect(_engaged(presentation: ShellPresentation.overlay), isTrue);
++      expect(
++        _engaged(
++          state: const LiquidNativeShellState(installed: true, compact: true),
++        ),
++        isTrue,
++      );
+     });
+ 
+     test('each failing condition disengages', () {
+@@ -38,13 +40,6 @@ void main() {
+         _engaged(state: const LiquidNativeShellState(installed: false)),
+         isFalse,
+       );
+-      expect(
+-        _engaged(
+-          state: const LiquidNativeShellState(installed: true, compact: true),
+-        ),
+-        isFalse,
+-      );
+-      expect(_engaged(presentation: ShellPresentation.compact), isFalse);
+       expect(_engaged(hasChromeBuilder: true), isFalse);
+       expect(_engaged(describable: false), isFalse);
+     });
+@@ -53,44 +48,25 @@ void main() {
+   group('nativeChromePossible (what Dart knows before the platform)', () {
+     bool possible({
+       LiquidNativeChrome mode = LiquidNativeChrome.auto,
+-      ShellPresentation presentation = ShellPresentation.tiled,
+       bool hasChromeBuilder = false,
+       bool describable = true,
+     }) => nativeChromePossible(
+       mode: mode,
+-      presentation: presentation,
+       hasChromeBuilder: hasChromeBuilder,
+       describable: describable,
+     );
+ 
+-    test('auto, regular, no chromeBuilder, describable → possible', () {
++    test('auto, no chromeBuilder, describable → possible', () {
+       expect(possible(), isTrue);
+-      expect(possible(presentation: ShellPresentation.overlay), isTrue);
+     });
+ 
+     test('each failing condition rules it out', () {
+       expect(possible(mode: LiquidNativeChrome.off), isFalse);
+-      expect(possible(presentation: ShellPresentation.compact), isFalse);
+       expect(possible(hasChromeBuilder: true), isFalse);
+       expect(possible(describable: false), isFalse);
+     });
+   });
+ 
+-  test('nativeChromeScreenPossible: an iPad screen, not an iPhone one', () {
+-    // iPad mini (744 × 1133) is the smallest iPad.
+-    expect(nativeChromeScreenPossible(const Size(744, 1133)), isTrue);
+-    expect(nativeChromeScreenPossible(const Size(1194, 834)), isTrue);
+-    // iPhone 17 Pro Max, either way round: 440pt short side.
+-    expect(nativeChromeScreenPossible(const Size(956, 440)), isFalse);
+-    expect(nativeChromeScreenPossible(const Size(440, 956)), isFalse);
+-    // Unknown screen: possible (wait for the platform, as before).
+-    expect(nativeChromeScreenPossible(Size.zero), isTrue);
+-    // A display not described yet (ratio 0): the caller's size / ratio is
+-    // NaN (empty) or infinite. Unknown too, never a NaN comparison.
+-    expect(nativeChromeScreenPossible(Size.zero / 0), isTrue);
+-    expect(nativeChromeScreenPossible(const Size(2388, 1668) / 0), isTrue);
+-  });
+-
+   test('nativeDescribable needs every symbol, the trailing one too', () {
+     const home = LiquidDestination(
+       icon: Icon(Icons.home),
+@@ -140,12 +116,28 @@ void main() {
+     expect(nativeBadgeText(const LiquidBadge.dot()), '');
+   });
+ 
+-  test('nativeChromeKind maps the sidebar; hidden wins', () {
+-    LiquidChromeKind kind(LiquidNativeSidebar sidebar, {bool hidden = false}) =>
+-        nativeChromeKind(
+-          state: LiquidNativeShellState(installed: true, sidebar: sidebar),
+-          hidden: hidden,
+-        );
++  test('nativeChromeKind maps the sidebar; compact is the bottom bar; '
++      'hidden wins', () {
++    LiquidChromeKind kind(
++      LiquidNativeSidebar sidebar, {
++      bool compact = false,
++      bool hidden = false,
++    }) => nativeChromeKind(
++      state: LiquidNativeShellState(
++        installed: true,
++        compact: compact,
++        sidebar: sidebar,
++      ),
++      hidden: hidden,
++    );
++    expect(
++      kind(LiquidNativeSidebar.hidden, compact: true),
++      LiquidChromeKind.bottomBar,
++    );
++    expect(
++      kind(LiquidNativeSidebar.hidden, compact: true, hidden: true),
++      LiquidChromeKind.hidden,
++    );
+     expect(kind(LiquidNativeSidebar.hidden), LiquidChromeKind.topBar);
+     expect(kind(LiquidNativeSidebar.overlay), LiquidChromeKind.sidebarOverlay);
+     expect(kind(LiquidNativeSidebar.tiled), LiquidChromeKind.sidebarTiled);
+@@ -155,15 +147,17 @@ void main() {
+     );
+   });
+ 
+-  test('nativeChromeInsets: the top padding under the bar, else zero', () {
++  test('nativeChromeInsets: the padding on the side of the bar, else zero', () {
++    const padding = EdgeInsets.only(top: 96, bottom: 83);
+     for (final kind in LiquidChromeKind.values) {
+-      final insets = nativeChromeInsets(kind: kind, topPadding: 96);
+-      final covered =
+-          kind == LiquidChromeKind.topBar ||
+-          kind == LiquidChromeKind.sidebarOverlay;
+       expect(
+-        insets,
+-        covered ? const EdgeInsets.only(top: 96) : EdgeInsets.zero,
++        nativeChromeInsets(kind: kind, padding: padding),
++        switch (kind) {
++          LiquidChromeKind.topBar ||
++          LiquidChromeKind.sidebarOverlay => const EdgeInsets.only(top: 96),
++          LiquidChromeKind.bottomBar => const EdgeInsets.only(bottom: 83),
++          _ => EdgeInsets.zero,
++        },
+       );
+     }
+   });
+diff --git a/liquid_shell/test/widget/native_chrome_test.dart b/liquid_shell/test/widget/native_chrome_test.dart
+index dda4991..2de58d2 100644
+--- a/liquid_shell/test/widget/native_chrome_test.dart
++++ b/liquid_shell/test/widget/native_chrome_test.dart
+@@ -40,6 +40,13 @@ const kNative = [
+ /// safe area (24 status bar + 72).
+ const _nativePadding = EdgeInsets.only(top: 96, bottom: 20);
+ 
++/// iPhone portrait with UIKit's compact tab bar copied into the bottom
++/// safe area (34 home indicator + 49).
++const _compactPadding = EdgeInsets.only(top: 62, bottom: 83);
++
++/// UIKit's compact size class: the floating tab bar at the bottom.
++const _compact = LiquidNativeShellState(installed: true, compact: true);
++
+ Future<void> _pumpNative(
+   WidgetTester tester, {
+   Widget? shell,
+@@ -115,23 +122,61 @@ void main() {
+       expect(native.last.interactive, isTrue);
+     });
+ 
+-    testWidgets('compact width draws the Flutter bottom bar', (tester) async {
+-      final native = installFakeNative();
+-      await _pumpNative(tester, size: kPhone);
+-      expect(find.byType(LiquidTabBar), findsOneWidget);
+-      expect(_scope(tester).nativeChrome, isFalse);
+-      expect(native.last.engaged, isFalse);
++    // Owner D1: the native bar on every iOS 26 iPhone and iPad, compact
++    // windows included. UIKit's compact bar is in the bottom safe area.
++    testWidgets('compact: the native bottom bar, compact scope', (
++      tester,
++    ) async {
++      final native = installFakeNative(state: _compact);
++      await _pumpNative(tester, size: kPhone, padding: _compactPadding);
++      expect(_flutterChrome(), isFalse);
++      final scope = _scope(tester);
++      expect(scope.nativeChrome, isTrue);
++      expect(scope.sizeClass, LiquidSizeClass.compact);
++      expect(scope.chromeKind, LiquidChromeKind.bottomBar);
++      expect(scope.chromeInsets, const EdgeInsets.only(bottom: 83));
++      expect(scope.sidebarVisible, isFalse);
++      expect(native.last.engaged, isTrue);
++      expect(native.last.visible, isTrue);
+     });
+ 
+-    testWidgets('a compact platform size class draws Flutter chrome', (
++    // P1 parity: the compact bar has no sidebar, so a sidebar-only
++    // selection is hidden there and the app hears about it.
++    testWidgets('compact: a sidebar-only selection is reported hidden', (
+       tester,
+     ) async {
+-      final native = installFakeNative(
+-        state: const LiquidNativeShellState(installed: true, compact: true),
++      installFakeNative(state: _compact);
++      final hidden = <int>[];
++      await _pumpNative(
++        tester,
++        shell: TestShell(
++          destinations: kNative,
++          initialIndex: 2,
++          onHidden: hidden.add,
++        ),
++        size: kPhone,
++        padding: _compactPadding,
+       );
++      expect(hidden, [2]);
++    });
++
++    // UIKit decides the bar, not the shell's own width.
++    testWidgets('a compact platform at a regular shell width: bottom bar', (
++      tester,
++    ) async {
++      installFakeNative(state: _compact);
+       await _pumpNative(tester);
+-      expect(_flutterChrome(), isTrue);
+-      expect(native.last.engaged, isFalse);
++      expect(_scope(tester).chromeKind, LiquidChromeKind.bottomBar);
++      expect(_scope(tester).sizeClass, LiquidSizeClass.compact);
++    });
++
++    testWidgets('a regular platform at a phone shell width: top bar', (
++      tester,
++    ) async {
++      installFakeNative();
++      await _pumpNative(tester, size: kPhone);
++      expect(_scope(tester).chromeKind, LiquidChromeKind.topBar);
++      expect(_scope(tester).sizeClass, LiquidSizeClass.regular);
+     });
+ 
+     testWidgets('a destination without sfSymbol keeps Flutter chrome', (
+@@ -236,28 +281,21 @@ void main() {
+       expect(native.last.engaged, isTrue);
+     });
+ 
+-    // Pending only where native chrome is possible: everywhere else the
+-    // answer is already known to be Flutter chrome, so draw it at once.
+-    testWidgets('pending at phone width: the Flutter tab bar, compact', (
+-      tester,
+-    ) async {
++    // D1: an iPhone may install native chrome too, so it waits like an
++    // iPad, at its own size class.
++    testWidgets('pending at phone width waits too, compact', (tester) async {
+       installFakeNative().attachGate = Completer<LiquidNativeShellState>();
+       await _pumpNative(tester, size: kPhone, settle: false);
+-      expect(find.byType(LiquidTabBar), findsOneWidget);
++      expect(_flutterChrome(), isFalse);
+       final scope = _scope(tester);
+       expect(scope.sizeClass, LiquidSizeClass.compact);
+-      expect(scope.chromeKind, LiquidChromeKind.bottomBar);
++      expect(scope.chromeKind, LiquidChromeKind.hidden);
+     });
+ 
+-    // Every iPhone screen is under 744pt on its short side, every iPad
+-    // (mini included) at least that: no iPhone can install native chrome,
+-    // so one in landscape (a regular-width shell) does not wait for it.
+-    testWidgets('pending on an iPhone in landscape: the Flutter chrome on '
+-        'the first frame', (tester) async {
++    testWidgets('pending on an iPhone in landscape waits too', (tester) async {
+       installFakeNative().attachGate = Completer<LiquidNativeShellState>();
+       await _pumpNative(tester, size: kPhoneLandscape, settle: false);
+-      expect(_flutterChrome(), isTrue);
+-      expect(_scope(tester).chromeKind, isNot(LiquidChromeKind.hidden));
++      expect(_flutterChrome(), isFalse);
+     });
+ 
+     testWidgets('pending in an iPad window narrower than its screen still '
+@@ -295,25 +333,24 @@ void main() {
+       expect(_flutterChrome(), isTrue);
+     });
+ 
+-    testWidgets('the state flipping to compact falls back, and back again', (
+-      tester,
+-    ) async {
++    testWidgets('a window resized across the size class swaps the native '
++        'bar; the body keeps its state', (tester) async {
+       final native = installFakeNative();
+       await _pumpNative(tester);
+       final counter = find.byKey(const ValueKey('counter-Home'));
+       await tester.tap(counter);
+       await tester.pump();
+ 
+-      native.pushState(
+-        const LiquidNativeShellState(installed: true, compact: true),
+-      );
++      native.pushState(_compact);
+       await tester.pumpAndSettle();
+-      expect(_flutterChrome(), isTrue);
+-      expect(native.last.engaged, isFalse);
++      expect(_flutterChrome(), isFalse);
++      expect(_scope(tester).chromeKind, LiquidChromeKind.bottomBar);
++      expect(native.last.engaged, isTrue);
+ 
+       native.pushState(kInstalled);
+       await tester.pumpAndSettle();
+       expect(_flutterChrome(), isFalse);
++      expect(_scope(tester).chromeKind, LiquidChromeKind.topBar);
+       // §5.6: the body never moved, so its State survived both switches.
+       expect(find.text('Home page: 1'), findsOneWidget);
+     });
+@@ -810,6 +847,30 @@ void main() {
+       expect(native.last.interactive, isTrue);
+     });
+ 
++    // D1 on iPhone: the compact native bar is drawn above the Flutter view,
++    // so it would cover a sheet's bottom (or a dialog's) drawn in Flutter.
++    // There it hides while anything is above the shell, as for a page.
++    testWidgets('compact: a sheet above hides the native bar until it pops', (
++      tester,
++    ) async {
++      final native = installFakeNative(state: _compact);
++      await _pumpNative(tester, size: kPhone, padding: _compactPadding);
++      unawaited(
++        showModalBottomSheet<void>(
++          context: tester.element(find.byType(TestPage).first),
++          builder: (_) => const Text('sheet'),
++        ),
++      );
++      await tester.pumpAndSettle();
++      expect(native.last.hidden, isTrue);
++      expect(native.last.interactive, isFalse);
++
++      tester.state<NavigatorState>(find.byType(Navigator)).pop();
++      await tester.pumpAndSettle();
++      expect(native.last.hidden, isFalse);
++      expect(native.last.interactive, isTrue);
++    });
++
+     testWidgets('a second shell owns the chrome; the first gets it back', (
+       tester,
+     ) async {
+diff --git a/liquid_shell/test/widget/window_controls_test.dart b/liquid_shell/test/widget/window_controls_test.dart
+index 6564f37..d329bda 100644
+--- a/liquid_shell/test/widget/window_controls_test.dart
++++ b/liquid_shell/test/widget/window_controls_test.dart
+@@ -308,6 +308,45 @@ void main() {
+       expect(scope.windowControls, LiquidWindowControls.zero);
+       expect(tester.getTopLeft(find.text('Title 0')).dx, 0);
+     });
++
++    // D1: in a compact iPad window the native bar is at the bottom; the
++    // top row is Flutter's, so it must clear the cluster itself.
++    testWidgets('under the compact native bar the page clears the cluster', (
++      tester,
++    ) async {
++      final native = installFakeNative(
++        state: const LiquidNativeShellState(installed: true, compact: true),
++      )..controls = _controls;
++      await pumpShell(
++        tester,
++        const TestShell(
++          destinations: [
++            LiquidDestination(
++              icon: Icon(Icons.home_outlined),
++              label: 'Home',
++              sfSymbol: 'house',
++            ),
++            LiquidDestination(
++              icon: Icon(Icons.inbox_outlined),
++              label: 'Inbox',
++              sfSymbol: 'tray',
++            ),
++          ],
++          pageBuilder: _titlePage,
++        ),
++        size: const Size(500, 800),
++        padding: const EdgeInsets.only(top: 24, bottom: 83),
++      );
++      native.emitNative(const LiquidWindowControlsChanged(_controls));
++      await tester.pumpAndSettle();
++      final scope = LiquidShellScope.of(
++        tester.element(find.text('Title 0')),
++      );
++      expect(scope.nativeChrome, isTrue);
++      expect(scope.chromeKind, LiquidChromeKind.bottomBar);
++      expect(scope.windowControls, _controls);
++      expect(tester.getTopLeft(find.text('Title 0')).dx, 66);
++    });
+   });
+ 
+   group('scope', () {
+```
+
+- [ ] **Step 2: Run them and watch them fail**
+
+Run: `fvm flutter test liquid_shell/test/unit/native_layout_test.dart liquid_shell/test/widget/native_chrome_test.dart liquid_shell/test/widget/window_controls_test.dart`
+Expected: `native_layout_test.dart` does not compile (`Required named parameter 'presentation' must be provided`, `No named parameter with the name 'padding'`), and these fail: `compact: the native bottom bar, compact scope`, `a compact platform at a regular shell width: bottom bar`, `a regular platform at a phone shell width: top bar`, `compact: a sidebar-only selection is reported hidden` (`Expected: [2] Actual: []`), `pending at phone width waits too, compact`, `pending on an iPhone in landscape waits too`, `a window resized across the size class swaps the native bar; the body keeps its state`, `compact: a sheet above hides the native bar until it pops`, and `under the compact native bar the page clears the cluster`. `Some tests failed.`
+
+- [ ] **Step 3: Engage at both size classes**
+
+```diff
+diff --git a/liquid_shell/lib/src/native/native_chrome.dart b/liquid_shell/lib/src/native/native_chrome.dart
+index 98384ba..bb9c307 100644
+--- a/liquid_shell/lib/src/native/native_chrome.dart
++++ b/liquid_shell/lib/src/native/native_chrome.dart
+@@ -3,8 +3,8 @@ import 'package:flutter/foundation.dart';
+ /// Whether a `LiquidShell` may hand its chrome to the platform.
+ enum LiquidNativeChrome {
+   /// Native chrome wherever the platform offers it and the shell can
+-  /// describe itself natively (spec P2 §5.1): today iPadOS 26 at regular
+-  /// width, in an app that opted in. Flutter chrome everywhere else.
++  /// describe itself natively (spec P2 §5.1): today iOS 26 on iPhone and
++  /// iPad, in an app that opted in. Flutter chrome everywhere else.
+   auto,
+ 
+   /// Always Flutter chrome.
+diff --git a/liquid_shell/lib/src/native/native_host.dart b/liquid_shell/lib/src/native/native_host.dart
+index e3f0206..9ffde19 100644
+--- a/liquid_shell/lib/src/native/native_host.dart
++++ b/liquid_shell/lib/src/native/native_host.dart
+@@ -74,7 +74,7 @@ final class NativeChromeHost extends ChangeNotifier {
+         state.unavailableReason == LiquidNativeUnavailableReason.notEnabled) {
+       debugLogOnce(
+         'notEnabled',
+-        'liquid_shell: native iPadOS chrome is available on this device but '
++        'liquid_shell: native iOS chrome is available on this device but '
+             'not enabled; add <key>LiquidShellNativeChrome</key><true/> to '
+             'Info.plist to use it.',
+       );
+diff --git a/liquid_shell/lib/src/native/native_layout.dart b/liquid_shell/lib/src/native/native_layout.dart
+index 20389dd..f8a6b52 100644
+--- a/liquid_shell/lib/src/native/native_layout.dart
++++ b/liquid_shell/lib/src/native/native_layout.dart
+@@ -9,63 +9,39 @@ import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.
+ /// Whether the shell's chrome is native right now (spec P2 §5.1). Pure.
+ ///
+ /// Every condition must hold: the app allows it, this shell owns the
+-/// window's native chrome, the platform installed it, the platform's size
+-/// class is regular, the shell's own width is regular, the shell has no
++/// window's native chrome, the platform installed it, the shell has no
+ /// custom Flutter chrome, and every destination (and the trailing action)
+-/// can be drawn natively.
++/// can be drawn natively. Width does not matter (owner D1): UIKit draws
++/// the compact bar at the bottom and the top bar or sidebar at regular
++/// width, and reports which in [LiquidNativeShellState.compact].
+ bool nativeChromeEngaged({
+   required LiquidNativeChrome mode,
+   required bool owner,
+   required LiquidNativeShellState? state,
+-  required ShellPresentation presentation,
+   required bool hasChromeBuilder,
+   required bool describable,
+ }) =>
+     nativeChromePossible(
+       mode: mode,
+-      presentation: presentation,
+       hasChromeBuilder: hasChromeBuilder,
+       describable: describable,
+     ) &&
+     owner &&
+     state != null &&
+-    state.installed &&
+-    !state.compact;
++    state.installed;
+ 
+ /// The conditions of [nativeChromeEngaged] that the shell knows without the
+-/// platform: the app allows it, the shell's width is regular, it has no
+-/// custom Flutter chrome, and it can be drawn natively. Pure.
++/// platform: the app allows it, it has no custom Flutter chrome, and it
++/// can be drawn natively. Pure.
+ ///
+ /// While the platform has not answered (pending), only a shell for which
+ /// this holds waits with no chrome; every other one draws Flutter chrome
+ /// from its first frame.
+ bool nativeChromePossible({
+   required LiquidNativeChrome mode,
+-  required ShellPresentation presentation,
+   required bool hasChromeBuilder,
+   required bool describable,
+-}) =>
+-    mode == LiquidNativeChrome.auto &&
+-    presentation != ShellPresentation.compact &&
+-    !hasChromeBuilder &&
+-    describable;
+-
+-/// Whether a screen of [screen] logical pixels can be an iPad's: its short
+-/// side is at least 744pt (iPad mini), while every iPhone's is under 500pt
+-/// in either orientation. Window size does not matter, only the screen's:
+-/// an iPad window in Split View is still on an iPad. An unknown screen
+-/// (empty, or not finite: a display whose pixel ratio is still 0) counts
+-/// as possible. Pure.
+-///
+-/// Native chrome installs only on iPad, so a shell on any other screen
+-/// never waits for the platform's answer (pending).
+-bool nativeChromeScreenPossible(Size screen) =>
+-    !screen.isFinite ||
+-    screen.isEmpty ||
+-    screen.shortestSide >= kNativeChromeMinScreenSide;
+-
+-/// The short side of the smallest iPad screen (iPad mini), in points.
+-const double kNativeChromeMinScreenSide = 744;
++}) => mode == LiquidNativeChrome.auto && !hasChromeBuilder && describable;
+ 
+ /// Whether every destination and the trailing action have an SF Symbol.
+ bool nativeDescribable(
+@@ -86,13 +62,14 @@ String? nativeBadgeText(LiquidBadge? badge) {
+   };
+ }
+ 
+-/// The chrome kind while native chrome is engaged. The tab bar shows when
+-/// the sidebar is hidden; UIKit's own compact bar never engages.
++/// The chrome kind while native chrome is engaged: UIKit's compact bar at
++/// the bottom, else the top bar while the sidebar is hidden.
+ LiquidChromeKind nativeChromeKind({
+   required LiquidNativeShellState state,
+   required bool hidden,
+ }) {
+   if (hidden) return LiquidChromeKind.hidden;
++  if (state.compact) return LiquidChromeKind.bottomBar;
+   return switch (state.sidebar) {
+     LiquidNativeSidebar.hidden => LiquidChromeKind.topBar,
+     LiquidNativeSidebar.overlay => LiquidChromeKind.sidebarOverlay,
+@@ -100,15 +77,17 @@ LiquidChromeKind nativeChromeKind({
+   };
+ }
+ 
+-/// The insets of native chrome: the tab bar (or the overlay's held top) is
+-/// already in the Flutter view's safe area, so the top inset is the top
+-/// padding; tiled and hidden cover nothing.
++/// The insets of native chrome. The bar is already in the Flutter view's
++/// safe area [padding]: the top bar (or the overlay's held top) in the
++/// top padding, the compact bar in the bottom padding. Tiled and hidden
++/// cover nothing.
+ EdgeInsets nativeChromeInsets({
+   required LiquidChromeKind kind,
+-  required double topPadding,
++  required EdgeInsets padding,
+ }) => switch (kind) {
+   LiquidChromeKind.topBar ||
+-  LiquidChromeKind.sidebarOverlay => EdgeInsets.only(top: topPadding),
++  LiquidChromeKind.sidebarOverlay => EdgeInsets.only(top: padding.top),
++  LiquidChromeKind.bottomBar => EdgeInsets.only(bottom: padding.bottom),
+   _ => EdgeInsets.zero,
+ };
+ 
+diff --git a/liquid_shell/lib/src/native/window_controls.dart b/liquid_shell/lib/src/native/window_controls.dart
+index 961b542..81762a1 100644
+--- a/liquid_shell/lib/src/native/window_controls.dart
++++ b/liquid_shell/lib/src/native/window_controls.dart
+@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
+ import 'package:flutter/rendering.dart';
+ import 'package:flutter/scheduler.dart';
+ import 'package:flutter/widgets.dart';
++import 'package:liquid_shell/src/shell/breakpoints.dart';
+ import 'package:liquid_shell/src/shell/shell_layout.dart';
+ import 'package:liquid_shell/src/shell/shell_scope.dart';
+ import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
+@@ -211,8 +212,11 @@ class _LiquidWindowControlsClearanceState
+     // Beside a tiled sidebar the body starts past the cluster: a new row
+     // there is never drawn under it, not even for its first frame.
+     final tiled = scope?.chromeKind == LiquidChromeKind.sidebarTiled;
+-    // Native chrome makes room for the cluster itself (spec P2 §8.3).
+-    final native = scope?.nativeChrome ?? false;
++    // Regular native chrome makes room for the cluster itself (spec P2
++    // §8.3); the compact native bar is at the bottom and does not.
++    final native =
++        (scope?.nativeChrome ?? false) &&
++        scope?.sizeClass == LiquidSizeClass.regular;
+     _scheduleMeasure();
+     return _LayoutProbe(
+       onLayout: _scheduleMeasure,
+diff --git a/liquid_shell/lib/src/shell/liquid_shell.dart b/liquid_shell/lib/src/shell/liquid_shell.dart
+index beb777e..e46e4e7 100644
+--- a/liquid_shell/lib/src/shell/liquid_shell.dart
++++ b/liquid_shell/lib/src/shell/liquid_shell.dart
+@@ -61,8 +61,8 @@ String _repeatedLabels(List<LiquidDestination> destinations) {
+ /// route, not in `MaterialApp.builder`. Without them the chrome fails a
+ /// debug assert.
+ ///
+-/// On iPadOS 26 at regular width, in an app that opted in, the chrome is
+-/// the platform's own `UITabBarController` sidebar and tab bar
++/// On iOS 26, on iPhone and iPad, in an app that opted in, the chrome is
++/// the platform's own `UITabBarController` tab bar and sidebar
+ /// ([nativeChrome]); everywhere else it is drawn in Flutter.
+ class LiquidShell extends StatefulWidget {
+   /// Creates a shell.
+@@ -815,7 +815,6 @@ class _LiquidShellState extends State<LiquidShell>
+     );
+     final possible = nativeChromePossible(
+       mode: widget.nativeChrome,
+-      presentation: presentation,
+       hasChromeBuilder: widget.chromeBuilder != null,
+       describable: describable,
+     );
+@@ -823,7 +822,6 @@ class _LiquidShellState extends State<LiquidShell>
+       mode: widget.nativeChrome,
+       owner: owner,
+       state: state,
+-      presentation: presentation,
+       hasChromeBuilder: widget.chromeBuilder != null,
+       describable: describable,
+     );
+@@ -859,42 +857,53 @@ class _LiquidShellState extends State<LiquidShell>
+           tint: theme.colorScheme.primary,
+           dark: theme.brightness == Brightness.dark,
+           rtl: rtl,
+-          hidden: _hideRequests > 0 || _covered,
++          // The compact bar is drawn above the Flutter view: it would
++          // cover the bottom of a sheet or dialog drawn there, so it hides
++          // while one is above the shell. The top bar and sidebar only
++          // turn inert (§7.4).
++          hidden:
++              _hideRequests > 0 ||
++              _covered ||
++              ((state?.compact ?? false) && !_routeCurrent),
+           interactive: _routeCurrent && !_guardPending,
+         ),
+       );
+     }
+-    // Pending: the platform may install native chrome but has not answered
+-    // yet, and this shell would use it. Draw no chrome rather than flash
+-    // the Flutter one (a frame or two). A shell that could not use native
+-    // chrome anyway (compact width, a missing sfSymbol, a chromeBuilder, a
+-    // screen that is no iPad's, such as an iPhone in landscape) draws
+-    // Flutter chrome from its first frame.
+-    final display = View.of(context).display;
++    // Pending: the platform may install native chrome (any iOS 26 iPhone
++    // or iPad, owner D1) but has not answered yet, and this shell would use
++    // it. Draw no chrome rather than flash the Flutter one (a frame or
++    // two). A shell that could not use native chrome anyway (a missing
++    // sfSymbol, a chromeBuilder) draws Flutter chrome from its first frame.
+     final pending =
+         possible &&
+         owner &&
+         state == null &&
+-        LiquidShellPlatform.instance.supportsNativeChrome &&
+-        nativeChromeScreenPossible(display.size / display.devicePixelRatio);
++        LiquidShellPlatform.instance.supportsNativeChrome;
+     // Standby: another shell (pushed above, or nested) owns the native
+     // chrome, which this one would otherwise use. Draw no chrome, so no
+     // Flutter chrome shows beside the native one while the other shell's
+     // route slides in or out; this one engages when it owns it again.
+-    final standby =
+-        possible &&
+-        !owner &&
+-        (state?.installed ?? false) &&
+-        !(state?.compact ?? true);
++    final standby = possible && !owner && (state?.installed ?? false);
+     if (!engaged && !pending && !standby) return null;
+ 
+     final kind = engaged
+         ? nativeChromeKind(state: state!, hidden: _hideRequests > 0)
+         : LiquidChromeKind.hidden;
+-    final insets = nativeChromeInsets(
+-      kind: kind,
+-      topPadding: media.padding.top,
+-    );
++    final insets = nativeChromeInsets(kind: kind, padding: media.padding);
++    // UIKit's size class decides the bar once it has answered; before
++    // that, the shell's own width.
++    final sizeClass = engaged
++        ? (state!.compact ? LiquidSizeClass.compact : LiquidSizeClass.regular)
++        : sizeClassOf(presentation);
++    // UIKit's compact bar hides sidebar-only destinations, as P1's does.
++    if (engaged) {
++      _reportHiddenSelection(
++        sizeClass == LiquidSizeClass.compact
++            ? ShellPresentation.compact
++            : ShellPresentation.overlay,
++        selected,
++      );
++    }
+     // Tiled: UIKit does not resize the Flutter view; it reports the
+     // sidebar's width as the start padding. Make it real width here.
+     final tiled = kind == LiquidChromeKind.sidebarTiled;
+@@ -916,16 +925,16 @@ class _LiquidShellState extends State<LiquidShell>
+       },
+       child: ShellScopeMarker(
+         data: LiquidShellScopeData(
+-          // Regular: native and pending both need a regular presentation.
+-          sizeClass: sizeClassOf(presentation),
++          sizeClass: sizeClass,
+           chromeKind: kind,
+           chromeInsets: insets,
+           sidebarVisible: state?.sidebarVisible ?? false,
+           setSidebarVisible: _setSidebarVisible,
+           nativeChrome: engaged,
+-          // UIKit's bar and sidebar make room for the cluster; the body
+-          // starts below or beside them (spec P2 §8.3).
+-          windowControls: engaged
++          // UIKit's top bar and sidebar make room for the cluster; the
++          // body starts below or beside them (spec P2 §8.3). The compact
++          // bar is at the bottom: the top is the body's to clear.
++          windowControls: engaged && sizeClass == LiquidSizeClass.regular
+               ? LiquidWindowControls.zero
+               : _windowControls.value.value,
+         ),
+```
+
+- [ ] **Step 4: Run them green, then the package**
+
+Run: `fvm flutter test liquid_shell/test/unit/native_layout_test.dart liquid_shell/test/widget/native_chrome_test.dart liquid_shell/test/widget/window_controls_test.dart`
+Expected: `+72: All tests passed!`
+
+Run: `make analyze test`
+Expected: `No issues found!`; `liquid_shell` `+314: All tests passed!` (P1's 242 and Task 4's native tests unchanged apart from the ones above).
+
+- [ ] **Step 5: Commit**
+
+```bash
+bash .githooks/pre-commit && git add liquid_shell/lib liquid_shell/test && \
+git commit -m "feat(shell): native chrome at both size classes; the compact bar is the bottom bar (VK-346)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+### Task 7c: Integration on an iPhone and on iPads, CI, docs
+
+**Files:** see the file map, rows 7c.
+
+**Interfaces:**
+- Consumes: 7a and 7b; Task 5's `native_shell_test.dart`, `_RecordingIOS`, `_settle`, `_scope`; `tool/integration_ios_native.sh`.
+- Produces: `NATIVE_DEVICES` default `iPad Air 11-inch (M4)=true;iPhone 17 Pro=true`; CI runs XCTest on the newest iPhone too and expects native chrome on its iPhone leg; the docs say iOS, not iPadOS.
+
+- [ ] **Step 1: The integration test, the script and CI**
+
+```diff
+diff --git a/.github/workflows/ci.yaml b/.github/workflows/ci.yaml
+index 19805aa..20aacdf 100644
+--- a/.github/workflows/ci.yaml
++++ b/.github/workflows/ci.yaml
+@@ -172,6 +172,10 @@ jobs:
+         run: |
+           udid=$(xcrun simctl list devices available | grep -F '    iPad' | tail -n1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+           make ios-unit IOS_UNIT_DEVICE="$udid"
++      - name: XCTest of liquid_shell_ios on the newest iPhone simulator (compact)
++        run: |
++          udid=$(xcrun simctl list devices available | grep -F '    iPhone' | tail -n1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
++          make ios-unit IOS_UNIT_DEVICE="$udid"
+ 
+   integration-ios-native:
+     runs-on: macos-latest
+@@ -186,11 +190,11 @@ jobs:
+           flutter-version: 3.44.x
+           cache: true
+       - run: make get
+-      - name: Native shell on an iPad (iOS 26+) and an iPhone
++      - name: Native shell on an iPad and an iPhone (iOS 26+)
+         run: |
+           ipad=$(xcrun simctl list devices available | grep -F '    iPad' | tail -n1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+           iphone=$(xcrun simctl list devices available | grep -F '    iPhone' | tail -n1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+-          NATIVE_DEVICES="$ipad=true;$iphone=false" tool/integration_ios_native.sh
++          NATIVE_DEVICES="$ipad=true;$iphone=true" tool/integration_ios_native.sh
+         env:
+           IOS_RUNTIME: ""
+       - uses: actions/upload-artifact@v4
+diff --git a/liquid_shell/example/integration_test/native_shell_test.dart b/liquid_shell/example/integration_test/native_shell_test.dart
+index 3502b9b..6ec92eb 100644
+--- a/liquid_shell/example/integration_test/native_shell_test.dart
++++ b/liquid_shell/example/integration_test/native_shell_test.dart
+@@ -1,8 +1,10 @@
+-// The native iPadOS 26 shell on a real simulator (spec P2 §9.4).
++// The native iOS 26 shell on a real simulator (spec P2 §9.4).
+ //
+-// tool/integration_ios_native.sh runs it on an iPad with iOS 26 or later
+-// (EXPECT_NATIVE=true) and on an iPhone (EXPECT_NATIVE=false). The example
+-// opts in with LiquidShellNativeChrome in Info.plist.
++// tool/integration_ios_native.sh runs it on an iPad and on an iPhone with
++// iOS 26 or later (EXPECT_NATIVE=true): every iOS 26 iPhone and iPad gets
++// the native bar (owner D1). EXPECT_NATIVE=false is for a device that must
++// keep the Flutter chrome. The example opts in with LiquidShellNativeChrome
++// in Info.plist.
+ import 'package:flutter/material.dart';
+ import 'package:flutter_test/flutter_test.dart';
+ import 'package:integration_test/integration_test.dart';
+@@ -61,9 +63,6 @@ void main() {
+     final state = await platform.attachNativeChrome();
+     debugPrint('liquid_shell native: $state');
+     expect(state.installed, _expectNative);
+-    if (!_expectNative) {
+-      expect(state.unavailableReason, LiquidNativeUnavailableReason.notIPad);
+-    }
+   });
+ 
+   testWidgets('the native case draws native or Flutter chrome, not both', (
+@@ -105,12 +104,26 @@ void main() {
+     await _settle(tester);
+     final platform = LiquidShellPlatform.instance as LiquidShellIOS;
+ 
+-    // The tab bar row is in the Flutter view's top safe area.
+-    final top = MediaQuery.paddingOf(
++    // The native bar is in the Flutter view's safe area: the top bar row
++    // at regular width, UIKit's compact bar at the bottom (owner D1). A
++    // landscape iPad starts with the sidebar tiled: no bar row then.
++    final scope = _scope(tester);
++    final padding = MediaQuery.paddingOf(
+       tester.element(find.byType(DemoPage).first),
+-    ).top;
+-    expect(_scope(tester).chromeInsets.top, top);
+-    expect(top, greaterThan(40));
++    );
++    debugPrint('liquid_shell native: ${scope.chromeKind.name} $padding');
++    switch (scope.chromeKind) {
++      case LiquidChromeKind.bottomBar:
++        expect(scope.chromeInsets, EdgeInsets.only(bottom: padding.bottom));
++        expect(padding.bottom, greaterThan(40));
++      case LiquidChromeKind.sidebarTiled:
++        expect(scope.chromeInsets, EdgeInsets.zero);
++      case LiquidChromeKind.topBar ||
++          LiquidChromeKind.sidebarOverlay ||
++          LiquidChromeKind.hidden:
++        expect(scope.chromeInsets.top, padding.top);
++        expect(padding.top, greaterThan(40));
++    }
+ 
+     await platform.debugTap(NativeTapTarget.destination, 1);
+     await _settle(tester);
+@@ -147,6 +160,9 @@ void main() {
+     expect(recorder.configs.last.interactive, isFalse);
+     expect(recorder.configs.last.selectedIndex, 0);
+     if (overlay) expect(_scope(tester).sidebarVisible, isFalse);
++    // The compact bar would cover the dialog's bottom: it hides.
++    final compact = _scope(tester).sizeClass == LiquidSizeClass.compact;
++    expect(recorder.configs.last.hidden, compact);
+     await binding.takeScreenshot('native_${_runName}_guard');
+ 
+     final beforeKeep = recorder.configs.length;
+@@ -176,11 +192,29 @@ void main() {
+     _scope(tester).setSidebarVisible(true);
+     await _settle(tester);
+     final scope = _scope(tester);
++    if (scope.sizeClass == LiquidSizeClass.compact) {
++      // UIKit's compact bar has no sidebar: the request is ignored.
++      expect(scope.sidebarVisible, isFalse);
++      expect(scope.chromeKind, LiquidChromeKind.bottomBar);
++      return;
++    }
+     expect(scope.sidebarVisible, isTrue);
+     expect(
+       scope.chromeKind,
+       anyOf(LiquidChromeKind.sidebarOverlay, LiquidChromeKind.sidebarTiled),
+     );
++    // VK-403: tiled, the body starts at the sidebar's edge and fills the
++    // rest; overlay, it keeps the whole window under the sidebar.
++    final page = tester.getRect(find.byType(DemoPage).first);
++    final window = tester.view.physicalSize / tester.view.devicePixelRatio;
++    debugPrint('liquid_shell native: ${scope.chromeKind.name} page $page');
++    if (scope.chromeKind == LiquidChromeKind.sidebarTiled) {
++      expect(page.left, greaterThan(200));
++      expect(page.right, window.width);
++    } else {
++      expect(page.left, 0);
++      expect(page.width, window.width);
++    }
+     await binding.takeScreenshot('native_${_runName}_sidebar');
+ 
+     final platform = LiquidShellPlatform.instance as LiquidShellIOS;
+@@ -199,9 +233,13 @@ void main() {
+     if (!_expectNative) return;
+     await tester.pumpWidget(_app);
+     await _settle(tester);
+-    final below = MediaQuery.paddingOf(
+-      tester.element(find.byType(DemoPage).first),
+-    ).top;
++    // The padding on the bar's side: the top bar row, or the compact bar.
++    final compact = _scope(tester).sizeClass == LiquidSizeClass.compact;
++    double barSide(EdgeInsets padding) =>
++        compact ? padding.bottom : padding.top;
++    final below = barSide(
++      MediaQuery.paddingOf(tester.element(find.byType(DemoPage).first)),
++    );
+     final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+     final pushed = navigator.push(
+       MaterialPageRoute<void>(
+@@ -211,10 +249,10 @@ void main() {
+       ),
+     );
+     await _settle(tester);
+-    final above = MediaQuery.paddingOf(
+-      tester.element(find.byType(DemoPage).last),
+-    ).top;
+-    // The tab bar row left the safe area with the hidden chrome.
++    final above = barSide(
++      MediaQuery.paddingOf(tester.element(find.byType(DemoPage).last)),
++    );
++    // The bar left the safe area with the hidden chrome.
+     expect(above, lessThan(below));
+     navigator.pop();
+     await pushed;
+diff --git a/tool/integration_ios_native.sh b/tool/integration_ios_native.sh
+index ca726ce..18a7ce5 100755
+--- a/tool/integration_ios_native.sh
++++ b/tool/integration_ios_native.sh
+@@ -1,13 +1,13 @@
+ #!/usr/bin/env bash
+-# Native iPadOS 26 shell on simulators (spec P2 §9.4).
++# Native iOS 26 shell on simulators (spec P2 §9.4).
+ #
+ #   tool/integration_ios_native.sh
+ #
+ # IOS_RUNTIME     simctl runtime (default "iOS 26.5"; empty = any).
+ # NATIVE_DEVICES  ';'-separated "name=expect" pairs; expect is true when the
+-#                 native shell must install (iPad, iOS >= 26) and false when
+-#                 it must not (default
+-#                 "iPad Air 11-inch (M4)=true;iPhone 17 Pro=false").
++#                 native shell must install (iPhone or iPad, iOS >= 26) and
++#                 false when it must not (default
++#                 "iPad Air 11-inch (M4)=true;iPhone 17 Pro=true").
+ #                 A 36-character UDID works in place of a name.
+ # FLUTTER         flutter command (default: flutter).
+ # IOS_DRIVE_TIMEOUT  seconds one `flutter drive` may run (default 1200).
+@@ -25,7 +25,7 @@ cd "$tool_dir/../liquid_shell/example"
+ FLUTTER=${FLUTTER:-flutter}
+ IOS_DRIVE_TIMEOUT=${IOS_DRIVE_TIMEOUT:-1200}
+ IOS_RUNTIME=${IOS_RUNTIME-iOS 26.5}
+-NATIVE_DEVICES=${NATIVE_DEVICES:-iPad Air 11-inch (M4)=true;iPhone 17 Pro=false}
++NATIVE_DEVICES=${NATIVE_DEVICES:-iPad Air 11-inch (M4)=true;iPhone 17 Pro=true}
+ 
+ udid_of() {
+   local name=$1
+```
+
+- [ ] **Step 2: Run the integration on the iPhone (compact) and the portrait iPad**
+
+Run: `FLUTTER="fvm flutter" IOS_RUNTIME="" NATIVE_DEVICES="$PHONE=true;$IPAD=true" tool/integration_ios_native.sh`
+Expected (dry run):
+```
+▸ <PHONE> …, native expected: true
+flutter: liquid_shell native: LiquidNativeShellState(installed: true, compact: true, sidebar: hidden, unavailableReason: null)
+flutter: liquid_shell native: kind bottomBar insets EdgeInsets(0.0, 0.0, 0.0, 83.0) …
+flutter: liquid_shell native: guard from LiquidChromeKind.bottomBar
+flutter: 00:21 +7: All tests passed!
+▸ <IPAD> …, native expected: true
+flutter: liquid_shell native: kind topBar insets EdgeInsets(0.0, 96.0, 0.0, 0.0) …
+flutter: liquid_shell native: guard from LiquidChromeKind.sidebarOverlay
+flutter: liquid_shell native: sidebarOverlay page Rect.fromLTRB(0.0, 0.0, 820.0, 1180.0)
+flutter: 00:24 +7: All tests passed!
+✓ native shell integration passed
+```
+`native_<PHONE>_home.png` shows UIKit's floating glass bar `[Home | Inbox ③ | Settings]` with the separate ⌕ circle, and no Reports.
+
+- [ ] **Step 3: Landscape on iPadOS 27 (the VK-403 layout), when the simulator can be turned**
+
+`xcrun simctl` cannot rotate a simulator. idb's companion can, with a raw HID orientation event. With fb-idb installed (`pipx install fb-idb`, `brew install idb-companion`), start `idb_companion --udid $IPAD27 --only simulator --grpc-domain-sock /tmp/idb/$IPAD27.sock &`, then send field 5 (orientation), value 3 (landscape) to `/idb.CompanionService/hid` as raw protobuf bytes `2a020803` (value 1 turns it back to portrait). The dry run used a 40-line grpclib script for that (`rotate.py <sock> 5 3`). Then:
+
+Run: `FLUTTER="fvm flutter" IOS_RUNTIME="" NATIVE_DEVICES="$IPAD27=true" tool/integration_ios_native.sh`
+Expected:
+```
+flutter: liquid_shell native: kind sidebarTiled insets EdgeInsets.zero …
+flutter: liquid_shell native: sidebarTiled EdgeInsets(0.0, 32.0, 0.0, 20.0)
+flutter: liquid_shell native: guard from LiquidChromeKind.sidebarTiled
+flutter: liquid_shell native: sidebarTiled page Rect.fromLTRB(280.0, 0.0, 1180.0, 820.0)
+flutter: 00:24 +7: All tests passed!
+```
+If idb is not available, skip this step and say so in the PR: the XCTest `testATiledSidebarIsFluttersStartSafeArea` covers the native half on any iPad, and the owner checks landscape on the device (`docs/qa/p2/manual.md`). A compact iPad *window* cannot be made headlessly (spec §9.4); the XCTests cover compact iPads through a trait override.
+
+- [ ] **Step 4: The docs**
+
+```diff
+diff --git a/docs/qa/p2/manual.md b/docs/qa/p2/manual.md
+index daabb2e..7d39a20 100644
+--- a/docs/qa/p2/manual.md
++++ b/docs/qa/p2/manual.md
+@@ -2,9 +2,10 @@
+ 
+ Chạy trên **iPad Air (iPadOS 27)** thật và **iPhone 16 Plus** thật. Agent
+ không có GUI/VoiceOver/xoay máy nên các mục dưới là phần còn lại của Task 5.
+-Đã có sẵn trên simulator (iPad 26.5): pill native, sidebar overlay dọc, trailing
+-và footer, đẩy trang che chrome, guard với dialog (từ sidebar overlay dọc),
+-iPhone dùng chrome Flutter. Hit test chạy trên cây view UIKit thật trong
++Đã có sẵn trên simulator (iPad 26.5/27.0, iPhone 26.5): pill native, sidebar
++overlay dọc, sidebar tiled ngang (thân Flutter nằm cạnh sidebar), trailing và
++footer, đẩy trang che chrome, guard với dialog, iPhone dùng thanh tab native
++nổi ở đáy (Task 7, quyết định D1). Hit test chạy trên cây view UIKit thật trong
+ XCTest (`make ios-unit`), nhưng chỉ gọi `hitTest`, không phải chạm thật.
+ 
+ ## Cài bản example
+@@ -37,9 +38,15 @@ Nếu cần log: `fvm flutter run -d <UDID>` thay cho ba lệnh cuối.
+       **không** thụt 66pt (giá trị window controls là 0 khi chrome native
+       hiện). Đẩy một trang lên (chrome native ẩn): tiêu đề trang đó né nút
+       `•••` như ở chrome Flutter.
+-- [ ] **Split View:** mở cùng app ở 1/3 màn hình: chỉ còn thanh dưới Flutter
+-      (không có chrome native). Kéo lên 1/2 và 2/3: quay lại native khi đủ
+-      rộng. Không thấy hai chrome cùng lúc.
++- [ ] **Cửa sổ hẹp / Split View (D1):** thu cửa sổ thật hẹp hoặc 1/3 màn
++      hình: thanh tab **native** Liquid Glass nổi ở đáy (không còn viên
++      Flutter), ⌕ là nút tròn riêng ở cuối, badge "3" trên Inbox, không có
++      "Reports" (chỉ có trong sidebar). Kéo rộng lại: thanh trên + sidebar
++      native. Không thấy hai chrome cùng lúc; nội dung không nhảy; tiêu đề
++      trang vẫn né nút `•••` khi thanh ở đáy.
++- [ ] **Dáng sidebar iPadOS 27:** sidebar là tấm xám mờ phủ kín mép trái,
++      không bo góc/nổi như iPadOS 26. Đó là dáng của chính hệ thống (Photos,
++      Health trên iPadOS 27 giống hệt), không phải lỗi của liquid_shell.
+ - [ ] **VoiceOver:** bật VO. Đọc đúng tên các tab, nút bật/tắt sidebar, nút
+       ⌕ (trailing) và footer ("Ann Lee ..."). Vuốt qua được hết, footer kích
+       hoạt được. (Nhãn nút sidebar do hệ thống, theo ngôn ngữ máy.)
+@@ -72,9 +79,15 @@ Nếu cần log: `fvm flutter run -d <UDID>` thay cho ba lệnh cuối.
+ 
+ ## iPhone 16 Plus
+ 
+-- [ ] Mở app: chrome **Flutter** (thanh dưới glass), không có sidebar native.
+-- [ ] Xoay ngang: vẫn chrome Flutter, không nháy trống ở lúc mở.
+-- [ ] Đẩy trang chi tiết rồi quay lại: không lỗi; tab/badge đúng.
++- [ ] Mở app (case "Native chrome"): thanh tab **native** Liquid Glass nổi ở
++      đáy, ⌕ tròn riêng ở cuối, badge đúng, không có "Reports". Hàng cuối
++      danh sách cuộn được lên trên thanh (không bị che).
++- [ ] Chạm tab: đổi tab; bật "Unsaved changes" rồi chạm tab khác → dialog
++      "Discard changes?", "Keep editing" giữ nguyên tab.
++- [ ] Chạm ⌕: số "Searches" tăng, không mở ô tìm kiếm hệ thống.
++- [ ] Xoay ngang: vẫn thanh native, không nháy trống ở lúc mở.
++- [ ] Đẩy trang chi tiết rồi quay lại: thanh ẩn khi trang che, hiện lại khi
++      pop; tab/badge đúng.
+ 
+ ## Báo kết quả
+ 
+diff --git a/liquid_shell/CHANGELOG.md b/liquid_shell/CHANGELOG.md
+index 4a458cd..17d5f8b 100644
+--- a/liquid_shell/CHANGELOG.md
++++ b/liquid_shell/CHANGELOG.md
+@@ -1,6 +1,7 @@
+ ## 0.1.0-dev.2
+ 
+-- Native iPadOS 26 chrome (opt-in): `LiquidShell(nativeChrome:)`,
++- Native iOS 26 chrome (opt-in) on iPhone and iPad, compact windows
++  included: `LiquidShell(nativeChrome:)`,
+   `LiquidNativeChrome`, `LiquidNativeSidebarFooter`, and `sfSymbol` on
+   `LiquidDestination` and `LiquidTabAction`.
+ - Window controls: `LiquidShellScopeData.windowControls`,
+diff --git a/liquid_shell/README.md b/liquid_shell/README.md
+index 35dacc4..ebb851d 100644
+--- a/liquid_shell/README.md
++++ b/liquid_shell/README.md
+@@ -33,9 +33,10 @@ dependency.
+   saver, disabled window blurs and devices that cannot blur.
+ - **Accessible**: semantics, large-text icon-only cells with a large content
+   viewer, RTL, and every string replaceable through `LiquidShellStrings`.
+-- **Native iPadOS 26 chrome**, opt-in: the system's own
+-  `UITabBarController` tab bar and sidebar (with a native footer) on iPad at
+-  regular width; the Flutter chrome everywhere else.
++- **Native iOS 26 chrome**, opt-in: the system's own
++  `UITabBarController` tab bar and sidebar (with a native footer) on iPhone
++  and iPad, the floating bottom bar at compact width; the Flutter chrome
++  everywhere else.
+ - **Window controls**: on iPadOS 26 windowed apps, the shell's top row and
+   your large titles move past the close/minimise/resize cluster.
+ - Runtime dependencies: Flutter and this plugin's own packages only (plus
+@@ -43,7 +44,7 @@ dependency.
+ 
+ | Platform | Look | Signals |
+ |---|---|---|
+-| iOS 15+ | Glass pill and sidebar; native `UITabBarController` chrome on iPadOS 26 (opt-in) | Reduce Transparency, iPadOS 26 window controls |
++| iOS 15+ | Glass pill and sidebar; native `UITabBarController` chrome on iOS 26 (opt-in) | Reduce Transparency, iPadOS 26 window controls |
+ | Android | Same as iOS | Animations off / high contrast, battery saver, window blurs disabled (API 31+), no Impeller |
+ | Web, macOS, Windows, Linux | Frosted glass | None (always frosted unless forced) |
+ 
+@@ -778,14 +779,16 @@ below the size the user chose, down to 10pt. The icon-only cells and the
+ large content viewer only start at 1.6. Larger text also grows the pill and
+ the trailing circle, so cells can drop under 44pt there.
+ 
+-### Native iPadOS chrome
++### Native iOS chrome
+ 
+-On an iPad with iPadOS 26 or later, at regular width, the shell can hand its
+-chrome to the system: a real `UITabBarController` in sidebar mode, with the
+-Liquid Glass tab bar, the sidebar toggle, the sidebar (over the content in
+-portrait, beside it in landscape) and a native footer. Your Flutter body
+-stays exactly where it is. Everywhere else (iPhone, Android, iPadOS before
+-26, compact iPad windows) the same `LiquidShell` draws its Flutter chrome.
++On an iPhone or iPad with iOS 26 or later, the shell can hand its chrome to
++the system: a real `UITabBarController` in sidebar mode, with the Liquid
++Glass tab bar. At regular width that is the top bar, the sidebar toggle,
++the sidebar (over the content in portrait, beside it in landscape) and a
++native footer; at compact width (iPhone, a narrow iPad window) it is
++UIKit's floating tab bar at the bottom. Your Flutter body stays exactly
++where it is. Everywhere else (Android, iOS before 26) the same
++`LiquidShell` draws its Flutter chrome.
+ 
+ Opt in once, in `ios/Runner/Info.plist`:
+ 
+@@ -955,19 +958,18 @@ content viewer (see [Custom chrome](#custom-chrome)).
+   while `chromeKind` is `LiquidChromeKind.sidebarOverlay` (see
+   [doc/router_integration.md](doc/router_integration.md#system-back-and-the-overlay-sidebar)).
+   How a router such as go_router orders back is not covered yet.
+-- **Native chrome is iPad-only and opt-in.** iPhone keeps the Flutter
+-  chrome on every iOS version. Native chrome needs iPadOS 26, regular
+-  width, `LiquidShellNativeChrome` in Info.plist, and an SF Symbol on every
++- **Native chrome is opt-in.** It needs iOS 26,
++  `LiquidShellNativeChrome` in Info.plist, and an SF Symbol on every
+   destination. Strings the system draws (the sidebar button's VoiceOver
+-  label) follow the device language, not your app's.
+-- **A frame or two without chrome at start on iPad.** Whether the app opted
+-  in is known only natively, so on an iPad screen a shell that could use
+-  native chrome draws none until the platform answers, even in an app
+-  without the Info.plist key. The same holds for an iPad app running on a
+-  Mac ("Designed for iPad"): the Mac's display passes the iPad screen-size
+-  check, so the shell waits for the platform's answer (`iPadAppOnMac`) and
+-  then draws Flutter chrome. iPhone and every other platform draw their
+-  chrome from the first frame.
++  label) follow the device language, not your app's. The compact native
++  bar does not minimise on scroll (`minimizeOnScroll` is Flutter-only).
++- **A frame or two without chrome at start on iOS.** Whether the app opted
++  in, and the iOS version, are known only natively, so on iOS a shell that
++  could use native chrome draws none until the platform answers, even in
++  an app without the Info.plist key. The same holds for an iPad app running
++  on a Mac ("Designed for iPad"), which then draws Flutter chrome
++  (`iPadAppOnMac`). Every other platform draws its chrome from the first
++  frame.
+ - **Native chrome hit testing follows UIKit's view tree.** Touches on the
+   transparent part of the native chrome go to Flutter; a future iOS that
+   reshapes `UITabBarController`'s views can break that. `make ios-unit`
+@@ -987,7 +989,7 @@ content viewer (see [Custom chrome](#custom-chrome)).
+ 
+ - [doc/theming.md](doc/theming.md): `LiquidGlassTheme` fields and defaults
+ - [doc/tiers.md](doc/tiers.md): tiers, the policy, signals, writing a renderer
+-- [doc/native_chrome.md](doc/native_chrome.md): native iPadOS chrome, its
++- [doc/native_chrome.md](doc/native_chrome.md): native iOS chrome, its
+   install rules, behaviour and limits
+ - [doc/router_integration.md](doc/router_integration.md): `IndexedStack`,
+   `Navigator` and go_router wiring, branch state, hide/no chrome, system
+@@ -995,7 +997,7 @@ content viewer (see [Custom chrome](#custom-chrome)).
+ 
+ ## Roadmap
+ 
+-- **P2 (this release):** native iPadOS 26 chrome and window controls.
++- **P2 (this release):** native iOS 26 chrome and window controls.
+ - **P3:** a glass back button and title bar, a search field and a search tab.
+ - **P4:** the liquid tier on Android, as a `LiquidGlassRenderer` adapter.
+ - **P5:** a go_router adapter (`StatefulShellRoute` builder, route-driven
+diff --git a/liquid_shell/doc/native_chrome.md b/liquid_shell/doc/native_chrome.md
+index abed328..5fddb3e 100644
+--- a/liquid_shell/doc/native_chrome.md
++++ b/liquid_shell/doc/native_chrome.md
+@@ -1,9 +1,12 @@
+-# Native iPadOS chrome
++# Native iOS chrome
+ 
+-On iPadOS 26 and later, `LiquidShell` can hand its chrome to the system: a
+-`UITabBarController` in sidebar mode, with the Liquid Glass tab bar, the
+-sidebar toggle, the sidebar and a native footer. Flutter keeps drawing the
+-body. Everywhere else the shell draws its Flutter chrome.
++On iOS and iPadOS 26 and later, `LiquidShell` can hand its chrome to the
++system: a `UITabBarController` in sidebar mode, with the Liquid Glass tab
++bar. At regular width (a full-screen or wide iPad window) that is the top
++bar, the sidebar toggle, the sidebar and a native footer; at compact width
++(every iPhone, a narrow iPad window) it is UIKit's floating tab bar at the
++bottom, with the trailing action as a separate search button. Flutter keeps
++drawing the body. Everywhere else the shell draws its Flutter chrome.
+ 
+ ## Turning it on
+ 
+@@ -29,8 +32,7 @@ only when every fact below holds. The first one that fails is the reason
+ 
+ | Fact | Reason when it fails |
+ |---|---|
+-| The device is an iPad | `notIPad` |
+-| iPadOS 26 or later | `osTooOld` |
++| iOS or iPadOS 26 or later | `osTooOld` |
+ | Not an iPad app running on a Mac | `iPadAppOnMac` |
+ | `LiquidShellNativeChrome` is `true` in Info.plist | `notEnabled` |
+ | The environment variable `LIQUID_SHELL_NATIVE_OFF` is not `1` | `disabledByEnvironment` |
+@@ -39,26 +41,23 @@ only when every fact below holds. The first one that fails is the reason
+ 
+ Once installed, a shell uses it on every frame where all of these hold:
+ `nativeChrome` is `auto`; the shell is the newest one on screen that asked
+-for it; the platform's width is regular; the shell's own width is at least
+-`breakpoints.regular`; there is no `chromeBuilder`; and every destination
+-(and the trailing action) has an SF Symbol. Otherwise the container is
+-dormant: it hides, gives Flutter the whole window, and lets every touch
+-through.
++for it; there is no `chromeBuilder`; and every destination (and the
++trailing action) has an SF Symbol. Width does not matter: UIKit picks the
++compact bar or the top bar and sidebar from the window's size class, and
++the shell's `sizeClass` and `chromeKind` follow it (`bottomBar` when
++compact). Otherwise the container is dormant: it hides, gives Flutter the
++whole window, and lets every touch through.
+ 
+ ### Waiting for the platform
+ 
+ The platform answers `attachNativeChrome()` asynchronously. Until it does, a
+ shell that would use native chrome draws no chrome at all rather than flash
+-the Flutter one: on an iPad with the plist key set, that is the first one or
+-two frames. Every other shell draws its Flutter chrome from the first frame:
+-a compact one, one without symbols, one with a `chromeBuilder`, and any
+-shell on a screen whose shorter side is under 744 points. That last rule is
+-a shortcut for iPhones: no iPhone is that large in either orientation, so an
+-iPhone, even in landscape, never waits. The screen's size is used, not the
+-window's, so an iPad window in Split View still waits, and so does an iPad
+-app on a Mac ("Designed for iPad"): the Mac's display passes the size check,
+-and the platform then answers `iPadAppOnMac`. Platforms without native
+-chrome (Android, web, desktop) answer at once.
++the Flutter one: on iOS that is the first one or two frames, on every
++iPhone and iPad, also on iOS before 26 and in an app without the plist key
++(only the platform knows), and in an iPad app on a Mac ("Designed for
++iPad"), which then answers `iPadAppOnMac`. A shell without symbols or with
++a `chromeBuilder` draws its Flutter chrome from the first frame. Platforms
++without native chrome (Android, web, desktop) answer at once.
+ 
+ ## How it behaves
+ 
+@@ -78,13 +77,21 @@ chrome (Android, web, desktop) answer at once.
+   hides the native chrome while it covers the shell, and shows it again when
+   the page is popped. A dialog, popup or sheet above the shell makes the
+   native chrome ignore touches, so a tap outside the dialog reaches its
+-  barrier.
++  barrier. The compact bar also hides while one is up: it is drawn above
++  the Flutter view and would cover the bottom of a sheet.
+ - **Hide chrome.** `LiquidHideChrome` hides the native chrome as it hides the
+   Flutter chrome.
+-- **Insets.** The native tab bar row is part of Flutter's top safe area, and
+-  a tiled sidebar is its start padding. The shell turns the tiled sidebar's
+-  padding into real width for its body. Use
+-  `LiquidShellScope.contentPaddingOf` as usual.
++- **Insets.** The native top bar row is part of Flutter's top safe area,
++  the compact bar is part of its bottom safe area, and a tiled sidebar is
++  its start padding. The shell turns the tiled sidebar's padding into real
++  width for its body. Use `LiquidShellScope.contentPaddingOf` as usual.
++- **Compact.** The compact bar has no sidebar: `setSidebarVisible` is
++  ignored, and a `sidebarOnly` destination is left out of the bar, as in
++  the Flutter bar; `onSelectedDestinationHidden` tells you when it was the
++  selected one. `minimizeOnScroll` applies to the Flutter bar only.
++- **Sidebar look.** The sidebar is UIKit's own. On iPadOS 26 it floats over
++  the content as a Liquid Glass panel; on iPadOS 27 it is a full-height
++  panel flush with the screen edge, as in Apple's own apps (Photos, Health).
+ - **Several shells.** One window has one native chrome. The newest shell
+   that asks for it owns it; when it goes away, the previous one gets it back,
+   and with none left the native chrome hides. While another shell owns the
+@@ -127,9 +134,11 @@ chrome (Android, web, desktop) answer at once.
+ A windowed iPadOS 26 app has close, minimise and resize buttons in its
+ top-leading corner. `LiquidShellScope.of(context).windowControls` gives their
+ size (`leading`, `top`), measured from the safe area. It is zero on every
+-other platform, in full screen, and while the native chrome is visible:
+-UIKit's tab bar and sidebar make room for the buttons, as its navigation bar
+-does, and your content starts below the bar row or beside the sidebar. The Flutter top bar and the Flutter sidebar header
++other platform, in full screen, and while the regular native chrome is
++visible: UIKit's top bar and sidebar make room for the buttons, as its
++navigation bar does, and your content starts below the bar row or beside
++the sidebar. Under the compact native bar, which is at the bottom, it is
++the real value: the top of the window is your content's. The Flutter top bar and the Flutter sidebar header
+ move past them on their own. For your own top rows, use
+ `LiquidWindowControlsClearance`.
+ 
+@@ -154,7 +163,7 @@ resize changes it, and jumps when the platform asks to reduce motion.
+ - **`rootNotFlutter`**: the scene's root is not the Flutter view controller.
+   Native chrome needs the standard Flutter scene setup.
+ - **Native chrome installed but Flutter chrome shows**: a destination or the
+-  trailing action has no `sfSymbol` (a debug log says so), the shell has a
+-  `chromeBuilder`, or the window is compact.
++  trailing action has no `sfSymbol` (a debug log says so), or the shell has
++  a `chromeBuilder`.
+ - **The outer shell lost its navigation**: an inner shell took the native
+   chrome; set its `nativeChrome` to `off`.
+diff --git a/liquid_shell_ios/CHANGELOG.md b/liquid_shell_ios/CHANGELOG.md
+index ac5fb33..20e4519 100644
+--- a/liquid_shell_ios/CHANGELOG.md
++++ b/liquid_shell_ios/CHANGELOG.md
+@@ -1,7 +1,9 @@
+ ## 0.1.0-dev.2
+ 
+-- The native iPadOS 26 shell: a `UITabBarController` sidebar over the Flutter
+-  view, installed at scene connection when Info.plist sets
++- The native iOS 26 shell on iPhone and iPad: a `UITabBarController` in
++  sidebar mode over the Flutter view (top bar and sidebar at regular width,
++  the floating tab bar at compact width; the trailing action is a search
++  tab), installed at scene connection when Info.plist sets
+   `LiquidShellNativeChrome`.
+ - Window controls read from the iPadOS 26 corner-adaptation region.
+ - `LiquidShellIOS` replaces the bare event-channel platform; the Pigeon
+```
+
+- [ ] **Step 5: Verify everything**
+
+Run: `make verify`
+Expected: exit 0; `No issues found!`; `✓ provenance clean`; `✓ pigeon output matches its source`; `✓ 16 README and doc snippets match their #docregion`; `liquid_shell` `+314`, interface `+33`, ios `+12`, android `+1`, example `+47`, tool `+45`, each `All tests passed!`; `✓ coverage 98.00% (1472/1502 lines)` for `liquid_shell`, 100 % for the other three; goldens unchanged.
+
+- [ ] **Step 6: Commit and clean up**
+
+```bash
+bash .githooks/pre-commit && git add liquid_shell/example/integration_test tool/integration_ios_native.sh \
+  .github/workflows/ci.yaml liquid_shell/doc liquid_shell/README.md liquid_shell/CHANGELOG.md \
+  liquid_shell_ios/CHANGELOG.md docs/qa/p2/manual.md && \
+git commit -m "test(example): native chrome on iPhone and in landscape; docs for iOS-wide native chrome (VK-346)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+for d in $PHONE $IPAD $IPAD27; do xcrun simctl shutdown $d; xcrun simctl delete $d; done
+```
+
+Then hand the owner `docs/qa/p2/manual.md` (iPad Air on iPadOS 27 and iPhone 16 Plus): the narrow-window and iPhone items are new.
+
+## Dry-run notes (Task 7)
+
+Run on 2026-10-10 on a copy of this branch at `3404385`: `/private/tmp/claude-502/-Users-invoker-Projects-tuvi-vankhan/a0e0ee64-9e82-413c-a1a4-2b3e910a1cc5/scratchpad/ls-p2-t7-dry` (rsync without `build/`, `Pods/`, `.dart_tool/`; the copied `.git` file deleted and a fresh `git init`). fvm Flutter 3.44.6, Xcode 27.0 (27A266a). Own simulators: iPhone 17 Pro iOS 26.5, iPad Air 11-inch (M3) iOS 26.5 and iOS 27.0. Every patch above is `git diff` of that copy.
+
+| Check | Result |
+|---|---|
+| `make verify` | exit 0: format, analyze (`No issues found!`), provenance, pigeon-check, snippets, tests **452** (`liquid_shell` 314, interface 33, ios 12, android 1, example 47, tool 45), coverage `liquid_shell` 98.00 % (1472/1502), goldens unchanged |
+| XCTest, iPad 26.5 / iPad 27.0 | 43 / 43 passed |
+| XCTest, iPhone 26.5 | 43 run, 8 skipped (iPad-only layouts), 0 failures |
+| Red checks | 7a Step 2 compile error; 7a Step 4's four failures, run against Task 3's controller; 7b Step 2 as listed |
+| Integration, iPhone 17 Pro 26.5 | 7/7: installed, compact, `bottomBar`, inset 83, guard dialog hides the compact bar, page above drops the bottom inset |
+| Integration, iPad 26.5 portrait | 7/7: top bar 96, overlay full width |
+| Integration, iPad 27.0 landscape (idb) | 7/7: tiled from the start, page `280…1180` |
+
+**Findings folded into Task 7:**
+
+- **VK-403 is not a layout bug** (spec §14.2): logs on both sides matched on 26.5 and 27.0, landscape and portrait, including live rotation; the device video's "landscape" frame is portrait.
+- **iPadOS 27's sidebar is flush and grey**, in Apple's apps too: documented, not changed.
+- **UIKit's compact bar shows `.sidebarOnly` tabs, and `UITab.isHidden` (even with `allowsHiding`) does not hide them** on iPhone iOS 26.5: native leaves them out of `setTabs` while compact.
+- **Emptying UIKit's tabs (the dormant config) and refilling them brought the compact bar back hidden**, with the host's bottom safe area down to the home indicator (34 instead of 83). Found when a second integration test re-pumped the app; Task 3's controller did not show it because it never re-sent the tabs in that order. Fix: a config without tabs leaves the tabs alone; XCTest pins it.
+- **On iPadOS 27 the compact pill rises 5pt above the host's 72pt bottom safe area.** The hit test measures from `tabBar`'s frame, not from the safe area.
+- **A landscape iPad starts tiled**, so the old "tab bar row in the top safe area" check failed there; the test now switches on the kind (`no_default_cases` wants every kind named).
+- **Minimize on scroll is not feasible from Flutter**: `tabBarMinimizeBehavior = .onScrollDown` with a proxy `UIScrollView` (`setContentScrollView(_:for: .bottom)`) moved by code did not minimise the bar. Left out (spec §14.3).
+- **`SystemChrome.setPreferredOrientations` does not rotate an iPad simulator** (the app stays 820 × 1180); idb's HID orientation event does (field 5, value 3).
+- `xcodebuild test` straight after `flutter drive` runs the integration test as the host app's entry point and restarts: use `make ios-unit`, which runs `--config-only` first.
+
+**Clean-up:** the simulators were deleted, and so were the copy's `build/`, `Pods/` and DerivedData.
+
+## Self-review (Task 7)
+
+- **Spec §14 coverage:** D1 install rule → 7a Step 3; engagement, kind, inset, pending, standby, size class → 7b; `UISearchTab` → 7a Step 5; sidebar-only at compact → 7a Step 5 and 7b (`_reportHiddenSelection`); size-class transitions → 7a (`testResizingAcrossTheSizeClassRepublishesTheState`) and 7b (`a window resized across the size class …`); window controls under the compact bar → 7a and 7b; modals above the compact bar → 7b; dormant keeps the tabs → 7a; hit testing → 7a; guard flow and badges unchanged (integration guard test on iPhone, badge in the iPhone screenshot); VK-403 guards → 7a (`testATiledSidebarIsFluttersStartSafeArea`) and 7c (sidebar test); minimize on scroll → out, documented; D2–D4 → order and the merge gate, no code.
+- **Placeholders:** none; every code step is a patch that ran.
+- **Names:** `nativeChromeEngaged`/`nativeChromePossible` lose `presentation` in every caller (`liquid_shell.dart`, the unit test); `nativeChromeInsets(padding:)` everywhere; `LiquidNativeUnavailableReason.notIPad` has no remaining reference outside `docs/` history.
