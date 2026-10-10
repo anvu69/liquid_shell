@@ -14,6 +14,11 @@
 - `LiquidShellScopeData.nativeChrome`; `LiquidNoChrome` passes the window
   controls through.
 - `debugResetLiquidNative()` for tests that swap the platform.
+- In debug, a shell that could use native chrome but lacks an `sfSymbol`
+  logs one line, once, naming the destinations and the trailing action
+  without one.
+- Example: every case with a real shell runs native on iOS 26; the cases
+  about the Flutter chrome say so on screen.
 
 ## 0.1.0-dev.1
 

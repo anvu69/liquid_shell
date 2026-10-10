@@ -839,7 +839,8 @@ Opt in once, in `ios/Runner/Info.plist`:
 
 Then give every destination, and the trailing action, an SF Symbol. A shell
 without a symbol somewhere, or with a `chromeBuilder`, keeps its Flutter
-chrome; so does `nativeChrome: LiquidNativeChrome.off`.
+chrome; so does `nativeChrome: LiquidNativeChrome.off`. In debug, a shell
+that only lacks symbols logs one line naming them.
 
 <?code-excerpt "native_chrome.dart (readme)"?>
 ```dart

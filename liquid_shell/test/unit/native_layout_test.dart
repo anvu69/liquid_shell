@@ -67,6 +67,61 @@ void main() {
     });
   });
 
+  group('nativeSymbolHint (spec P2 §15, E2)', () {
+    const home = LiquidDestination(
+      icon: Icon(Icons.home),
+      label: 'Home',
+      sfSymbol: 'house',
+    );
+    const star = LiquidDestination(icon: Icon(Icons.star), label: 'Star');
+    const moon = LiquidDestination(icon: Icon(Icons.bedtime), label: 'Moon');
+    void noop() {}
+    final plainSearch = LiquidTabAction(
+      icon: const Icon(Icons.search),
+      onPressed: noop,
+      semanticLabel: 'Search',
+    );
+    final search = LiquidTabAction(
+      icon: const Icon(Icons.search),
+      onPressed: noop,
+      semanticLabel: 'Search',
+      sfSymbol: 'magnifyingglass',
+    );
+
+    test('null when every destination and the trailing action have one', () {
+      expect(nativeSymbolHint(const [home], null), isNull);
+      expect(nativeSymbolHint(const [home], search), isNull);
+    });
+
+    test('names each destination without one, and only those', () {
+      final one = nativeSymbolHint(const [home, star], search)!;
+      expect(one, contains('destination "Star"'));
+      expect(one, isNot(contains('Home')));
+      expect(one, isNot(contains('tabBarTrailing')));
+
+      final two = nativeSymbolHint(const [star, home, moon], null)!;
+      expect(two, contains('destinations "Star", "Moon"'));
+    });
+
+    test('names the trailing action by its semantic label', () {
+      final trailing = nativeSymbolHint(const [home], plainSearch)!;
+      expect(trailing, contains('tabBarTrailing "Search"'));
+      expect(trailing, isNot(contains('destination')));
+
+      final both = nativeSymbolHint(const [star], plainSearch)!;
+      expect(both, contains('destination "Star"'));
+      expect(both, contains('tabBarTrailing "Search"'));
+    });
+
+    test('is one line that says how to fix or silence it', () {
+      final hint = nativeSymbolHint(const [star], plainSearch)!;
+      expect(hint, startsWith('liquid_shell: '));
+      expect(hint, isNot(contains('\n')));
+      expect(hint, contains('sfSymbol'));
+      expect(hint, contains('nativeChrome: LiquidNativeChrome.off'));
+    });
+  });
+
   test('nativeDescribable needs every symbol, the trailing one too', () {
     const home = LiquidDestination(
       icon: Icon(Icons.home),

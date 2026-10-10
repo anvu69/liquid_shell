@@ -154,8 +154,9 @@ class LiquidShell extends StatefulWidget {
 
   /// Whether the platform may draw the chrome (spec P2 §5.1). With
   /// [LiquidNativeChrome.auto] the shell uses native chrome when the
-  /// platform installed it, its width is regular, it has no [chromeBuilder],
-  /// and every destination (and [tabBarTrailing]) has an `sfSymbol`.
+  /// platform installed it, it has no [chromeBuilder], and every
+  /// destination (and [tabBarTrailing]) has an `sfSymbol`. In debug, a shell
+  /// that only lacks symbols logs one line naming them.
   /// Native chrome shows neither [sidebarHeader] nor [sidebarFooter]; see
   /// [nativeSidebarFooter].
   ///
@@ -198,6 +199,7 @@ class _LiquidShellState extends State<LiquidShell>
   LiquidNativeChromeConfig? _nativeConfig;
   bool _nativeSendScheduled = false;
   bool _forceNativeSend = false;
+  bool _symbolHintLogged = false;
   // The compact native bar's bottom inset (Flutter's bottom view padding
   // while the bar shows) and the window size it was read at.
   double? _barBottom;
@@ -832,6 +834,29 @@ class _LiquidShellState extends State<LiquidShell>
     );
   }
 
+  /// In debug, once per shell: names what lacks an `sfSymbol` when only
+  /// that keeps this shell from native chrome (spec P2 §15, E2): `auto`, no
+  /// `chromeBuilder`, and the platform installed native chrome or may still
+  /// (pending).
+  void _debugHintMissingSymbols({
+    required LiquidNativeShellState? state,
+    required bool describable,
+  }) {
+    if (!kDebugMode || _symbolHintLogged || describable) return;
+    if (widget.nativeChrome != LiquidNativeChrome.auto ||
+        widget.chromeBuilder != null) {
+      return;
+    }
+    final available = state == null
+        ? LiquidShellPlatform.instance.supportsNativeChrome
+        : state.installed;
+    if (!available) return;
+    final hint = nativeSymbolHint(widget.destinations, widget.tabBarTrailing);
+    if (hint == null) return;
+    _symbolHintLogged = true;
+    debugPrint(hint);
+  }
+
   /// The native chrome layout, or null to draw Flutter chrome (spec P2 §7).
   ///
   /// Also sends this shell's config to the platform when it owns the
@@ -858,17 +883,7 @@ class _LiquidShellState extends State<LiquidShell>
       hasChromeBuilder: widget.chromeBuilder != null,
       describable: describable,
     );
-    // Only for a shell that asked for native chrome and could use it.
-    if (!describable &&
-        widget.nativeChrome == LiquidNativeChrome.auto &&
-        widget.chromeBuilder == null &&
-        (state?.installed ?? false)) {
-      NativeChromeHost.debugLogOnce(
-        'notDescribable',
-        'liquid_shell: native chrome needs an sfSymbol on every destination '
-            'and on tabBarTrailing; drawing Flutter chrome.',
-      );
-    }
+    _debugHintMissingSymbols(state: state, describable: describable);
     final wasEngaged = _nativeEngaged;
     _nativeEngaged = engaged;
     if (engaged != wasEngaged) _presentation = null;

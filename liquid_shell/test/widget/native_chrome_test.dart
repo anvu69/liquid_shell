@@ -413,10 +413,79 @@ void main() {
       });
       expect(logs.where((l) => l.contains('not enabled')), hasLength(1));
     });
+  });
 
-    testWidgets('a missing sfSymbol: logged once, and only for a shell that '
-        'asked for native chrome', (tester) async {
-      final quiet = await _logsOf(() async {
+  group('missing-symbol hint (spec P2 §15, E2): one line per shell', () {
+    final plainSearch = LiquidTabAction(
+      icon: const Icon(Icons.search),
+      onPressed: () {},
+      semanticLabel: 'Search',
+    );
+    Iterable<String> hints(List<String> logs) =>
+        logs.where((l) => l.contains('sfSymbol'));
+
+    testWidgets('installed: one line naming every destination and the '
+        'trailing action without a symbol', (tester) async {
+      final logs = await _logsOf(() async {
+        installFakeNative();
+        await _pumpNative(tester, shell: TestShell(trailing: plainSearch));
+      });
+      expect(hints(logs), hasLength(1));
+      final hint = hints(logs).single;
+      for (final label in ['Home', 'Inbox', 'Reports', 'Settings']) {
+        expect(hint, contains('"$label"'));
+      }
+      expect(hint, contains('tabBarTrailing "Search"'));
+    });
+
+    testWidgets('pending: logged before the platform answers', (tester) async {
+      final logs = await _logsOf(() async {
+        installFakeNative().attachGate = Completer<LiquidNativeShellState>();
+        await _pumpNative(tester, shell: const TestShell(), settle: false);
+      });
+      expect(hints(logs), hasLength(1));
+    });
+
+    testWidgets('a rebuild does not log it again', (tester) async {
+      final logs = await _logsOf(() async {
+        final native = installFakeNative();
+        await _pumpNative(tester, shell: const TestShell());
+        await tester.tap(find.text('Inbox').first);
+        await tester.pumpAndSettle();
+        native.pushState(_compact);
+        await tester.pumpAndSettle();
+        // A new widget for the same shell.
+        await _pumpNative(
+          tester,
+          shell: const TestShell(minimizeOnScroll: false),
+        );
+      });
+      expect(hints(logs), hasLength(1));
+    });
+
+    testWidgets('two shells: one line each', (tester) async {
+      final logs = await _logsOf(() async {
+        installFakeNative();
+        await _pumpNative(tester, shell: const TestShell());
+        // A second shell without symbols, pushed above the first.
+        tester
+            .state<NavigatorState>(find.byType(Navigator))
+            .push(
+              MaterialPageRoute<void>(builder: (_) => const TestShell()),
+            )
+            .ignore();
+        await tester.pumpAndSettle();
+      });
+      expect(hints(logs), hasLength(2));
+    });
+
+    testWidgets('quiet where native chrome is impossible anyway, and for a '
+        'describable shell', (tester) async {
+      final logs = await _logsOf(() async {
+        // The default platform: no native chrome.
+        await _pumpNative(tester, shell: const TestShell());
+        await tester.pumpWidget(const SizedBox());
+        debugResetLiquidNative();
         installFakeNative();
         await _pumpNative(
           tester,
@@ -428,21 +497,9 @@ void main() {
             chromeBuilder: (context, details, chrome) => chrome,
           ),
         );
+        await _pumpNative(tester);
       });
-      expect(quiet.where((l) => l.contains('sfSymbol')), isEmpty);
-
-      final logs = await _logsOf(() async {
-        await _pumpNative(tester, shell: const TestShell());
-        // A second shell without symbols, pushed above the first.
-        tester
-            .state<NavigatorState>(find.byType(Navigator))
-            .push(
-              MaterialPageRoute<void>(builder: (_) => const TestShell()),
-            )
-            .ignore();
-        await tester.pumpAndSettle();
-      });
-      expect(logs.where((l) => l.contains('sfSymbol')), hasLength(1));
+      expect(hints(logs), isEmpty);
     });
   });
 

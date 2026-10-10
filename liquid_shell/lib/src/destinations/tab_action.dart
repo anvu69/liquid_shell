@@ -24,7 +24,8 @@ class LiquidTabAction {
 
   /// SF Symbol name (for example `magnifyingglass`) for native chrome,
   /// where the action is pinned to the tab bar's trailing end. Native chrome
-  /// needs it when the shell has a trailing action.
+  /// needs it: without it a shell with this action draws Flutter chrome,
+  /// also on iOS 26, and logs one line in debug saying so.
   final String? sfSymbol;
 
   /// Field by field. Widgets ([icon]) and callbacks ([onPressed]) compare by

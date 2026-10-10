@@ -40,7 +40,9 @@ class LiquidDestination {
   final LiquidPlacement placement;
 
   /// SF Symbol name (for example `house`) for native chrome. Native chrome
-  /// is used only when every destination has one (spec P2 §5.1).
+  /// needs it: a shell uses native chrome only when every destination (and
+  /// its trailing action) has one, and otherwise draws Flutter chrome, also
+  /// on iOS 26. In debug, such a shell logs one line naming what lacks one.
   final String? sfSymbol;
 
   /// Field by field. Widgets ([icon], [selectedIcon]) compare by identity;

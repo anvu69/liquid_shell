@@ -183,7 +183,7 @@ resize changes it, and jumps when the platform asks to reduce motion.
 - **`rootNotFlutter`**: the scene's root is not the Flutter view controller.
   Native chrome needs the standard Flutter scene setup.
 - **Native chrome installed but Flutter chrome shows**: a destination or the
-  trailing action has no `sfSymbol` (a debug log says so), or the shell has
-  a `chromeBuilder`.
+  trailing action has no `sfSymbol` (in debug, the shell logs one line
+  naming them), or the shell has a `chromeBuilder`.
 - **The outer shell lost its navigation**: an inner shell took the native
   chrome; set its `nativeChrome` to `off`.

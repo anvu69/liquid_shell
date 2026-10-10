@@ -52,6 +52,30 @@ bool nativeDescribable(
     destinations.every((d) => d.sfSymbol != null) &&
     (trailing == null || trailing.sfSymbol != null);
 
+/// The debug hint for a shell that could use native chrome but cannot
+/// describe itself (spec P2 §15, E2): one line naming every destination
+/// (by label) and the trailing action (by semantic label) without an
+/// `sfSymbol`. Null when nothing lacks one. Pure.
+String? nativeSymbolHint(
+  List<LiquidDestination> destinations,
+  LiquidTabAction? trailing,
+) {
+  final labels = [
+    for (final d in destinations)
+      if (d.sfSymbol == null) '"${d.label}"',
+  ];
+  final missing = [
+    if (labels.length == 1) 'destination ${labels.single}',
+    if (labels.length > 1) 'destinations ${labels.join(', ')}',
+    if (trailing != null && trailing.sfSymbol == null)
+      'tabBarTrailing "${trailing.semanticLabel}"',
+  ];
+  if (missing.isEmpty) return null;
+  return 'liquid_shell: drawing Flutter chrome where native chrome is '
+      'available: no sfSymbol on ${missing.join(' and ')}. Add one, or set '
+      'nativeChrome: LiquidNativeChrome.off.';
+}
+
 /// The native badge text: a count as drawn by the Flutter badge, `''` for
 /// a dot (UIKit draws an empty badge as a dot), null when hidden.
 String? nativeBadgeText(LiquidBadge? badge) {
