@@ -22,7 +22,6 @@ enum NativeSidebar { hidden, overlay, tiled }
 
 /// Why the native shell is not installed.
 enum NativeUnavailableReason {
-  notIPad,
   osTooOld,
   iPadAppOnMac,
   notEnabled,

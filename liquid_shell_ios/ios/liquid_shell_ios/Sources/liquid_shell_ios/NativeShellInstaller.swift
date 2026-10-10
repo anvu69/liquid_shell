@@ -60,7 +60,6 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
   /// The facts of this device, OS, bundle and process (spec §5.1).
   static func systemFacts(registeredLate: Bool, rootIsFlutter: Bool) -> InstallFacts {
     InstallFacts(
-      isPad: UIDevice.current.userInterfaceIdiom == .pad,
       osAtLeast26: { if #available(iOS 26.0, *) { return true } else { return false } }(),
       isiOSAppOnMac: ProcessInfo.processInfo.isiOSAppOnMac
         || ProcessInfo.processInfo.isMacCatalystApp,

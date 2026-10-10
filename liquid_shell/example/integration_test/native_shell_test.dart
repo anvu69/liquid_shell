@@ -61,9 +61,6 @@ void main() {
     final state = await platform.attachNativeChrome();
     debugPrint('liquid_shell native: $state');
     expect(state.installed, _expectNative);
-    if (!_expectNative) {
-      expect(state.unavailableReason, LiquidNativeUnavailableReason.notIPad);
-    }
   });
 
   testWidgets('the native case draws native or Flutter chrome, not both', (

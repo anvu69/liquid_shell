@@ -127,7 +127,7 @@ final class ArgbColorTests: XCTestCase {
 
 final class InstallPolicyTests: XCTestCase {
   private let ok = InstallFacts(
-    isPad: true, osAtLeast26: true, isiOSAppOnMac: false, enabledInInfoPlist: true,
+    osAtLeast26: true, isiOSAppOnMac: false, enabledInInfoPlist: true,
     disabledByEnvironment: false, registeredLate: false, rootIsFlutter: true)
 
   func testInstallsWhenEveryFactHolds() {
@@ -148,8 +148,6 @@ final class InstallPolicyTests: XCTestCase {
     XCTAssertEqual(InstallPolicy.decide(facts), .iPadAppOnMac)
     facts.osAtLeast26 = false
     XCTAssertEqual(InstallPolicy.decide(facts), .osTooOld)
-    facts.isPad = false
-    XCTAssertEqual(InstallPolicy.decide(facts), .notIPad)
   }
 
   func testKeysAreThePublishedNames() {
@@ -239,15 +237,16 @@ final class NativeTabsTests: XCTestCase {
 
   private func config(
     engaged: Bool = true, hidden: Bool = false, interactive: Bool = true,
-    footer: Bool = false, selected: Int64 = 0
+    footer: Bool = false, trailing: Bool = false, reports: Bool = false, selected: Int64 = 0
   ) -> NativeChromeConfig {
     NativeChromeConfig(
       engaged: engaged,
       tabs: [
         NativeTab(title: "Home", sfSymbol: "house", sidebarOnly: false),
         NativeTab(title: "Inbox", sfSymbol: "tray", sidebarOnly: false),
-      ],
+      ] + (reports ? [NativeTab(title: "Reports", sfSymbol: "chart.bar", sidebarOnly: true)] : []),
       selectedIndex: selected,
+      trailing: trailing ? NativeAction(title: "Search", sfSymbol: "magnifyingglass") : nil,
       footer: footer
         ? NativeFooter(
           title: "Ann Lee", subtitle: "Account", sfSymbol: "person.crop.circle",
@@ -286,20 +285,33 @@ final class NativeTabsTests: XCTestCase {
   }
 
   /// A shell installed in its own window with the first config applied.
+  /// `sizeClass`: the container's horizontal size class, overriding the
+  /// window's (a compact iPad window, or a regular one on an iPhone).
   private func installedShell(
-    footer: Bool = false, landscape: Bool = false
+    footer: Bool = false, trailing: Bool = false, reports: Bool = false,
+    landscape: Bool = false, sizeClass: UIUserInterfaceSizeClass? = nil
   ) throws -> NativeTabsController {
     let flutter = UIViewController()
     let tabs = NativeTabsController(flutter: flutter, events: events)
     let window = try portraitWindow(root: UIViewController(), landscape: landscape)
-    window.rootViewController = ShellContainerController(tabs: tabs, flutter: flutter)
+    let container = ShellContainerController(tabs: tabs, flutter: flutter)
+    if let sizeClass { container.traitOverrides.horizontalSizeClass = sizeClass }
+    window.rootViewController = container
     self.window = window
-    tabs.apply(config(footer: footer))
+    tabs.apply(config(footer: footer, trailing: trailing, reports: reports))
     settle()
     return tabs
   }
 
+  /// The overlay, tiled and top-bar tests need a regular-width iPad: an
+  /// iPhone window is compact, where UIKit draws the bottom tab bar.
+  private func requireIPad() throws {
+    try XCTSkipUnless(
+      UIDevice.current.userInterfaceIdiom == .pad, "an iPad layout (overlay, tiled, top bar)")
+  }
+
   func testHidingTheChromeClosesAnOverlaySidebar() throws {
+    try requireIPad()
     let tabs = try installedShell()
     tabs.setSidebarVisible(true)
     settle()
@@ -315,6 +327,7 @@ final class NativeTabsTests: XCTestCase {
   }
 
   func testGoingDormantClosesAnOverlaySidebar() throws {
+    try requireIPad()
     let tabs = try installedShell()
     tabs.setSidebarVisible(true)
     settle()
@@ -329,6 +342,7 @@ final class NativeTabsTests: XCTestCase {
   /// sidebar and its dimming view: a non-interactive config (a dialog
   /// above the shell, or a guard pending) closes the overlay first.
   func testANonInteractiveConfigClosesAnOverlaySidebar() throws {
+    try requireIPad()
     let tabs = try installedShell()
     tabs.setSidebarVisible(true)
     settle()
@@ -411,6 +425,7 @@ final class NativeTabsTests: XCTestCase {
   /// The floating tab bar: its items stay with UIKit; beside the pill,
   /// just below the bar row and in the content, touches reach Flutter.
   func testTouchesBesideAndBelowThePillReachFlutter() throws {
+    try requireIPad()
     let tabs = try installedShell()
     let root = try XCTUnwrap(tabs.parent?.view)
     let inbox = try centreOfLabel("Inbox", in: tabs.view, tabs)
@@ -446,6 +461,7 @@ final class NativeTabsTests: XCTestCase {
   /// and its footer stay with UIKit (spec §5.3: "the sidebar"), and so does
   /// the dimming view beside it, whose tap closes the overlay.
   func testTheOverlaySidebarAndItsDimmingKeepTheirTouches() throws {
+    try requireIPad()
     let tabs = try installedShell(footer: true)
     let root = try XCTUnwrap(tabs.parent?.view)
     openSidebar(tabs)
@@ -469,6 +485,7 @@ final class NativeTabsTests: XCTestCase {
   /// Landscape tiles the sidebar: its rows stay with UIKit, and the content
   /// beside it reaches Flutter.
   func testBesideATiledSidebarTouchesReachFlutter() throws {
+    try requireIPad()
     let tabs = try installedShell(landscape: true)
     let root = try XCTUnwrap(tabs.parent?.view)
     openSidebar(tabs)
@@ -544,6 +561,7 @@ final class NativeTabsTests: XCTestCase {
   /// Dart as a cluster, pushed or read. Once the chrome hides (a page
   /// covers the shell) Flutter has the whole window and the read counts.
   func testWindowControlsAreZeroWhileTheNativeChromeIsVisible() throws {
+    try requireIPad()
     let (installer, window) = try installedByInstaller()
     let shell = try tabs(in: window)
     let windowed = NativeWindowControls(leading: 66, top: 44)
@@ -607,6 +625,169 @@ final class NativeTabsTests: XCTestCase {
     XCTAssertEqual(shell.selectedTab?.identifier, "destination1")
   }
 
+  // MARK: - Compact: UIKit's floating tab bar at the bottom (owner D1)
+
+  /// iPhone, or an iPad window too narrow for the top bar: the native bar
+  /// is UIKit's compact floating tab bar at the bottom. The Flutter view
+  /// keeps the whole window; the bar's height reaches Flutter as its
+  /// bottom safe area, and UIKit reports compact with no sidebar.
+  func testACompactShellShowsTheBottomTabBarInFluttersBottomSafeArea() throws {
+    let tabs = try installedShell(trailing: true, sizeClass: .compact)
+    let root = try XCTUnwrap(tabs.parent?.view)
+    let host = try XCTUnwrap(tabs.selectedViewController?.view)
+    let state = tabs.currentState()
+    XCTAssertTrue(state.compact)
+    XCTAssertEqual(state.sidebar, .hidden)
+    XCTAssertEqual(tabs.flutter.view.frame, root.bounds, "Flutter keeps the whole window")
+    XCTAssertGreaterThan(
+      host.safeAreaInsets.bottom, root.safeAreaInsets.bottom + 40, "the bar is in the host's safe area")
+    XCTAssertEqual(
+      tabs.flutter.view.safeAreaInsets.bottom, host.safeAreaInsets.bottom,
+      "and so in Flutter's")
+    let inbox = try centreOfLabel("Inbox", in: tabs.view, tabs)
+    XCTAssertGreaterThan(inbox.y, root.bounds.height - host.safeAreaInsets.bottom, "a bottom bar")
+  }
+
+  /// The compact bar's items stay with UIKit; the content, and the row
+  /// just above the bar, reach Flutter. The bar's own top, not the safe
+  /// area's: on iPadOS 27 the pill rises 5pt above the 72pt safe area.
+  func testTouchesAboveTheCompactBarReachFlutter() throws {
+    let tabs = try installedShell(trailing: true, sizeClass: .compact)
+    let root = try XCTUnwrap(tabs.parent?.view)
+    let barTop = tabs.tabBar.convert(tabs.tabBar.bounds, to: root).minY
+    let inbox = try centreOfLabel("Inbox", in: tabs.view, tabs)
+
+    XCTAssertTrue(isNative(try hit(tabs, inbox), tabs), "a tab bar item")
+    XCTAssertTrue(
+      try hit(tabs, CGPoint(x: inbox.x, y: barTop - 4)) === tabs.flutter.view,
+      "just above the bar")
+    XCTAssertTrue(
+      try hit(tabs, CGPoint(x: root.bounds.midX, y: root.bounds.midY)) === tabs.flutter.view,
+      "the centre")
+    XCTAssertTrue(
+      try hit(tabs, CGPoint(x: root.bounds.midX, y: 4)) === tabs.flutter.view, "the top edge")
+    tabs.apply(config(interactive: false, trailing: true))
+    XCTAssertTrue(try hit(tabs, inbox) === tabs.flutter.view, "inert under a dialog")
+  }
+
+  /// Compact has no sidebar, so a sidebar-only destination is left out of
+  /// the compact bar (as P1 leaves it out of the Flutter one) and comes
+  /// back at regular width, selected again if Dart still selects it.
+  /// Neither is a user's selection: nothing is proposed to Dart.
+  func testASidebarOnlyDestinationIsLeftOutOfTheCompactBar() throws {
+    let tabs = try installedShell(reports: true, sizeClass: .compact)
+    let container = try XCTUnwrap(tabs.parent)
+    func shown() -> [String] { tabs.tabs.map(\.identifier) }
+    XCTAssertEqual(shown(), ["destination0", "destination1"])
+    XCTAssertNil(labelCentre("Reports", in: tabs.view, tabs))
+
+    tabs.apply(config(reports: true, selected: 2))
+    settle()
+    XCTAssertEqual(tabs.selectedTab?.identifier, "destination0", "hidden: not selectable")
+
+    container.traitOverrides.horizontalSizeClass = .regular
+    settle()
+    XCTAssertEqual(shown(), ["destination0", "destination1", "destination2"])
+    XCTAssertEqual(tabs.selectedTab?.identifier, "destination2", "Dart's selection, back")
+    XCTAssertFalse(events.sent.contains { $0.hasPrefix("destination") })
+  }
+
+  /// The last shell leaving sends the dormant config (no tabs), and the
+  /// next shell's config follows (a route replaced, a test re-pumped). The
+  /// dormant spell must not empty UIKit's tabs: emptied and refilled, the
+  /// compact bar came back hidden under the content, with the host's (and
+  /// so Flutter's) bottom safe area down to the home indicator (iPhone,
+  /// iOS 26.5, Task 7 dry run).
+  func testADormantSpellKeepsTheTabsSoTheCompactBarComesBack() throws {
+    let tabs = try installedShell(trailing: true, sizeClass: .compact)
+    let root = try XCTUnwrap(tabs.parent?.view)
+    let shown = tabs.tabs.map(\.identifier)
+
+    tabs.apply(
+      NativeChromeConfig(
+        engaged: false, tabs: [], selectedIndex: 0, tintArgb: 0xFF00_7AFF, dark: false,
+        rtl: false, hidden: false, interactive: true))
+    settle()
+    XCTAssertFalse(tabs.chromeVisible)
+    XCTAssertEqual(tabs.tabs.map(\.identifier), shown, "dormant leaves the tabs alone")
+
+    tabs.apply(config(trailing: true))
+    settle()
+    let host = try XCTUnwrap(tabs.selectedViewController?.view)
+    XCTAssertGreaterThan(host.safeAreaInsets.bottom, root.safeAreaInsets.bottom + 40)
+    XCTAssertEqual(tabs.flutter.view.safeAreaInsets.bottom, host.safeAreaInsets.bottom)
+  }
+
+  /// Compact has no sidebar: Dart's request is ignored.
+  func testTheSidebarStaysClosedWhenCompact() throws {
+    let tabs = try installedShell(sizeClass: .compact)
+    tabs.setSidebarVisible(true)
+    settle()
+    XCTAssertEqual(tabs.currentState().sidebar, .hidden)
+  }
+
+  /// The compact bar is at the bottom and does not clear the window
+  /// controls at the top: Flutter content must, so the read reaches Dart.
+  func testWindowControlsAreReadUnderACompactBar() throws {
+    let tabs = try installedShell(sizeClass: .compact)
+    let windowed = NativeWindowControls(leading: 66, top: 44)
+    tabs.readWindowControls = { _ in windowed }
+    tabs.dartAttached = true
+    tabs.syncFlutter()
+    XCTAssertTrue(tabs.chromeVisible)
+    XCTAssertEqual(events.controls.last, windowed, "pushed")
+    XCTAssertEqual(tabs.windowControls(), windowed, "read")
+  }
+
+  /// The trailing action is a search-role tab (`UISearchTab`): the
+  /// separate ⌕ at the end of the compact bar, the trailing end of the top
+  /// bar, the first sidebar row. A tap only calls the app.
+  func testTheTrailingActionIsASearchTabThatOnlyCallsTheApp() throws {
+    let tabs = try installedShell(trailing: true, sizeClass: .compact)
+    let search = try XCTUnwrap(tabs.tabs.first as? UISearchTab)
+    XCTAssertEqual(search.title, "Search")
+    XCTAssertFalse(tabs.tabBarController(tabs, shouldSelectTab: search))
+    XCTAssertEqual(events.sent.last, "trailing")
+    XCTAssertEqual(tabs.selectedTab?.identifier, "destination0", "nothing selected")
+  }
+
+  /// A window resized across the size-class boundary (Stage Manager,
+  /// Split View): UIKit swaps the bar, and Dart hears the new state.
+  func testResizingAcrossTheSizeClassRepublishesTheState() throws {
+    let tabs = try installedShell(sizeClass: .regular)
+    let container = try XCTUnwrap(tabs.parent)
+    tabs.dartAttached = true
+    tabs.syncFlutter()
+    XCTAssertFalse(tabs.currentState().compact)
+    let before = events.sent.filter { $0 == "state" }.count
+
+    container.traitOverrides.horizontalSizeClass = .compact
+    settle()
+    XCTAssertTrue(tabs.currentState().compact)
+    XCTAssertEqual(events.sent.filter { $0 == "state" }.count, before + 1)
+    XCTAssertEqual(tabs.flutter.view.frame, container.view.bounds)
+
+    container.traitOverrides.horizontalSizeClass = .regular
+    settle()
+    XCTAssertFalse(tabs.currentState().compact)
+    XCTAssertEqual(events.sent.filter { $0 == "state" }.count, before + 2)
+  }
+
+  /// VK-403 guard: a tiled sidebar does not resize the Flutter view; its
+  /// width reaches Flutter as the start safe area (Dart then lays the body
+  /// out beside it). Measured equal on iPadOS 26.5 and 27.0.
+  func testATiledSidebarIsFluttersStartSafeArea() throws {
+    try requireIPad()
+    let tabs = try installedShell(landscape: true)
+    let root = try XCTUnwrap(tabs.parent?.view)
+    openSidebar(tabs)
+    XCTAssertEqual(tabs.currentState().sidebar, .tiled, "precondition: a landscape iPad tiles")
+    let host = try XCTUnwrap(tabs.selectedViewController?.view)
+    XCTAssertGreaterThan(host.safeAreaInsets.left, 200, "the sidebar's width")
+    XCTAssertEqual(tabs.flutter.view.frame, root.bounds)
+    XCTAssertEqual(tabs.flutter.view.safeAreaInsets.left, host.safeAreaInsets.left)
+  }
+
   private func footerView(_ tabs: NativeTabsController) throws -> SidebarFooterView {
     try XCTUnwrap(tabs.sidebar.bottomBarView as? SidebarFooterView)
   }
@@ -645,7 +826,7 @@ final class NativeTabsTests: XCTestCase {
 /// plugin registered (spec §5.7, §11).
 final class InstallerReasonTests: XCTestCase {
   private func installer(
-    isPad: Bool = true, enabled: Bool = true, flutterViewOnScreen: Bool
+    enabled: Bool = true, flutterViewOnScreen: Bool
   ) -> NativeShellInstaller {
     NativeShellInstaller(
       events: RecordingEvents(),
@@ -653,7 +834,7 @@ final class InstallerReasonTests: XCTestCase {
       ownsFlutter: { _ in true },
       readFacts: { registeredLate, rootIsFlutter in
         InstallFacts(
-          isPad: isPad, osAtLeast26: true, isiOSAppOnMac: false, enabledInInfoPlist: enabled,
+          osAtLeast26: true, isiOSAppOnMac: false, enabledInInfoPlist: enabled,
           disabledByEnvironment: false, registeredLate: registeredLate,
           rootIsFlutter: rootIsFlutter)
       },
@@ -676,7 +857,6 @@ final class InstallerReasonTests: XCTestCase {
   }
 
   func testAnEarlierFailingFactStillWins() throws {
-    XCTAssertEqual(try reason(installer(isPad: false, flutterViewOnScreen: true)), .notIPad)
     XCTAssertEqual(try reason(installer(enabled: false, flutterViewOnScreen: true)), .notEnabled)
   }
 }
@@ -733,7 +913,7 @@ final class InstallerEngineTests: XCTestCase {
       ownsFlutter: owns,
       readFacts: { registeredLate, rootIsFlutter in
         InstallFacts(
-          isPad: true, osAtLeast26: true, isiOSAppOnMac: false, enabledInInfoPlist: true,
+          osAtLeast26: true, isiOSAppOnMac: false, enabledInInfoPlist: true,
           disabledByEnvironment: false, registeredLate: registeredLate,
           rootIsFlutter: rootIsFlutter)
       },

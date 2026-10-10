@@ -19,10 +19,7 @@ enum LiquidNativeUnavailableReason {
   /// The platform has no native chrome (Android, web, desktop, tests).
   unsupportedPlatform,
 
-  /// Not an iPad.
-  notIPad,
-
-  /// iPadOS before 26.
+  /// iOS or iPadOS before 26.
   osTooOld,
 
   /// An iPad app running on a Mac ("Designed for iPad").

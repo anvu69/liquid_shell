@@ -3,7 +3,9 @@ import UIKit
 
 /// The transparent `UITabBarController(.tabSidebar)` over the Flutter view
 /// (spec §5): tab bar, sidebar toggle, sidebar, trailing action and footer
-/// are real UIKit.
+/// are real UIKit. Regular width shows the top bar and the sidebar; compact
+/// width (every iPhone, a narrow iPad window) shows UIKit's floating tab
+/// bar at the bottom (owner D1).
 ///
 /// Sources of truth: Dart owns the selection (a tap only proposes it,
 /// `onDestinationTapped`, and Dart answers with `update`); UIKit owns the
@@ -20,7 +22,10 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   private let events: NativeShellFlutterApiProtocol
 
   private var destinationTabs: [UITab] = []
-  private var trailingTab: UITab?
+  /// The trailing action: a search-role tab, the separate ⌕ at the end of
+  /// the compact bar, the trailing end of the top bar, the first sidebar
+  /// row. It is never selected (`shouldSelectTab`).
+  private var trailingTab: UISearchTab?
   /// Sidebar-only flags plus "has trailing": a change rebuilds the tabs.
   private var structure: [Bool] = []
   private let footer = SidebarFooterView()
@@ -70,6 +75,10 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     footer.onTap = { [weak self] in self?.footerTapped() }
     registerForTraitChanges([UITraitHorizontalSizeClass.self]) {
       (self: NativeTabsController, _: UITraitCollection) in
+      if let config = self.config {
+        self.showTabs(config)
+        self.select(Int(config.selectedIndex))
+      }
       self.syncFlutter()
     }
   }
@@ -90,17 +99,23 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     // Read before `config` changes: once the new config hides the chrome,
     // `currentSidebar()` reports `.hidden` and an open overlay is missed.
     let overlayOpen = currentSidebar() == .overlay
-    rebuildTabsIfNeeded(new)
-    for (tab, spec) in zip(destinationTabs, new.tabs) {
-      tab.title = spec.title
-      tab.image = UIImage(systemName: spec.sfSymbol)
-      tab.badgeValue = spec.badge
+    // The dormant config has no tabs: it hides the chrome and leaves the
+    // tabs alone. Emptied and refilled, UIKit brought the compact bar back
+    // hidden, with no bar in the host's safe area (iOS 26.5).
+    if !new.tabs.isEmpty {
+      rebuildTabsIfNeeded(new)
+      for (tab, spec) in zip(destinationTabs, new.tabs) {
+        tab.title = spec.title
+        tab.image = UIImage(systemName: spec.sfSymbol)
+        tab.badgeValue = spec.badge
+      }
+      if let tab = trailingTab, let action = new.trailing {
+        tab.title = action.title
+        tab.image = UIImage(systemName: action.sfSymbol)
+      }
+      showTabs(new)
+      select(Int(new.selectedIndex))
     }
-    if let tab = trailingTab, let action = new.trailing {
-      tab.title = action.title
-      tab.image = UIImage(systemName: action.sfSymbol)
-    }
-    select(Int(new.selectedIndex))
     setFooter(new.footer)
     view.tintColor = UIColor(argb: new.tintArgb)
     traitOverrides.userInterfaceStyle = new.dark ? .dark : .light
@@ -125,6 +140,8 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     sidebar.isHidden = !visible
   }
 
+  /// Creates the tabs when the structure changes; `showTabs` hands them to
+  /// UIKit.
   private func rebuildTabsIfNeeded(_ new: NativeChromeConfig) {
     let wanted = new.tabs.map(\.sidebarOnly) + [new.trailing != nil]
     guard wanted != structure else { return }
@@ -138,20 +155,33 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       return tab
     }
     trailingTab = new.trailing.map { _ in
-      let tab = UITab(title: "", image: nil, identifier: "trailing") { _ in
-        TabHostController()
-      }
-      // Pinned: the trailing end of the tab bar, the first sidebar row.
-      tab.preferredPlacement = .pinned
-      return tab
+      // Pinned by default: the trailing end of the bar, the first sidebar row.
+      UISearchTab { _ in TabHostController() }
     }
+  }
+
+  /// The tabs UIKit shows. Compact has no sidebar, and UIKit's compact bar
+  /// shows a `.sidebarOnly` tab anyway (`UITab.isHidden` does not hide it
+  /// there, iOS 26.5): leave sidebar-only destinations out, as P1's bar
+  /// does, and put them back at regular width. Dart tells the app about a
+  /// hidden selection (`onSelectedDestinationHidden`). Not a user's
+  /// selection: nothing is proposed to Dart.
+  private func showTabs(_ config: NativeChromeConfig) {
+    guard !config.tabs.isEmpty else { return }
+    let compact = traitCollection.horizontalSizeClass == .compact
+    let shown = zip(destinationTabs, config.tabs).filter { !(compact && $1.sidebarOnly) }.map(\.0)
+    let wanted = (trailingTab.map { [$0] } ?? []) + shown
+    guard wanted.map(ObjectIdentifier.init) != tabs.map(ObjectIdentifier.init) else { return }
     applyingFromDart = true
-    setTabs((trailingTab.map { [$0] } ?? []) + destinationTabs, animated: false)
+    setTabs(wanted, animated: false)
     applyingFromDart = false
   }
 
+  /// Selects destination [index] when UIKit shows it (a sidebar-only one
+  /// is left out of the compact bar).
   private func select(_ index: Int) {
-    guard destinationTabs.indices.contains(index), selectedTab !== destinationTabs[index]
+    guard destinationTabs.indices.contains(index), selectedTab !== destinationTabs[index],
+      tabs.contains(where: { $0 === destinationTabs[index] })
     else { return }
     applyingFromDart = true
     selectedTab = destinationTabs[index]
@@ -255,14 +285,16 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   }
 
   /// The window controls Flutter must clear (spec §8.1). None while the
-  /// native chrome is visible: UIKit's tab bar and sidebar make room for
-  /// the cluster themselves, as its navigation bar does, and Flutter
-  /// content starts below the bar row or beside the sidebar. The corner
-  /// read is meaningless there: Flutter's safe top (the bar row) is below
-  /// the cluster, so the vertical delta is 0 and the leading one alone
-  /// would read as a cluster (`ShellMath.fallbackClusterTop`).
+  /// regular native chrome is visible: UIKit's top bar and sidebar make
+  /// room for the cluster themselves, as its navigation bar does, and
+  /// Flutter content starts below the bar row or beside the sidebar. The
+  /// corner read is meaningless there: Flutter's safe top (the bar row) is
+  /// below the cluster, so the vertical delta is 0 and the leading one
+  /// alone would read as a cluster (`ShellMath.fallbackClusterTop`). The
+  /// compact bar is at the bottom: the top is Flutter's, so it is read.
   func windowControls() -> NativeWindowControls {
-    if chromeVisible { return NativeWindowControls(leading: 0, top: 0) }
+    let compact = traitCollection.horizontalSizeClass == .compact
+    if chromeVisible, !compact { return NativeWindowControls(leading: 0, top: 0) }
     return readWindowControls(flutter.viewIfLoaded)
   }
 

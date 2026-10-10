@@ -120,7 +120,6 @@ enum NativeSidebar {
 
 /// Why the native shell is not installed.
 enum NativeUnavailableReason {
-  notIPad,
   osTooOld,
   iPadAppOnMac,
   notEnabled,

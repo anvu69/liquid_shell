@@ -16,7 +16,6 @@ LiquidNativeShellState stateFromNative(
   },
   unavailableReason: switch (state.unavailableReason) {
     null => null,
-    NativeUnavailableReason.notIPad => LiquidNativeUnavailableReason.notIPad,
     NativeUnavailableReason.osTooOld => LiquidNativeUnavailableReason.osTooOld,
     NativeUnavailableReason.iPadAppOnMac =>
       LiquidNativeUnavailableReason.iPadAppOnMac,

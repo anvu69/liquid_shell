@@ -1,8 +1,8 @@
 import Foundation
 
-/// What decides whether the native shell is installed (spec §5.1).
+/// What decides whether the native shell is installed (spec §5.1). Every
+/// iPhone and iPad qualifies (owner D1): there is no idiom fact.
 struct InstallFacts: Equatable {
-  var isPad: Bool
   var osAtLeast26: Bool
   var isiOSAppOnMac: Bool
   var enabledInInfoPlist: Bool
@@ -21,7 +21,6 @@ enum InstallPolicy {
 
   /// nil: install. Otherwise why not.
   static func decide(_ facts: InstallFacts) -> NativeUnavailableReason? {
-    if !facts.isPad { return .notIPad }
     if !facts.osAtLeast26 { return .osTooOld }
     if facts.isiOSAppOnMac { return .iPadAppOnMac }
     if !facts.enabledInInfoPlist { return .notEnabled }

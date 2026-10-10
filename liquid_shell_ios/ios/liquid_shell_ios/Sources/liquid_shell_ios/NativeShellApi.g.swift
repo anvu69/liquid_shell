@@ -197,13 +197,12 @@ enum NativeSidebar: Int, CaseIterable {
 
 /// Why the native shell is not installed.
 enum NativeUnavailableReason: Int, CaseIterable {
-  case notIPad = 0
-  case osTooOld = 1
-  case iPadAppOnMac = 2
-  case notEnabled = 3
-  case disabledByEnvironment = 4
-  case rootNotFlutter = 5
-  case registeredLate = 6
+  case osTooOld = 0
+  case iPadAppOnMac = 1
+  case notEnabled = 2
+  case disabledByEnvironment = 3
+  case rootNotFlutter = 4
+  case registeredLate = 5
 }
 
 /// Test-only: what `debugTap` taps.

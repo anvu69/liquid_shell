@@ -48,7 +48,7 @@ void main() {
         isNot(
           const LiquidNativeShellState(
             installed: true,
-            unavailableReason: LiquidNativeUnavailableReason.notIPad,
+            unavailableReason: LiquidNativeUnavailableReason.osTooOld,
           ),
         ),
       );
