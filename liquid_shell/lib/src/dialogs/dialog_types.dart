@@ -37,10 +37,11 @@ class LiquidAlertAction<T> {
   final LiquidAlertActionStyle style;
 
   /// Alerts only: emphasised, and chosen by Return. Action sheets ignore
-  /// it, as UIKit does. At most one per dialog.
+  /// it, as UIKit does. At most one per dialog, and it must be [enabled].
   final bool preferred;
 
-  /// Whether it can be picked.
+  /// Whether it can be picked. Every dialog needs at least one enabled
+  /// action, or the user could never close it.
   final bool enabled;
 
   @override

@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:liquid_shell/src/dialogs/dialog_types.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
-/// Throws [ArgumentError] for actions UIKit would crash on or draw blank:
-/// none, more than one cancel action, more than one preferred action, a
-/// blank label (spec P3a §4.2).
+/// Throws [ArgumentError] for actions UIKit would crash on, draw blank, or
+/// never let the user leave: none, more than one cancel action, more than
+/// one preferred action, a blank label (spec P3a §4.2), a disabled
+/// preferred action, or no enabled action at all (a native alert has no
+/// tap-outside, so its future would never end).
 void checkAlertActions<T>(List<LiquidAlertAction<T>> actions) {
   if (actions.isEmpty) {
     throw ArgumentError.value(actions, 'actions', 'needs at least one action');
@@ -24,6 +26,20 @@ void checkAlertActions<T>(List<LiquidAlertAction<T>> actions) {
   }
   if (actions.any((a) => a.label.trim().isEmpty)) {
     throw ArgumentError.value(actions, 'actions', 'every label needs text');
+  }
+  if (actions.any((a) => a.preferred && !a.enabled)) {
+    throw ArgumentError.value(
+      actions,
+      'actions',
+      'the preferred action must be enabled',
+    );
+  }
+  if (!actions.any((a) => a.enabled)) {
+    throw ArgumentError.value(
+      actions,
+      'actions',
+      'needs at least one enabled action',
+    );
   }
 }
 

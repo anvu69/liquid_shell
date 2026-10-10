@@ -185,6 +185,34 @@ void main() {
       await _open(tester);
       expect(fake.dialogRequests.single.requireGlass, isFalse);
     });
+
+    testWidgets('a disabled action reaches the platform disabled', (
+      tester,
+    ) async {
+      final fake = installFakeNative()
+        ..dialogAnswers.add(const LiquidNativeDialogChose(0));
+      await _launcher(
+        tester,
+        (context) => showLiquidAlert(
+          context,
+          title: 'Discard changes?',
+          actions: const [
+            _keep,
+            LiquidAlertAction(
+              label: 'Discard',
+              value: _Pick.discard,
+              style: LiquidAlertActionStyle.destructive,
+              enabled: false,
+            ),
+          ],
+        ),
+      );
+      await _open(tester);
+      expect(
+        fake.dialogRequests.single.actions.map((a) => a.enabled),
+        [isTrue, isFalse],
+      );
+    });
   });
 
   group('fallback', () {

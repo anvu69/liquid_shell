@@ -1,3 +1,5 @@
+import 'package:flutter/rendering.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/dialogs/dialog_plan.dart';
@@ -16,6 +18,27 @@ const _discard = LiquidAlertAction<_Pick>(
   style: LiquidAlertActionStyle.destructive,
 );
 const _later = LiquidAlertAction<_Pick>(label: 'Later', value: _Pick.later);
+
+/// Takes its parent's size and never lays out, paints or describes its
+/// child, so the child's box is attached but has no size.
+class _NeverLaysOut extends SingleChildRenderObjectWidget {
+  const _NeverLaysOut({super.child});
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderNeverLaysOut();
+}
+
+class _RenderNeverLaysOut extends RenderProxyBox {
+  @override
+  void performLayout() => size = constraints.biggest;
+
+  @override
+  void paint(PaintingContext context, Offset offset) {}
+
+  @override
+  void visitChildrenForSemantics(RenderObjectVisitor visitor) {}
+}
 
 void main() {
   group('checkAlertActions', () {
@@ -37,6 +60,46 @@ void main() {
         expect(() => checkAlertActions(actions), throwsArgumentError);
       }
     });
+
+    test('rejects a dialog the user could never leave', () {
+      final trapped = <List<LiquidAlertAction<_Pick>>>[
+        const [
+          LiquidAlertAction(label: 'A', value: _Pick.keep, enabled: false),
+        ],
+        const [
+          LiquidAlertAction(
+            label: 'Keep editing',
+            value: _Pick.keep,
+            style: LiquidAlertActionStyle.cancel,
+            enabled: false,
+          ),
+          LiquidAlertAction(label: 'B', value: _Pick.later, enabled: false),
+        ],
+        const [
+          _keep,
+          LiquidAlertAction(
+            label: 'Discard',
+            value: _Pick.discard,
+            preferred: true,
+            enabled: false,
+          ),
+        ],
+      ];
+      for (final actions in trapped) {
+        expect(
+          () => checkAlertActions(actions),
+          throwsArgumentError,
+          reason: '$actions',
+        );
+      }
+    });
+
+    test('accepts a disabled action beside an enabled one', () {
+      checkAlertActions(const [
+        _keep,
+        LiquidAlertAction(label: 'Later', value: _Pick.later, enabled: false),
+      ]);
+    });
   });
 
   group('dialogValue', () {
@@ -47,6 +110,68 @@ void main() {
     test('a dismissal picks the cancel action, else null', () {
       expect(dialogValue(const [_discard, _keep], null), _Pick.keep);
       expect(dialogValue(const [_discard, _later], null), isNull);
+    });
+  });
+
+  group('anchorOf', () {
+    testWidgets('is null before layout', (tester) async {
+      Rect? during = const Rect.fromLTWH(1, 1, 1, 1);
+      await tester.pumpWidget(
+        Builder(
+          builder: (context) {
+            during = anchorOf(context);
+            return const SizedBox(width: 10, height: 10);
+          },
+        ),
+      );
+      expect(during, isNull);
+    });
+
+    testWidgets('is null for a box that was never laid out', (tester) async {
+      const key = Key('unsized');
+      await tester.pumpWidget(
+        const _NeverLaysOut(child: SizedBox(key: key, width: 10, height: 10)),
+      );
+      expect(anchorOf(tester.element(find.byKey(key))), isNull);
+    });
+
+    testWidgets('is null for a context without a box', (tester) async {
+      late BuildContext sliver;
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: CustomScrollView(
+            slivers: [
+              Builder(
+                builder: (context) {
+                  sliver = context;
+                  return const SliverToBoxAdapter(
+                    child: SizedBox(height: 10),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+      expect(anchorOf(sliver), isNull);
+    });
+
+    testWidgets('is the laid-out box in global coordinates', (tester) async {
+      const key = Key('box');
+      await tester.pumpWidget(
+        const Align(
+          alignment: Alignment.topLeft,
+          child: Padding(
+            padding: EdgeInsets.only(left: 30, top: 50),
+            child: SizedBox(key: key, width: 20, height: 10),
+          ),
+        ),
+      );
+      expect(
+        anchorOf(tester.element(find.byKey(key))),
+        const Rect.fromLTWH(30, 50, 20, 10),
+      );
     });
   });
 

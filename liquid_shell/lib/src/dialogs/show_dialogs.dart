@@ -9,16 +9,30 @@ import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.
 
 /// Shows an alert and completes with the chosen action's value.
 ///
-/// On iOS 26 and later this is the system's `UIAlertController`, above any
-/// native chrome. Elsewhere, or with [presentation] set to
-/// [LiquidDialogPresentation.flutter], it is a Flutter glass alert (spec
-/// P3a). [title], [message] and every label come from the app.
+/// Who draws it depends on [presentation]:
+///
+/// * [LiquidDialogPresentation.auto] (the default): on iOS 26 and later,
+///   the system's `UIAlertController`, with Liquid Glass and above any
+///   native chrome. On earlier iOS and on Android, a Flutter glass alert.
+/// * [LiquidDialogPresentation.system]: the system's `UIAlertController`
+///   on every iOS version (without glass before 26); a Flutter glass alert
+///   elsewhere.
+/// * [LiquidDialogPresentation.flutter]: always the Flutter glass alert.
+///
+/// The Flutter glass alert is also drawn when the system one cannot be
+/// shown, for example when the app runs with the diagnostic environment
+/// variable `LIQUID_SHELL_NATIVE_OFF=1`. It is pushed on the root
+/// [Navigator], so [context] needs one above it. [title], [message] and
+/// every label come from the app.
 ///
 /// Completes with the cancel action's value (or null without one) when
 /// the alert closes without a choice (Escape, Android back, a dismissal by
-/// the system), and with null if it could never be shown. Throws
-/// [ArgumentError] at once for no actions, two cancel or two preferred
-/// actions, a blank label or a blank [title].
+/// the system), and with null when it could never be shown because
+/// [context] was unmounted first.
+///
+/// Throws [ArgumentError] at once, before anything is shown, for a blank
+/// [title], no actions, more than one cancel or preferred action, a blank
+/// label, a disabled preferred action, or no enabled action.
 Future<T?> showLiquidAlert<T>(
   BuildContext context, {
   required String title,
@@ -48,12 +62,27 @@ Future<T?> showLiquidAlert<T>(
 
 /// Shows an action sheet and completes with the chosen action's value.
 ///
-/// On iPad, and in the Flutter fallback at regular width, the sheet points
+/// [presentation] picks who draws it, as for [showLiquidAlert]: the
+/// system's `UIAlertController` on iOS 26 and later with
+/// [LiquidDialogPresentation.auto], on every iOS with
+/// [LiquidDialogPresentation.system], and otherwise (or with
+/// `LIQUID_SHELL_NATIVE_OFF=1`) a Flutter glass sheet pushed on the root
+/// [Navigator] above [context].
+///
+/// On iPad, and in the Flutter sheet at regular width, the sheet points
 /// at [anchor] (global logical coordinates); when [anchor] is null it
 /// points at [context]'s render box. So pass the tapped widget's context,
-/// for example from a `Builder` around the button. A tap outside completes
-/// with the cancel action's value, or null without one. [strings] labels
-/// the fallback's barrier for screen readers.
+/// for example from a `Builder` around the button. [strings] labels the
+/// Flutter sheet's barrier for screen readers.
+///
+/// Completes with the cancel action's value (or null without one) when
+/// the sheet closes without a choice (a tap outside, Escape, Android back,
+/// a dismissal by the system), and with null when it could never be shown
+/// because [context] was unmounted first.
+///
+/// Throws [ArgumentError] at once, before anything is shown, for no
+/// actions, more than one cancel action, a blank label, more than one or
+/// a disabled preferred action, or no enabled action.
 Future<T?> showLiquidActionSheet<T>(
   BuildContext context, {
   required List<LiquidAlertAction<T>> actions,
