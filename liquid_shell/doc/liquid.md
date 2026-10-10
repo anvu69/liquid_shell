@@ -51,6 +51,43 @@ frames, inside another `BackdropFilter`, and until the shader has loaded.
 It drops to **solid** with Reduce Transparency, Increase Contrast, or
 window blurs disabled outside battery saver. See [tiers.md](tiers.md).
 
+## Limitations
+
+- **Opaque output.** The lens writes opaque pixels. That is invisible in
+  an opaque app, and an `Opacity`, `FadeTransition` or fading page
+  transition above the glass fades it like frosted. But over a
+  transparent backdrop it is a solid slab of the tint over black, not
+  see-through glass:
+  - add-to-app with a transparent `FlutterView`, or Android
+    `TransparencyMode.transparent`;
+  - an overlay window;
+  - an image capture of a subtree (`RepaintBoundary.toImage`,
+    share-as-image features).
+
+  Force frosted for those surfaces:
+
+  ```dart
+  LiquidGlassScope(
+    policy: const LiquidGlassPolicy(forcedTier: LiquidGlassTier.frosted),
+    child: shareableCard,
+  )
+  ```
+
+- **Scaled or rotated ancestors.** The lens is placed on the glass's
+  axis-aligned bounding box in screen pixels, and its corner radii, bezel,
+  thickness and rim keep their unscaled size. Under a `Transform.scale`
+  or a rotation (zoom page transitions, scale-in dialogs,
+  `CupertinoContextMenu`) the lens corners therefore do not match the
+  clip, and a rotated glass gets a misplaced lens. A transition is over in
+  a few frames; for glass that stays transformed, force frosted.
+- **One frame of lag.** The nearest route's transition and the nearest
+  `Scrollable` repaint the lens in the same frame. Any other move is
+  caught by a check after each frame and corrected one frame late: glass
+  under a `CompositedTransformFollower`, or moved by an outer
+  `Navigator`'s route or an outer `Scrollable`.
+- **Inside another `BackdropFilter`** glass draws frosted: the lens cannot
+  be placed in a nested filter's coordinates.
+
 ## First frame
 
 The shader loads when the first `LiquidGlass` mounts; until then glass is

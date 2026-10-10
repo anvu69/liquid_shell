@@ -15,6 +15,18 @@ import 'package:liquid_shell/src/glass/signals_controller.dart';
 /// (see [LiquidGlassScope]); [child] is drawn on top. A tier change
 /// cross-fades over 200ms (instantly under reduce motion) and never
 /// rebuilds [child], so focus and scroll position survive.
+///
+/// Limits of the liquid tier (see `doc/liquid.md`):
+///
+/// * It writes opaque pixels. Over a transparent window or in an image
+///   capture of a subtree it is a solid tint, not see-through; an
+///   `Opacity` ancestor fades it normally. Force
+///   `LiquidGlassTier.frosted` there with [LiquidGlassPolicy.forcedTier].
+/// * Under a scaling or rotating ancestor the lens uses the glass's
+///   bounding box, with the corner radii, bezel and rim unscaled.
+/// * Moves other than the nearest route's transition or the nearest
+///   `Scrollable`'s scroll (a `CompositedTransformFollower`, an outer
+///   `Navigator` or `Scrollable`) place the lens one frame late.
 class LiquidGlass extends StatefulWidget {
   /// Creates a glass surface around [child].
   const LiquidGlass({required this.child, this.borderRadius, super.key});

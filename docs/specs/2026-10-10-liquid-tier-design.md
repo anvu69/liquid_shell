@@ -188,7 +188,7 @@ All quantities are in **physical pixels of the pass**, and y points down.
 9. **Sample.** `uv = (p + δ) / uSize`, clamped to [0, 1]. The y-flip applies only under `IMPELLER_TARGET_OPENGLES` (spike).
 10. **Tint and vibrancy.** `rgb = mix(sample, tint.rgb, tint.a)`. Then `rgb = mix(vec3(luma(rgb)), rgb, sat)`, with `sat` = 1.1 (an internal constant). `luma` uses Rec. 709 weights.
 11. **Specular rim.** `L = normalize(lightDir)`, with the light at the top-left `(−0.5, −0.85)`. The rim mask is `ρ = 1 − smoothstep(0, w, t)`, where `w` is the rim width (1.5 pt). Then `spec = ρ · (max(n₂·L, 0) + 0.4 · max(−n₂·L, 0))`, which gives a strong highlight on the lit edge and a weaker one opposite, as light passing through. The bezel glow is `g = 0.25 · (1 − η(x))`. Finally `rgb += rim.rgb · rim.a · (spec + g)`.
-12. **Output.** `fragColor = vec4(rgb, 1)`. The `ClipRRect` around the filter cuts the shape with anti-aliasing, so the shader never handles the outside.
+12. **Output.** `fragColor = vec4(rgb, 1)`. The `ClipRRect` around the filter cuts the shape with anti-aliasing, so the shader never handles the outside. The owner kept this opaque output after the final review (premultiplied input read as is, alpha 1). Measured on Impeller: under `Opacity`, `FadeTransition` and other save-layer fades the glass fades like frosted; over a transparent or translucent backdrop (a transparent `FlutterView` in add-to-app, Android `TransparencyMode.transparent`, an overlay window, `RepaintBoundary.toImage` of a subtree) it is an opaque slab of the tint over black. README and `doc/liquid.md` document it and tell apps to force `frosted` (`LiquidGlassPolicy(forcedTier:)`) there.
 
 ### 4.2 Uniform layout
 

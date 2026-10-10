@@ -106,5 +106,9 @@ void main() {
   float glow = 0.25 * (1.0 - bezelHeight(x));
   color += uRim.rgb * uRim.a * (spec + glow);
 
+  // Opaque by design (spec §4.1 step 12): the backdrop's rgb is read as is
+  // and alpha is 1, so over a transparent backdrop (transparent window,
+  // image capture of a subtree) the glass is a solid tint. Opacity
+  // ancestors still fade it. Apps force frosted there.
   fragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
 }

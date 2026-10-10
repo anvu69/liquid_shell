@@ -1060,6 +1060,23 @@ content viewer (see [Custom chrome](#custom-chrome)).
 - **Liquid glass inside another BackdropFilter draws frosted.** Flutter
   3.44 gives a nested filter coordinates relative to its parent's region,
   so the lens cannot be placed there.
+- **Liquid glass is opaque.** It writes opaque pixels: over a transparent
+  window (add-to-app with a transparent `FlutterView`, Android
+  `TransparencyMode.transparent`, an overlay window) or in an image capture
+  of a subtree (`RepaintBoundary.toImage`, share-as-image) it is a solid
+  grey or tinted slab, not see-through glass. An `Opacity` or fade ancestor
+  fades it normally. Force frosted there with
+  `LiquidGlassScope(policy: LiquidGlassPolicy(forcedTier: LiquidGlassTier.frosted))`.
+- **The lens assumes an upright, unscaled glass.** Under a scaling or
+  rotating ancestor (zoom page transitions, scale-in dialogs,
+  `CupertinoContextMenu`) the lens is placed on the glass's axis-aligned
+  bounding box, with the corner radii, bezel and rim at their unscaled
+  size, so its corners do not match the clip; force frosted inside such a
+  transform if it stays on screen.
+- **One frame of lens lag in some moves.** A transition of the nearest
+  route or a scroll of the nearest `Scrollable` moves the lens in the same
+  frame. Glass under a `CompositedTransformFollower`, or moved by an outer
+  `Navigator`'s route or an outer `Scrollable`, is placed one frame late.
 - **Android signals are best effort.** Each one that cannot be read
   counts as off.
 
