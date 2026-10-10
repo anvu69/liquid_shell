@@ -67,6 +67,33 @@ class FakeNativePlatform extends FakeSignalsPlatform {
 
   @override
   Stream<LiquidNativeEvent> get nativeEvents => _native.stream;
+
+  /// What [supportsNativeDialogs] answers (iOS: true).
+  bool nativeDialogs = true;
+
+  /// Every dialog request, in order.
+  final dialogRequests = <LiquidNativeDialogRequest>[];
+
+  /// Answers for the next requests, in order. When empty, a request waits
+  /// for [dialogGate] (created on demand).
+  final dialogAnswers = <LiquidNativeDialogResult>[];
+
+  /// Completes the requests that found no queued answer.
+  Completer<LiquidNativeDialogResult>? dialogGate;
+
+  @override
+  bool get supportsNativeDialogs => nativeDialogs;
+
+  @override
+  Future<LiquidNativeDialogResult> presentNativeDialog(
+    LiquidNativeDialogRequest request,
+  ) {
+    dialogRequests.add(request);
+    if (dialogAnswers.isNotEmpty) {
+      return Future.value(dialogAnswers.removeAt(0));
+    }
+    return (dialogGate ??= Completer()).future;
+  }
 }
 
 /// Installs a [FakeNativePlatform] until the current test ends.
