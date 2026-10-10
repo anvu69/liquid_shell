@@ -13,7 +13,8 @@ public final class LiquidShellPlugin: NSObject, FlutterPlugin, FlutterStreamHand
   private var sink: FlutterEventSink?
   private var observer: NSObjectProtocol?
   private var installer: NativeShellInstaller?
-  private var dialogs: NativeDialogPresenter?
+  /// Readable by the example's XCTests (`@testable`): the engine-teardown test.
+  private(set) var dialogs: NativeDialogPresenter?
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     let plugin = LiquidShellPlugin()

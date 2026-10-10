@@ -1427,6 +1427,32 @@ final class NativeDialogPresenterTests: XCTestCase {
     XCTAssertNil(root.presentedViewController)
   }
 
+  /// The scene closes while an alert is up: its window lets go of the
+  /// Flutter view controller, and UIKit of the alert, unanswered. Dart's
+  /// future still ends, once.
+  func testAnAlertWhoseSceneClosesAnswersDismissedOnce() throws {
+    var host: UIViewController? = UIViewController()
+    var answers = Answers()
+    try autoreleasepool {
+      let window = try self.window(root: host!)
+      let dialogs = NativeDialogPresenter(
+        flutterViewController: { [weak host] in host }, osAtLeast26: { true },
+        disabledByEnvironment: { false })
+      answers = present(dialogs, request())
+      settle()
+      XCTAssertNotNil(host?.presentedViewController as? UIAlertController)
+      XCTAssertTrue(answers.all.isEmpty)
+      window.isHidden = true
+      window.rootViewController = nil
+      windows.removeAll { $0 === window }
+      host = nil
+    }
+    settle()
+    XCTAssertEqual(answers.all, [.dismissed()])
+    settle()
+    XCTAssertEqual(answers.all, [.dismissed()])
+  }
+
   /// UIKit tells the popover's delegate when a tap outside closes it.
   func testAPopoverClosedByATapOutsideAnswersDismissedOnce() throws {
     let answers = present(presenter(), request(kind: .actionSheet))
@@ -1443,5 +1469,56 @@ final class NativeDialogPresenterTests: XCTestCase {
     let base = UIViewController()
     XCTAssertTrue(NativeDialogPresenter.topmost(from: base) === base)
     XCTAssertNil(NativeDialogPresenter.topmost(from: nil))
+  }
+}
+
+/// The plugin's dialog wiring on a real engine (spec P3a §5.4): `register`
+/// presents from the registrar's Flutter view controller, and
+/// `detachFromEngine` (the engine going away) answers what is still shown.
+final class PluginDialogWiringTests: XCTestCase {
+  private var window: UIWindow?
+
+  override func tearDown() {
+    window?.isHidden = true
+    window?.rootViewController = nil
+    window = nil
+    super.tearDown()
+  }
+
+  func testDetachingFromTheEngineAnswersAnOpenAlertDismissed() throws {
+    let engine = FlutterEngine(name: "dialogs", project: nil, allowHeadlessExecution: true)
+    XCTAssertTrue(engine.run())
+    let registrar = try XCTUnwrap(engine.registrar(forPlugin: LiquidShellPlugin.registrarKey))
+    LiquidShellPlugin.register(with: registrar)
+    let plugin = try XCTUnwrap(
+      engine.valuePublished(byPlugin: LiquidShellPlugin.registrarKey) as? LiquidShellPlugin)
+    let flutter = FlutterViewController(engine: engine, nibName: nil, bundle: nil)
+    let scene = try XCTUnwrap(
+      UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+    let window = UIWindow(windowScene: scene)
+    window.frame = scene.coordinateSpace.bounds
+    window.rootViewController = flutter
+    window.makeKeyAndVisible()
+    self.window = window
+
+    var answers: [NativeDialogResult] = []
+    try XCTUnwrap(plugin.dialogs).present(
+      request: NativeDialogRequest(
+        kind: .alert, title: "Discard changes?", message: nil,
+        actions: [NativeDialogAction(label: "Discard", style: .destructive, enabled: true)],
+        preferredIndex: nil, anchor: nil, tintArgb: 0xFF00_7AFF, dark: false, rtl: false,
+        requireGlass: false)
+    ) { result in
+      if case .success(let value) = result { answers.append(value) }
+    }
+    RunLoop.current.run(until: Date().addingTimeInterval(0.8))
+    XCTAssertNotNil(flutter.presentedViewController as? UIAlertController)
+    XCTAssertTrue(answers.isEmpty)
+
+    plugin.detachFromEngine(for: registrar)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.8))
+    XCTAssertEqual(answers, [.dismissed()])
+    XCTAssertNil(flutter.presentedViewController)
+    engine.destroyContext()
   }
 }
