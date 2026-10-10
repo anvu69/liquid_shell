@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -197,6 +198,10 @@ class _LiquidShellState extends State<LiquidShell>
   LiquidNativeChromeConfig? _nativeConfig;
   bool _nativeSendScheduled = false;
   bool _forceNativeSend = false;
+  // The compact native bar's bottom inset (Flutter's bottom view padding
+  // while the bar shows) and the window size it was read at.
+  double? _barBottom;
+  Size? _barSize;
 
   @override
   void initState() {
@@ -465,6 +470,34 @@ class _LiquidShellState extends State<LiquidShell>
         break;
     }
     return false;
+  }
+
+  /// A dialog, sheet or menu above the shell hides the compact native bar
+  /// (it would cover the overlay's bottom), and native gives Flutter the
+  /// window's own bottom safe area. The body behind the overlay keeps the
+  /// bar's inset, so nothing there jumps 49pt and back (owner decision);
+  /// the overlay, above the shell, lays out against the home indicator.
+  /// Also held after the pop until native shows the bar again. A page
+  /// pushed above, `LiquidHideChrome`, or a new window size drops it.
+  MediaQueryData _holdBarInset(MediaQueryData media, {required bool barShown}) {
+    final bottom = media.viewPadding.bottom;
+    if (!barShown || _covered) {
+      _barBottom = null;
+      return media;
+    }
+    final held = _barBottom;
+    if (held == null || media.size != _barSize || bottom >= held) {
+      // The bar shows (or a fresh window size): its inset is the truth.
+      _barBottom = bottom;
+      _barSize = media.size;
+      return media;
+    }
+    return media.copyWith(
+      viewPadding: media.viewPadding.copyWith(bottom: held),
+      padding: media.padding.copyWith(
+        bottom: math.max(0, held - media.viewInsets.bottom),
+      ),
+    );
   }
 
   /// §5.5 item 6: once per entry into compact, after the frame.
@@ -839,7 +872,7 @@ class _LiquidShellState extends State<LiquidShell>
     final wasEngaged = _nativeEngaged;
     _nativeEngaged = engaged;
     if (engaged != wasEngaged) _presentation = null;
-    final media = MediaQuery.of(context);
+    var media = MediaQuery.of(context);
     final rtl = Directionality.of(context) == TextDirection.rtl;
     final selected = resolveSelectedIndex(
       widget.selectedIndex,
@@ -889,6 +922,7 @@ class _LiquidShellState extends State<LiquidShell>
     final kind = engaged
         ? nativeChromeKind(state: state!, hidden: _hideRequests > 0)
         : LiquidChromeKind.hidden;
+    media = _holdBarInset(media, barShown: kind == LiquidChromeKind.bottomBar);
     final insets = nativeChromeInsets(kind: kind, padding: media.padding);
     // UIKit's size class decides the bar once it has answered; before
     // that, the shell's own width.

@@ -47,6 +47,15 @@ const _compactPadding = EdgeInsets.only(top: 62, bottom: 83);
 /// UIKit's compact size class: the floating tab bar at the bottom.
 const _compact = LiquidNativeShellState(installed: true, compact: true);
 
+/// What native does to Flutter's bottom safe area: [bottom] is 83 with the
+/// compact bar shown, 34 (the home indicator) with it hidden.
+void _setBottomPadding(WidgetTester tester, double bottom) {
+  final padding = FakeViewPadding(top: _compactPadding.top, bottom: bottom);
+  tester.view
+    ..padding = padding
+    ..viewPadding = padding;
+}
+
 Future<void> _pumpNative(
   WidgetTester tester, {
   Widget? shell,
@@ -145,7 +154,7 @@ void main() {
     testWidgets('compact: a sidebar-only selection is reported hidden', (
       tester,
     ) async {
-      installFakeNative(state: _compact);
+      final native = installFakeNative(state: _compact);
       final hidden = <int>[];
       await _pumpNative(
         tester,
@@ -157,7 +166,39 @@ void main() {
         size: kPhone,
         padding: _compactPadding,
       );
+      // The native path, not a Flutter compact bar.
+      expect(_scope(tester).nativeChrome, isTrue);
+      expect(native.last.engaged, isTrue);
       expect(hidden, [2]);
+    });
+
+    // Split View or Stage Manager narrows a regular iPad window: the
+    // presentation stays wide, only UIKit's size class turns compact.
+    testWidgets('narrowed to compact: a sidebar-only selection is reported '
+        'hidden, once per entry', (tester) async {
+      final native = installFakeNative();
+      final hidden = <int>[];
+      await _pumpNative(
+        tester,
+        shell: TestShell(
+          destinations: kNative,
+          initialIndex: 2,
+          onHidden: hidden.add,
+        ),
+      );
+      expect(hidden, isEmpty);
+
+      native.pushState(_compact);
+      await tester.pumpAndSettle();
+      expect(_scope(tester).nativeChrome, isTrue);
+      expect(_scope(tester).chromeKind, LiquidChromeKind.bottomBar);
+      expect(hidden, [2]);
+
+      native.pushState(kInstalled);
+      await tester.pumpAndSettle();
+      native.pushState(_compact);
+      await tester.pumpAndSettle();
+      expect(hidden, [2, 2]);
     });
 
     // UIKit decides the bar, not the shell's own width.
@@ -869,6 +910,90 @@ void main() {
       await tester.pumpAndSettle();
       expect(native.last.hidden, isFalse);
       expect(native.last.interactive, isTrue);
+    });
+
+    // Owner decision (7b review): a sheet, dialog or menu hides the
+    // compact bar, but the body keeps the bar's inset, so nothing behind
+    // the overlay jumps 49pt and back. The overlay itself lays out against
+    // the home indicator.
+    for (final (name, open) in <(String, void Function(BuildContext))>[
+      (
+        'a sheet',
+        (context) => unawaited(
+          showModalBottomSheet<void>(
+            context: context,
+            builder: (_) => const Text('above'),
+          ),
+        ),
+      ),
+      (
+        'a dialog',
+        (context) => unawaited(
+          showDialog<void>(
+            context: context,
+            builder: (_) => const Text('above'),
+          ),
+        ),
+      ),
+    ]) {
+      testWidgets('compact: $name hides the bar but the body keeps its '
+          'inset', (tester) async {
+        final native = installFakeNative(state: _compact);
+        await _pumpNative(tester, size: kPhone, padding: _compactPadding);
+        final page = find.byType(TestPage).first;
+        double body() => MediaQuery.paddingOf(tester.element(page)).bottom;
+        open(tester.element(page));
+        await tester.pumpAndSettle();
+        expect(native.last.hidden, isTrue);
+
+        _setBottomPadding(tester, 34);
+        await tester.pump();
+        expect(body(), 83);
+        expect(_scope(tester).chromeInsets, const EdgeInsets.only(bottom: 83));
+        // Above the shell (where the overlay is laid out): the window's own.
+        expect(
+          MediaQuery.paddingOf(tester.element(find.byType(Navigator))).bottom,
+          34,
+        );
+
+        // Popped: until native shows the bar again, the body keeps 83.
+        tester.state<NavigatorState>(find.byType(Navigator)).pop();
+        await tester.pump();
+        await tester.pump();
+        expect(native.last.hidden, isFalse);
+        expect(body(), 83);
+        _setBottomPadding(tester, 83);
+        await tester.pumpAndSettle();
+        expect(body(), 83);
+        expect(_scope(tester).chromeInsets, const EdgeInsets.only(bottom: 83));
+      });
+    }
+
+    // Hide on push: the page covers the body, so the bar's inset goes.
+    testWidgets('compact: a page pushed above drops the bar inset', (
+      tester,
+    ) async {
+      final native = installFakeNative(state: _compact);
+      await _pumpNative(tester, size: kPhone, padding: _compactPadding);
+      final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+      navigator
+          .push(
+            MaterialPageRoute<void>(
+              builder: (_) => const LiquidNoChrome(child: Text('above')),
+            ),
+          )
+          .ignore();
+      await tester.pumpAndSettle();
+      expect(native.last.hidden, isTrue);
+
+      _setBottomPadding(tester, 34);
+      await tester.pump();
+      expect(_scope(tester).chromeInsets, const EdgeInsets.only(bottom: 34));
+
+      navigator.pop();
+      _setBottomPadding(tester, 83);
+      await tester.pumpAndSettle();
+      expect(_scope(tester).chromeInsets, const EdgeInsets.only(bottom: 83));
     });
 
     // Hide on push (§7.4) holds under the compact bar too, from the first
