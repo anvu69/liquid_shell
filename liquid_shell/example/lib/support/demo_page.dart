@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:liquid_shell/liquid_shell.dart';
+import 'package:liquid_shell_example/support/chrome_mode.dart';
 import 'package:liquid_shell_example/support/drawn_by_flutter.dart';
 import 'package:liquid_shell_example/support/wallpaper.dart';
 
@@ -19,6 +20,7 @@ class DemoPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final mode = ChromeModeScope.maybeOf(context);
     // The nearest navigator with a page to pop: a branch navigator while it
     // holds a pushed page, otherwise the app's (back to the case list).
     final local = Navigator.of(context);
@@ -55,6 +57,13 @@ class DemoPage extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               const DrawnByFlutterNote(),
+              if (mode != null) ...[
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: ChromeModeSwitch(mode: mode),
+                ),
+                const SizedBox(height: 12),
+              ],
               ...children,
               for (var i = 1; i <= 24; i++)
                 Card(

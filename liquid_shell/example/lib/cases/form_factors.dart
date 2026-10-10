@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:liquid_shell/liquid_shell.dart';
+import 'package:liquid_shell_example/support/chrome_mode.dart';
 import 'package:liquid_shell_example/support/demo_page.dart';
 import 'package:liquid_shell_example/support/drawn_by_flutter.dart';
 
@@ -44,6 +45,13 @@ class FormFactorsCase extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       children: [
         const DrawnByFlutterNote(),
+        if (ChromeModeScope.maybeOf(context) case final mode?) ...[
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: ChromeModeSwitch(mode: mode),
+          ),
+          const SizedBox(height: 16),
+        ],
         for (final frame in kDeviceFrames) ...[
           Text(frame.name, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
