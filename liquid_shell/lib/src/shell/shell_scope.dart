@@ -170,6 +170,11 @@ abstract final class LiquidShellScope {
   static LiquidShellScopeData? maybeOf(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<ShellScopeMarker>()?.data;
 
+  /// The nearest shell's search phase (spec P3b §3.1): idle, selected or
+  /// active. Null outside a shell and in a shell without a search tab.
+  static LiquidSearchPhase? searchPhaseOf(BuildContext context) =>
+      maybeOf(context)?.searchPhase;
+
   /// Padding that keeps content clear of both chrome and system UI: per
   /// side, the larger of the chrome insets and `MediaQuery.paddingOf`.
   static EdgeInsets contentPaddingOf(BuildContext context) {

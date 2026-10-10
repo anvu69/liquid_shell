@@ -183,6 +183,31 @@ final class NativeChromeClaim {
     );
   }
 
+  /// Sets the native search text, when this claim owns the chrome.
+  void setSearchText(String text) {
+    if (!isOwner) return;
+    unawaited(LiquidShellPlatform.instance.setNativeSearchText(text));
+  }
+
+  /// Activates or deactivates the native search, when this claim owns it.
+  void setSearchActive({required bool active}) {
+    if (!isOwner) return;
+    unawaited(
+      LiquidShellPlatform.instance.setNativeSearchActive(active: active),
+    );
+  }
+
+  /// Sends the top page's scroll offset of [tab], when this claim owns it.
+  void setPageScroll({required int tab, required double offset}) {
+    if (!isOwner) return;
+    unawaited(
+      LiquidShellPlatform.instance.setNativePageScroll(
+        tab: tab,
+        offset: offset,
+      ),
+    );
+  }
+
   /// Gives the chrome back. Idempotent.
   void release() {
     if (_released) return;

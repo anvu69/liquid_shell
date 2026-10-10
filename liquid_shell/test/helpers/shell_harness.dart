@@ -46,6 +46,7 @@ class TestShell extends StatefulWidget {
     this.offstageBranches = false,
     this.nativeChrome = LiquidNativeChrome.auto,
     this.nativeSidebarFooter,
+    this.search,
     super.key,
   });
 
@@ -71,6 +72,7 @@ class TestShell extends StatefulWidget {
 
   final LiquidNativeChrome nativeChrome;
   final LiquidNativeSidebarFooter? nativeSidebarFooter;
+  final LiquidSearch? search;
 
   @override
   State<TestShell> createState() => TestShellState();
@@ -99,6 +101,7 @@ class TestShellState extends State<TestShell> {
     strings: widget.strings,
     nativeChrome: widget.nativeChrome,
     nativeSidebarFooter: widget.nativeSidebarFooter,
+    search: widget.search,
     body: widget.offstageBranches
         ? Stack(
             fit: StackFit.expand,
@@ -233,3 +236,30 @@ int tapsOf(WidgetTester tester, String label) => tester
       ),
     )
     .taps;
+
+/// [kDestinations] with SF Symbols, so native chrome can describe them.
+const kNative = [
+  LiquidDestination(
+    icon: Icon(Icons.home_outlined),
+    label: 'Home',
+    sfSymbol: 'house',
+  ),
+  LiquidDestination(
+    icon: Icon(Icons.inbox_outlined),
+    label: 'Inbox',
+    badge: LiquidBadge.count(3),
+    sfSymbol: 'tray',
+  ),
+  LiquidDestination(
+    icon: Icon(Icons.bar_chart),
+    label: 'Reports',
+    placement: LiquidPlacement.sidebarOnly,
+    sfSymbol: 'chart.bar',
+  ),
+  LiquidDestination(
+    icon: Icon(Icons.settings_outlined),
+    label: 'Settings',
+    badge: LiquidBadge.dot(),
+    sfSymbol: 'gear',
+  ),
+];

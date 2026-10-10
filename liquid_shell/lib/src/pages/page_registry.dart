@@ -64,7 +64,9 @@ abstract interface class PageHandle {
   /// The page's state changed (title, route, on screen).
   void update(PageEntry entry);
 
-  /// The page's first vertical scroll view scrolled to [offset].
+  /// The page's first vertical scroll view is at [offset]: it scrolled, or
+  /// a new scroll position laid out for the first time (restored from
+  /// PageStorage, or rebuilt after a GlobalKey move).
   void scrolled(double offset);
 
   /// The page left the tree.

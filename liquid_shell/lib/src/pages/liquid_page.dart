@@ -110,9 +110,25 @@ class _LiquidPageState extends State<LiquidPage> {
     super.deactivate();
   }
 
-  bool _onScroll(ScrollUpdateNotification notification) {
-    if (notification.depth == 0 && notification.metrics.axis == Axis.vertical) {
-      _handle?.scrolled(notification.metrics.pixels);
+  // Scrolls, and the first layout of a scroll position. A position
+  // restored from PageStorage reports its offset only through its metrics.
+  // So does a page moved with a GlobalKey, which registers again with a
+  // new handle: the moved Scrollable builds a new position (its
+  // didChangeDependencies), whose first layout reports the kept offset.
+  bool _onScroll(Notification notification) {
+    final (depth, metrics) = switch (notification) {
+      ScrollUpdateNotification(:final depth, :final metrics) => (
+        depth,
+        metrics,
+      ),
+      ScrollMetricsNotification(:final depth, :final metrics) => (
+        depth,
+        metrics,
+      ),
+      _ => (-1, null),
+    };
+    if (depth == 0 && metrics != null && metrics.axis == Axis.vertical) {
+      _handle?.scrolled(metrics.pixels);
     }
     return false;
   }
@@ -122,7 +138,7 @@ class _LiquidPageState extends State<LiquidPage> {
     final scope = LiquidShellScope.maybeOf(context);
     final child = KeyedSubtree(
       key: _childKey,
-      child: NotificationListener<ScrollUpdateNotification>(
+      child: NotificationListener<Notification>(
         onNotification: _onScroll,
         child: widget.child,
       ),

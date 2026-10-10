@@ -14,7 +14,10 @@ import 'package:liquid_shell/src/native/native_chrome.dart';
 import 'package:liquid_shell/src/native/native_host.dart';
 import 'package:liquid_shell/src/native/native_layout.dart';
 import 'package:liquid_shell/src/native/window_controls.dart';
+import 'package:liquid_shell/src/pages/page_registry.dart';
 import 'package:liquid_shell/src/search/search.dart';
+import 'package:liquid_shell/src/search/search_layout.dart';
+import 'package:liquid_shell/src/search/shell_search.dart';
 import 'package:liquid_shell/src/shell/bar_measure.dart';
 import 'package:liquid_shell/src/shell/breakpoints.dart';
 import 'package:liquid_shell/src/shell/chrome_builder.dart';
@@ -181,7 +184,7 @@ class LiquidShell extends StatefulWidget {
 }
 
 class _LiquidShellState extends State<LiquidShell>
-    implements HideChromeRegistry {
+    implements HideChromeRegistry, PageRegistry {
   final ValueNotifier<bool> _minimized = ValueNotifier(false);
   late final GlobalObjectKey _bodyKey = GlobalObjectKey(this);
 
@@ -212,6 +215,22 @@ class _LiquidShellState extends State<LiquidShell>
   double? _barBottom;
   Size? _barSize;
 
+  // --- search and pages (spec P3b §8) --------------------------------------
+  late final ShellSearch _search = ShellSearch(
+    claim: () => _claim,
+    onChange: _rebuild,
+  );
+  final List<_PageRecord> _pageRecords = [];
+  final Map<int, List<LiquidNativePage>> _pageStacks = {};
+  // The records behind each sent stack, kept while no page is on top.
+  final Map<int, List<_PageRecord>> _stackRecords = {};
+  bool _nativePageBar = false;
+  bool _searchDeactivatedForRoute = false;
+  // The scroll offset native has for the top page (spec P3b §7.7).
+  _PageRecord? _scrollRecord;
+  double _scrollSent = 0;
+  bool _scrollScheduled = false;
+
   @override
   void initState() {
     super.initState();
@@ -220,13 +239,35 @@ class _LiquidShellState extends State<LiquidShell>
     _host.addListener(_rebuild);
     _host.state.addListener(_rebuild);
     _syncClaim();
+    _configureSearch();
   }
 
   @override
   void didUpdateWidget(LiquidShell oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.nativeChrome != widget.nativeChrome) _syncClaim();
+    _configureSearch();
   }
+
+  // A new key builds the next shell before this one is disposed, and a
+  // GlobalKey move takes this one out and back: the controller takes one
+  // shell at a time.
+  @override
+  void deactivate() {
+    _search.detach();
+    super.deactivate();
+  }
+
+  @override
+  void activate() {
+    super.activate();
+    _configureSearch();
+  }
+
+  void _configureSearch() => _search.configure(
+    widget.search,
+    hasSearchDestination: searchIndexOf(widget.destinations) != null,
+  );
 
   @override
   void didChangeDependencies() {
@@ -287,6 +328,7 @@ class _LiquidShellState extends State<LiquidShell>
     _windowControls.value.removeListener(_rebuild);
     _windowControls.release();
     _minimized.dispose();
+    _search.dispose();
     super.dispose();
   }
 
@@ -303,13 +345,14 @@ class _LiquidShellState extends State<LiquidShell>
         widget.tabBarTrailing?.onPressed();
       case LiquidNativeFooterTapped():
         widget.nativeSidebarFooter?.onPressed();
-      case LiquidNativeStateChanged() ||
-          LiquidWindowControlsChanged() ||
-          LiquidNativeSearchTextChanged() ||
+      case LiquidNativeSearchTextChanged() ||
           LiquidNativeSearchActiveChanged() ||
           LiquidNativeSearchSubmitted() ||
-          LiquidNativeSearchFieldChanged() ||
-          LiquidNativeBackTapped():
+          LiquidNativeSearchFieldChanged():
+        _search.onNativeEvent(event);
+      case LiquidNativeBackTapped(:final tab):
+        _onNativeBack(tab);
+      case LiquidNativeStateChanged() || LiquidWindowControlsChanged():
         break;
     }
   }
@@ -325,8 +368,113 @@ class _LiquidShellState extends State<LiquidShell>
       final latest = _nativeConfig;
       final force = _forceNativeSend;
       _forceNativeSend = false;
-      if (mounted && latest != null) _claim?.update(latest, force: force);
+      if (mounted && latest != null) {
+        _claim?.update(latest, force: force);
+        _search.afterConfigSent();
+      }
     });
+  }
+
+  // --- pages (PageRegistry) -----------------------------------------------
+  //
+  // Pages register, update and leave while the body builds: every change
+  // rebuilds the shell after the frame (`_rebuild`), and the next build
+  // computes the stack (spec P3b §8.4).
+
+  @override
+  PageHandle registerPage(PageEntry entry) {
+    final record = _PageRecord(this, entry);
+    _pageRecords.add(record);
+    _rebuild();
+    return record;
+  }
+
+  /// The page the user sees in the selected tab, if it is a LiquidPage.
+  _PageRecord? get _topRecord {
+    _PageRecord? top;
+    for (final record in _pageRecords) {
+      final entry = record.entry;
+      if (entry.isTop && (top == null || entry.sequence > top.entry.sequence)) {
+        top = record;
+      }
+    }
+    return top;
+  }
+
+  PageEntry? get _topPageEntry => _topRecord?.entry;
+
+  /// The selected tab's stack, root first. With no page on top (a page
+  /// above the shell, a sheet in the tab's navigator) the last stack stays,
+  /// less the pages that left: emptying it would pop native to the root,
+  /// and push everything again, animated, when the cover goes.
+  List<_PageRecord> _stackFor(int tab) {
+    final records = Map<PageEntry, _PageRecord>.identity();
+    for (final record in _pageRecords) {
+      records[record.entry] = record;
+    }
+    final stack = [
+      for (final entry in pageStackFor(records.keys, isTop: (e) => e.isTop))
+        records[entry]!,
+    ];
+    if (stack.isNotEmpty) return stack;
+    return [
+      for (final record in _stackRecords[tab] ?? const <_PageRecord>[])
+        if (_pageRecords.contains(record) &&
+            (record.entry.route?.isActive ?? false))
+          record,
+    ];
+  }
+
+  /// The native back button (spec P3b §7.6): a proposal for the selected
+  /// tab's top page. `maybePop` runs its PopScope.
+  void _onNativeBack(int tab) {
+    if (tab !=
+        resolveSelectedIndex(
+          widget.selectedIndex,
+          widget.destinations.length,
+        )) {
+      return;
+    }
+    unawaited(_topPageEntry?.navigator?.maybePop());
+  }
+
+  /// Sends the top page's offset after the frame: one message per frame,
+  /// only for the top page of a tab with a native bar (spec P3b §7.7).
+  void _scheduleScrollSync() {
+    if (_scrollScheduled) return;
+    _scrollScheduled = true;
+    SchedulerBinding.instance
+      ..addPostFrameCallback((_) => _syncScroll())
+      ..ensureVisualUpdate();
+  }
+
+  void _syncScroll() {
+    _scrollScheduled = false;
+    if (!mounted) return;
+    final top = _nativePageBar ? _topRecord : null;
+    if (top == null) {
+      _scrollRecord = null;
+      return;
+    }
+    final offset = top.offset;
+    if (identical(top, _scrollRecord)) {
+      if (offset == _scrollSent) return;
+    } else {
+      _scrollRecord = top;
+      // A page that native has not seen yet: its proxy starts at zero.
+      if (offset == 0) {
+        _scrollSent = 0;
+        return;
+      }
+    }
+    _scrollSent = offset;
+    _claim?.setPageScroll(
+      tab: resolveSelectedIndex(
+        widget.selectedIndex,
+        widget.destinations.length,
+      ),
+      offset: offset,
+    );
   }
 
   /// After every native destination tap, whatever came of it (accepted,
@@ -627,6 +775,11 @@ class _LiquidShellState extends State<LiquidShell>
       widget.destinations.length,
     );
     _reportHiddenSelection(presentation, selected);
+    final searchIndex = searchIndexOf(widget.destinations);
+    _search
+      ..native = false
+      ..selected = searchIndex != null && selected == searchIndex;
+    _nativePageBar = false;
 
     final kind = chromeKindFor(
       presentation: presentation,
@@ -871,8 +1024,17 @@ class _LiquidShellState extends State<LiquidShell>
           sidebarVisible: sidebarShown,
           setSidebarVisible: _setSidebarVisible,
           windowControls: _windowControls.value.value,
+          searchPhase: searchIndex == null
+              ? null
+              : searchPhaseFor(
+                  selected: selected,
+                  searchIndex: searchIndex,
+                  active: _search.controller?.isActive ?? false,
+                ),
         ),
         registry: this,
+        pages: this,
+        strings: widget.strings,
         // One backdrop read for all chrome glass (budget rule, §5.8).
         child: BackdropGroup(child: Stack(children: children)),
       ),
@@ -936,6 +1098,38 @@ class _LiquidShellState extends State<LiquidShell>
       widget.selectedIndex,
       widget.destinations.length,
     );
+    final searchIndex = searchIndexOf(widget.destinations);
+    _search
+      ..native = engaged
+      ..selected = searchIndex != null && selected == searchIndex;
+    _nativePageBar = nativePageBarFor(
+      engaged: engaged,
+      selected: selected,
+      searchIndex: searchIndex,
+    );
+    if (_nativePageBar) {
+      final stack = _stackFor(selected);
+      _stackRecords[selected] = stack;
+      _pageStacks[selected] = [
+        for (final record in stack)
+          LiquidNativePage(
+            title: record.entry.title,
+            largeTitle: record.entry.largeTitle,
+          ),
+      ];
+    }
+    if (_nativePageBar || _scrollRecord != null) _scheduleScrollSync();
+    final searchActive = _search.controller?.isActive ?? false;
+    // A dialog or sheet above an active search: the keyboard and the field
+    // would sit above its barrier (spec §7.10). Once per covering.
+    if (_routeCurrent) {
+      _searchDeactivatedForRoute = false;
+    } else if (engaged && searchActive && !_searchDeactivatedForRoute) {
+      _searchDeactivatedForRoute = true;
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _search.deactivate();
+      });
+    }
     if (owner) {
       final theme = Theme.of(context);
       _scheduleNativeSend(
@@ -958,6 +1152,7 @@ class _LiquidShellState extends State<LiquidShell>
               ((state?.compact ?? false) && !_routeCurrent),
           interactive: _routeCurrent && !_guardPending,
           searchPlaceholder: widget.search?.placeholder,
+          pageStacks: _pageStacks,
         ),
       );
     }
@@ -982,7 +1177,22 @@ class _LiquidShellState extends State<LiquidShell>
         ? nativeChromeKind(state: state!, hidden: _hideRequests > 0)
         : LiquidChromeKind.hidden;
     media = _holdBarInset(media, barShown: kind == LiquidChromeKind.bottomBar);
-    final insets = nativeChromeInsets(kind: kind, padding: media.padding);
+    var insets = nativeChromeInsets(kind: kind, padding: media.padding);
+    if (_search.selected) {
+      // The iPhone field above the keyboard is not in the safe area.
+      insets = insets.copyWith(
+        bottom: math.max(
+          insets.bottom,
+          nativeSearchBottomInset(
+            field: _search.field,
+            size: media.size,
+            padding: media.padding,
+            viewInsets: media.viewInsets,
+            active: searchActive,
+          ),
+        ),
+      );
+    }
     // UIKit's size class decides the bar once it has answered; before
     // that, the shell's own width.
     final sizeClass = engaged
@@ -1024,14 +1234,27 @@ class _LiquidShellState extends State<LiquidShell>
           sidebarVisible: state?.sidebarVisible ?? false,
           setSidebarVisible: _setSidebarVisible,
           nativeChrome: engaged,
-          // UIKit's top bar and sidebar make room for the cluster; the
-          // body starts below or beside them (spec P2 §8.3). The compact
-          // bar is at the bottom: the top is the body's to clear.
-          windowControls: engaged && sizeClass == LiquidSizeClass.regular
+          searchPhase: searchIndex == null
+              ? null
+              : searchPhaseFor(
+                  selected: selected,
+                  searchIndex: searchIndex,
+                  active: searchActive,
+                ),
+          nativePageBar: _nativePageBar,
+          // UIKit's top bar, sidebar and navigation bars make room for the
+          // cluster; the body starts below or beside them (spec P2 §8.3,
+          // P3b §7.9). The compact bar is at the bottom: the top is the
+          // body's to clear.
+          windowControls:
+              (engaged && sizeClass == LiquidSizeClass.regular) ||
+                  _nativePageBar
               ? LiquidWindowControls.zero
               : _windowControls.value.value,
         ),
         registry: this,
+        pages: this,
+        strings: widget.strings,
         // The same chain as the Flutter layout (BackdropGroup → Stack →
         // body first), so switching between native and Flutter chrome
         // never moves the body (§5.6).
@@ -1059,5 +1282,36 @@ class _LiquidShellState extends State<LiquidShell>
         ),
       ),
     );
+  }
+}
+
+/// One `LiquidPage` registered with a shell.
+final class _PageRecord implements PageHandle {
+  _PageRecord(this._shell, this.entry);
+
+  final _LiquidShellState _shell;
+  PageEntry entry;
+
+  /// The page's last scroll offset (spec P3b §7.7).
+  double offset = 0;
+
+  @override
+  void update(PageEntry next) {
+    if (next.sameAs(entry)) return;
+    entry = next;
+    _shell._rebuild();
+  }
+
+  @override
+  void scrolled(double offset) {
+    if (offset == this.offset) return;
+    this.offset = offset;
+    if (_shell.mounted) _shell._scheduleScrollSync();
+  }
+
+  @override
+  void unregister() {
+    _shell._pageRecords.remove(this);
+    if (_shell.mounted) _shell._rebuild();
   }
 }
