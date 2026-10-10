@@ -4,6 +4,8 @@ import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell_example/cases/cases.dart';
 import 'package:liquid_shell_example/main.dart';
 import 'package:liquid_shell_example/support/demo_page.dart';
+import 'package:liquid_shell_example/support/drawn_by_flutter.dart';
+import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
 /// The destination labels of the only [LiquidShell] on screen.
 List<String> shellLabels(WidgetTester tester) => [
@@ -13,6 +15,27 @@ List<String> shellLabels(WidgetTester tester) => [
 ];
 
 const _sizes = {'phone': Size(393, 852), 'tablet': Size(1194, 834)};
+
+/// A platform that reports native chrome installed, as an opted-in app on
+/// iOS 26 does, until the current test ends.
+void _installNative() {
+  final original = LiquidShellPlatform.instance;
+  LiquidShellPlatform.instance = _InstalledNative();
+  addTearDown(() => LiquidShellPlatform.instance = original);
+}
+
+class _InstalledNative extends LiquidShellPlatform {
+  @override
+  Stream<LiquidPlatformSignals> watchSignals() =>
+      Stream.value(LiquidPlatformSignals.none);
+
+  @override
+  bool get supportsNativeChrome => true;
+
+  @override
+  Future<LiquidNativeShellState> attachNativeChrome() async =>
+      const LiquidNativeShellState(installed: true);
+}
 
 Future<void> _openCase(WidgetTester tester, String id) async {
   await tester.pumpWidget(const ExampleApp());
@@ -189,19 +212,82 @@ void main() {
     expect(find.text('Explore item 1'), findsOneWidget);
   });
 
-  testWidgets('native_chrome can be drawn natively: a symbol on every '
-      'destination and the trailing action, and a native footer', (
-    tester,
-  ) async {
+  // Owner E1 (spec P2 §15): on iOS 26 every case with a real shell runs
+  // native; the Flutter-by-nature cases keep the Flutter chrome and say why.
+  const nativeIds = {
+    'basic',
+    'badges',
+    'sidebar_only',
+    'sidebar_slots',
+    'trailing',
+    'guard',
+    'hide_chrome',
+    'native_chrome',
+  };
+  const flutterIds = {
+    'custom_chrome',
+    'custom_theme',
+    'forced_tier',
+    'form_factors',
+    'narrow',
+    'standalone',
+  };
+
+  test('every case is either native or Flutter by nature', () {
+    expect({...nativeIds, ...flutterIds}, {for (final c in kCases) c.id});
+    expect(nativeIds.intersection(flutterIds), isEmpty);
+  });
+
+  group('on iOS 26 with native chrome installed', () {
+    for (final MapEntry(key: sizeName, value: size) in _sizes.entries) {
+      for (final id in nativeIds) {
+        testWidgets('$id on a $sizeName draws native chrome', (tester) async {
+          _installNative();
+          tester.view
+            ..devicePixelRatio = 1
+            ..physicalSize = size;
+          addTearDown(tester.view.reset);
+          await _openCase(tester, id);
+          expect(tester.takeException(), isNull);
+          final page = tester.element(find.byType(DemoPage).first);
+          expect(LiquidShellScope.of(page).nativeChrome, isTrue);
+          expect(find.byType(LiquidTabBar), findsNothing);
+          expect(find.byType(LiquidSidebar), findsNothing);
+          expect(find.text(kDrawnByFlutter), findsNothing);
+        });
+      }
+
+      for (final id in flutterIds) {
+        testWidgets('$id on a $sizeName keeps the Flutter chrome and says '
+            'why', (tester) async {
+          _installNative();
+          tester.view
+            ..devicePixelRatio = 1
+            ..physicalSize = size;
+          addTearDown(tester.view.reset);
+          await _openCase(tester, id);
+          expect(tester.takeException(), isNull);
+          // Every shell draws its Flutter chrome: none waits for native
+          // (hidden) or hands it over.
+          final pages = find.byType(DemoPage).evaluate();
+          expect(pages, isNotEmpty);
+          for (final page in pages) {
+            final scope = LiquidShellScope.maybeOf(page);
+            if (scope == null) continue; // standalone: no shell
+            expect(scope.nativeChrome, isFalse);
+            expect(scope.chromeKind, isNot(LiquidChromeKind.hidden));
+          }
+          expect(find.text(kDrawnByFlutter), findsOneWidget);
+        });
+      }
+    }
+  });
+
+  testWidgets('native_chrome has a native footer; off iOS 26 the trailing '
+      'action counts', (tester) async {
     await _openCase(tester, 'native_chrome');
     final shell = tester.widget<LiquidShell>(find.byType(LiquidShell));
-    expect(shell.nativeChrome, LiquidNativeChrome.auto);
-    expect(shell.chromeBuilder, isNull);
-    expect(shell.destinations.map((d) => d.sfSymbol), everyElement(isNotNull));
-    expect(shell.tabBarTrailing?.sfSymbol, isNotNull);
     expect(shell.nativeSidebarFooter, isNotNull);
-
-    // Off iPadOS 26 it draws the Flutter chrome; the trailing action counts.
     await tester.tap(find.byTooltip('Search'));
     await tester.pumpAndSettle();
     expect(find.text('Searches: 1'), findsOneWidget);

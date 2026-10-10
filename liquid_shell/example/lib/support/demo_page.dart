@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:liquid_shell/liquid_shell.dart';
+import 'package:liquid_shell_example/support/drawn_by_flutter.dart';
 import 'package:liquid_shell_example/support/wallpaper.dart';
 
 /// A long page over the [Wallpaper]. Its list is padded with
@@ -53,6 +54,7 @@ class DemoPage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
+              const DrawnByFlutterNote(),
               ...children,
               for (var i = 1; i <= 24; i++)
                 Card(
@@ -73,21 +75,25 @@ class DemoPage extends StatelessWidget {
   }
 }
 
-/// The three destinations most cases share.
+/// The three destinations most cases share. Each has an SF Symbol, so a
+/// shell built on them can use the native chrome on iOS 26.
 const kDemoDestinations = [
   LiquidDestination(
     icon: Icon(Icons.home_outlined),
     selectedIcon: Icon(Icons.home),
     label: 'Home',
+    sfSymbol: 'house',
   ),
   LiquidDestination(
     icon: Icon(Icons.explore_outlined),
     selectedIcon: Icon(Icons.explore),
     label: 'Explore',
+    sfSymbol: 'map',
   ),
   LiquidDestination(
     icon: Icon(Icons.settings_outlined),
     selectedIcon: Icon(Icons.settings),
     label: 'Settings',
+    sfSymbol: 'gear',
   ),
 ];

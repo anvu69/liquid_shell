@@ -9,6 +9,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
+import 'package:liquid_shell_example/cases/badges.dart';
+import 'package:liquid_shell_example/cases/basic_tabs.dart';
 import 'package:liquid_shell_example/cases/native_chrome.dart';
 import 'package:liquid_shell_example/support/demo_page.dart';
 import 'package:liquid_shell_ios/liquid_shell_ios.dart';
@@ -95,6 +97,25 @@ void main() {
     expect(scope.windowControls, LiquidWindowControls.zero);
     await binding.takeScreenshot('native_${_runName}_home');
   });
+
+  // Owner E1 (spec P2 §15): every shell case of the example has its
+  // symbols, so the plain cases run native too, not only this one.
+  for (final (name, page) in [
+    ('basic', const BasicTabsCase()),
+    ('badges', const BadgesCase()),
+  ]) {
+    testWidgets('the $name case draws native chrome', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(debugShowCheckedModeBanner: false, home: page),
+      );
+      await _settle(tester);
+      final scope = _scope(tester);
+      debugPrint('liquid_shell native: $name ${scope.chromeKind.name}');
+      expect(scope.nativeChrome, _expectNative);
+      expect(find.byType(LiquidTabBar).evaluate().isEmpty, _expectNative);
+      await binding.takeScreenshot('native_${_runName}_case_$name');
+    });
+  }
 
   testWidgets('native taps select; the trailing action calls the app', (
     tester,

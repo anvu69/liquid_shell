@@ -22,16 +22,19 @@ class _BadgesCaseState extends State<BadgesCase> {
         icon: Icon(Icons.inbox_outlined),
         label: 'Inbox',
         badge: LiquidBadge.count(3),
+        sfSymbol: 'tray',
       ),
       LiquidDestination(
         icon: Icon(Icons.forum_outlined),
         label: 'Chats',
         badge: LiquidBadge.count(120), // shows "99+"
+        sfSymbol: 'bubble.left.and.bubble.right',
       ),
       LiquidDestination(
         icon: Icon(Icons.notifications_outlined),
         label: 'Alerts',
         badge: LiquidBadge.dot(),
+        sfSymbol: 'bell',
       ),
     ];
     return LiquidShell(

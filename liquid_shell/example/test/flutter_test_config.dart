@@ -16,6 +16,8 @@ Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   tearDown(() {
     debugLiquidGlassCanBlurOverride = null;
     debugResetLiquidGlassSignals();
+    // Tests that install a native platform leave the native link started.
+    debugResetLiquidNative();
   });
   await loadGoldenFonts();
   final local = goldenFileComparator;

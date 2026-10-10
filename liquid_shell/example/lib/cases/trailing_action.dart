@@ -24,6 +24,7 @@ class _TrailingActionCaseState extends State<TrailingActionCase> {
       tabBarTrailing: LiquidTabAction(
         icon: const Icon(Icons.search),
         semanticLabel: 'Search',
+        sfSymbol: 'magnifyingglass',
         onPressed: () => Navigator.of(context).push(
           MaterialPageRoute<void>(builder: _searchPage),
         ),
