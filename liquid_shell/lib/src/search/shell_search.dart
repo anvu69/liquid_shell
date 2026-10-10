@@ -35,11 +35,24 @@ final class ShellSearch implements SearchDriver {
   LiquidSearchController? _internal;
   bool _lastActive = false;
   bool _sentSelected = false;
+  // Whether the last config showed the search tab natively.
+  bool _sentShown = false;
+  // The next native entry sends the text even when empty: native may
+  // still show another one (a hot restart, a reconnected scene).
+  bool _replay = true;
+  bool _native = false;
   bool _writing = false;
   String? _pendingFieldText;
 
   /// Whether the native field shows the search (native chrome engaged).
-  bool native = false;
+  /// A build without it (pending, standby, Flutter chrome) makes the next
+  /// native entry send the text again: native never got what the app set
+  /// meanwhile.
+  bool get native => _native;
+  set native(bool value) {
+    if (!value) _sentShown = false;
+    _native = value;
+  }
 
   /// Whether the search tab is selected (set by the shell's build).
   bool selected = false;
@@ -84,6 +97,13 @@ final class ShellSearch implements SearchDriver {
     next.addListener(_onValue);
     _lastActive = next.isActive;
     _writeField(next.text);
+  }
+
+  /// The native scene reconnected (or reported its state again): the next
+  /// config that shows the search tab sends the text, empty or not.
+  void replay() {
+    _sentShown = false;
+    _replay = true;
   }
 
   /// Lets go of the controller while the shell is out of the tree (a new
@@ -141,15 +161,19 @@ final class ShellSearch implements SearchDriver {
     }
   }
 
-  /// After the shell's config went out: entering the search tab restores
-  /// the kept query natively (Q2); leaving it ends the active state.
+  /// After the shell's config went out: the search tab newly shown
+  /// natively gets the kept query (Q2; spec §7.10: a cold start, a hot
+  /// restart, a reconnected scene); leaving it ends the active state.
   void afterConfigSent() {
     final controller = _controller;
-    final entered = selected && !_sentSelected;
+    final shown = selected && native;
+    final entered = shown && !_sentShown;
+    _sentShown = shown;
     final left = !selected && _sentSelected;
     _sentSelected = selected;
     if (controller == null) return;
-    if (entered && native && controller.text.isNotEmpty) {
+    if (entered && (_replay || controller.text.isNotEmpty)) {
+      _replay = false;
       claim()?.setSearchText(controller.text);
     }
     if (left && controller.isActive) {

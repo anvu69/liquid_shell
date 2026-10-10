@@ -352,7 +352,12 @@ class _LiquidShellState extends State<LiquidShell>
         _search.onNativeEvent(event);
       case LiquidNativeBackTapped(:final tab):
         _onNativeBack(tab);
-      case LiquidNativeStateChanged() || LiquidWindowControlsChanged():
+      case LiquidNativeStateChanged():
+        // After the host's forced resend (a reconnected scene may have
+        // lost the field's text): replay it with the next config.
+        _search.replay();
+        _rebuild();
+      case LiquidWindowControlsChanged():
         break;
     }
   }
@@ -417,8 +422,24 @@ class _LiquidShellState extends State<LiquidShell>
         records[entry]!,
     ];
     if (stack.isNotEmpty) return stack;
+    final kept = _stackRecords[tab] ?? const <_PageRecord>[];
+    // Only a cover keeps it (spec §8.4 rule 3 otherwise: no stack):
+    // - the shell's route is covered (a page or dialog above the shell);
+    // - the last top page is still current in its navigator, so only
+    //   something outside it hides it (also the frame where the shell is
+    //   uncovered before that page has heard of it);
+    // - a popup route (a sheet) is above it: it stays on screen.
+    // A page pushed in the tab without LiquidPage covers it opaquely and
+    // is none of these.
+    final top = kept.isEmpty ? null : kept.last;
+    final keep =
+        !_routeCurrent ||
+        _covered ||
+        (top != null &&
+            ((top.entry.route?.isCurrent ?? false) || top.entry.onScreen));
+    if (!keep) return const [];
     return [
-      for (final record in _stackRecords[tab] ?? const <_PageRecord>[])
+      for (final record in kept)
         if (_pageRecords.contains(record) &&
             (record.entry.route?.isActive ?? false))
           record,
@@ -456,17 +477,15 @@ class _LiquidShellState extends State<LiquidShell>
       _scrollRecord = null;
       return;
     }
+    // Not laid out yet (a new page, or one moved with a GlobalKey): its
+    // scroll position reports its offset after its first layout.
     final offset = top.offset;
-    if (identical(top, _scrollRecord)) {
-      if (offset == _scrollSent) return;
-    } else {
-      _scrollRecord = top;
-      // A page that native has not seen yet: its proxy starts at zero.
-      if (offset == 0) {
-        _scrollSent = 0;
-        return;
-      }
-    }
+    if (offset == null) return;
+    // A new top page is always sent, once per navigation: native may
+    // reuse a host for it (a same-count stack, pushReplacement) whose
+    // proxy keeps the old offset.
+    if (identical(top, _scrollRecord) && offset == _scrollSent) return;
+    _scrollRecord = top;
     _scrollSent = offset;
     _claim?.setPageScroll(
       tab: resolveSelectedIndex(
@@ -1292,8 +1311,9 @@ final class _PageRecord implements PageHandle {
   final _LiquidShellState _shell;
   PageEntry entry;
 
-  /// The page's last scroll offset (spec P3b §7.7).
-  double offset = 0;
+  /// The page's last scroll offset (spec P3b §7.7); null until its scroll
+  /// view reports one.
+  double? offset;
 
   @override
   void update(PageEntry next) {

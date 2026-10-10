@@ -94,6 +94,9 @@ final class NativeChromeHost extends ChangeNotifier {
         // rare and the native apply is idempotent.
         _sent = null;
         _sendOwner(force: true);
+        // Then the owner: what the config does not carry (the search
+        // text) is the shell's to replay.
+        if (_claims.isNotEmpty) _claims.last._onEvent(event);
       case LiquidWindowControlsChanged():
         break;
       case LiquidNativeSearchTextChanged() ||

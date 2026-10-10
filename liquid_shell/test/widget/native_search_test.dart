@@ -73,6 +73,9 @@ Future<(FakeNativePlatform, LiquidSearchController, List<String>)> _pump(
     padding: _compactPadding,
     settle: settle,
   );
+  // The first native entry replays the (empty) text (spec §7.10); the
+  // tests below are about what happens after it.
+  if (settle) fake.searchTexts.clear();
   return (fake, controller, changes);
 }
 
@@ -398,11 +401,23 @@ void main() {
     expect(find.byKey(const ValueKey('list-D')), findsOneWidget);
   });
 
+  // Replaces the plan's version, whose controls were set after the pump
+  // and never read, so it could not fail (review I-3).
   testWidgets('the search tab has a native bar: no Flutter bar, no controls', (
     tester,
   ) async {
-    final (fake, _, _) = await _pump(tester);
-    fake.controls = const LiquidWindowControls(leading: 66, top: 24);
+    const controls = LiquidWindowControls(leading: 66, top: 24);
+    final (fake, _, _) = await _pump(tester, initialIndex: 0);
+    fake.emitNative(const LiquidWindowControlsChanged(controls));
+    await tester.pump();
+    expect(_scope(tester, 'Home').nativePageBar, isFalse);
+    expect(
+      _scope(tester, 'Home').windowControls,
+      controls,
+      reason: "the compact bar is at the bottom: the top is the page's",
+    );
+    fake.emitNative(const LiquidNativeDestinationTapped(2));
+    await tester.pumpAndSettle();
     final scope = _scope(tester);
     expect(scope.nativePageBar, isTrue);
     expect(scope.windowControls, LiquidWindowControls.zero);
@@ -514,6 +529,7 @@ void main() {
       await pumpShell(tester, shell(1), padding: _compactPadding);
       await pumpShell(tester, shell(2), padding: _compactPadding);
       expect(tester.takeException(), isNull);
+      fake.searchTexts.clear();
       controller.text = 'x';
       await tester.pump();
       expect(fake.searchTexts, ['x']);
@@ -548,6 +564,7 @@ void main() {
       await pumpShell(tester, at(padded: false), padding: _compactPadding);
       await pumpShell(tester, at(padded: true), padding: _compactPadding);
       expect(tester.takeException(), isNull);
+      fake.searchTexts.clear();
       controller.text = 'y';
       await tester.pump();
       expect(fake.searchTexts, ['y']);
@@ -571,6 +588,7 @@ void main() {
         search: LiquidSearch(controller: controller),
       );
       await pumpShell(tester, shell(first), padding: _compactPadding);
+      fake.searchTexts.clear();
       fake.emitNative(const LiquidNativeSearchActiveChanged(true));
       await tester.pump();
       await pumpShell(tester, shell(second), padding: _compactPadding);
@@ -612,6 +630,7 @@ void main() {
         ),
         padding: _compactPadding,
       );
+      fake.searchTexts.clear();
       for (final (text, composing) in const [
         ('h', false),
         ('ho', false),
@@ -789,6 +808,7 @@ void main() {
           ),
         ),
       );
+      fake.pageScrolls.clear();
       _position(tester, 'Search').jumpTo(200);
       await tester.pump();
       expect(fake.pageScrolls, [(2, 200.0)]);
@@ -816,6 +836,7 @@ void main() {
         ),
       );
       final list = find.byKey(const PageStorageKey('stored-list'));
+      fake.pageScrolls.clear();
       tester
           .state<ScrollableState>(
             find.descendant(of: list, matching: find.byType(Scrollable)),
@@ -855,6 +876,237 @@ void main() {
       fake.attachGate!.complete(_compact);
       await tester.pumpAndSettle();
       expect(fake.pageScrolls, [(2, 150.0)]);
+    });
+  });
+  group('review fixes', () {
+    Widget searchShell(
+      LiquidSearchController controller, {
+      int initialIndex = 2,
+      LiquidNativeChrome nativeChrome = LiquidNativeChrome.auto,
+    }) => TestShell(
+      destinations: _destinations,
+      initialIndex: initialIndex,
+      pageBuilder: _page,
+      nativeChrome: nativeChrome,
+      search: LiquidSearch(controller: controller),
+    );
+
+    testWidgets('I-1: the text reaches native once it engages (cold start)', (
+      tester,
+    ) async {
+      final fake = installFakeNative(state: _compact)
+        ..attachGate = Completer<LiquidNativeShellState>();
+      final controller = LiquidSearchController(text: 'hồ');
+      addTearDown(controller.dispose);
+      await pumpShell(
+        tester,
+        searchShell(controller),
+        padding: _compactPadding,
+        settle: false,
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(fake.searchTexts, isEmpty, reason: 'nothing installed yet');
+      fake.attachGate!.complete(_compact);
+      await tester.pumpAndSettle();
+      expect(fake.searchTexts, ['hồ']);
+    });
+
+    testWidgets('I-1: an app write while pending reaches native too', (
+      tester,
+    ) async {
+      final fake = installFakeNative(state: _compact)
+        ..attachGate = Completer<LiquidNativeShellState>();
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      await pumpShell(
+        tester,
+        searchShell(controller),
+        padding: _compactPadding,
+        settle: false,
+      );
+      await tester.pump();
+      controller.text = 'hà nội';
+      await tester.pump();
+      fake.attachGate!.complete(_compact);
+      await tester.pumpAndSettle();
+      expect(fake.searchTexts, ['hà nội']);
+    });
+
+    testWidgets('I-1: the first native entry sends the text even when empty '
+        '(hot restart: native may still show the old one)', (tester) async {
+      final fake = installFakeNative(state: _compact);
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      await pumpShell(
+        tester,
+        searchShell(controller),
+        padding: _compactPadding,
+      );
+      expect(fake.searchTexts, ['']);
+      fake.emitNative(const LiquidNativeDestinationTapped(0));
+      await tester.pumpAndSettle();
+      fake.emitNative(const LiquidNativeDestinationTapped(2));
+      await tester.pumpAndSettle();
+      expect(fake.searchTexts, [''], reason: 'an empty kept query: no resend');
+    });
+
+    testWidgets('I-1: after Flutter chrome, native shows the text again', (
+      tester,
+    ) async {
+      final fake = installFakeNative(state: _compact);
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      await pumpShell(
+        tester,
+        searchShell(controller),
+        padding: _compactPadding,
+      );
+      fake.emitNative(
+        const LiquidNativeSearchTextChanged('hà', composing: false),
+      );
+      await tester.pump();
+      await pumpShell(
+        tester,
+        searchShell(controller, nativeChrome: LiquidNativeChrome.off),
+        padding: _compactPadding,
+      );
+      fake.searchTexts.clear();
+      await pumpShell(
+        tester,
+        searchShell(controller),
+        padding: _compactPadding,
+      );
+      expect(fake.searchTexts, ['hà']);
+    });
+
+    testWidgets('scene reconnect: the text is replayed after the resend', (
+      tester,
+    ) async {
+      final (fake, _, _) = await _pump(tester);
+      fake.emitNative(
+        const LiquidNativeSearchTextChanged('hà', composing: false),
+      );
+      await tester.pump();
+      fake.searchTexts.clear();
+      final configs = fake.configs.length;
+      // A reconnected scene reports its state, maybe the same one.
+      fake.pushState(_compact);
+      await tester.pumpAndSettle();
+      expect(fake.configs.length, greaterThan(configs), reason: 'resent');
+      expect(fake.searchTexts, ['hà']);
+    });
+
+    testWidgets('scene reconnect on another tab: replayed on entry', (
+      tester,
+    ) async {
+      final (fake, _, _) = await _pump(tester);
+      fake
+        ..emitNative(
+          const LiquidNativeSearchTextChanged('hà', composing: false),
+        )
+        ..emitNative(const LiquidNativeDestinationTapped(0));
+      await tester.pumpAndSettle();
+      fake.searchTexts.clear();
+      fake.pushState(_compact);
+      await tester.pumpAndSettle();
+      expect(fake.searchTexts, isEmpty);
+      fake.emitNative(const LiquidNativeDestinationTapped(2));
+      await tester.pumpAndSettle();
+      expect(fake.searchTexts, ['hà']);
+    });
+
+    testWidgets('I-2: a plain page above a LiquidPage in the tab: the stack '
+        'empties (spec §8.4 rule 3), and comes back when it pops', (
+      tester,
+    ) async {
+      final (fake, _, _) = await _pump(tester);
+      await _pushDetail(tester);
+      _searchNavigator.currentState!
+          .push(
+            MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(body: Text('Plain')),
+            ),
+          )
+          .ignore();
+      await tester.pumpAndSettle();
+      expect(find.text('Plain'), findsOneWidget);
+      expect(fake.last.tabs.last.pages, isEmpty);
+      _searchNavigator.currentState!.pop();
+      await tester.pumpAndSettle();
+      expect(fake.last.tabs.last.pages.map((p) => p.title), [
+        'Search',
+        'Hồ Hoàn Kiếm',
+      ]);
+    });
+
+    testWidgets('m-1: a replaced top page sends its offset (zero)', (
+      tester,
+    ) async {
+      final (fake, _, _) = await _pump(tester);
+      await _pushDetail(tester);
+      _position(tester, 'Detail').jumpTo(300);
+      await tester.pump();
+      expect(fake.pageScrolls.last, (2, 300.0));
+      _searchNavigator.currentState!
+          .pushReplacement(
+            MaterialPageRoute<void>(
+              builder: (_) => const LiquidPage(
+                title: 'Other',
+                child: TestPage(label: 'Other'),
+              ),
+            ),
+          )
+          .ignore();
+      await tester.pumpAndSettle();
+      expect(fake.last.tabs.last.pages.map((p) => p.title), [
+        'Search',
+        'Other',
+      ]);
+      expect(fake.pageScrolls.last, (2, 0.0));
+    });
+
+    testWidgets('m-4: a guard that refuses the search tab keeps Home', (
+      tester,
+    ) async {
+      final asked = <int>[];
+      final (fake, _, _) = await _pump(
+        tester,
+        initialIndex: 0,
+        guard: (i) async {
+          asked.add(i);
+          return false;
+        },
+      );
+      final sent = fake.configs.length;
+      fake.emitNative(const LiquidNativeDestinationTapped(2));
+      await tester.pumpAndSettle();
+      expect(asked, [2]);
+      expect(fake.configs.length, greaterThan(sent), reason: 'forced resync');
+      expect(fake.last.selectedIndex, 0);
+      expect(fake.searchTexts, isEmpty);
+      expect(_scope(tester, 'Home').searchPhase, LiquidSearchPhase.idle);
+    });
+
+    testWidgets('C1: a page above the shell deactivates an active search', (
+      tester,
+    ) async {
+      final (fake, controller, _) = await _pump(tester);
+      fake.emitNative(const LiquidNativeSearchActiveChanged(true));
+      await tester.pump();
+      Navigator.of(
+            tester.element(find.byKey(const ValueKey('list-Search'))),
+            rootNavigator: true,
+          )
+          .push(
+            MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(body: Text('Above')),
+            ),
+          )
+          .ignore();
+      await tester.pumpAndSettle();
+      expect(fake.searchActives, [false]);
+      expect(controller.text, '', reason: 'the text is kept (none here)');
     });
   });
 }
