@@ -53,10 +53,14 @@ class LiquidFrameGuard extends ValueNotifier<bool> {
       kProfileMode || kReleaseMode || debugLiquidFrameGuardEnabled;
 
   /// The frame budget of the first display (60 Hz when unknown).
+  ///
+  /// Never below 1/60 s: an app capped at 60 Hz on a 120 Hz ProMotion
+  /// panel still reports 120 Hz, and must not be demoted for that.
   Duration get budget {
     final views = SchedulerBinding.instance.platformDispatcher.views;
     final hz = views.isEmpty ? 60.0 : views.first.display.refreshRate;
-    return Duration(microseconds: (1e6 / (hz > 0 ? hz : 60)).round());
+    final micros = (1e6 / (hz > 0 ? hz : 60)).round();
+    return Duration(microseconds: micros < 16667 ? 16667 : micros);
   }
 
   /// One liquid surface is on screen.

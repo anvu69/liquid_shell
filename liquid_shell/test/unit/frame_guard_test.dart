@@ -123,14 +123,34 @@ void main() {
 
     testWidgets('a refresh-rate change starts the run again', (tester) async {
       addTearDown(tester.view.display.resetRefreshRate);
-      // Fine against a 60 Hz budget, slow against a 120 Hz one.
-      final p = _ms * 15;
+      // Fine against a 30 Hz budget, slow against a 60 Hz one.
+      final p = _ms * 25;
+      tester.view.display.refreshRate = 30;
+      guard.addRasterTimes([..._window(p), ..._window(p)]);
       tester.view.display.refreshRate = 60;
-      guard.addRasterTimes([..._window(p), ..._window(p)]);
-      tester.view.display.refreshRate = 120;
       guard.addRasterTimes(_window(p));
-      expect(guard.value, isFalse, reason: '60 Hz windows judged at 60 Hz');
+      expect(guard.value, isFalse, reason: '30 Hz windows judged at 30 Hz');
       guard.addRasterTimes([..._window(p), ..._window(p)]);
+      expect(guard.value, isTrue);
+    });
+
+    testWidgets('a 120 Hz panel is judged against a 60 Hz floor', (
+      tester,
+    ) async {
+      addTearDown(tester.view.display.resetRefreshRate);
+      // An app capped at 60 Hz on a ProMotion panel still reports 120 Hz.
+      tester.view.display.refreshRate = 120;
+      expect(guard.budget, _budget);
+      final p = _ms * 14;
+      guard.addRasterTimes([..._window(p), ..._window(p), ..._window(p)]);
+      expect(guard.value, isFalse);
+    });
+
+    testWidgets('at 60 Hz a p90 above 20.8 ms still trips', (tester) async {
+      addTearDown(tester.view.display.resetRefreshRate);
+      tester.view.display.refreshRate = 60;
+      final p = _ms * 21;
+      guard.addRasterTimes([..._window(p), ..._window(p), ..._window(p)]);
       expect(guard.value, isTrue);
     });
 
