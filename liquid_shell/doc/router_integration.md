@@ -101,6 +101,27 @@ If you keep branches alive some other way, wrap the inactive ones in
 `Visibility(visible: false, maintainState: true, ...)` or
 `TickerMode(enabled: false)`.
 
+### With native iOS chrome
+
+Native chrome (iOS 26 on iPhone and iPad, see
+[native_chrome.md](native_chrome.md)) follows the same table. It also
+watches the shell's own route: a page pushed above the shell hides the
+native chrome while it covers the shell. A dialog or sheet above the shell
+makes the native top bar and sidebar ignore touches at regular width, and
+hides the native compact bar at compact width (every iPhone, and a narrow
+iPad window), so the bar never covers the bottom of the sheet.
+
+Both work only for routes on a navigator **above** the shell. A modal shown
+on a branch's own navigator is drawn **under** the native chrome, which
+stays visible and takes touches. At compact width that is the floating bar
+over the bottom of the sheet, and it is the default for
+`showModalBottomSheet` (`useRootNavigator: false`) from a page inside a
+branch. Show modals on the root navigator (`showDialog` does by default;
+pass `useRootNavigator: true` to `showModalBottomSheet`), or wrap the page
+in `LiquidHideChrome`. Overlays that are not routes (a `SnackBar`, an
+`OverlayPortal` or `Autocomplete` menu) also stay under the native chrome,
+as they do under the Flutter chrome.
+
 ## Leaving a page with unsaved work
 
 `beforeDestinationChange` runs before every user selection (not before

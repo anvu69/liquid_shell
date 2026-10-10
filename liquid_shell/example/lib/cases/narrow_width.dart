@@ -40,6 +40,8 @@ class _NarrowWidthCaseState extends State<NarrowWidthCase> {
               destinations: destinations,
               selectedIndex: _index,
               onDestinationSelected: (i) => setState(() => _index = i),
+              // Native chrome spans the window, not this 320pt shell.
+              nativeChrome: LiquidNativeChrome.off,
               tabBarTrailing: LiquidTabAction(
                 icon: const Icon(Icons.search),
                 semanticLabel: 'Search',

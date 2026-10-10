@@ -1,6 +1,6 @@
 name: liquid_shell
 description: Adaptive navigation shell with a Liquid Glass look for iOS and Android. A floating tab bar on phones and a glass sidebar on tablets, with no router dependency.
-version: 0.1.0-dev.1
+version: 0.1.0-dev.2
 homepage: https://github.com/anvu69/liquid_shell/tree/main/liquid_shell
 repository: https://github.com/anvu69/liquid_shell/tree/main/liquid_shell
 issue_tracker: https://github.com/anvu69/liquid_shell/issues
@@ -14,9 +14,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  liquid_shell_android: ^0.1.0-dev.1
-  liquid_shell_ios: ^0.1.0-dev.1
-  liquid_shell_platform_interface: ^0.1.0-dev.1
+  liquid_shell_android: ^0.1.0-dev.2
+  liquid_shell_ios: ^0.1.0-dev.2
+  liquid_shell_platform_interface: ^0.1.0-dev.2
 
 dev_dependencies:
   flutter_test:

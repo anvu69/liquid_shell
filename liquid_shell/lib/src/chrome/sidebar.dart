@@ -3,7 +3,11 @@ import 'package:liquid_shell/src/destinations/badge.dart';
 import 'package:liquid_shell/src/destinations/destination.dart';
 import 'package:liquid_shell/src/destinations/tab_action.dart';
 import 'package:liquid_shell/src/glass/liquid_glass.dart';
+import 'package:liquid_shell/src/native/window_controls.dart';
 import 'package:liquid_shell/src/shell/strings.dart';
+
+/// Space between the safe-area top and the first sidebar row.
+const double _kSidebarTopPadding = 24;
 
 /// A full-height glass sidebar of destinations.
 ///
@@ -67,17 +71,23 @@ class LiquidSidebar extends StatelessWidget {
     final rows = <Widget>[
       // No header row (and no gap after it) when it would be empty.
       if (header != null || onHide != null)
-        Row(
-          children: [
-            Expanded(child: header ?? const SizedBox.shrink()),
-            if (onHide != null)
-              IconButton(
-                onPressed: onHide,
-                tooltip: strings.hideSidebar,
-                color: scheme.onSurfaceVariant,
-                icon: const Icon(Icons.view_sidebar_outlined),
-              ),
-          ],
+        // iPadOS 26 windowed: the header row starts past the window
+        // controls (spec P2 §8.3). 24 is the list's top padding below the
+        // safe area.
+        LiquidWindowControlsClearance(
+          rowTop: _kSidebarTopPadding,
+          child: Row(
+            children: [
+              Expanded(child: header ?? const SizedBox.shrink()),
+              if (onHide != null)
+                IconButton(
+                  onPressed: onHide,
+                  tooltip: strings.hideSidebar,
+                  color: scheme.onSurfaceVariant,
+                  icon: const Icon(Icons.view_sidebar_outlined),
+                ),
+            ],
+          ),
         ),
       if (action != null)
         _SidebarRow(
@@ -124,7 +134,7 @@ class LiquidSidebar extends StatelessWidget {
                 SliverPadding(
                   padding: EdgeInsetsDirectional.fromSTEB(
                     16 + start,
-                    24 + pad.top,
+                    _kSidebarTopPadding + pad.top,
                     16,
                     0,
                   ),

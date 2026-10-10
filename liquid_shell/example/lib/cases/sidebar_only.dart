@@ -24,11 +24,13 @@ class _SidebarOnlyCaseState extends State<SidebarOnlyCase> {
           icon: Icon(Icons.bar_chart),
           label: 'Reports',
           placement: LiquidPlacement.sidebarOnly,
+          sfSymbol: 'chart.bar',
         ),
         LiquidDestination(
           icon: Icon(Icons.archive_outlined),
           label: 'Archive',
           placement: LiquidPlacement.sidebarOnly,
+          sfSymbol: 'archivebox',
         ),
       ],
       selectedIndex: _index,

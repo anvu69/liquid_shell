@@ -23,6 +23,22 @@ end_of_record
       expect(coverage.percent, 75);
     });
 
+    test('ignores generated *.g.dart libraries', () {
+      const lcov = '''
+SF:lib/src/native_shell_api.g.dart
+LF:400
+LH:40
+end_of_record
+SF:lib/liquid_shell_ios.dart
+LF:10
+LH:10
+end_of_record
+''';
+      final coverage = LineCoverage.parse(lcov);
+      expect(coverage.found, 10);
+      expect(coverage.percent, 100);
+    });
+
     test('an empty report instruments nothing and never passes', () {
       final coverage = LineCoverage.parse('');
       expect(coverage.isEmpty, isTrue);

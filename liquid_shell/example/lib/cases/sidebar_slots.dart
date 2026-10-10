@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell_example/support/demo_page.dart';
 
-/// A title in the sidebar header and a profile footer.
+/// A title in the sidebar header and a profile footer. The native sidebar
+/// (iOS 26) shows the footer only.
 class SidebarSlotsCase extends StatefulWidget {
   /// Creates the case.
   const SidebarSlotsCase({super.key});
@@ -27,6 +28,15 @@ class _SidebarSlotsCaseState extends State<SidebarSlotsCase> {
         leading: CircleAvatar(child: Text('A')),
         title: Text('Ana Lima'),
         subtitle: Text('ana@example.com'),
+      ),
+      // The native sidebar (iOS 26) shows no Flutter widgets: its footer is
+      // data, and it has no header.
+      nativeSidebarFooter: LiquidNativeSidebarFooter(
+        title: 'Ana Lima',
+        subtitle: 'ana@example.com',
+        sfSymbol: 'person.crop.circle',
+        semanticLabel: 'Ana Lima, ana@example.com',
+        onPressed: () => setState(() => _index = 2),
       ),
       body: DemoPage(title: kDemoDestinations[_index].label),
     );

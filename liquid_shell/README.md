@@ -33,11 +33,18 @@ dependency.
   saver, disabled window blurs and devices that cannot blur.
 - **Accessible**: semantics, large-text icon-only cells with a large content
   viewer, RTL, and every string replaceable through `LiquidShellStrings`.
-- Runtime dependencies: Flutter and this plugin's own packages only.
+- **Native iOS 26 chrome**, opt-in: the system's own
+  `UITabBarController` tab bar and sidebar (with a native footer) on iPhone
+  and iPad, the floating bottom bar at compact width; the Flutter chrome
+  everywhere else.
+- **Window controls**: on iPadOS 26 windowed apps, the shell's top row and
+  your large titles move past the close/minimise/resize cluster.
+- Runtime dependencies: Flutter and this plugin's own packages only (plus
+  `meta`, pinned by the Flutter SDK, for the generated iOS channel).
 
 | Platform | Look | Signals |
 |---|---|---|
-| iOS 15+ | Glass pill and sidebar | Reduce Transparency |
+| iOS 15+ | Glass pill and sidebar; native `UITabBarController` chrome on iOS 26 (opt-in) | Reduce Transparency, iPadOS 26 window controls |
 | Android | Same as iOS | Animations off / high contrast, battery saver, window blurs disabled (API 31+), no Impeller |
 | Web, macOS, Windows, Linux | Frosted glass | None (always frosted unless forced) |
 
@@ -106,6 +113,14 @@ destinations; they are in
 Each snippet is checked against its source in CI, and each image is a golden
 test.
 
+Every case with a real shell gives each destination and the trailing action
+an `sfSymbol`, so on iOS 26 it runs with the
+[native chrome](#native-ios-chrome). The images show the Flutter chrome,
+which the same code draws everywhere else. Custom chrome, the standalone widgets, the custom theme, the forced
+tier, form factors and narrow width are about the Flutter chrome itself:
+they keep it on iOS 26 too (`nativeChrome: LiquidNativeChrome.off` or a
+`chromeBuilder`), and the example app says so on screen.
+
 ### Three tabs over an `IndexedStack`
 
 The quickstart with real pages. An `IndexedStack` keeps every tab's state
@@ -118,12 +133,22 @@ int _index = 0;
 @override
 Widget build(BuildContext context) {
   return LiquidShell(
+    // sfSymbol: the native chrome's icon on iOS 26.
     destinations: const [
-      LiquidDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
-      LiquidDestination(icon: Icon(Icons.explore_outlined), label: 'Explore'),
+      LiquidDestination(
+        icon: Icon(Icons.home_outlined),
+        label: 'Home',
+        sfSymbol: 'house',
+      ),
+      LiquidDestination(
+        icon: Icon(Icons.explore_outlined),
+        label: 'Explore',
+        sfSymbol: 'map',
+      ),
       LiquidDestination(
         icon: Icon(Icons.settings_outlined),
         label: 'Settings',
+        sfSymbol: 'gear',
       ),
     ],
     selectedIndex: _index,
@@ -155,16 +180,19 @@ Widget build(BuildContext context) {
       icon: Icon(Icons.inbox_outlined),
       label: 'Inbox',
       badge: LiquidBadge.count(3),
+      sfSymbol: 'tray',
     ),
     LiquidDestination(
       icon: Icon(Icons.forum_outlined),
       label: 'Chats',
       badge: LiquidBadge.count(120), // shows "99+"
+      sfSymbol: 'bubble.left.and.bubble.right',
     ),
     LiquidDestination(
       icon: Icon(Icons.notifications_outlined),
       label: 'Alerts',
       badge: LiquidBadge.dot(),
+      sfSymbol: 'bell',
     ),
   ];
   return LiquidShell(
@@ -197,11 +225,13 @@ Widget build(BuildContext context) {
         icon: Icon(Icons.bar_chart),
         label: 'Reports',
         placement: LiquidPlacement.sidebarOnly,
+        sfSymbol: 'chart.bar',
       ),
       LiquidDestination(
         icon: Icon(Icons.archive_outlined),
         label: 'Archive',
         placement: LiquidPlacement.sidebarOnly,
+        sfSymbol: 'archivebox',
       ),
     ],
     selectedIndex: _index,
@@ -234,6 +264,15 @@ Widget build(BuildContext context) {
       title: Text('Ana Lima'),
       subtitle: Text('ana@example.com'),
     ),
+    // The native sidebar (iOS 26) shows no Flutter widgets: its footer is
+    // data, and it has no header.
+    nativeSidebarFooter: LiquidNativeSidebarFooter(
+      title: 'Ana Lima',
+      subtitle: 'ana@example.com',
+      sfSymbol: 'person.crop.circle',
+      semanticLabel: 'Ana Lima, ana@example.com',
+      onPressed: () => setState(() => _index = 2),
+    ),
     body: DemoPage(title: kDemoDestinations[_index].label),
   );
 }
@@ -261,6 +300,7 @@ Widget build(BuildContext context) {
     tabBarTrailing: LiquidTabAction(
       icon: const Icon(Icons.search),
       semanticLabel: 'Search',
+      sfSymbol: 'magnifyingglass',
       onPressed: () => Navigator.of(context).push(
         MaterialPageRoute<void>(builder: _searchPage),
       ),
@@ -603,6 +643,8 @@ Widget build(BuildContext context) {
       destinations: kDemoDestinations,
       selectedIndex: _index,
       onDestinationSelected: (i) => setState(() => _index = i),
+      // The glass below is Flutter's: keep it on iOS 26 too.
+      nativeChrome: LiquidNativeChrome.off,
       body: DemoPage(
         title: 'Brand glass',
         children: [
@@ -639,6 +681,8 @@ Widget build(BuildContext context) {
       destinations: kDemoDestinations,
       selectedIndex: _index,
       onDestinationSelected: (i) => setState(() => _index = i),
+      // The glass below is Flutter's: keep it on iOS 26 too.
+      nativeChrome: LiquidNativeChrome.off,
       body: DemoPage(
         title: 'Forced tier',
         children: [
@@ -668,7 +712,7 @@ No liquid renderer ships yet; forcing `liquid` draws frosted. See
 
 ### Form factors
 
-The example's form-factor screen puts the basic shell in fixed device frames
+The example's form-factor screen puts a basic shell in fixed device frames
 with this helper:
 
 <?code-excerpt "form_factors.dart (readme)"?>
@@ -736,6 +780,8 @@ Widget build(BuildContext context) {
             destinations: destinations,
             selectedIndex: _index,
             onDestinationSelected: (i) => setState(() => _index = i),
+            // Native chrome spans the window, not this 320pt shell.
+            nativeChrome: LiquidNativeChrome.off,
             tabBarTrailing: LiquidTabAction(
               icon: const Icon(Icons.search),
               semanticLabel: 'Search',
@@ -771,6 +817,138 @@ Trade-off: between text scale 1 and 1.6 a narrow bar's labels can shrink
 below the size the user chose, down to 10pt. The icon-only cells and the
 large content viewer only start at 1.6. Larger text also grows the pill and
 the trailing circle, so cells can drop under 44pt there.
+
+### Native iOS chrome
+
+On an iPhone or iPad with iOS 26 or later, the shell can hand its chrome to
+the system: a real `UITabBarController` in sidebar mode, with the Liquid
+Glass tab bar. At regular width that is the top bar, the sidebar toggle,
+the sidebar (over the content in portrait, beside it in landscape) and a
+native footer; at compact width (every iPhone, in either orientation, and
+a narrow iPad window) it is UIKit's floating tab bar at the bottom, with
+the trailing action as a separate round search button. Your Flutter body stays exactly
+where it is. Everywhere else (Android, iOS before 26) the same
+`LiquidShell` draws its Flutter chrome.
+
+Opt in once, in `ios/Runner/Info.plist`:
+
+```xml
+<key>LiquidShellNativeChrome</key>
+<true/>
+```
+
+Then give every destination, and the trailing action, an SF Symbol. A shell
+without a symbol somewhere, or with a `chromeBuilder`, keeps its Flutter
+chrome; so does `nativeChrome: LiquidNativeChrome.off`. In debug, a shell
+that only lacks symbols logs one line, once per shell, naming them.
+
+<?code-excerpt "native_chrome.dart (readme)"?>
+```dart
+int _index = 0;
+int _searches = 0;
+
+static const _destinations = [
+  LiquidDestination(
+    icon: Icon(Icons.home_outlined),
+    label: 'Home',
+    sfSymbol: 'house',
+  ),
+  LiquidDestination(
+    icon: Icon(Icons.inbox_outlined),
+    label: 'Inbox',
+    badge: LiquidBadge.count(3),
+    sfSymbol: 'tray',
+  ),
+  LiquidDestination(
+    icon: Icon(Icons.bar_chart),
+    label: 'Reports',
+    placement: LiquidPlacement.sidebarOnly,
+    sfSymbol: 'chart.bar',
+  ),
+  LiquidDestination(
+    icon: Icon(Icons.settings_outlined),
+    label: 'Settings',
+    sfSymbol: 'gear',
+  ),
+];
+
+@override
+Widget build(BuildContext context) {
+  return LiquidShell(
+    destinations: _destinations,
+    selectedIndex: _index,
+    beforeDestinationChange: _confirmLeave, // "Discard changes?"
+    onDestinationSelected: (i) => setState(() {
+      if (i != _index) _dirty = false;
+      _index = i;
+    }),
+    tabBarTrailing: LiquidTabAction(
+      icon: const Icon(Icons.search),
+      semanticLabel: 'Search',
+      sfSymbol: 'magnifyingglass',
+      onPressed: () => setState(() => _searches++),
+    ),
+    nativeSidebarFooter: LiquidNativeSidebarFooter(
+      title: 'Ann Lee',
+      subtitle: 'Active profile',
+      sfSymbol: 'person.crop.circle',
+      semanticLabel: 'Ann Lee, active profile',
+      onPressed: () => setState(() => _index = 3),
+    ),
+    body: DemoPage(
+      title: _destinations[_index].label,
+      children: [
+        Text('Searches: $_searches'),
+        SwitchListTile(
+          title: const Text('Unsaved changes'),
+          value: _dirty,
+          onChanged: (value) => setState(() => _dirty = value),
+        ),
+      ],
+    ),
+  );
+}
+```
+
+How it behaves:
+
+- Taps on native tabs and sidebar rows go through `beforeDestinationChange`
+  like Flutter taps; the native selection changes only when the guard
+  accepts. The trailing action and the footer call your callbacks.
+- A page pushed above the shell hides the native chrome while it covers the
+  shell; a dialog above the shell makes it ignore touches, and hides the
+  compact bar.
+- `LiquidHideChrome` hides it, as it hides the Flutter chrome.
+- `LiquidShellScope.of(context).nativeChrome` tells pages which chrome is
+  on screen. `sidebarHeader` and `sidebarFooter` are Flutter widgets and
+  show only in the Flutter sidebar; use `nativeSidebarFooter` for the
+  native one.
+- The native chrome cannot be drawn by widget tests or goldens. The images
+  in this section come from the simulator (`make integration-ios-native`).
+
+| iPhone | iPad portrait | Sidebar open |
+|---|---|---|
+| <img src="doc/images/native_iphone.png" width="160" alt="Native floating tab bar at the bottom of an iPhone, with a separate search button"> | <img src="doc/images/native_ipad_portrait.png" width="220" alt="Native tab bar, iPad portrait"> | <img src="doc/images/native_ipad_sidebar.png" width="220" alt="Native sidebar over the content"> |
+
+<img src="doc/images/native_ipad_landscape.png" width="440" alt="iPadOS 27 landscape: the native sidebar tiled beside the content">
+
+Simulator captures (`make integration-ios-native`), not goldens.
+
+### Window controls
+
+A windowed iPadOS 26 app has its close, minimise and resize buttons in the
+top-leading corner. The shell's own top row and the Flutter sidebar header
+move past them, and `LiquidShellScope.of(context).windowControls` gives the
+size of the cluster to your pages. Wrap a page's top row, for example a large
+title, in `LiquidWindowControlsClearance`:
+
+```dart
+LiquidWindowControlsClearance(
+  child: Text('Inbox', style: Theme.of(context).textTheme.headlineMedium),
+)
+```
+
+Everywhere else the value is zero and nothing moves.
 
 ## Layout rules
 
@@ -824,11 +1002,31 @@ content viewer (see [Custom chrome](#custom-chrome)).
   while `chromeKind` is `LiquidChromeKind.sidebarOverlay` (see
   [doc/router_integration.md](doc/router_integration.md#system-back-and-the-overlay-sidebar)).
   How a router such as go_router orders back is not covered yet.
-- **Flutter-drawn chrome on iOS 26.** The tab bar and sidebar are drawn by
-  Flutter on every platform. Native iOS 26 chrome (`UITabBarController`,
-  the iPadOS window controls) comes in P2.
+- **Native chrome is opt-in.** It needs iOS 26,
+  `LiquidShellNativeChrome` in Info.plist, and an SF Symbol on every
+  destination. Strings the system draws (the sidebar button's VoiceOver
+  label) follow the device language, not your app's. The compact native
+  bar does not minimise on scroll (`minimizeOnScroll` is Flutter-only), and
+  it hides while a dialog or sheet is up (the body keeps its inset).
+- **A frame or two without chrome at start on iOS.** Whether the app opted
+  in, and the iOS version, are known only natively, so on iOS a shell that
+  could use native chrome draws none until the platform answers, even in
+  an app without the Info.plist key. The same holds for an iPad app running
+  on a Mac ("Designed for iPad"), which then draws Flutter chrome
+  (`iPadAppOnMac`). Every other platform draws its chrome from the first
+  frame.
+- **Native chrome hit testing follows UIKit's view tree.** Touches on the
+  transparent part of the native chrome go to Flutter; a future iOS that
+  reshapes `UITabBarController`'s views can break that. `make ios-unit`
+  hit-tests UIKit's real tab bar and sidebar on a simulator (calls to
+  `hitTest`, not real touch events); check real taps and scrolling by hand
+  on each new iOS release.
+- **One native chrome per window.** The newest `LiquidShell` owns it. A
+  shell nested in another shell's body (sub-tabs) takes it from the outer
+  one, which then shows no navigation; give a nested shell
+  `nativeChrome: LiquidNativeChrome.off`.
 - **No liquid tier yet.** Forcing `LiquidGlassTier.liquid` draws frosted.
-  The liquid tier comes in P4 (and a native iOS 26 renderer in P2).
+  The liquid tier comes in P4.
 - **Android signals are best effort.** Each one that cannot be read
   counts as off.
 
@@ -836,14 +1034,15 @@ content viewer (see [Custom chrome](#custom-chrome)).
 
 - [doc/theming.md](doc/theming.md): `LiquidGlassTheme` fields and defaults
 - [doc/tiers.md](doc/tiers.md): tiers, the policy, signals, writing a renderer
+- [doc/native_chrome.md](doc/native_chrome.md): native iOS chrome, its
+  install rules, behaviour and limits
 - [doc/router_integration.md](doc/router_integration.md): `IndexedStack`,
   `Navigator` and go_router wiring, branch state, hide/no chrome, system
   back, known limits
 
 ## Roadmap
 
-- **P2:** native iOS chrome (`UITabBarController` sidebar, iPadOS 26 window
-  controls) and a native liquid renderer on iOS 26.
+- **P2 (this release):** native iOS 26 chrome and window controls.
 - **P3:** a glass back button and title bar, a search field and a search tab.
 - **P4:** the liquid tier on Android, as a `LiquidGlassRenderer` adapter.
 - **P5:** a go_router adapter (`StatefulShellRoute` builder, route-driven

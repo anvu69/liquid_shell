@@ -9,7 +9,10 @@ class LineCoverage {
   const LineCoverage({required this.found, required this.hit});
 
   /// Parses an lcov report. Records whose `SF:` path has no `lib/` segment
-  /// (test helpers, generated test files) are ignored.
+  /// (test helpers, generated test files) are ignored, and so are generated
+  /// `*.g.dart` libraries (the Pigeon channel code): their tests live where
+  /// the generator is tested, and counting them would only measure which
+  /// generated branches a contract test happens to touch.
   factory LineCoverage.parse(String lcov) {
     var found = 0;
     var hit = 0;
@@ -17,7 +20,9 @@ class LineCoverage {
     for (final line in lcov.split('\n')) {
       if (line.startsWith('SF:')) {
         final path = line.substring(3).replaceAll(r'\', '/');
-        inLib = path.startsWith('lib/') || path.contains('/lib/');
+        inLib =
+            (path.startsWith('lib/') || path.contains('/lib/')) &&
+            !path.endsWith('.g.dart');
       } else if (inLib && line.startsWith('LF:')) {
         found += int.parse(line.substring(3));
       } else if (inLib && line.startsWith('LH:')) {

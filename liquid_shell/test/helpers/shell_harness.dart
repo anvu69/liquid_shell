@@ -44,6 +44,8 @@ class TestShell extends StatefulWidget {
     this.strings = const LiquidShellStrings(),
     this.pageBuilder,
     this.offstageBranches = false,
+    this.nativeChrome = LiquidNativeChrome.auto,
+    this.nativeSidebarFooter,
     super.key,
   });
 
@@ -66,6 +68,9 @@ class TestShell extends StatefulWidget {
   /// (`Offstage` + `TickerMode`) instead of with an `IndexedStack`
   /// (`Visibility`).
   final bool offstageBranches;
+
+  final LiquidNativeChrome nativeChrome;
+  final LiquidNativeSidebarFooter? nativeSidebarFooter;
 
   @override
   State<TestShell> createState() => TestShellState();
@@ -92,6 +97,8 @@ class TestShellState extends State<TestShell> {
     chromeBuilder: widget.chromeBuilder,
     minimizeOnScroll: widget.minimizeOnScroll,
     strings: widget.strings,
+    nativeChrome: widget.nativeChrome,
+    nativeSidebarFooter: widget.nativeSidebarFooter,
     body: widget.offstageBranches
         ? Stack(
             fit: StackFit.expand,
@@ -140,11 +147,13 @@ class TestPageState extends State<TestPage> {
   );
 }
 
-/// Pumps [shell] in a MaterialApp on a window of [size] logical pixels.
+/// Pumps [shell] in a MaterialApp on a window of [size] logical pixels, on
+/// a screen of [screen] logical pixels (default: the window fills it).
 Future<void> pumpShell(
   WidgetTester tester,
   Widget shell, {
   Size size = kPhone,
+  Size? screen,
   EdgeInsets padding = const EdgeInsets.only(top: 59, bottom: 34),
   EdgeInsets? gestureInsets,
   TargetPlatform platform = TargetPlatform.iOS,
@@ -171,6 +180,10 @@ Future<void> pumpShell(
         ? FakeViewPadding.zero
         : FakeViewPadding(bottom: gestureInsets.bottom);
   addTearDown(tester.view.reset);
+  tester.view.display
+    ..devicePixelRatio = 1
+    ..size = screen ?? size;
+  addTearDown(tester.view.display.reset);
   final base =
       theme ??
       ThemeData(

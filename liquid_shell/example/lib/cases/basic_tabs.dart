@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell_example/support/demo_page.dart';
 
-/// The smallest shell: three tabs over an `IndexedStack`.
+/// The smallest shell: three tabs over an `IndexedStack`. Native chrome on
+/// iOS 26, Flutter chrome elsewhere.
 class BasicTabsCase extends StatefulWidget {
   /// Creates the case.
   const BasicTabsCase({super.key});
@@ -18,12 +19,22 @@ class _BasicTabsCaseState extends State<BasicTabsCase> {
   @override
   Widget build(BuildContext context) {
     return LiquidShell(
+      // sfSymbol: the native chrome's icon on iOS 26.
       destinations: const [
-        LiquidDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
-        LiquidDestination(icon: Icon(Icons.explore_outlined), label: 'Explore'),
+        LiquidDestination(
+          icon: Icon(Icons.home_outlined),
+          label: 'Home',
+          sfSymbol: 'house',
+        ),
+        LiquidDestination(
+          icon: Icon(Icons.explore_outlined),
+          label: 'Explore',
+          sfSymbol: 'map',
+        ),
         LiquidDestination(
           icon: Icon(Icons.settings_outlined),
           label: 'Settings',
+          sfSymbol: 'gear',
         ),
       ],
       selectedIndex: _index,

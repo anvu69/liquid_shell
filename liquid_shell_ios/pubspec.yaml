@@ -1,6 +1,6 @@
 name: liquid_shell_ios
-description: The iOS implementation of the liquid_shell plugin. Reads Reduce Transparency through UIAccessibility.
-version: 0.1.0-dev.1
+description: The iOS implementation of the liquid_shell plugin. Reduce Transparency, the native iOS 26 tab bar and sidebar, and the iPadOS window controls.
+version: 0.1.0-dev.2
 homepage: https://github.com/anvu69/liquid_shell/tree/main/liquid_shell_ios
 repository: https://github.com/anvu69/liquid_shell/tree/main/liquid_shell_ios
 issue_tracker: https://github.com/anvu69/liquid_shell/issues
@@ -14,11 +14,20 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  liquid_shell_platform_interface: ^0.1.0-dev.1
+  liquid_shell_platform_interface: ^0.1.0-dev.2
+  # Imported by the Pigeon-generated lib/src/native_shell_api.g.dart. Pinned
+  # by the Flutter SDK, as in every flutter/packages plugin that uses Pigeon.
+  meta: ^1.10.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  # Generates both ends of the native shell channel from
+  # pigeons/native_shell.dart (`make pigeon`). Exact pin: the generated
+  # header embeds the version, and `make pigeon-check` fails on any drift.
+  # 27.3.0 is the newest release whose analyzer (<13) resolves beside the
+  # workspace's `test` on the Flutter 3.44 SDK pins; 27.3.1+ needs analyzer 13.
+  pigeon: 27.3.0
   very_good_analysis: 10.3.0
 
 flutter:

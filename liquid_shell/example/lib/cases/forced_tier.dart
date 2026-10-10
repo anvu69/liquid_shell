@@ -30,6 +30,8 @@ class _ForcedTierCaseState extends State<ForcedTierCase> {
         destinations: kDemoDestinations,
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),
+        // The glass below is Flutter's: keep it on iOS 26 too.
+        nativeChrome: LiquidNativeChrome.off,
         body: DemoPage(
           title: 'Forced tier',
           children: [

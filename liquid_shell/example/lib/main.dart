@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:liquid_shell_example/cases/cases.dart';
+import 'package:liquid_shell_example/support/drawn_by_flutter.dart';
 
 void main() => runApp(const ExampleApp());
 
@@ -40,7 +41,12 @@ class CaseList extends StatelessWidget {
             subtitle: Text(entry.subtitle),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => entry.page),
+              MaterialPageRoute<void>(
+                builder: (_) => DrawnByFlutter(
+                  reason: entry.drawnByFlutter,
+                  child: entry.page,
+                ),
+              ),
             ),
           ),
       ],

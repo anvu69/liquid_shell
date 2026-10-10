@@ -20,6 +20,7 @@ class LiquidDestination {
     this.selectedIcon,
     this.badge,
     this.placement = LiquidPlacement.everywhere,
+    this.sfSymbol,
   });
 
   /// Icon when not selected. Sized and coloured by the shell.
@@ -38,6 +39,12 @@ class LiquidDestination {
   /// Tab bar and sidebar, or sidebar only.
   final LiquidPlacement placement;
 
+  /// SF Symbol name (for example `house`) for native chrome. Native chrome
+  /// needs it: a shell uses native chrome only when every destination (and
+  /// its trailing action) has one, and otherwise draws Flutter chrome, also
+  /// on iOS 26. In debug, such a shell logs one line naming what lacks one.
+  final String? sfSymbol;
+
   /// Field by field. Widgets ([icon], [selectedIcon]) compare by identity;
   /// use const or stable instances, or two equal-looking destinations are
   /// never `==`.
@@ -48,8 +55,10 @@ class LiquidDestination {
       other.selectedIcon == selectedIcon &&
       other.label == label &&
       other.badge == badge &&
-      other.placement == placement;
+      other.placement == placement &&
+      other.sfSymbol == sfSymbol;
 
   @override
-  int get hashCode => Object.hash(icon, selectedIcon, label, badge, placement);
+  int get hashCode =>
+      Object.hash(icon, selectedIcon, label, badge, placement, sfSymbol);
 }

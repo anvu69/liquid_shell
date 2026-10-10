@@ -9,6 +9,7 @@ class LiquidTabAction {
     required this.icon,
     required this.onPressed,
     required this.semanticLabel,
+    this.sfSymbol,
   });
 
   /// The icon. Sized and coloured by the shell.
@@ -21,6 +22,12 @@ class LiquidTabAction {
   /// row.
   final String semanticLabel;
 
+  /// SF Symbol name (for example `magnifyingglass`) for native chrome,
+  /// where the action is pinned to the tab bar's trailing end. Native chrome
+  /// needs it: without it a shell with this action draws Flutter chrome,
+  /// also on iOS 26, and logs one line in debug saying so.
+  final String? sfSymbol;
+
   /// Field by field. Widgets ([icon]) and callbacks ([onPressed]) compare by
   /// identity; use const or stable instances, or two equal-looking actions
   /// are never `==`.
@@ -29,8 +36,9 @@ class LiquidTabAction {
       other is LiquidTabAction &&
       other.icon == icon &&
       other.onPressed == onPressed &&
-      other.semanticLabel == semanticLabel;
+      other.semanticLabel == semanticLabel &&
+      other.sfSymbol == sfSymbol;
 
   @override
-  int get hashCode => Object.hash(icon, onPressed, semanticLabel);
+  int get hashCode => Object.hash(icon, onPressed, semanticLabel, sfSymbol);
 }
