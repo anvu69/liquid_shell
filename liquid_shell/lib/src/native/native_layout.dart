@@ -3,6 +3,7 @@ import 'package:liquid_shell/src/destinations/badge.dart';
 import 'package:liquid_shell/src/destinations/destination.dart';
 import 'package:liquid_shell/src/destinations/tab_action.dart';
 import 'package:liquid_shell/src/native/native_chrome.dart';
+import 'package:liquid_shell/src/search/search_layout.dart';
 import 'package:liquid_shell/src/shell/shell_layout.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
@@ -43,13 +44,16 @@ bool nativeChromePossible({
   required bool describable,
 }) => mode == LiquidNativeChrome.auto && !hasChromeBuilder && describable;
 
-/// Whether every destination and the trailing action have an SF Symbol.
+/// Whether every destination and the trailing action have an SF Symbol. A
+/// search destination needs none: UIKit's search tab has its own image.
 bool nativeDescribable(
   List<LiquidDestination> destinations,
   LiquidTabAction? trailing,
 ) =>
     destinations.isNotEmpty &&
-    destinations.every((d) => d.sfSymbol != null) &&
+    destinations.every(
+      (d) => d.sfSymbol != null || d.role == LiquidDestinationRole.search,
+    ) &&
     (trailing == null || trailing.sfSymbol != null);
 
 /// The debug hint for a shell that could use native chrome but cannot
@@ -62,7 +66,8 @@ String? nativeSymbolHint(
 ) {
   final labels = [
     for (final d in destinations)
-      if (d.sfSymbol == null) '"${d.label}"',
+      if (d.sfSymbol == null && d.role != LiquidDestinationRole.search)
+        '"${d.label}"',
   ];
   final missing = [
     if (labels.length == 1) 'destination ${labels.single}',
@@ -127,15 +132,19 @@ LiquidNativeChromeConfig nativeConfigFor({
   required bool rtl,
   required bool hidden,
   required bool interactive,
+  String? searchPlaceholder,
+  Map<int, List<LiquidNativePage>> pageStacks = const {},
 }) => LiquidNativeChromeConfig(
   engaged: engaged,
   tabs: [
-    for (final d in destinations)
+    for (final (i, d) in destinations.indexed)
       LiquidNativeTab(
         title: d.label,
         sfSymbol: d.sfSymbol ?? '',
         badge: nativeBadgeText(d.badge),
         sidebarOnly: d.placement == LiquidPlacement.sidebarOnly,
+        search: d.role == LiquidDestinationRole.search,
+        pages: pageStacks[i] ?? const [],
       ),
   ],
   selectedIndex: selectedIndex,
@@ -158,4 +167,16 @@ LiquidNativeChromeConfig nativeConfigFor({
   rtl: rtl,
   hidden: hidden,
   interactive: interactive,
+  search: searchIndexOf(destinations) == null
+      ? null
+      : LiquidNativeSearchConfig(placeholder: searchPlaceholder),
 );
+
+/// Whether the selected tab has a native navigation bar (spec P3b §8.3).
+/// P3b-1: the search tab only, while native chrome is engaged. P3b-2 makes
+/// it every engaged tab.
+bool nativePageBarFor({
+  required bool engaged,
+  required int selected,
+  required int? searchIndex,
+}) => engaged && searchIndex != null && selected == searchIndex;

@@ -15,6 +15,9 @@ class LiquidShellStrings {
     this.expandTabBarHint = 'Tap to open the navigation bar',
     this.badgeDot = 'New',
     this.badgeCount = defaultBadgeCount,
+    this.searchPlaceholder = 'Search',
+    this.cancelSearch = 'Cancel search',
+    this.back = 'Back',
   });
 
   /// Tooltip and semantics of the show-sidebar toggle.
@@ -35,6 +38,16 @@ class LiquidShellStrings {
   /// Spoken after a destination label when it has a count badge.
   final String Function(int count) badgeCount;
 
+  /// The Flutter search field's placeholder when `LiquidSearch.placeholder`
+  /// is null.
+  final String searchPlaceholder;
+
+  /// Semantics and tooltip of the Flutter search field's cancel (×).
+  final String cancelSearch;
+
+  /// Semantics and tooltip of `LiquidBackButton`.
+  final String back;
+
   /// The default [badgeCount]: `'3 new'`.
   static String defaultBadgeCount(int count) => '$count new';
 
@@ -49,7 +62,10 @@ class LiquidShellStrings {
       other.tabBarExpanded == tabBarExpanded &&
       other.expandTabBarHint == expandTabBarHint &&
       other.badgeDot == badgeDot &&
-      other.badgeCount == badgeCount;
+      other.badgeCount == badgeCount &&
+      other.searchPlaceholder == searchPlaceholder &&
+      other.cancelSearch == cancelSearch &&
+      other.back == back;
 
   @override
   int get hashCode => Object.hash(
@@ -59,5 +75,8 @@ class LiquidShellStrings {
     expandTabBarHint,
     badgeDot,
     badgeCount,
+    searchPlaceholder,
+    cancelSearch,
+    back,
   );
 }

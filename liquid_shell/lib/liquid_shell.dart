@@ -22,6 +22,9 @@ export 'src/glass/tier.dart';
 export 'src/native/native_chrome.dart';
 export 'src/native/native_reset.dart';
 export 'src/native/window_controls.dart' show LiquidWindowControlsClearance;
+export 'src/search/search.dart';
+export 'src/search/search_controller.dart'
+    show LiquidSearchController, LiquidSearchPhase, LiquidSearchValue;
 export 'src/shell/breakpoints.dart';
 export 'src/shell/chrome_builder.dart';
 export 'src/shell/liquid_shell.dart';

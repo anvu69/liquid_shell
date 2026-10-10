@@ -14,6 +14,7 @@ import 'package:liquid_shell/src/native/native_chrome.dart';
 import 'package:liquid_shell/src/native/native_host.dart';
 import 'package:liquid_shell/src/native/native_layout.dart';
 import 'package:liquid_shell/src/native/window_controls.dart';
+import 'package:liquid_shell/src/search/search.dart';
 import 'package:liquid_shell/src/shell/bar_measure.dart';
 import 'package:liquid_shell/src/shell/breakpoints.dart';
 import 'package:liquid_shell/src/shell/chrome_builder.dart';
@@ -84,6 +85,7 @@ class LiquidShell extends StatefulWidget {
     this.strings = const LiquidShellStrings(),
     this.nativeChrome = LiquidNativeChrome.auto,
     this.nativeSidebarFooter,
+    this.search,
     super.key,
   });
 
@@ -168,6 +170,11 @@ class LiquidShell extends StatefulWidget {
 
   /// The native sidebar's footer. The Flutter sidebar uses [sidebarFooter].
   final LiquidNativeSidebarFooter? nativeSidebarFooter;
+
+  /// The search tab's field. Required with a destination whose role is
+  /// [LiquidDestinationRole.search], and only then. Search is a tab: its
+  /// page is that destination's page, never a page pushed above the shell.
+  final LiquidSearch? search;
 
   @override
   State<LiquidShell> createState() => _LiquidShellState();
@@ -557,6 +564,38 @@ class _LiquidShellState extends State<LiquidShell>
           widget.sidebarWidth < widget.breakpoints.regular,
       'LiquidShell.sidebarWidth must be > 0 and < breakpoints.regular.',
     );
+    final searches = [
+      for (final (i, d) in destinations.indexed)
+        if (d.role == LiquidDestinationRole.search) i,
+    ];
+    assert(
+      searches.length <= 1,
+      'LiquidShell allows one search destination; got ${searches.length}.',
+    );
+    assert(
+      searches.isEmpty || searches.single == length - 1,
+      'The search destination must be the last destination.',
+    );
+    assert(
+      searches.every(
+        (i) => destinations[i].placement == LiquidPlacement.everywhere,
+      ),
+      'The search destination must be placed everywhere.',
+    );
+    assert(
+      searches.isEmpty || widget.search != null,
+      'A search destination needs LiquidShell.search.',
+    );
+    assert(
+      searches.isNotEmpty || widget.search == null,
+      'LiquidShell.search needs a destination with '
+      'LiquidDestinationRole.search.',
+    );
+    assert(
+      searches.isEmpty || widget.tabBarTrailing == null,
+      'A shell with a search destination has no tabBarTrailing: both are '
+      'the trailing ⌕.',
+    );
     return true;
   }
 
@@ -918,6 +957,7 @@ class _LiquidShellState extends State<LiquidShell>
               _covered ||
               ((state?.compact ?? false) && !_routeCurrent),
           interactive: _routeCurrent && !_guardPending,
+          searchPlaceholder: widget.search?.placeholder,
         ),
       );
     }

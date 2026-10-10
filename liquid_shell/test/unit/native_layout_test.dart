@@ -286,4 +286,105 @@ void main() {
       ),
     );
   });
+
+  group('P3b search', () {
+    const search = LiquidDestination(
+      icon: Icon(Icons.search),
+      label: 'Find',
+      role: LiquidDestinationRole.search,
+    );
+    const home = LiquidDestination(
+      icon: Icon(Icons.home),
+      label: 'Home',
+      sfSymbol: 'house',
+    );
+
+    test('a search destination needs no symbol', () {
+      expect(nativeDescribable(const [home, search], null), isTrue);
+    });
+
+    test('nativeConfigFor marks the search tab and carries pages', () {
+      final config = nativeConfigFor(
+        engaged: true,
+        destinations: const [home, search],
+        selectedIndex: 1,
+        trailing: null,
+        footer: null,
+        tint: const Color(0xFF3D5AFE),
+        dark: false,
+        rtl: false,
+        hidden: false,
+        interactive: true,
+        searchPlaceholder: 'Songs, places',
+        pageStacks: const {
+          1: [LiquidNativePage(title: 'Search'), LiquidNativePage(title: 'Hồ')],
+        },
+      );
+      expect(config.tabs.map((t) => t.search), [false, true]);
+      expect(config.tabs.first.pages, isEmpty);
+      expect(config.tabs.last.pages.map((p) => p.title), ['Search', 'Hồ']);
+      expect(config.search?.placeholder, 'Songs, places');
+    });
+
+    test('no search destination: no search config', () {
+      final config = nativeConfigFor(
+        engaged: true,
+        destinations: const [home],
+        selectedIndex: 0,
+        trailing: null,
+        footer: null,
+        tint: const Color(0xFF3D5AFE),
+        dark: false,
+        rtl: false,
+        hidden: false,
+        interactive: true,
+        searchPlaceholder: 'ignored',
+      );
+      expect(config.search, isNull);
+    });
+
+    test('Tab.search and Config.search are set together', () {
+      for (final destinations in const [
+        [home],
+        [home, search],
+      ]) {
+        final config = nativeConfigFor(
+          engaged: true,
+          destinations: destinations,
+          selectedIndex: 0,
+          trailing: null,
+          footer: null,
+          tint: const Color(0xFF3D5AFE),
+          dark: false,
+          rtl: false,
+          hidden: false,
+          interactive: true,
+        );
+        expect(
+          config.search != null,
+          config.tabs.any((t) => t.search),
+          reason: '$destinations',
+        );
+      }
+    });
+
+    test('nativePageBarFor: the search tab only, while engaged (P3b-1)', () {
+      expect(
+        nativePageBarFor(engaged: true, selected: 1, searchIndex: 1),
+        isTrue,
+      );
+      expect(
+        nativePageBarFor(engaged: true, selected: 0, searchIndex: 1),
+        isFalse,
+      );
+      expect(
+        nativePageBarFor(engaged: false, selected: 1, searchIndex: 1),
+        isFalse,
+      );
+      expect(
+        nativePageBarFor(engaged: true, selected: 0, searchIndex: null),
+        isFalse,
+      );
+    });
+  });
 }
