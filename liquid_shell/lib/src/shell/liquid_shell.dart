@@ -231,6 +231,8 @@ class _LiquidShellState extends State<LiquidShell>
   // The scroll offset native has for the top page (spec P3b §7.7).
   _PageRecord? _scrollRecord;
   double _scrollSent = 0;
+  // The top page that had no offset at the last sync (N-4).
+  _PageRecord? _scrollWaited;
   bool _scrollScheduled = false;
   // The destination the fallback's collapsed circle returns to.
   int _previousIndex = 0;
@@ -451,7 +453,10 @@ class _LiquidShellState extends State<LiquidShell>
   }
 
   /// The native back button (spec P3b §7.6): a proposal for the selected
-  /// tab's top page. `maybePop` runs its PopScope.
+  /// tab's top page. `maybePop` runs its PopScope. Under a sheet in the
+  /// tab's navigator the kept stack shows a live back button: it pops the
+  /// sheet, as the sheet's barrier does. Above the shell the chrome is not
+  /// interactive, and nothing pops.
   void _onNativeBack(int tab) {
     if (tab !=
         resolveSelectedIndex(
@@ -460,7 +465,10 @@ class _LiquidShellState extends State<LiquidShell>
         )) {
       return;
     }
-    unawaited(_topPageEntry?.navigator?.maybePop());
+    final kept = _routeCurrent && !_covered
+        ? _stackRecords[tab]?.lastOrNull?.entry
+        : null;
+    unawaited((_topPageEntry ?? kept)?.navigator?.maybePop());
   }
 
   /// Sends the top page's offset after the frame: one message per frame,
@@ -482,9 +490,19 @@ class _LiquidShellState extends State<LiquidShell>
       return;
     }
     // Not laid out yet (a new page, or one moved with a GlobalKey): its
-    // scroll position reports its offset after its first layout.
-    final offset = top.offset;
-    if (offset == null) return;
+    // scroll position reports its offset after its first layout, in that
+    // frame's post-frame callbacks. Still nothing a frame later: the page
+    // has no scroll view and sits at its top. Native may reuse a host for
+    // it whose proxy keeps the old offset, so 0 is sent.
+    var offset = top.offset;
+    if (offset == null) {
+      if (!identical(top, _scrollWaited)) {
+        _scrollWaited = top;
+        _scheduleScrollSync();
+        return;
+      }
+      offset = 0;
+    }
     // A new top page is always sent, once per navigation: native may
     // reuse a host for it (a same-count stack, pushReplacement) whose
     // proxy keeps the old offset.

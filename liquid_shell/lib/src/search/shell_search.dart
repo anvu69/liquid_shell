@@ -116,7 +116,9 @@ final class ShellSearch implements SearchDriver {
   /// sends it, empty or not. A changed state (an iPad crossing the size
   /// class) comes from a live field the user may be typing in: the user's
   /// own text is never sent back to it (the one-way rule, spec §7.4); only
-  /// a text the app set is replayed.
+  /// a text the app set is replayed. A reconnect whose first state differs
+  /// looks the same here: the plugin's installer carries the old field's
+  /// text to the new one natively.
   void replay({required bool reconnect}) {
     if (!reconnect && _userText) return;
     _sentShown = false;

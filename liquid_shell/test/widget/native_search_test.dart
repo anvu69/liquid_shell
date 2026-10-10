@@ -1257,4 +1257,109 @@ void main() {
       expect(_searchStacks(fake, from), everyElement(['Find']));
     });
   });
+
+  group('integration carry-overs (Task 11)', () {
+    testWidgets('N-4: a replacing page without a scroll view sends zero: '
+        'the reused native host drops the old offset', (tester) async {
+      final (fake, _, _) = await _pump(tester);
+      await _pushDetail(tester);
+      _position(tester, 'Detail').jumpTo(300);
+      await tester.pump();
+      expect(fake.pageScrolls.last, (2, 300.0));
+      _searchNavigator.currentState!
+          .pushReplacement(
+            MaterialPageRoute<void>(
+              builder: (_) =>
+                  const LiquidPage(title: 'Plain', child: Text('No scroll')),
+            ),
+          )
+          .ignore();
+      await tester.pumpAndSettle();
+      expect(fake.last.tabs.last.pages.map((p) => p.title), [
+        'Search',
+        'Plain',
+      ]);
+      expect(fake.pageScrolls.last, (2, 0.0));
+    });
+
+    testWidgets('N-4: a page whose scroll view reports late still sends its '
+        'own offset', (tester) async {
+      final (fake, _, _) = await _pump(tester);
+      await _pushDetail(tester);
+      _position(tester, 'Detail').jumpTo(300);
+      await tester.pump();
+      fake.pageScrolls.clear();
+      // The new page has no scroll view at first, then gets one.
+      final show = ValueNotifier(false);
+      addTearDown(show.dispose);
+      _searchNavigator.currentState!
+          .pushReplacement(
+            MaterialPageRoute<void>(
+              builder: (_) => LiquidPage(
+                title: 'Late',
+                child: ValueListenableBuilder(
+                  valueListenable: show,
+                  builder: (_, shown, _) => shown
+                      ? const TestPage(label: 'Late')
+                      : const Text('Loading'),
+                ),
+              ),
+            ),
+          )
+          .ignore();
+      await tester.pumpAndSettle();
+      show.value = true;
+      await tester.pumpAndSettle();
+      _position(tester, 'Late').jumpTo(120);
+      await tester.pump();
+      await tester.pump();
+      expect(fake.pageScrolls.last, (2, 120.0));
+    });
+
+    testWidgets('N-5: the native back under a sheet in the tab closes the '
+        'sheet, as its barrier does', (tester) async {
+      final (fake, _, _) = await _pump(tester);
+      await _pushDetail(tester);
+      showModalBottomSheet<void>(
+        context: tester.element(find.byKey(const ValueKey('list-Detail'))),
+        builder: (_) => const SizedBox(height: 200, child: Text('Sheet')),
+      ).ignore();
+      await tester.pumpAndSettle();
+      expect(find.text('Sheet'), findsOneWidget);
+      expect(fake.last.interactive, isTrue, reason: 'the back is live');
+      fake.emitNative(const LiquidNativeBackTapped(2));
+      await tester.pumpAndSettle();
+      expect(find.text('Sheet'), findsNothing);
+      expect(find.byKey(const ValueKey('list-Detail')), findsOneWidget);
+      expect(fake.last.tabs.last.pages.map((p) => p.title), [
+        'Search',
+        'Hồ Hoàn Kiếm',
+      ]);
+    });
+
+    testWidgets('N-5: a back tap under a page above the shell pops nothing '
+        '(the chrome is not interactive there)', (tester) async {
+      final (fake, _, _) = await _pump(tester);
+      await _pushDetail(tester);
+      final root = Navigator.of(
+        tester.element(find.byKey(const ValueKey('list-Detail'))),
+        rootNavigator: true,
+      );
+      root
+          .push(
+            MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(body: Text('Above')),
+            ),
+          )
+          .ignore();
+      await tester.pumpAndSettle();
+      expect(fake.last.interactive, isFalse);
+      fake.emitNative(const LiquidNativeBackTapped(2));
+      await tester.pumpAndSettle();
+      expect(find.text('Above'), findsOneWidget);
+      root.pop();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('list-Detail')), findsOneWidget);
+    });
+  });
 }
