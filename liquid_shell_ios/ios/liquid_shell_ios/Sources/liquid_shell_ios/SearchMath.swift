@@ -1,4 +1,4 @@
-import Foundation
+import UIKit
 
 /// Where the search tab's field goes (spec P3b §7.2).
 enum SearchPlacement: Equatable {
@@ -33,5 +33,19 @@ enum SearchMath {
     return SearchTabStyle(
       placement: .automatic, hidesWhenScrolling: nil, largeTitle: rootLargeTitle ?? true,
       prominent: osMajor >= 27)
+  }
+
+  /// Flutter's top inset while a page's proxy scroll view is scrolled: the
+  /// resting value, so the padding does not shrink as the large title
+  /// collapses (spec §7.7). At rest: the current value.
+  static func heldTop(current: CGFloat, resting: CGFloat, scrolled: Bool) -> CGFloat {
+    scrolled ? max(current, resting) : current
+  }
+
+  /// Whether a field frame moved enough to send (≥ 0.5pt on any edge).
+  static func frameChanged(_ old: NativeRect?, _ new: NativeRect) -> Bool {
+    guard let old else { return true }
+    return abs(old.x - new.x) >= 0.5 || abs(old.y - new.y) >= 0.5
+      || abs(old.width - new.width) >= 0.5 || abs(old.height - new.height) >= 0.5
   }
 }

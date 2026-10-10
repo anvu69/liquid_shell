@@ -32,6 +32,44 @@ final class ShellNavController: UINavigationController {
     interactivePopGestureRecognizer?.isEnabled = false
     interactiveContentPopGestureRecognizer?.isEnabled = false
   }
+
+  /// Mirrors the tab's Flutter pages (spec §7.6): push for a longer stack,
+  /// pop for a shorter one, retitle in place. The root's title is the first
+  /// page's, or the destination's label without pages. Each pushed page's
+  /// back button only proposes (`onBackTapped`); Dart pops the Flutter
+  /// route and the next stack pops here.
+  func applyPages(
+    _ pages: [NativePage], rootTitle: String, tabIndex: Int,
+    events: NativeShellFlutterApiProtocol
+  ) {
+    let wanted = pages.isEmpty ? [NativePage(title: rootTitle, largeTitle: nil)] : pages
+    rootHost.title = wanted[0].title
+    var hosts = viewControllers.compactMap { $0 as? PageHostController }
+    if hosts.count > wanted.count { hosts = Array(hosts.prefix(wanted.count)) }
+    while hosts.count < wanted.count {
+      let host = PageHostController()
+      host.hidesBottomBarWhenPushed = Self.hidesBarWhenPushed
+      host.onBack = {
+        events.onBackTapped(tab: Int64(tabIndex)) { result in
+          #if DEBUG
+            if case .failure(let error) = result {
+              NSLog("[liquid_shell] sending onBackTapped to Dart failed: %@", String(describing: error))
+            }
+          #endif
+        }
+      }
+      hosts.append(host)
+    }
+    for (host, page) in zip(hosts, wanted).dropFirst() {
+      host.title = page.title
+      host.navigationItem.largeTitleDisplayMode = (page.largeTitle ?? false) ? .always : .never
+    }
+    guard hosts.map(ObjectIdentifier.init) != viewControllers.map(ObjectIdentifier.init) else {
+      return
+    }
+    let animated = viewIfLoaded?.window != nil && !UIAccessibility.isReduceMotionEnabled
+    setViewControllers(hosts, animated: animated)
+  }
 }
 
 /// One clear page of a `ShellNavController`: a title for the native bar
@@ -41,9 +79,53 @@ final class ShellNavController: UINavigationController {
 final class PageHostController: UIViewController {
   private var shell: NativeTabsController? { tabBarController as? NativeTabsController }
 
+  /// Invisible scroll view UIKit reads for the large title's collapse and
+  /// the scroll-edge effect, moved by code from Flutter's scroll offset
+  /// (spec §7.7; research §4.1).
+  let proxy = UIScrollView()
+  /// The top safe-area inset with the proxy at rest.
+  private(set) var restingTop: CGFloat = 0
+  private var offset: Double = 0
+  /// The native back button's proposal (set for pushed pages).
+  var onBack: (() -> Void)? {
+    didSet {
+      navigationItem.backAction = onBack.map { back in UIAction { _ in back() } }
+    }
+  }
+
+  /// Flutter's top inset for this page: held while scrolled.
+  var flutterTop: CGFloat {
+    SearchMath.heldTop(current: view.safeAreaInsets.top, resting: restingTop, scrolled: offset > 0)
+  }
+
+  func setScrollOffset(_ value: Double) {
+    loadViewIfNeeded()
+    offset = max(0, value)
+    // From the resting top, not the current inset: once the title has
+    // collapsed the proxy's inset is the small bar's, and offset 0 must pull
+    // the large title back out, as a real scroll view does.
+    let top = max(restingTop, proxy.adjustedContentInset.top)
+    proxy.contentOffset.y = -top + CGFloat(offset)
+  }
+
+  /// Re-reads the resting top: at rest, or always with [force] (a search
+  /// activation hides the large title on purpose; that is not a scroll).
+  func rereadRestingTop(force: Bool = false) {
+    if force || offset <= 0 { restingTop = view.safeAreaInsets.top }
+  }
+
   override func viewDidLoad() {
     super.viewDidLoad()
     view.backgroundColor = .clear
+    proxy.frame = view.bounds
+    proxy.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    proxy.isUserInteractionEnabled = false
+    proxy.backgroundColor = .clear
+    proxy.showsVerticalScrollIndicator = false
+    proxy.contentInsetAdjustmentBehavior = .always
+    proxy.contentSize = CGSize(width: 1, height: 100_000)
+    view.addSubview(proxy)
+    setContentScrollView(proxy, for: .top)
   }
 
   override func viewIsAppearing(_ animated: Bool) {
@@ -58,6 +140,7 @@ final class PageHostController: UIViewController {
 
   override func viewSafeAreaInsetsDidChange() {
     super.viewSafeAreaInsetsDidChange()
+    rereadRestingTop()
     shell?.syncFlutter()
   }
 

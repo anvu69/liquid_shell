@@ -5,11 +5,12 @@ import UIKit
 /// on the transparent "background" of the tab bar controller go to the
 /// Flutter view underneath (spec §5.3).
 ///
-/// Tracked debt: "background" means the selected tab's host view and its
-/// ancestors up to and including the tab bar controller's view. That is
-/// public API, but a new iOS that reshapes the view tree breaks it. The
-/// example's XCTests hit-test UIKit's real tree on the newest simulator;
-/// real touches are checked by hand on every Xcode/iOS bump.
+/// Tracked debt: "background" means the selected tab's host view, or its
+/// navigation controller's top page, and every ancestor up to and including
+/// the tab bar controller's view. That is public API, but a new iOS that
+/// reshapes the view tree breaks it. The example's XCTests hit-test UIKit's
+/// real tree on the newest simulator; real touches are checked by hand on
+/// every Xcode/iOS bump.
 @available(iOS 26.0, *)
 final class PassThroughView: UIView {
   weak var shell: NativeTabsController?
@@ -20,19 +21,25 @@ final class PassThroughView: UIView {
       return super.hitTest(point, with: event)
     }
     let hit = tabsView.hitTest(convert(point, to: tabsView), with: event)
-    guard Self.isBackground(hit, selected: shell.selectedViewController?.viewIfLoaded, tabsView: tabsView)
-    else { return hit }
+    let selected = shell.selectedViewController
+    // A tab with a navigation bar: the chain starts at its top page, so the
+    // bar, the back button and the search field stay with UIKit (spec P3b
+    // §7.8).
+    let top = (selected as? UINavigationController)?.topViewController?.viewIfLoaded
+      ?? selected?.viewIfLoaded
+    guard Self.isBackground(hit, chainFrom: top, tabsView: tabsView) else { return hit }
     // Platform views inside Flutter are subviews of the Flutter view, so its
     // own hitTest finds them.
     return flutterView.hitTest(convert(point, to: flutterView), with: event)
   }
 
   /// nil (chrome hidden, not interactive, or fully transparent), the tab bar
-  /// controller's own view, or the selected host and its ancestors.
-  static func isBackground(_ hit: UIView?, selected: UIView?, tabsView: UIView) -> Bool {
+  /// controller's own view, or a view on the chain from [top] (the selected
+  /// tab's view, or its navigation controller's top page) up to it.
+  static func isBackground(_ hit: UIView?, chainFrom top: UIView?, tabsView: UIView) -> Bool {
     guard let hit else { return true }
     if hit === tabsView { return true }
-    var node = selected
+    var node = top
     while let current = node {
       if current === hit { return true }
       if current === tabsView { break }

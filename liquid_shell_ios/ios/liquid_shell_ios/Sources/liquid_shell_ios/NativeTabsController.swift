@@ -85,6 +85,7 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       self?.send("onSearchActiveChanged") {
         self?.events.onSearchActiveChanged(active: active, completion: $0)
       }
+      if let self, let index = self.searchIndex { self.topHost(ofTab: index)?.rereadRestingTop(force: true) }
       self?.syncFlutter()
     }
     searchBridge.onSubmit = { [weak self] text in
@@ -116,6 +117,15 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     view.backgroundColor = .clear
     view.isHidden = true
     footer.onTap = { [weak self] in self?.footerTapped() }
+    // The iPhone field rides on the keyboard: publish its end position.
+    for name in [
+      UIResponder.keyboardDidChangeFrameNotification, UIResponder.keyboardDidHideNotification,
+    ] {
+      keyboardObservers.append(
+        NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) {
+          [weak self] _ in self?.publishSearchField()
+        })
+    }
     registerForTraitChanges([UITraitHorizontalSizeClass.self]) {
       (self: NativeTabsController, _: UITraitCollection) in
       // Dormant (no tabs in the config): leave UIKit's tabs and selection
@@ -128,6 +138,10 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       // too (`viewDidLayoutSubviews`), and no test tells the two apart.
       self.syncFlutter()
     }
+  }
+
+  deinit {
+    for observer in keyboardObservers { NotificationCenter.default.removeObserver(observer) }
   }
 
   override func viewDidLayoutSubviews() {
@@ -164,6 +178,10 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       }
       showTabs(new)
       applySearch(new)
+      for (index, nav) in navControllers where new.tabs.indices.contains(index) {
+        nav.applyPages(
+          new.tabs[index].pages, rootTitle: new.tabs[index].title, tabIndex: index, events: events)
+      }
       select(Int(new.selectedIndex))
     }
     setFooter(new.footer)
@@ -381,7 +399,14 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     if chromeVisible, let host = selectedViewController, host.isViewLoaded {
       let frame = host.view.convert(host.view.bounds, to: root)
       if flutter.view.frame != frame { flutter.view.frame = frame }
-      var want = ShellInsets(host.view.safeAreaInsets)
+      // A navigation controller's top page carries the bar, the large title
+      // and the stacked field in its safe area; its frame slides during a
+      // push, so the frame above stays the tab's (spec §7.9).
+      let page = (host as? UINavigationController)?.topViewController
+      var want = ShellInsets(page?.viewIfLoaded?.safeAreaInsets ?? host.view.safeAreaInsets)
+      if let page = page as? PageHostController, page.isViewLoaded {
+        want.top = Double(page.flutterTop)
+      }
       // Portrait overlay: the tab bar hides and safe.top drops; keep the
       // closed value so Flutter sees no metrics change.
       if currentSidebar() == .overlay {
@@ -402,6 +427,7 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     }
     publishState()
     publishWindowControls()
+    publishSearchField()
     scheduleControlsReread()
   }
 
@@ -436,7 +462,9 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   /// alone would read as a cluster (`ShellMath.fallbackClusterTop`). The
   /// compact bar is at the bottom: the top is Flutter's, so it is read.
   func windowControls() -> NativeWindowControls {
-    if chromeVisible, !isCompact { return NativeWindowControls(leading: 0, top: 0) }
+    if chromeVisible, !isCompact || selectedHasNavigationBar {
+      return NativeWindowControls(leading: 0, top: 0)
+    }
     return readWindowControls(flutter.viewIfLoaded)
   }
 
@@ -526,8 +554,14 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
         _ = tabBarController(self, shouldSelectTab: trailingTab)
       case .footer:
         footerTapped()
-      case .searchField, .searchCancel, .back:
-        break
+      case .searchField:
+        // A tap on the field: UIKit presents the search and reports it.
+        guard isSearchSelected else { return }
+        searchBridge.activate()
+      case .searchCancel:
+        searchBridge.debugCancel()
+      case .back:
+        topHost(ofTab: index)?.onBack?()
       }
     #endif
   }
@@ -556,10 +590,90 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     }
   }
 
-  // MARK: - Pages (P3b-1 Task 3 stubs; Task 5 implements)
+  // MARK: - Pages (spec P3b §7.6, §7.7)
 
-  func setPageScroll(tab: Int, offset: Double) {}
-  func debugSnapshot() -> NativeDebugSnapshot { .empty }
+  /// The top page of tab [index], when it has a native navigation bar.
+  func topHost(ofTab index: Int) -> PageHostController? {
+    navControllers[index]?.topViewController as? PageHostController
+  }
+
+  private var selectedHasNavigationBar: Bool { selectedViewController is ShellNavController }
+
+  /// The selected destination's index in Dart's list, nil when none is. The
+  /// search destination is read from the selected controller
+  /// (`isSearchSelected`): `selectedTab` can name a replaced search tab.
+  private var selectedDestination: Int? {
+    if isSearchSelected { return searchIndex }
+    return destinationTabs.firstIndex { $0 === selectedTab && $0 !== searchTab }
+  }
+
+  /// The selected destination's index in Dart's list (0 when none is).
+  var selectedDestinationIndex: Int { selectedDestination ?? 0 }
+
+  /// The top page's scroll offset (proxy, spec §7.7).
+  func setPageScroll(tab: Int, offset: Double) {
+    guard offset.isFinite, let host = topHost(ofTab: tab) else { return }
+    host.setScrollOffset(offset)
+    syncFlutter()
+  }
+
+  // MARK: - Search field frame (spec P3b §7.5)
+
+  private var lastField: NativeRect?
+  private var keyboardObservers: [NSObjectProtocol] = []
+
+  /// The search field's frame in the Flutter view, or zero when the search
+  /// tab is not selected or the field is not shown (spec §7.5).
+  func currentFieldFrame() -> NativeRect {
+    let zero = NativeRect(x: 0, y: 0, width: 0, height: 0)
+    let field = searchBridge.controller.searchBar.searchTextField
+    guard chromeVisible, isSearchSelected, field.window != nil,
+      let flutterView = flutter.viewIfLoaded
+    else { return zero }
+    var node: UIView? = field
+    while let current = node {
+      if current.isHidden || current.alpha < 0.01 { return zero }
+      node = current.superview
+    }
+    let frame = field.convert(field.bounds, to: flutterView)
+    return NativeRect(x: frame.minX, y: frame.minY, width: frame.width, height: frame.height)
+  }
+
+  func publishSearchField() {
+    guard dartAttached, searchTab != nil else { return }
+    let frame = currentFieldFrame()
+    guard SearchMath.frameChanged(lastField, frame) else { return }
+    lastField = frame
+    send("onSearchFieldChanged", onFailure: { [weak self] in self?.lastField = nil }) {
+      self.events.onSearchFieldChanged(frame: frame, completion: $0)
+    }
+  }
+
+  /// Debug builds: the native search and page state (integration tests).
+  func debugSnapshot() -> NativeDebugSnapshot {
+    #if DEBUG
+      let nav = searchIndex.flatMap { navControllers[$0] }
+      let placement: String
+      switch nav?.rootHost.navigationItem.searchBarPlacement {
+      case .stacked?: placement = "stacked"
+      case .inline?: placement = "inline"
+      case .integrated?: placement = "integrated"
+      case .integratedCentered?: placement = "integratedCentered"
+      case .integratedButton?: placement = "integratedButton"
+      default: placement = ""
+      }
+      return NativeDebugSnapshot(
+        selectedTab: selectedDestination.map { "destination\($0)" } ?? "",
+        searchActive: searchBridge.controller.isActive,
+        searchText: searchBridge.text,
+        placement: placement,
+        pageTitles: nav?.viewControllers.map { $0.title ?? "" } ?? [],
+        fieldFrame: currentFieldFrame(),
+        firstResponderIsSearch: searchBridge.controller.searchBar.searchTextField.isFirstResponder)
+    #else
+      return .empty
+    #endif
+  }
 }
 
 /// The empty, transparent controller of every tab. The Flutter view never

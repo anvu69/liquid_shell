@@ -133,6 +133,19 @@ final class SearchMathTests: XCTestCase {
     XCTAssertFalse(SearchMath.style(isPad: false, osMajor: 26, rootLargeTitle: false).largeTitle)
     XCTAssertTrue(SearchMath.style(isPad: true, osMajor: 27, rootLargeTitle: true).largeTitle)
   }
+
+  func testTheTopIsHeldOnlyWhileTheProxyIsScrolled() {
+    XCTAssertEqual(SearchMath.heldTop(current: 116, resting: 168.7, scrolled: true), 168.7)
+    XCTAssertEqual(SearchMath.heldTop(current: 116, resting: 168.7, scrolled: false), 116)
+    XCTAssertEqual(SearchMath.heldTop(current: 172, resting: 168.7, scrolled: true), 172)
+  }
+
+  func testAFieldFrameChangeNeedsHalfAPoint() {
+    let a = NativeRect(x: 8, y: 490, width: 330, height: 48)
+    XCTAssertTrue(SearchMath.frameChanged(nil, a))
+    XCTAssertFalse(SearchMath.frameChanged(a, NativeRect(x: 8.2, y: 490.4, width: 330, height: 48)))
+    XCTAssertTrue(SearchMath.frameChanged(a, NativeRect(x: 8, y: 489, width: 330, height: 48)))
+  }
 }
 
 final class ArgbColorTests: XCTestCase {
@@ -207,13 +220,33 @@ final class PassThroughTests: XCTestCase {
     transition.addSubview(host)
     tabsView.addSubview(chrome)
 
-    XCTAssertTrue(PassThroughView.isBackground(nil, selected: host, tabsView: tabsView))
-    XCTAssertTrue(PassThroughView.isBackground(tabsView, selected: host, tabsView: tabsView))
-    XCTAssertTrue(PassThroughView.isBackground(host, selected: host, tabsView: tabsView))
-    XCTAssertTrue(PassThroughView.isBackground(transition, selected: host, tabsView: tabsView))
-    XCTAssertFalse(PassThroughView.isBackground(chrome, selected: host, tabsView: tabsView))
+    XCTAssertTrue(PassThroughView.isBackground(nil, chainFrom: host, tabsView: tabsView))
+    XCTAssertTrue(PassThroughView.isBackground(tabsView, chainFrom: host, tabsView: tabsView))
+    XCTAssertTrue(PassThroughView.isBackground(host, chainFrom: host, tabsView: tabsView))
+    XCTAssertTrue(PassThroughView.isBackground(transition, chainFrom: host, tabsView: tabsView))
+    XCTAssertFalse(PassThroughView.isBackground(chrome, chainFrom: host, tabsView: tabsView))
     // No selected host yet: only nil and the tabs view are background.
-    XCTAssertFalse(PassThroughView.isBackground(transition, selected: nil, tabsView: tabsView))
+    XCTAssertFalse(PassThroughView.isBackground(transition, chainFrom: nil, tabsView: tabsView))
+  }
+
+  func testTheChainStartsAtANavigationControllersTopPage() {
+    let tabsView = UIView()
+    let navView = UIView()
+    let transition = UIView()
+    let wrapper = UIView()
+    let top = UIView()
+    let bar = UIView()
+    tabsView.addSubview(navView)
+    navView.addSubview(transition)
+    transition.addSubview(wrapper)
+    wrapper.addSubview(top)
+    navView.addSubview(bar)
+    for view in [top, wrapper, transition, navView, tabsView] {
+      XCTAssertTrue(PassThroughView.isBackground(view, chainFrom: top, tabsView: tabsView))
+    }
+    XCTAssertFalse(
+      PassThroughView.isBackground(bar, chainFrom: top, tabsView: tabsView),
+      "the navigation bar stays with UIKit")
   }
 }
 
@@ -1652,5 +1685,135 @@ extension NativeTabsTests {
     let tabs = try installedSearchShell(selected: 2, reports: true, sizeClass: .compact)
     XCTAssertEqual(tabs.selectedTab?.identifier, "destination0", "Reports is left out; Home, not Find")
     XCTAssertFalse(tabs.selectedTab === tabs.searchTab)
+  }
+
+  private func titles(_ nav: ShellNavController) -> [String] {
+    nav.viewControllers.map { $0.title ?? "" }
+  }
+
+  func testPagesArePushedAndPoppedWithTheirTitles() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let nav = try XCTUnwrap(tabs.navControllers[2])
+    XCTAssertEqual(titles(nav), ["Find"], "no pages: the destination's label")
+    tabs.apply(
+      searchConfig(
+        selected: 2,
+        pages: [NativePage(title: "Search", largeTitle: nil), NativePage(title: "Hồ Hoàn Kiếm")]))
+    settle()
+    XCTAssertEqual(titles(nav), ["Search", "Hồ Hoàn Kiếm"])
+    let top = try XCTUnwrap(nav.topViewController as? PageHostController)
+    XCTAssertNotNil(top.navigationItem.backAction, "the back tap is a proposal")
+    XCTAssertEqual(top.navigationItem.largeTitleDisplayMode, .never)
+    XCTAssertEqual(top.hidesBottomBarWhenPushed, ShellNavController.hidesBarWhenPushed)
+    tabs.apply(searchConfig(selected: 2, pages: [NativePage(title: "Search", largeTitle: nil)]))
+    settle()
+    XCTAssertEqual(titles(nav), ["Search"])
+  }
+
+  func testTheNativeBackButtonOnlyProposes() throws {
+    let tabs = try installedSearchShell(
+      selected: 2, pages: [NativePage(title: "Search"), NativePage(title: "Detail")])
+    let nav = try XCTUnwrap(tabs.navControllers[2])
+    let top = try XCTUnwrap(nav.topViewController as? PageHostController)
+    top.onBack?()
+    XCTAssertEqual(events.sent.last, "back 2")
+    XCTAssertEqual(nav.viewControllers.count, 2, "Dart pops; native follows")
+  }
+
+  func testFlutterKeepsTheTabsFrameAndGetsTheTopPagesInsets() throws {
+    let tabs = try installedSearchShell(
+      selected: 2, pages: [NativePage(title: "Search"), NativePage(title: "Detail")])
+    let root = try XCTUnwrap(tabs.parent?.view)
+    let nav = try XCTUnwrap(tabs.navControllers[2])
+    let top = try XCTUnwrap(nav.topViewController)
+    XCTAssertEqual(tabs.flutter.view.frame, nav.view.convert(nav.view.bounds, to: root))
+    XCTAssertEqual(
+      tabs.flutter.view.safeAreaInsets.top, top.view.safeAreaInsets.top, accuracy: 0.5,
+      "the native bar is Flutter's top padding")
+  }
+
+  func testTheProxyCollapsesTheLargeTitleWhileFlutterKeepsItsTop() throws {
+    try requirePhone()
+    let tabs = try installedSearchShell(selected: 2)
+    let host = try XCTUnwrap(tabs.topHost(ofTab: 2))
+    let restingFlutterTop = tabs.flutter.view.safeAreaInsets.top
+    let restingHostTop = host.view.safeAreaInsets.top
+    tabs.setPageScroll(tab: 2, offset: 400)
+    settle()
+    XCTAssertLessThan(host.view.safeAreaInsets.top, restingHostTop - 20, "the title collapsed")
+    XCTAssertEqual(
+      tabs.flutter.view.safeAreaInsets.top, restingFlutterTop, accuracy: 0.5,
+      "held: Flutter's padding does not move under the finger")
+    tabs.setPageScroll(tab: 2, offset: 0)
+    settle()
+    XCTAssertEqual(host.view.safeAreaInsets.top, restingHostTop, accuracy: 0.5)
+  }
+
+  func testTheFieldFrameIsPublishedInFlutterCoordinatesWhileSelected() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let frame = try XCTUnwrap(events.fieldFrames.last)
+    XCTAssertGreaterThan(frame.width, 100, "the field is on screen")
+    XCTAssertGreaterThan(frame.height, 30)
+    tabs.apply(searchConfig(selected: 0))
+    settle()
+    XCTAssertEqual(events.fieldFrames.last?.width, 0, "not selected: zero")
+  }
+
+  func testWindowControlsAreZeroUnderTheSearchNavigationBar() throws {
+    let tabs = try installedSearchShell(selected: 2, sizeClass: .compact)
+    let windowed = NativeWindowControls(leading: 66, top: 44)
+    tabs.readWindowControls = { _ in windowed }
+    XCTAssertEqual(tabs.windowControls(), NativeWindowControls(leading: 0, top: 0))
+    tabs.apply(searchConfig(selected: 0))
+    settle()
+    XCTAssertEqual(tabs.windowControls(), windowed, "Home has no native bar: the compact read")
+  }
+
+  func testInEveryPhaseTheFieldIsNativeAndTheBodyIsFlutters() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let root = try XCTUnwrap(tabs.parent?.view)
+    func fieldCentre() throws -> CGPoint {
+      let field = tabs.searchBridge.controller.searchBar.searchTextField
+      XCTAssertNotNil(field.window, "the field is on screen")
+      let frame = field.convert(field.bounds, to: root)
+      return CGPoint(x: frame.midX, y: frame.midY)
+    }
+    // Selected.
+    XCTAssertTrue(isNative(try hit(tabs, try fieldCentre()), tabs), "selected: the field")
+    XCTAssertTrue(
+      try hit(tabs, CGPoint(x: root.bounds.midX, y: root.bounds.midY)) === tabs.flutter.view,
+      "selected: the body")
+    // Active.
+    tabs.setSearchActive(true)
+    settle()
+    XCTAssertTrue(isNative(try hit(tabs, try fieldCentre()), tabs), "active: the field")
+    let body = CGPoint(x: root.bounds.midX, y: root.bounds.height * 0.35)
+    XCTAssertTrue(try hit(tabs, body) === tabs.flutter.view, "active: the body")
+    // Inert under a dialog.
+    tabs.apply(searchConfig(selected: 2, interactive: false))
+    XCTAssertTrue(try hit(tabs, try fieldCentre()) === tabs.flutter.view, "inert")
+  }
+
+  func testAPushedPagesBackButtonIsNative() throws {
+    let tabs = try installedSearchShell(
+      selected: 2, pages: [NativePage(title: "Search"), NativePage(title: "Detail")])
+    let root = try XCTUnwrap(tabs.parent?.view)
+    let bar = try XCTUnwrap(tabs.navControllers[2]).navigationBar
+    let frame = bar.convert(bar.bounds, to: root)
+    XCTAssertTrue(isNative(try hit(tabs, CGPoint(x: frame.minX + 38, y: frame.midY)), tabs))
+  }
+
+  func testTheDebugSnapshotDescribesTheSearchTab() throws {
+    let tabs = try installedSearchShell(
+      selected: 2, pages: [NativePage(title: "Search"), NativePage(title: "Detail")])
+    tabs.setSearchText("ho")
+    let snapshot = tabs.debugSnapshot()
+    XCTAssertEqual(snapshot.selectedTab, "destination2")
+    XCTAssertEqual(snapshot.searchText, "ho")
+    XCTAssertEqual(snapshot.pageTitles, ["Search", "Detail"])
+    if UIDevice.current.userInterfaceIdiom == .pad {
+      XCTAssertEqual(snapshot.placement, "stacked")
+    }
+    XCTAssertFalse(snapshot.searchActive)
   }
 }
