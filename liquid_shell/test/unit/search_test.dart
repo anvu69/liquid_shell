@@ -125,6 +125,81 @@ void main() {
       expect(driver.calls, isEmpty, reason: 'no setText back for user edits');
     });
 
+    test('the app setting the same text while composing changes nothing '
+        '(review I-1)', () {
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      final driver = _Driver();
+      attachSearchDriver(controller, driver);
+      var heard = 0;
+      controller.addListener(() {
+        heard++;
+        final mirrored = controller.value.text;
+        controller.text = mirrored;
+      });
+      applySearchEdit(
+        controller,
+        const LiquidSearchValue(text: 'か', composing: true, active: true),
+      );
+      expect(driver.calls, isEmpty);
+      expect(controller.value.composing, isTrue);
+      expect(heard, 1);
+    });
+
+    test('value= is the app path: a text change reaches the field '
+        '(review I-2)', () {
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      final driver = _Driver();
+      attachSearchDriver(controller, driver);
+      controller.value = controller.value.copyWith(text: 'x');
+      expect(controller.text, 'x');
+      expect(driver.calls, ['text x']);
+    });
+
+    test('value= keeps the platform-owned active and composing '
+        '(review I-2)', () {
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      final driver = _Driver();
+      attachSearchDriver(controller, driver);
+      var heard = 0;
+      controller
+        ..addListener(() => heard++)
+        ..value = controller.value.copyWith(active: true, composing: true);
+      expect(controller.isActive, isFalse);
+      expect(controller.value.composing, isFalse);
+      expect(heard, 0);
+      expect(driver.calls, isEmpty);
+
+      applySearchEdit(
+        controller,
+        const LiquidSearchValue(text: 'か', composing: true, active: true),
+      );
+      controller.value = controller.value.copyWith(scopeIndex: 1);
+      expect(
+        controller.value,
+        const LiquidSearchValue(
+          text: 'か',
+          composing: true,
+          active: true,
+          scopeIndex: 1,
+        ),
+      );
+      expect(driver.calls, isEmpty, reason: 'same text: no setText');
+
+      controller.value = controller.value.copyWith(text: 'き');
+      expect(controller.value.composing, isFalse);
+      expect(controller.isActive, isTrue);
+      expect(driver.calls, ['text き']);
+    });
+
+    test('a negative scopeIndex asserts (review M-3)', () {
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      expect(() => controller.scopeIndex = -1, throwsAssertionError);
+    });
+
     test('a second driver asserts', () {
       final controller = LiquidSearchController();
       addTearDown(controller.dispose);
@@ -209,7 +284,7 @@ void main() {
         );
         expect(
           nativeSearchBottomInset(
-            field: const Rect.fromLTWH(20, 86, 780, 44),
+            field: const Rect.fromLTWH(16, 86, 370, 44),
             size: size,
             padding: padding,
             viewInsets: EdgeInsets.zero,

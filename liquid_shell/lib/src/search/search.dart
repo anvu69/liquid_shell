@@ -13,7 +13,9 @@ class LiquidSearch {
     this.onSubmitted,
   });
 
-  /// The query, the active state and the scope; owned by the app.
+  /// The query, the active state and the scope. Owned by the app: the app
+  /// creates and disposes it and keeps it alive as long as the shell; the
+  /// shell never disposes it. A new controller between builds is fine.
   final LiquidSearchController controller;
 
   /// Text of the empty field. Null: the platform's own ("Search" in the

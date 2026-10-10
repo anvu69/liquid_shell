@@ -368,6 +368,44 @@ void main() {
       }
     });
 
+    group('in release, the first search destination wins (spec §14)', () {
+      const second = LiquidDestination(
+        icon: Icon(Icons.search),
+        label: 'Find again',
+        role: LiquidDestinationRole.search,
+      );
+
+      test('nativeConfigFor marks only the first search tab', () {
+        final config = nativeConfigFor(
+          engaged: true,
+          destinations: const [home, search, second],
+          selectedIndex: 0,
+          trailing: null,
+          footer: null,
+          tint: const Color(0xFF3D5AFE),
+          dark: false,
+          rtl: false,
+          hidden: false,
+          interactive: true,
+          pageStacks: const {
+            2: [LiquidNativePage(title: 'Ignored')],
+          },
+        );
+        expect(config.tabs.map((t) => t.search), [false, true, false]);
+        expect(config.search, isNotNull);
+      });
+
+      test('an extra search destination needs a symbol like a standard '
+          'one', () {
+        expect(nativeDescribable(const [home, search, second], null), isFalse);
+        expect(
+          nativeSymbolHint(const [home, search, second], null),
+          contains('destination "Find again"'),
+        );
+        expect(nativeSymbolHint(const [home, search], null), isNull);
+      });
+    });
+
     test('nativePageBarFor: the search tab only, while engaged (P3b-1)', () {
       expect(
         nativePageBarFor(engaged: true, selected: 1, searchIndex: 1),
