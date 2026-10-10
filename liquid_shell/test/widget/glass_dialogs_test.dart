@@ -210,6 +210,35 @@ void main() {
       expect(find.byType(GlassAlert), findsOneWidget);
     });
 
+    // Review VK-406 T4 #1: Enter is Return-for-default only when there is
+    // an enabled default; otherwise it activates the focused button.
+    testWidgets('without a preferred action Enter activates the focused one', (
+      tester,
+    ) async {
+      final answers = await _open(tester, _request());
+      // Stacked in this font: Discard first (focused), then Keep editing.
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(answers, [0]);
+    });
+
+    // Review VK-406 T4 #2: a disabled preferred action cannot take focus;
+    // focus must still land below the key bindings.
+    testWidgets('with a disabled preferred action Escape still cancels', (
+      tester,
+    ) async {
+      const later = LiquidNativeDialogAction(label: 'Later', enabled: false);
+      final answers = await _open(
+        tester,
+        _request(actions: const [_cancel, later], preferredIndex: 1),
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(answers, [0]);
+    });
+
     testWidgets('scales in; reduce motion only fades', (tester) async {
       Finder scale() => find.ancestor(
         of: find.byType(GlassAlert),
@@ -305,5 +334,40 @@ void main() {
       );
       expect(card.bottom, lessThanOrEqualTo(anchor.top));
     });
+  });
+
+  // Review VK-406 T4 #3/#4: at large text the content scrolls instead of
+  // overflowing (UIKit does not clamp Dynamic Type in alerts either).
+  testWidgets('at text scale 2 nothing overflows', (tester) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final long = List.filled(12, 'Your edits will be lost.').join(' ');
+    LiquidNativeDialogRequest request(LiquidNativeDialogKind kind) =>
+        LiquidNativeDialogRequest(
+          kind: kind,
+          title: 'Discard changes?',
+          message: long,
+          actions: const [_cancel, _share, _discard],
+          tintArgb: 0,
+          dark: false,
+          rtl: false,
+          requireGlass: true,
+        );
+
+    // An alert on a phone in landscape.
+    await _open(
+      tester,
+      request(LiquidNativeDialogKind.alert),
+      size: const Size(852, 393),
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('Keep editing'), findsOneWidget);
+    await tester.tap(find.text('Keep editing'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    // A compact action sheet on a phone in portrait.
+    await tester.pumpWidget(const SizedBox());
+    await _open(tester, request(LiquidNativeDialogKind.actionSheet));
+    expect(tester.takeException(), isNull);
   });
 }

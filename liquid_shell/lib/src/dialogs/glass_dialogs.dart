@@ -131,6 +131,11 @@ class GlassAlert extends StatelessWidget {
       rowWidth: width - kAlertPadding.horizontal,
     );
     final order = alertDisplayOrder(actions, sideBySide: sideBySide);
+    final focused = firstEnabled(actions, [preferred, ...order]);
+    // Return picks the default only when there is an enabled one (spec
+    // §7.1). Otherwise Enter must reach the focused button's ActivateIntent:
+    // CallbackShortcuts swallows every key it binds, even a no-op.
+    final enterPicksPreferred = preferred != null && actions[preferred].enabled;
     void choose(int? index) {
       if (index == null || index < 0 || !actions[index].enabled) return;
       Navigator.of(context).pop(index);
@@ -139,7 +144,7 @@ class GlassAlert extends StatelessWidget {
     Widget button(int index) => GlassDialogButton(
       action: actions[index],
       prominent: index == preferred,
-      autofocus: index == (preferred ?? order.first),
+      autofocus: index == focused,
       onPressed: () => choose(index),
     );
     final buttons = sideBySide
@@ -154,10 +159,12 @@ class GlassAlert extends StatelessWidget {
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.escape): () => choose(cancel),
-        const SingleActivator(LogicalKeyboardKey.enter): () =>
-            choose(preferred),
-        const SingleActivator(LogicalKeyboardKey.numpadEnter): () =>
-            choose(preferred),
+        if (enterPicksPreferred) ...{
+          const SingleActivator(LogicalKeyboardKey.enter): () =>
+              choose(preferred),
+          const SingleActivator(LogicalKeyboardKey.numpadEnter): () =>
+              choose(preferred),
+        },
       },
       child: Center(
         child: Padding(
@@ -175,26 +182,41 @@ class GlassAlert extends StatelessWidget {
                   type: MaterialType.transparency,
                   child: Padding(
                     padding: kAlertPadding,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Flexible(
-                          child: SingleChildScrollView(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: kAlertHeaderInset,
-                              ),
-                              child: DialogHeader(
-                                title: request.title,
-                                message: request.message,
+                    // The header scrolls first; the actions stay visible
+                    // and scroll themselves only past what is left after
+                    // one action's height of header (large text).
+                    child: LayoutBuilder(
+                      builder: (context, constraints) => Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Flexible(
+                            child: SingleChildScrollView(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: kAlertHeaderInset,
+                                ),
+                                child: DialogHeader(
+                                  title: request.title,
+                                  message: request.message,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: kHeaderGap),
-                        buttons,
-                      ],
+                          const SizedBox(height: kHeaderGap),
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxHeight: math.max(
+                                kActionHeight,
+                                constraints.maxHeight -
+                                    kHeaderGap -
+                                    kActionHeight,
+                              ),
+                            ),
+                            child: SingleChildScrollView(child: buttons),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -229,7 +251,7 @@ class GlassActionSheet extends StatelessWidget {
         ? [cancel]
         : groups.main;
     final apart = regular ? null : cancel;
-    final first = stacked.isNotEmpty ? stacked.first : apart;
+    final first = firstEnabled(request.actions, [...stacked, apart]);
     Widget button(int index) => GlassDialogButton(
       action: request.actions[index],
       autofocus: index == first,
@@ -241,17 +263,24 @@ class GlassActionSheet extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (hasHeader)
-            Padding(
-              padding: kSheetHeaderPadding,
-              child: DialogHeader(
-                title: request.title,
-                message: request.message,
-              ),
-            ),
+          // Header and actions scroll together when they do not fit.
           Flexible(
             child: SingleChildScrollView(
-              child: _stack([for (final index in stacked) button(index)]),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (hasHeader)
+                    Padding(
+                      padding: kSheetHeaderPadding,
+                      child: DialogHeader(
+                        title: request.title,
+                        message: request.message,
+                      ),
+                    ),
+                  _stack([for (final index in stacked) button(index)]),
+                ],
+              ),
             ),
           ),
         ],

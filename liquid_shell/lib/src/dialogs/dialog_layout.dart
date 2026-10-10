@@ -96,3 +96,16 @@ Offset anchoredCardOffset({
       : (anchor.top - kAnchorGap - card.height).clamp(top, bottom);
   return Offset(x, y);
 }
+
+/// The first of [candidates] whose action is enabled: the one a dialog
+/// focuses first. A disabled button cannot take focus, and without a focused
+/// button below them a dialog's key bindings never see a key.
+int? firstEnabled(
+  List<LiquidNativeDialogAction> actions,
+  Iterable<int?> candidates,
+) {
+  for (final index in candidates) {
+    if (index != null && actions[index].enabled) return index;
+  }
+  return null;
+}
