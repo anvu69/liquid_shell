@@ -694,6 +694,7 @@ final class NativeTabsTests: XCTestCase {
   /// The compact bar's items stay with UIKit; the content, and the row
   /// just above the bar, reach Flutter. The bar's own top, not the safe
   /// area's: on iPadOS 27 the pill rises 5pt above the 72pt safe area.
+  /// The ⌕ circle: `testTheTrailingActionIsTheSeparateCircleAfterThePill`.
   func testTouchesAboveTheCompactBarReachFlutter() throws {
     let tabs = try installedShell(trailing: true, sizeClass: .compact)
     let root = try XCTUnwrap(tabs.parent?.view)
@@ -709,21 +710,27 @@ final class NativeTabsTests: XCTestCase {
       "the centre")
     XCTAssertTrue(
       try hit(tabs, CGPoint(x: root.bounds.midX, y: 4)) === tabs.flutter.view, "the top edge")
-    // The separate ⌕ circle is native, the gap before it is Flutter's. An
-    // iPhone always draws the circle; iPadOS 27 at the 820pt compact
-    // override puts the search tab inside the pill instead.
-    let (pill, circle) = try compactBarParts(tabs, inbox: inbox)
-    if UIDevice.current.userInterfaceIdiom == .phone { XCTAssertNotNil(circle, "the ⌕ circle") }
-    if let circle {
-      XCTAssertTrue(
-        isNative(try hit(tabs, CGPoint(x: circle.midX, y: circle.midY)), tabs), "the ⌕ circle")
-      XCTAssertGreaterThan(circle.minX - pill.maxX, 8, "precondition: a gap between pill and circle")
-      XCTAssertTrue(
-        try hit(tabs, CGPoint(x: (pill.maxX + circle.minX) / 2, y: inbox.y)) === tabs.flutter.view,
-        "the gap between the pill and the circle")
-    }
     tabs.apply(config(interactive: false, trailing: true))
     XCTAssertTrue(try hit(tabs, inbox) === tabs.flutter.view, "inert under a dialog")
+  }
+
+  /// The trailing action is the separate ⌕ circle after the pill on every
+  /// compact bar (spec §14), not one more item inside it. iOS 27 draws
+  /// the circle only for the prominent tab (`prominentTabIdentifier`),
+  /// which a search tab is by default only when it activates the system
+  /// search field. The circle is native; the gap before it is Flutter's.
+  func testTheTrailingActionIsTheSeparateCircleAfterThePill() throws {
+    let tabs = try installedShell(trailing: true, sizeClass: .compact)
+    let inbox = try centreOfLabel("Inbox", in: tabs.view, tabs)
+    let (pill, circle) = try compactBarParts(tabs, inbox: inbox)
+    XCTAssertNil(labelCentre("Find", in: tabs.view, tabs), "no Find item inside the pill")
+    let ring = try XCTUnwrap(circle, "the ⌕ circle")
+    XCTAssertTrue(
+      isNative(try hit(tabs, CGPoint(x: ring.midX, y: ring.midY)), tabs), "the ⌕ circle")
+    XCTAssertGreaterThan(ring.minX - pill.maxX, 8, "precondition: a gap between pill and circle")
+    XCTAssertTrue(
+      try hit(tabs, CGPoint(x: (pill.maxX + ring.minX) / 2, y: inbox.y)) === tabs.flutter.view,
+      "the gap between the pill and the circle")
   }
 
   /// The compact bar's pill (the drawn tab bar subview around [inbox]) and
