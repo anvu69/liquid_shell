@@ -82,6 +82,27 @@ class _CounterState extends State<_Counter> {
   );
 }
 
+/// A root page whose key the test changes while another page covers it.
+class _Rekey extends StatefulWidget {
+  const _Rekey();
+
+  @override
+  State<_Rekey> createState() => _RekeyState();
+}
+
+class _RekeyState extends State<_Rekey> {
+  int _key = 0;
+
+  void rekey() => setState(() => _key++);
+
+  @override
+  Widget build(BuildContext context) => LiquidPage(
+    key: ValueKey(_key),
+    title: 'Root',
+    child: const _Counter(),
+  );
+}
+
 Future<_Registry> _pump(
   WidgetTester tester, {
   LiquidShellScopeData? data,
@@ -315,5 +336,90 @@ void main() {
       _scope(nativePageBar: true).hashCode,
       _scope(nativePageBar: true).hashCode,
     );
+  });
+
+  testWidgets('a lower page recreated under a new key keeps its place', (
+    tester,
+  ) async {
+    final registry = await _pump(tester, home: const _Rekey());
+    tester
+        .state<NavigatorState>(find.byType(Navigator))
+        .push(
+          MaterialPageRoute<void>(
+            builder: (_) =>
+                const LiquidPage(title: 'Detail', child: _Counter()),
+          ),
+        )
+        .ignore();
+    await tester.pumpAndSettle();
+    tester.state<_RekeyState>(find.byType(_Rekey, skipOffstage: false)).rekey();
+    await tester.pump();
+    expect(registry.records, hasLength(2));
+    expect(registry.stack(), ['Root', 'Detail']);
+  });
+
+  testWidgets('the back label follows the shell strings', (tester) async {
+    Widget app(String back) => ShellScopeMarker(
+      data: _scope(),
+      registry: null,
+      strings: LiquidShellStrings(back: back),
+      child: const MaterialApp(
+        home: LiquidPage(title: 'Search', child: _Counter()),
+      ),
+    );
+    await tester.pumpWidget(app('A'));
+    tester
+        .state<NavigatorState>(find.byType(Navigator))
+        .push(
+          MaterialPageRoute<void>(
+            builder: (_) =>
+                const LiquidPage(title: 'Detail', child: _Counter()),
+          ),
+        )
+        .ignore();
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('A'), findsOneWidget);
+    await tester.pumpWidget(app('B'));
+    await tester.pump();
+    expect(find.bySemanticsLabel('B'), findsOneWidget);
+    expect(find.bySemanticsLabel('A'), findsNothing);
+  });
+
+  testWidgets('content scrolled up fades out above the large title row', (
+    tester,
+  ) async {
+    const red = Color(0xFFFF0000);
+    final boundary = GlobalKey();
+    await _pump(
+      tester,
+      home: RepaintBoundary(
+        key: boundary,
+        child: ColoredBox(
+          color: const Color(0xFFFFFFFF),
+          child: LiquidPage(
+            title: 'Search',
+            child: ListView(
+              children: const [
+                SizedBox(height: 2000, child: ColoredBox(color: red)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.drag(find.byType(ListView), const Offset(0, -150));
+    await tester.pump();
+    final image = (await tester.runAsync(
+      () => captureImage(boundary.currentContext! as Element),
+    ))!;
+    final bytes = (await tester.runAsync(image.toByteData))!;
+    int green(int x, int y) => bytes.getUint8((y * image.width + x) * 4 + 1);
+
+    final x = image.width - 8;
+    // The bar row (0–54) and the large title row (54–106) show no content.
+    expect(green(x, 20), 255, reason: 'bar row');
+    expect(green(x, 60), 255, reason: 'top of the large title row');
+    // Below the bar the content is opaque.
+    expect(green(x, 200), 0, reason: 'content below the bar');
   });
 }

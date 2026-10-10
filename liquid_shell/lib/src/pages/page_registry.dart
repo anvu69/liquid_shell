@@ -28,10 +28,14 @@ class PageEntry {
   /// The navigator holding [route].
   final NavigatorState? navigator;
 
-  /// Creation order: push order within a navigator.
+  /// Push order: the order in which [route] first had a page registered,
+  /// so push order within a navigator. A page recreated in a lower route
+  /// keeps its route's place. Pages of one route share it.
   final int sequence;
 
-  /// Tickers on: not covered by an opaque route, not in a hidden branch.
+  /// Visible and tickers on: not covered by an opaque route, not in a
+  /// hidden branch (an `IndexedStack` hides one with `Visibility` and
+  /// leaves its tickers on).
   final bool onScreen;
 
   /// [route] was current when the entry was taken.
@@ -81,6 +85,11 @@ abstract interface class PageRegistry {
 ///
 /// The top page stands for its route: another page in the same route sits
 /// in a hidden branch (an `IndexedStack` inside one route), not below it.
+///
+/// Known limit: a lower route holding several pages in an `IndexedStack`
+/// lists all of them, in no set order between them. A covered route has
+/// its tickers off, so its entries cannot tell the visible branch from the
+/// hidden ones. Tab branches with their own navigators are not affected.
 List<PageEntry> pageStackFor(
   Iterable<PageEntry> entries, {
   required bool Function(PageEntry) isTop,

@@ -42,8 +42,16 @@ class LiquidPage extends StatefulWidget {
 }
 
 class _LiquidPageState extends State<LiquidPage> {
-  static int _nextSequence = 0;
-  final int _sequence = _nextSequence++;
+  static int _nextOrder = 0;
+  // A route's place in push order, taken when its first page registers. A
+  // page recreated in a lower route (a new key) keeps its route's place
+  // instead of sorting above the pages pushed after it.
+  static final Expando<int> _routeOrder = Expando('LiquidPage route order');
+  int? _orderWithoutRoute;
+
+  int _orderOf(ModalRoute<Object?>? route) => route == null
+      ? _orderWithoutRoute ??= _nextOrder++
+      : _routeOrder[route] ??= _nextOrder++;
   // The child keeps its State when the bar switches between native and
   // Flutter (native chrome on or off).
   final GlobalKey _childKey = GlobalKey();
@@ -57,7 +65,7 @@ class _LiquidPageState extends State<LiquidPage> {
       largeTitle: widget.largeTitle,
       route: route,
       navigator: Navigator.maybeOf(context),
-      sequence: _sequence,
+      sequence: _orderOf(route),
       // As `LiquidHideChrome`: an `IndexedStack` hides a branch with
       // `Visibility` and leaves its tickers on.
       onScreen: Visibility.of(context) && TickerMode.valuesOf(context).enabled,
@@ -159,8 +167,10 @@ class LiquidBackButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final label =
         semanticLabel ??
+        // A dependency: the bar builds this button `const`, so only the
+        // marker can rebuild it when the strings change.
         context
-            .getInheritedWidgetOfExactType<ShellScopeMarker>()
+            .dependOnInheritedWidgetOfExactType<ShellScopeMarker>()
             ?.strings
             .back ??
         const LiquidShellStrings().back;

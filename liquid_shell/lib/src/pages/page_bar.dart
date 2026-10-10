@@ -63,12 +63,12 @@ class FlutterPageBar extends StatelessWidget {
             child: ShaderMask(
               blendMode: BlendMode.dstIn,
               shaderCallback: (rect) {
-                final end = rect.height == 0
-                    ? 0.0
-                    : (barTop + kPageBarExtent) / rect.height;
+                // Ends under the large title row too: that title does not
+                // collapse here, so content must not scroll through it.
+                final end = rect.height == 0 ? 0.0 : bottom / rect.height;
                 final start = rect.height == 0
                     ? 0.0
-                    : (barTop + kPageBarExtent - _kEdgeFade) / rect.height;
+                    : (bottom - _kEdgeFade) / rect.height;
                 return LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
