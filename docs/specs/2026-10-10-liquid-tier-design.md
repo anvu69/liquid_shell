@@ -113,7 +113,7 @@ So L5's premise that "goldens cannot capture shaders" does not hold on 3.44. Sid
 
 - **One backdrop copy per shell.** Each `BackdropFilter` without a shared key snapshots the backdrop. With `BackdropFilter.grouped` under one `BackdropGroup`, the snapshot is taken once and every glass filters the cached copy [S3]. The shell already wraps its chrome in one `BackdropGroup` (P1 §5.8), and the liquid renderer keeps `.grouped`.
 - **Measured costs.** On Windows Impeller, 36 grouped unbounded blurs cost 3.85 ms of raster time at p50, against 11.2 ms ungrouped. "Bounded" blur loses most of the grouping gain [S7]. A third-party liquid package measured about 115 mW for a backdrop copy, 165 mW for a σ 7 blur and 335 mW for full glass on a Pixel 10 (vk343 §1, M). The order of magnitude is what matters: the copy and the blur dominate, and the lens maths is cheap.
-- **Blur in the shader or chained.** A blur inside the shader costs N taps per pixel per channel (25 or more for a usable σ), and dispersion triples that in the rim. Impeller's Gaussian is separable and downsamples above σ 4 [S7]. **The design chains the engine blur as the inner filter and runs the lens shader on the blurred texture.** The shader does 1 tap in the body and 3 in the rim band (dispersion). Default `liquidBlurSigma` is 3, so the blur runs at full resolution. That stays cheap because only the clipped region is filtered.
+- **Blur in the shader or chained.** A blur inside the shader costs N taps per pixel per channel (25 or more for a usable σ), and dispersion triples that in the rim. Impeller's Gaussian is separable and downsamples above σ 4 [S7]. **The design chains the engine blur as the inner filter and runs the lens shader on the blurred texture.** The shader does 1 tap in the body and 3 in the rim band (dispersion). Default `liquidBlurSigma` is 6 (§3.6). That is above σ 4, so Impeller downsamples, and only the clipped region is filtered.
 - **Shader cost.** The lens maths is per pixel with no loops. A 360×64 pt tab bar at 3× is about 207 k fragments, roughly the cost of drawing a full-screen image (L).
 - **GLES on Android.** Flutter 3.44 sends Adreno ≤ 650 devices to GLES even when they have Vulkan (`DriverInfoVK::IsKnownBadDriver`, [S9]), and some GLES drivers are slower and buggier [S10][S11]. The emulator also defaults to GLES (spike). The shader has a GLES path (the y-flip). The policy treats only devices **without Vulkan 1.1** as GLES-only (Q6). Slow GLES devices are caught by the RAM rule and the frame guard.
 
@@ -137,6 +137,13 @@ From WWDC25 "Meet Liquid Glass" [S8] and the HIG [S16]:
 
 The maths below is derived from these descriptions and from textbook optics: a signed distance field, Snell's law and Fresnel-like rim falloff. The public rounded-box distance formula [S17] and the physical description of a convex bezel refracted with Snell's law at n ≈ 1.5 [S18] are the only references. **No source of `liquid_glass_renderer`, `liquid_glass_widgets`, `liquid_glass_easy` or any other glass package was opened** (clean room). The spike shader was written from scratch too.
 
+### 3.6 First comparison with native (H, while writing this spec)
+
+The validated shader ran through the real example in an Impeller golden (`flutter test --enable-impeller`, iPhone 393×852 at 2×). It was then placed next to P2's native iOS 26 doc image `native_iphone.png` with the plan's `tool/side_by_side.dart`. Two findings:
+
+- **The lens, the rim and the screen-edge rule work as derived.** The sidebar on an iPad landscape golden bends the backdrop only at its inner edge.
+- **The first tint (22 %) and blur (σ 3) were far too clear.** Labels from the list behind the bar read through the tab labels, while native glass reads as frosty white. **50 % (light) or 55 % (dark) tint with σ 6** comes visibly close to native, so these are the defaults (Q3, Q4). The remaining gaps are the bar's size and layout (P1 geometry, not this phase) and the selection lens (non-goal).
+
 ## 4. The shader
 
 ### 4.1 Model
@@ -154,7 +161,7 @@ All quantities are in **physical pixels of the pass**, and y points down.
 4. **Height profile.** A convex quarter-superellipse, `η(x) = (1 − (1 − x)⁴)^¼`. It is 0 at the edge, 1 at the inner end of the bezel and flat beyond. Its slope is `η′(x) = (1 − x)³ · (1 − (1 − x)⁴)^−¾`, with `x` clamped to ≥ 0.02 so the slope stays finite.
 5. **Surface normal (3D).** The surface descends toward the edge, so the normal tilts outward: `N = normalize(vec3(n₂ · s, 1))`, where `s = min(T / b · η′(x), 8)`.
 6. **Refraction.** `R = refract(I, N, 1/n)`. Because `n > 1`, `R.xy` points **inward** (opposite `n₂`). This is the convex-lens case: rim pixels show backdrop from further in, so content near the edge is magnified and squeezed.
-7. **Displacement.** `δ = R.xy · (T · η(x)) / max(−R.z, 0.2)`. It is 0 at the very edge, where the height is 0, peaks just inside the edge and falls to 0 where the bezel flattens. At the default `T = 18 pt`, `b = 12 pt` and `n = 1.5`, the peak is about **9 pt** at `x ≈ 0.02` and 3.4 pt at `x = 0.3` (worked numbers in plan Task 1).
+7. **Displacement.** `δ = R.xy · (T · η(x)) / max(−R.z, 0.2)`. It is 0 at the very edge, where the height is 0, peaks just inside the edge and falls to 0 where the bezel flattens. At the default `T = 18 pt`, `b = 12 pt` and `n = 1.5`, the peak is about **9 pt** (8.99) at `x ≈ 0.04`, 7.8 pt at `x = 0.1` and 3.4 pt at `x = 0.3` (worked numbers in plan Task 1). Dispersion at the default 0.3 moves red and blue by about ±0.3 pt at `x = 0.1`.
 8. **Dispersion.** Inside the bezel only (`x < 1`), the red, green and blue channels are sampled with `n − 0.1·k`, `n` and `n + 0.1·k`, where `k` = `dispersion` (0–1, default 0.3, so ±0.03). Outside the bezel there is one tap.
 9. **Sample.** `uv = (p + δ) / uSize`, clamped to [0, 1]. The y-flip applies only under `IMPELLER_TARGET_OPENGLES` (spike).
 10. **Tint and vibrancy.** `rgb = mix(sample, tint.rgb, tint.a)`. Then `rgb = mix(vec3(luma(rgb)), rgb, sat)`, with `sat` = 1.1 (an internal constant). `luma` uses Rec. 709 weights.
@@ -219,11 +226,10 @@ It extends `LiquidGlassRenderer`. It is internal: `LiquidGlassPolicy` uses it as
 - **`isSupported(context)`** is true only when all three hold:
   - `liquidGlassCanRefract()`, which is `debugLiquidGlassCanRefractOverride ?? ui.ImageFilter.isShaderFilterSupported`;
   - the program is loaded;
-  - there is no ancestor `RenderBackdropFilter` (`context.findAncestorRenderObjectOfType<RenderBackdropFilter>() == null`). This is spike case I (Q10). A `LiquidGlass` inside another `LiquidGlass`'s *child* is fine, because a glass background and its child are siblings, not ancestor and descendant.
-- **`buildBackground`** is a `Stack(fit: expand)` with three children:
+  - there is no ancestor `BackdropFilter` widget (`context.findAncestorWidgetOfExactType<BackdropFilter>() == null`, which also covers `BackdropFilter.grouped`). This is spike case I (Q10). A `LiquidGlass` inside another `LiquidGlass`'s *child* is fine, because a glass background and its child are siblings, not ancestor and descendant.
+- **`buildBackground`** is a `Stack(fit: expand)` with two children:
   - `ClipRRect(borderRadius)`, holding a `LiquidBackdrop` (the render object of §5.3), which holds `SizedBox.expand()`;
-  - `OutsideShadow` (P1's), drawn above the filter so the filter never samples the shadow;
-  - in high contrast nothing extra, because that is solid anyway.
+  - `OutsideShadow` (P1's), drawn above the filter so the filter never samples the shadow.
 
   There is no `DecoratedBox` tint or border: the shader draws the tint, and the rim replaces the hairline border.
 
@@ -235,7 +241,7 @@ In `paint(context, offset)`:
 
 1. Find the root `RenderView`: `owner!.rootNode! as RenderView`. Let `m = view.configuration.toMatrix() × getTransformTo(null)`. This is the logical → pass-pixel transform, and it includes every ancestor `Transform`, scroll offset and the device pixel ratio.
 2. Compute `rect = MatrixUtils.transformRect(m, Offset.zero & size)` and `scale = view.configuration.devicePixelRatio`. Also get the pass size in px, `view.size × scale`, for the screen-edge rule.
-3. Compute `uniforms = liquidUniforms(rect, radii, params, scale, passSize)`. If they differ from the last ones, set them on this object's own `FragmentShader` (one per render object, created once from the program and disposed on detach) and build a new filter: `factory(shader, blurSigma × scale)`. The default factory returns `compose(outer: ImageFilter.shader(shader), inner: ImageFilter.blur(σ))`, or just the shader when σ is 0. A new `ImageFilter` is made each time the uniforms change. Mutating a shader that an existing filter already wraps is not relied on.
+3. Compute `uniforms = liquidUniforms(rect, radii, params, scale, passSize)`. If they differ from the last ones, take a **fresh** `FragmentShader` from the program, set the uniforms on it, build a new filter with `factory(shader, liquidBlurSigma)`, and only then dispose the previous shader. A fresh shader is used because `ImageFilter.shader` equality compares the shader object: mutating the shader that the current filter wraps could make the new filter compare equal and skip the layer update. The engine keeps its own reference, so disposing the old Dart handle is safe. The default factory returns `compose(outer: ImageFilter.shader(shader), inner: ImageFilter.blur(σ))`, or just the shader when σ is 0. σ stays **logical**: like the frosted blur, the engine scales a layer's blur by the current transform (seen in the validation render: σ 3 at 3× blurs about 9 px). Only the shader's own uniforms are in pass pixels.
 4. Push a `BackdropFilterLayer` with that filter, `BlendMode.srcOver` and the `backdropKey`, then paint the child. `alwaysNeedsCompositing` is `child != null`, as in `RenderBackdropFilter`.
 5. Record `rect` as `_paintedRect`.
 
@@ -259,10 +265,10 @@ Nothing changes from P1. `LiquidGlass` cross-fades the background over 200 ms, o
 
 | Field | Type | Light default | Dark default | Meaning |
 |---|---|---|---|---|
-| `liquidTint` | `Color` | `surface` @ 0.22 | `surface` @ 0.32 | Tint inside the shader (lighter than frosted's 0.72 / 0.90) |
+| `liquidTint` | `Color` | `surface` @ 0.50 | `surface` @ 0.55 | Tint inside the shader (lighter than frosted's 0.72 / 0.90; tuned in §3.6) |
 | `refraction` | `double` | 1.0 | 1.0 | Scales thickness `T` = 18 pt × refraction. 0 means flat glass (blur and tint only) |
 | `dispersion` | `double` | 0.3 | 0.3 | 0–1, the colour fringe in the bezel. 0 turns it off |
-| `liquidBlurSigma` | `double` | 3 | 3 | Logical σ of the chained blur. 0 means none |
+| `liquidBlurSigma` | `double` | 6 | 6 | Logical σ of the chained blur. 0 means none |
 
 The bezel width (12 pt), the rim width (1.5 pt), the index (1.5), the saturation (1.1) and the light direction stay internal constants (`liquid_optics.dart`), so they can change without breaking the API. `rimHighlight` (P1) colours the specular rim.
 
@@ -351,7 +357,7 @@ JVM unit tests in `SignalReaderTest` cover each value, and the two `null` cases.
 
 `LiquidFrameGuard` is process-wide and reference-counted like the signals controller:
 
-- **Who holds it:** every mounted `LiquidGlass` whose resolved tier is liquid holds a reference.
+- **Who holds it:** every attached `RenderLiquidBackdrop` holds a reference (acquired in `attach`, released in `detach`), so the guard only measures frames while liquid glass is actually on screen.
 - **Subscription:** while at least one is held, it subscribes with `SchedulerBinding.instance.addTimingsCallback`.
 - **Windows:** it groups `FrameTiming.rasterDuration` into windows of 60 frames.
 - **The rule:** a window is slow when its p90 is above `1.25 × budget`, where `budget = 1 s / refreshRate` (`PlatformDispatcher.views.first.display.refreshRate`, default 60). After **3 consecutive** slow windows, `slowFrames` becomes true for the rest of the process. It logs once in debug.
@@ -388,8 +394,8 @@ It is documented in `doc/native_chrome.md` ("When the native chrome is used") an
 ### 9.2 The switch (L4)
 
 - **State.** `example/lib/support/chrome_mode.dart` holds `enum ExampleChromeMode { native, flutterLiquid }` and `ChromeModeScope`, an `InheritedNotifier<ValueNotifier<ExampleChromeMode>>`. The scope sits above the `MaterialApp`'s navigator, so every case and every pushed page shares it.
-- **Applying it.** `CaseFrame` wraps each case page where `CaseList` pushes it. In `flutterLiquid` it wraps the page in `LiquidGlassScope(policy: LiquidGlassPolicy(forcedTier: LiquidGlassTier.liquid))`. In `native` it adds nothing. **No case file and no README snippet changes.**
-- **Where the switch is.** `DemoPage` draws a `SegmentedButton` row under its title when a `ChromeModeScope` is above it. It has two segments:
+- **Applying it.** `CaseFrame` wraps each case page where `CaseList` pushes it, always in a `LiquidGlassScope`. In `flutterLiquid` that scope forces `LiquidGlassTier.liquid`; in `native` it forces nothing. Because the scope is always present, switching never rebuilds the case or loses its state. **No case's shell code and no README snippet change**, except the forced-tier case's one line of text (§9.2, last bullet).
+- **Where the switch is.** `DemoPage` draws a `SegmentedButton` row under its title when a `ChromeModeScope` is above it. It is inside the scrolling body, so it never sits under the Flutter or native chrome (a top-corner overlay was tried and covered the regular-width top bar). The form factors case, which has no `DemoPage`, shows the switch as the first row of its list. It has two segments:
   - The first segment is labelled "Native" where native chrome can engage (iOS 26), and "Auto" elsewhere, with the tooltip "Native chrome needs iOS 26; here the library picks the tier". In this mode the library behaves by default: native chrome where it engages, otherwise the automatic tier.
   - "Flutter liquid" forces the liquid tier, which also turns native chrome off (§9.1).
 - **"Flutter by nature" cases.** These come from E1: custom chrome, forced tier, custom theme, standalone widgets, form factors and narrow width. They keep the switch, so liquid can still be forced. E1's "drawn by Flutter" note stays. In the forced-tier case the case's own tier segment wins, because it is the inner scope.
@@ -505,7 +511,7 @@ The global test config sets `debugLiquidGlassCanRefractOverride = false`, so eve
 | Reduce Motion (`disableAnimations`) | the tier change is instant (P1). The shader is static, with no motion to reduce | Apple: "disables any elastic properties" |
 | Bold Text, text scale | unchanged (P1 §5.10). The glass is a background only | — |
 | VoiceOver and TalkBack | unchanged. The shader layer adds no semantics, because `LiquidBackdrop` has no semantics and its child is an empty `SizedBox` | — |
-| Legibility on liquid glass | Liquid is clearer than frosted, so contrast gets worse over busy backdrops. Mitigations: `liquidTint` alpha (0.22 light, 0.32 dark), a σ 3 blur, and the side-by-side review over the busiest backdrop. The owner can raise `liquidTint` alpha in the theme. A later phase can add adaptive dimming (non-goal) | WCAG 1.4.3 on labels is checked by eye in the review; a pixel-contrast checker is out of scope |
+| Legibility on liquid glass | Liquid is clearer than frosted, so contrast gets worse over busy backdrops. Mitigations: `liquidTint` alpha (0.50 light, 0.55 dark), a σ 6 blur (both tuned against native in §3.6), and the side-by-side review over the busiest backdrop. The owner can raise `liquidTint` alpha in the theme. A later phase can add adaptive dimming (non-goal) | WCAG 1.4.3 on labels is checked by eye in the review; a pixel-contrast checker is out of scope |
 
 The example's switch is a labelled `SegmentedButton`, so it is reachable with switch control and screen readers.
 
@@ -569,8 +575,8 @@ Mỗi dòng có đề xuất mặc định. Chủ sản phẩm trả lời "Ok h
 |---|---|---|
 | Q1 | Độ khúc xạ mặc định của mép kính bao nhiêu? | **Dải mép (bezel) 12pt, độ dày 18pt, chiết suất 1.5.** Nội dung sát mép bị kéo vào tối đa ~9pt, ở 1/3 dải còn ~3pt, giữa kính phẳng. Đèn cố định góc trên-trái, không dùng cảm biến nghiêng máy. Sau buổi duyệt ảnh đặt cạnh nhau được chỉnh một vòng (Task 6) |
 | Q2 | Tán sắc màu (dispersion) mặc định? | **Bật, mức 0.3** (chiết suất R/B lệch ±0.03): viền màu rất nhẹ, chỉ ở dải mép, đúng chữ "nhẹ" của L1. Đặt `dispersion: 0` để tắt |
-| Q3 | Lớp liquid có làm mờ nền không, mờ bao nhiêu? | **Có, σ = 3** (frosted đang là 10), dùng blur của engine nối trước shader (`compose`), không tự blur trong shader. Rẻ hơn nhiều mà đẹp hơn |
-| Q4 | `LiquidGlassTheme` có mở tham số shader cho app chỉnh không? | **Mở 4 trường:** `liquidTint` (màu phủ, sáng 22% / tối 32% màu surface), `refraction` (0–2, mặc định 1), `dispersion` (0–1, mặc định 0.3), `liquidBlurSigma` (mặc định 3). Còn lại (dải mép, viền sáng, chiết suất, hướng đèn) là hằng nội bộ, đổi được mà không vỡ API |
+| Q3 | Lớp liquid có làm mờ nền không, mờ bao nhiêu? | **Có, σ = 6** (frosted đang là 10), dùng blur của engine nối trước shader (`compose`), không tự blur trong shader. Rẻ hơn nhiều mà đẹp hơn. Đã so với ảnh tab bar native iOS 26 của P2: σ 3 quá trong, σ 6 gần native (§3.6) |
+| Q4 | `LiquidGlassTheme` có mở tham số shader cho app chỉnh không? | **Mở 4 trường:** `liquidTint` (màu phủ, sáng 50% / tối 55% màu surface; 22% thử trước đó quá trong, chữ phía sau đọc lẫn vào nhãn tab), `refraction` (0–2, mặc định 1), `dispersion` (0–1, mặc định 0.3), `liquidBlurSigma` (mặc định 6). Còn lại (dải mép, viền sáng, chiết suất, hướng đèn) là hằng nội bộ, đổi được mà không vỡ API |
 | Q5 | Ngưỡng "máy yếu" trên Android? | **`isLowRamDevice` hoặc RAM < 3 GiB** (máy 3 GB trở xuống) → frosted. Máy 4 GB trở lên được liquid; nếu thực tế giật thì bộ canh khung hình (Q7) tự hạ |
 | Q6 | Android 10+ chạy GLES thì liquid hay frosted? | **Máy không có Vulkan 1.1 (đúng nghĩa "chỉ GLES") → frosted.** Máy có Vulkan nhưng Flutter 3.44 vẫn đẩy sang GLES (Adreno ≤ 650, ví dụ Snapdragon 865 trở xuống) → **vẫn liquid**, shader có nhánh GLES đã chạy thử trên emulator, và có bộ canh khung hình đỡ. Không dò tên GPU (phải tạo ngữ cảnh EGL và chép danh sách đen của Flutter, đổi theo từng bản) |
 | Q7 | Có tự hạ xuống frosted khi khung hình thực tế chậm không? | **Có.** Khi đang hiện liquid, nếu 3 cửa sổ liên tiếp (mỗi cửa sổ 60 khung) có p90 thời gian raster > 1.25 × ngân sách khung (16.7ms ở 60Hz) thì hạ frosted đến hết phiên. Chỉ chạy ở bản profile/release |
