@@ -185,9 +185,10 @@ void main() {
   testWidgets('the bezel samples from further in (lensing)', (tester) async {
     final program = await _program(tester);
     // Stripes: red on [16k, 16k + 8), blue on [16k + 8, 16k + 16).
-    // At 101 (bezel x ~ 0.1) the shift is ~7.8 pt: 108.8 is blue [104, 112)
-    // and unbent 101 is red [96, 104), but an outward 93.2 is blue too
-    // [88, 96), so this probe proves bending, not its direction.
+    // Offset(108, _) reads the fragment centred at 108.25 (bezel x ~ 0.41):
+    // the shift is ~8.1 pt, so inward 116.3 is red [112, 120) while unbent
+    // 108.25 is blue [104, 112). This proves bending, not its direction
+    // (outward 100.2 is red too).
     const glass = Rect.fromLTWH(100, 100, 200, 100);
     final data = await _render(
       tester,
@@ -201,12 +202,12 @@ void main() {
         ),
       ),
     );
-    final edge = _pixel(data, const Offset(100.75, 150));
-    expect(edge[2], greaterThan(edge[0]), reason: 'blue sampled: $edge');
-    // Direction: at 103.75 (bezel x ~ 0.31) the shift is ~3.2 pt. Inward
-    // 106.95 is blue [104, 112); outward 100.55 and unbent 103.75 are red
-    // [96, 104).
-    final inward = _pixel(data, const Offset(103.5, 150));
+    final bent = _pixel(data, const Offset(108, 150));
+    expect(bent[0], greaterThan(bent[2]), reason: 'red sampled: $bent');
+    // Direction: the fragment centred at 103.25 (x ~ 0.16) shifts ~22.5 pt.
+    // Inward 125.8 is blue [120, 128); outward 80.7 and unbent 103.25 are
+    // red [80, 88) and [96, 104).
+    final inward = _pixel(data, const Offset(103, 150));
     expect(
       inward[2],
       greaterThan(inward[0]),
@@ -368,7 +369,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  // Glass at logical x 100 (physical 200), bezel 24 px, thickness 36 px at
+  // Glass at logical x 100 (physical 200), bezel 40 px, thickness 96 px at
   // scale 2. Output column X is fragment X + 0.5, at depth t = X + 0.5 − 200
   // inside the left edge, and samples X + 0.5 − δ (δ < 0 is inward, +x).
   const rampGlass = Rect.fromLTWH(100, 100, 200, 100);

@@ -38,22 +38,24 @@ void main() {
       expect(liquidDisplacement(1.5), 0);
     });
 
-    test('inward (negative), peaking about 9 near the edge', () {
-      expect(liquidDisplacement(0.037), closeTo(-8.987, 0.01));
-      expect(liquidDisplacement(0.05), closeTo(-8.894, 0.01));
-      expect(liquidDisplacement(0.1), closeTo(-7.830, 0.01));
-      expect(liquidDisplacement(0.3), closeTo(-3.398, 0.01));
-      expect(liquidDisplacement(0.5), closeTo(-1.157, 0.01));
+    test('inward (negative), peaking about 27 near the edge', () {
+      // Bezel 20, thickness 48 (spec §3.6): past ~2 pt in, the shift falls
+      // faster than the depth grows, so the band mirrors what lies inside.
+      expect(liquidDisplacement(0.02), closeTo(-22.384, 0.01));
+      expect(liquidDisplacement(0.05), closeTo(-27.233, 0.01));
+      expect(liquidDisplacement(0.1), closeTo(-26.107, 0.01));
+      expect(liquidDisplacement(0.3), closeTo(-13.724, 0.01));
+      expect(liquidDisplacement(0.5), closeTo(-4.904, 0.01));
     });
 
     test('scales with thickness and vanishes without it', () {
-      expect(liquidDisplacement(0.1, thickness: 36), closeTo(-21.250, 0.01));
+      expect(liquidDisplacement(0.1, thickness: 96), closeTo(-64.567, 0.01));
       expect(liquidDisplacement(0.1, thickness: 0), 0);
     });
 
     test('dispersion: a higher index bends more', () {
-      expect(liquidDisplacement(0.1, index: 1.47), closeTo(-7.539, 0.01));
-      expect(liquidDisplacement(0.1, index: 1.53), closeTo(-8.111, 0.01));
+      expect(liquidDisplacement(0.1, index: 1.47), closeTo(-25.157, 0.01));
+      expect(liquidDisplacement(0.1, index: 1.53), closeTo(-27.028, 0.01));
     });
   });
 
@@ -66,7 +68,7 @@ void main() {
         _floats([
           120, 2100, 960, 192, // rect
           96, 96, 96, 96, // radii: min(999*3, 192/2)
-          36, 54, 1.5, 0.3, // bezel 12*3, thickness 18*3, index, dispersion
+          60, 144, 1.5, 0.3, // bezel 20*3, thickness 48*3, index, dispersion
           1, 1, 1, 0x38 / 255, // tint
           1, 1, 1, 0x80 / 255, // rim
           -0.5, -0.85, 4.5, 1.1, // light, rim width 1.5*3, saturation
@@ -113,15 +115,15 @@ void main() {
       const pass = Size(1668, 2388);
       const rect = Rect.fromLTWH(0, 0, 640, 2388);
       final u = _uniforms(rect, scale: 2, pass: pass);
-      // reach = bezel 24 + max radius 0 + 2 = 26 on the left, top, bottom.
-      expect(u.sublist(0, 4), _floats([-26, -26, 666, 2440]));
+      // reach = bezel 40 + max radius 0 + 2 = 42 on the left, top, bottom.
+      expect(u.sublist(0, 4), _floats([-42, -42, 682, 2472]));
     });
 
     test('screen-edge rule in RTL: flush right, top and bottom', () {
       const pass = Size(1668, 2388);
       const rect = Rect.fromLTWH(1028, 0, 640, 2388);
       final u = _uniforms(rect, scale: 2, pass: pass);
-      expect(u.sublist(0, 4), _floats([1028, -26, 666, 2440]));
+      expect(u.sublist(0, 4), _floats([1028, -42, 682, 2472]));
     });
 
     test('scale 1 keeps logical numbers', () {
@@ -130,7 +132,7 @@ void main() {
         scale: 1,
         pass: const Size(400, 800),
       );
-      expect(u.sublist(8, 10), _floats([12, 18]));
+      expect(u.sublist(8, 10), _floats([20, 48]));
       // List index k is shader float k + 2: index 22 is the rim width.
       expect(u[22], 1.5);
     });

@@ -8,14 +8,16 @@ fragment shader; no other package is involved.
 
 ## What it draws
 
-- **Lens.** Across a 12pt band inside the edge the glass curves down like
-  a thick lens. Content under that band is pulled in and magnified, up to
-  about 9pt at the very edge; the middle is flat.
+- **Lens.** Across a 20pt band inside the edge the glass curves down like
+  a thick lens. Content under that band is pulled in by up to about 27pt,
+  so the band shows a mirrored strip of what lies further inside, as
+  iOS 26 glass does; the middle is flat.
 - **Specular rim.** A thin highlight, strongest on the top-left edge and
   fainter on the opposite one, plus a soft glow across the band.
 - **Dispersion.** Red and blue bend slightly differently in the band, a
   faint colour fringe. `dispersion: 0` turns it off.
-- **Blur and tint.** A light blur (σ 6) and the `liquidTint` colour.
+- **Blur and tint.** A light blur (σ 2) and the `liquidTint` colour,
+  so what lies behind the glass stays recognisable.
 
 A side that touches the screen edge (the sidebar's outer edges) has no
 lens and no rim.
@@ -24,10 +26,10 @@ lens and no rim.
 
 | Field | Default | Effect |
 |---|---|---|
-| `liquidTint` | surface @ 50 % (light), 55 % (dark) | Colour over the glass; raise its alpha for more legibility |
+| `liquidTint` | surface @ 40 % (light), 45 % (dark) | Colour over the glass; raise its alpha for more legibility |
 | `refraction` | 1 | Lens strength; 0 is flat glass, 2 doubles it |
 | `dispersion` | 0.3 | Colour fringe, 0–1 |
-| `liquidBlurSigma` | 6 | Blur under the lens; 0 for none |
+| `liquidBlurSigma` | 2 | Blur under the lens; 0 for none |
 
 | `refraction: 0` | default | `refraction: 2` |
 |---|---|---|

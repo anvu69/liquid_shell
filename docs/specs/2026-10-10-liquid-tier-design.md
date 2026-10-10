@@ -113,7 +113,7 @@ So L5's premise that "goldens cannot capture shaders" does not hold on 3.44. Sid
 
 - **One backdrop copy per shell.** Each `BackdropFilter` without a shared key snapshots the backdrop. With `BackdropFilter.grouped` under one `BackdropGroup`, the snapshot is taken once and every glass filters the cached copy [S3]. The shell already wraps its chrome in one `BackdropGroup` (P1 §5.8), and the liquid renderer keeps `.grouped`.
 - **Measured costs.** On Windows Impeller, 36 grouped unbounded blurs cost 3.85 ms of raster time at p50, against 11.2 ms ungrouped. "Bounded" blur loses most of the grouping gain [S7]. A third-party liquid package measured about 115 mW for a backdrop copy, 165 mW for a σ 7 blur and 335 mW for full glass on a Pixel 10 (vk343 §1, M). The order of magnitude is what matters: the copy and the blur dominate, and the lens maths is cheap.
-- **Blur in the shader or chained.** A blur inside the shader costs N taps per pixel per channel (25 or more for a usable σ), and dispersion triples that in the rim. Impeller's Gaussian is separable and downsamples above σ 4 [S7]. **The design chains the engine blur as the inner filter and runs the lens shader on the blurred texture.** The shader does 1 tap in the body and 3 in the rim band (dispersion). Default `liquidBlurSigma` is 6 (§3.6). That is above σ 4, so Impeller downsamples, and only the clipped region is filtered.
+- **Blur in the shader or chained.** A blur inside the shader costs N taps per pixel per channel (25 or more for a usable σ), and dispersion triples that in the rim. Impeller's Gaussian is separable and downsamples above σ 4 [S7]. **The design chains the engine blur as the inner filter and runs the lens shader on the blurred texture.** The shader does 1 tap in the body and 3 in the rim band (dispersion). Default `liquidBlurSigma` is 2 (§3.6.1, tuned down from 6). Below σ 4 Impeller does not downsample, but the blur is small and only the clipped region is filtered.
 - **Shader cost.** The lens maths is per pixel with no loops. A 360×64 pt tab bar at 3× is about 207 k fragments, roughly the cost of drawing a full-screen image (L).
 - **GLES on Android.** Flutter 3.44 sends Adreno ≤ 650 devices to GLES even when they have Vulkan (`DriverInfoVK::IsKnownBadDriver`, [S9]), and some GLES drivers are slower and buggier [S10][S11]. The emulator also defaults to GLES (spike). The shader has a GLES path (the y-flip). The policy treats only devices **without Vulkan 1.1** as GLES-only (Q6). Slow GLES devices are caught by the RAM rule and the frame guard.
 
@@ -143,6 +143,28 @@ The validated shader ran through the real example in an Impeller golden (`flutte
 
 - **The lens, the rim and the screen-edge rule work as derived.** The sidebar on an iPad landscape golden bends the backdrop only at its inner edge.
 - **The first tint (22 %) and blur (σ 3) were far too clear.** Labels from the list behind the bar read through the tab labels, while native glass reads as frosty white. **50 % (light) or 55 % (dark) tint with σ 6** comes visibly close to native, so these are the defaults (Q3, Q4). The remaining gaps are the bar's size and layout (P1 geometry, not this phase) and the selection lens (non-goal).
+- **Superseded by the tuning round below.** That comparison used a single still doc image, and σ 6 + 50 % hid the lens.
+
+#### 3.6.1 Tuning round against iOS 26 (VK-348, after Task 9)
+
+Task 9's side-by-side pairs (iPhone 17 Pro, iOS 26.5 simulator) showed that the defaults above read as **frosted** glass: native visibly bends the content behind the bar, while σ 6 and a 50 % tint washed it out so the 12 pt lens had almost nothing to bend. The owner's direction is that the package draws Liquid Glass, and frosted is not an acceptable look. One tuning round (owner decision B1) changed the default **parameters and internal constants only**; the shader and its alpha handling are unchanged.
+
+What native does, read off the pairs: the content behind the bar stays recognisable (a light blur and a light tint), and near the top and bottom edges the bar shows a **mirrored strip** of the text that lies further inside. That is what the §4.1 model gives once the displacement grows faster than the depth (`|dδ/dt| > 1`): the sample moves inward faster than the fragment moves inward, so the image flips. At bezel 12 pt and thickness 18 pt that band was a few points wide and blurred away; at **bezel 20 pt and thickness 48 pt** it spans about 2–11 pt in from the edge, with a peak shift of about 27 pt.
+
+Rounds (light theme unless noted; `a` = card text across the bar's top edge, `b` = across its middle):
+
+| Round | Tint L / D | σ | Bezel / thickness (pt) | Dispersion | Result |
+|---|---|---|---|---|---|
+| 0 (Task 9) | 0.50 / 0.55 | 6 | 12 / 18 | 0.3 | Frosted: near-opaque pill, lens visible only on the wallpaper discs |
+| 1 | 0.20–0.35 / 0.25–0.40 | 1–3 | 12–20 / 18–36 (via `refraction` 1.5–2) | 0.3–0.4 | Text behind becomes visible; the lens still barely shows |
+| 2 | 0.30–0.40 / — | 1.5–2.5 | 16–24 / 36–48 | 0.15–0.3 | Bezel ≥ 20 and thickness ≥ 48 produce native's mirrored strip at the top and bottom edges |
+| 3 | 0.25–0.35 / — | 1–1.5 | 20–24 / 48 | 0.2–0.3 | σ 1 makes the text behind fight the tab labels; σ 1.5 is about native's softness |
+| 4 (dark) | — / 0.35–0.55 | 1.5–2 | 20–24 / 48 | 0.3 | 0.55 hides the lens in dark too; 0.40 keeps labels clear and the strip visible |
+| 5 | 0.35 / 0.40 | 1.5–2 | 20–24 / 48 | 0.15–0.3 | Bezel 20 / thickness 48 / dispersion 0.3 settled; 0.35 + σ 1.5 closest to native on the iPhone bar |
+| 6 (iPad sidebar open) | 0.35–0.45 / 0.40–0.50 | 1.5–3 | 20 / 48 | 0.3 | The full-height sidebar is a large pane: at 0.35 + σ 1.5 the list behind fights the sidebar labels, native looks between 0.40 + σ 2 and 0.45 + σ 2.5 |
+| 7 (iPhone, check) | 0.35–0.45 / — | 1.5–2.5 | 20 / 48 | 0.3 | 0.40 + σ 2 keeps the mirrored strip and the recognisable text on the bar; **chosen** |
+
+**Defaults after the round:** `liquidTint` `surface` @ **0.40** (light) / **0.45** (dark), `liquidBlurSigma` **2**, `refraction` 1 and `dispersion` 0.3 unchanged; internal bezel **20 pt** and thickness **48 pt** (`refraction` 1 now means 48 pt). The tint and blur stay a little stronger than the clearest round (0.35, σ 1.5) because one theme serves both the small bar and the large sidebar, and native keeps its labels legible with vibrancy, which this package does not have. What still differs from native is in Task 9's report: bar geometry, the selection capsule, SF Symbols and label weight (P1), and native's sharper mirrored strip.
 
 ## 4. The shader
 
@@ -161,7 +183,7 @@ All quantities are in **physical pixels of the pass**, and y points down.
 4. **Height profile.** A convex quarter-superellipse, `η(x) = (1 − (1 − x)⁴)^¼`. It is 0 at the edge, 1 at the inner end of the bezel and flat beyond. Its slope is `η′(x) = (1 − x)³ · (1 − (1 − x)⁴)^−¾`, with `x` clamped to ≥ 0.02 so the slope stays finite.
 5. **Surface normal (3D).** The surface descends toward the edge, so the normal tilts outward: `N = normalize(vec3(n₂ · s, 1))`, where `s = min(T / b · η′(x), 8)`.
 6. **Refraction.** `R = refract(I, N, 1/n)`. Because `n > 1`, `R.xy` points **inward** (opposite `n₂`). This is the convex-lens case: rim pixels show backdrop from further in, so content near the edge is magnified and squeezed.
-7. **Displacement.** `δ = R.xy · (T · η(x)) / max(−R.z, 0.2)`. It is 0 at the very edge, where the height is 0, peaks just inside the edge and falls to 0 where the bezel flattens. At the default `T = 18 pt`, `b = 12 pt` and `n = 1.5`, the peak is about **9 pt** (8.99) at `x ≈ 0.04`, 7.8 pt at `x = 0.1` and 3.4 pt at `x = 0.3` (worked numbers in plan Task 1). Dispersion at the default 0.3 moves red and blue by about ±0.3 pt at `x = 0.1`.
+7. **Displacement.** `δ = R.xy · (T · η(x)) / max(−R.z, 0.2)`. It is 0 at the very edge, where the height is 0, peaks just inside the edge and falls to 0 where the bezel flattens. At the default `T = 48 pt`, `b = 20 pt` and `n = 1.5` (tuned in §3.6.1; the plan's Task 1 worked numbers used 18 / 12), the peak is about **27 pt** (27.3) at `x ≈ 0.06`, 26.1 pt at `x = 0.1` and 13.7 pt at `x = 0.3`. Between about `x = 0.1` and `0.55` the shift falls faster than the depth grows, so the band mirrors what lies inside. Dispersion at the default 0.3 moves red and blue by about ±1 pt at `x = 0.1`.
 8. **Dispersion.** Inside the bezel only (`x < 1`), the red, green and blue channels are sampled with `n − 0.1·k`, `n` and `n + 0.1·k`, where `k` = `dispersion` (0–1, default 0.3, so ±0.03). Outside the bezel there is one tap.
 9. **Sample.** `uv = (p + δ) / uSize`, clamped to [0, 1]. The y-flip applies only under `IMPELLER_TARGET_OPENGLES` (spike).
 10. **Tint and vibrancy.** `rgb = mix(sample, tint.rgb, tint.a)`. Then `rgb = mix(vec3(luma(rgb)), rgb, sat)`, with `sat` = 1.1 (an internal constant). `luma` uses Rec. 709 weights.
@@ -187,7 +209,7 @@ Floats are listed by index. Indices 0–1 are set by the engine. `setFloat` indi
 
 - `b` is clamped to `[1 px, 0.5 · min(width, height)]`.
 - Each radius is clamped to `0.5 · min(width, height)` (a pill with 999 pt radii becomes a stadium).
-- `T = 18 pt · refraction`.
+- `T = 48 pt · refraction` (§3.6.1).
 - **Screen-edge rule.** A side that lies within 0.5 px of the pass edge is pushed out by `b + max radius + 2 px`, so the sidebar's outer edges, which sit flush with the screen, get no bezel and no rim. The rect stays the drawn one for clipping, and only the SDF rect is extended.
 
 ### 4.3 File and declaration
@@ -265,12 +287,12 @@ Nothing changes from P1. `LiquidGlass` cross-fades the background over 200 ms, o
 
 | Field | Type | Light default | Dark default | Meaning |
 |---|---|---|---|---|
-| `liquidTint` | `Color` | `surface` @ 0.50 | `surface` @ 0.55 | Tint inside the shader (lighter than frosted's 0.72 / 0.90; tuned in §3.6) |
-| `refraction` | `double` | 1.0 | 1.0 | Scales thickness `T` = 18 pt × refraction. 0 means flat glass (blur and tint only) |
+| `liquidTint` | `Color` | `surface` @ 0.40 | `surface` @ 0.45 | Tint inside the shader (lighter than frosted's 0.72 / 0.90; tuned in §3.6.1) |
+| `refraction` | `double` | 1.0 | 1.0 | Scales thickness `T` = 48 pt × refraction. 0 means flat glass (blur and tint only) |
 | `dispersion` | `double` | 0.3 | 0.3 | 0–1, the colour fringe in the bezel. 0 turns it off |
-| `liquidBlurSigma` | `double` | 6 | 6 | Logical σ of the chained blur. 0 means none |
+| `liquidBlurSigma` | `double` | 2 | 2 | Logical σ of the chained blur. 0 means none (tuned in §3.6.1) |
 
-The bezel width (12 pt), the rim width (1.5 pt), the index (1.5), the saturation (1.1) and the light direction stay internal constants (`liquid_optics.dart`), so they can change without breaking the API. `rimHighlight` (P1) colours the specular rim.
+The bezel width (20 pt, §3.6.1), the rim width (1.5 pt), the index (1.5), the saturation (1.1) and the light direction stay internal constants (`liquid_optics.dart`), so they can change without breaking the API. `rimHighlight` (P1) colours the specular rim.
 
 ## 6. Tier policy
 
@@ -407,7 +429,7 @@ It is documented in `doc/native_chrome.md` ("When the native chrome is used") an
 
 ### 10.1 Unit tests (pure, `make test`)
 
-- **`liquid_optics_test.dart`:** `liquidUniforms` with exact float lists for a pill, a circle, the sidebar (screen-edge rule on three sides, and in RTL), per-corner radii, the bezel and radius clamps, `refraction` 0 and 2, `dispersion` 0, and scales 1, 2 and 3. It also checks `liquidDisplacement(x)`, a Dart mirror of steps 4–7 that exists for tests and docs: peak about 9 pt near the edge, 0 at the edge and for `x ≥ 1`.
+- **`liquid_optics_test.dart`:** `liquidUniforms` with exact float lists for a pill, a circle, the sidebar (screen-edge rule on three sides, and in RTL), per-corner radii, the bezel and radius clamps, `refraction` 0 and 2, `dispersion` 0, and scales 1, 2 and 3. It also checks `liquidDisplacement(x)`, a Dart mirror of steps 4–7 that exists for tests and docs: peak about 27 pt near the edge, 0 at the edge and for `x ≥ 1`.
 - **`glass_policy_test.dart`, rewritten for the new table:**
   - each signal alone → its tier;
   - `blurDisabled` with `powerSave` → frosted, and `blurDisabled` alone → solid;
@@ -511,7 +533,7 @@ The global test config resets `debugLiquidGlassCanRefractOverride` to `null` aft
 | Reduce Motion (`disableAnimations`) | the tier change is instant (P1). The shader is static, with no motion to reduce | Apple: "disables any elastic properties" |
 | Bold Text, text scale | unchanged (P1 §5.10). The glass is a background only | — |
 | VoiceOver and TalkBack | unchanged. The shader layer adds no semantics, because `LiquidBackdrop` has no semantics and its child is an empty `SizedBox` | — |
-| Legibility on liquid glass | Liquid is clearer than frosted, so contrast gets worse over busy backdrops. Mitigations: `liquidTint` alpha (0.50 light, 0.55 dark), a σ 6 blur (both tuned against native in §3.6), and the side-by-side review over the busiest backdrop. The owner can raise `liquidTint` alpha in the theme. A later phase can add adaptive dimming (non-goal) | WCAG 1.4.3 on labels is checked by eye in the review; a pixel-contrast checker is out of scope |
+| Legibility on liquid glass | Liquid is clearer than frosted, so contrast gets worse over busy backdrops. Mitigations: `liquidTint` alpha (0.40 light, 0.45 dark), a σ 2 blur (both tuned against native in §3.6.1; clearer than the first σ 6 / 50 %, which read as frosted), and the side-by-side review over the busiest backdrop. The owner can raise `liquidTint` alpha in the theme. A later phase can add adaptive dimming (non-goal) | WCAG 1.4.3 on labels is checked by eye in the review; a pixel-contrast checker is out of scope |
 
 The example's switch is a labelled `SegmentedButton`, so it is reachable with switch control and screen readers.
 
@@ -575,10 +597,10 @@ Mỗi dòng có đề xuất mặc định. Chủ sản phẩm trả lời "Ok h
 
 | Q# | câu hỏi | đề xuất |
 |---|---|---|
-| Q1 | Độ khúc xạ mặc định của mép kính bao nhiêu? | **Dải mép (bezel) 12pt, độ dày 18pt, chiết suất 1.5.** Nội dung sát mép bị kéo vào tối đa ~9pt, ở 1/3 dải còn ~3pt, giữa kính phẳng. Đèn cố định góc trên-trái, không dùng cảm biến nghiêng máy. Sau buổi duyệt ảnh đặt cạnh nhau được chỉnh một vòng (Task 6) |
+| Q1 | Độ khúc xạ mặc định của mép kính bao nhiêu? | **Dải mép (bezel) 12pt, độ dày 18pt, chiết suất 1.5.** Nội dung sát mép bị kéo vào tối đa ~9pt, ở 1/3 dải còn ~3pt, giữa kính phẳng. **Sau vòng chỉnh (§3.6.1): dải mép 20pt, độ dày 48pt** — kéo vào tối đa ~27pt, dải mép hiện lại chữ bên trong bị lật ngược như kính iOS 26. Đèn cố định góc trên-trái, không dùng cảm biến nghiêng máy. Sau buổi duyệt ảnh đặt cạnh nhau được chỉnh một vòng (Task 6) |
 | Q2 | Tán sắc màu (dispersion) mặc định? | **Bật, mức 0.3** (chiết suất R/B lệch ±0.03): viền màu rất nhẹ, chỉ ở dải mép, đúng chữ "nhẹ" của L1. Đặt `dispersion: 0` để tắt |
-| Q3 | Lớp liquid có làm mờ nền không, mờ bao nhiêu? | **Có, σ = 6** (frosted đang là 10), dùng blur của engine nối trước shader (`compose`), không tự blur trong shader. Rẻ hơn nhiều mà đẹp hơn. Đã so với ảnh tab bar native iOS 26 của P2: σ 3 quá trong, σ 6 gần native (§3.6) |
-| Q4 | `LiquidGlassTheme` có mở tham số shader cho app chỉnh không? | **Mở 4 trường:** `liquidTint` (màu phủ, sáng 50% / tối 55% màu surface; 22% thử trước đó quá trong, chữ phía sau đọc lẫn vào nhãn tab), `refraction` (0–2, mặc định 1), `dispersion` (0–1, mặc định 0.3), `liquidBlurSigma` (mặc định 6). Còn lại (dải mép, viền sáng, chiết suất, hướng đèn) là hằng nội bộ, đổi được mà không vỡ API |
+| Q3 | Lớp liquid có làm mờ nền không, mờ bao nhiêu? | **Có, σ = 6** (frosted đang là 10), dùng blur của engine nối trước shader (`compose`), không tự blur trong shader. Rẻ hơn nhiều mà đẹp hơn. Đã so với ảnh tab bar native iOS 26 của P2: σ 3 quá trong, σ 6 gần native (§3.6). **Sau vòng chỉnh (§3.6.1): σ = 2** — σ 6 làm kính thành kính mờ (frosted), không thấy thấu kính |
+| Q4 | `LiquidGlassTheme` có mở tham số shader cho app chỉnh không? | **Mở 4 trường:** `liquidTint` (màu phủ, sáng 50% / tối 55% màu surface; 22% thử trước đó quá trong, chữ phía sau đọc lẫn vào nhãn tab; **sau vòng chỉnh §3.6.1: sáng 40% / tối 45%**), `refraction` (0–2, mặc định 1), `dispersion` (0–1, mặc định 0.3), `liquidBlurSigma` (mặc định 6; **sau vòng chỉnh: 2**). Còn lại (dải mép, viền sáng, chiết suất, hướng đèn) là hằng nội bộ, đổi được mà không vỡ API |
 | Q5 | Ngưỡng "máy yếu" trên Android? | **`isLowRamDevice` hoặc RAM < 3 GiB** (máy 3 GB trở xuống) → frosted. Máy 4 GB trở lên được liquid; nếu thực tế giật thì bộ canh khung hình (Q7) tự hạ |
 | Q6 | Android 10+ chạy GLES thì liquid hay frosted? | **Máy không có Vulkan 1.1 (đúng nghĩa "chỉ GLES") → frosted.** Máy có Vulkan nhưng Flutter 3.44 vẫn đẩy sang GLES (Adreno ≤ 650, ví dụ Snapdragon 865 trở xuống) → **vẫn liquid**, shader có nhánh GLES đã chạy thử trên emulator, và có bộ canh khung hình đỡ. Không dò tên GPU (phải tạo ngữ cảnh EGL và chép danh sách đen của Flutter, đổi theo từng bản) |
 | Q7 | Có tự hạ xuống frosted khi khung hình thực tế chậm không? | **Có.** Khi đang hiện liquid, nếu 3 cửa sổ liên tiếp (mỗi cửa sổ 60 khung) có p90 thời gian raster > 1.25 × ngân sách khung (16.7ms ở 60Hz) thì hạ frosted đến hết phiên. Chỉ chạy ở bản profile/release |

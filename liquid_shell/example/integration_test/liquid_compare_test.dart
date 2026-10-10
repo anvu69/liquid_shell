@@ -124,7 +124,9 @@ void main() {
         await tester.drag(list, const Offset(0, -340));
         await tester.pumpAndSettle();
         await tester.drag(list, const Offset(0, 40));
-        await tester.pumpAndSettle();
+        // The bar's expand animation can still be running on the device
+        // after pumpAndSettle: give it time, or the shot catches it half way.
+        await _settle(tester);
         await binding.takeScreenshot('${_platform}_${_device}_${id}_$mode');
 
         if (_sidebarCases.contains(id) &&

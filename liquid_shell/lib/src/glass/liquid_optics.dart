@@ -7,11 +7,12 @@ import 'package:liquid_shell/src/glass/glass_theme.dart';
 /// Internal optics of the liquid tier (spec §4, §5.6). Lengths are logical
 /// pixels; [liquidUniforms] scales them to pass pixels.
 abstract final class LiquidOptics {
-  /// Width of the curved band inside the edge.
-  static const double bezel = 12;
+  /// Width of the curved band inside the edge. Wide and deep enough that
+  /// the band mirrors what lies inside it, as iOS 26 glass does (§3.6).
+  static const double bezel = 20;
 
   /// Glass thickness at `refraction` 1.
-  static const double thickness = 18;
+  static const double thickness = 48;
 
   /// Refractive index (crown glass).
   static const double index = 1.5;

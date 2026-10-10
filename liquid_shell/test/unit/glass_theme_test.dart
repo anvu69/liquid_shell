@@ -147,11 +147,14 @@ void main() {
     );
 
     test('defaults', () {
-      expect(light.liquidTint.a, closeTo(0.5, 1e-3));
-      expect(dark.liquidTint.a, closeTo(0.55, 1e-3));
+      // Tuned against iOS 26 native (spec §3.6): light enough that the
+      // lens shows what it bends.
+      expect(light.liquidTint.a, closeTo(0.40, 1e-3));
+      expect(dark.liquidTint.a, closeTo(0.45, 1e-3));
       expect(light.refraction, 1);
       expect(light.dispersion, 0.3);
-      expect(light.liquidBlurSigma, 6);
+      expect(light.liquidBlurSigma, 2);
+      expect(dark.liquidBlurSigma, 2);
     });
 
     test('copyWith, lerp and equality cover them', () {
@@ -171,7 +174,7 @@ void main() {
       final half = light.lerp(changed, 0.5);
       expect(half.refraction, 1.5);
       expect(half.dispersion, closeTo(0.15, 1e-9));
-      expect(half.liquidBlurSigma, 3);
+      expect(half.liquidBlurSigma, 1);
     });
 
     test('LiquidOpticsParams.fromTheme maps the fields', () {
@@ -182,7 +185,7 @@ void main() {
           rim: light.rimHighlight,
           refraction: 1,
           dispersion: 0.3,
-          blurSigma: 6,
+          blurSigma: 2,
         ),
       );
     });

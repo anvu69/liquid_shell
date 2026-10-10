@@ -22,7 +22,7 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
     this.borderRadius = const BorderRadius.all(Radius.circular(999)),
     this.refraction = 1,
     this.dispersion = 0.3,
-    this.liquidBlurSigma = 6,
+    this.liquidBlurSigma = 2,
   });
 
   /// Defaults for light and dark, derived from [scheme] (spec §5.9).
@@ -31,7 +31,7 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
     return LiquidGlassTheme(
       tint: scheme.surface.withValues(alpha: light ? 0.72 : 0.90),
       solid: scheme.surface,
-      liquidTint: scheme.surface.withValues(alpha: light ? 0.5 : 0.55),
+      liquidTint: scheme.surface.withValues(alpha: light ? 0.40 : 0.45),
       border: light
           ? scheme.outline.withValues(alpha: 0.28)
           : scheme.onSurface.withValues(alpha: 0.18),
