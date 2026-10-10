@@ -483,7 +483,7 @@ Rules:
 
 ### 7.5 Field frame and insets
 
-On every `syncFlutter` while the search tab is selected, and after every keyboard frame change (`keyboardWillChangeFrame`, re-read when the animation ends), native publishes the field frame converted to the Flutter view: `searchBar.searchTextField` when it is in a window, not hidden and not transparent; `CGRect.zero` otherwise. A change under 0.5pt is not sent; a failed send forgets the value (P2 rule).
+On every `syncFlutter` while the search tab is selected, and at the end of every keyboard move (`keyboardDidChangeFrame` and `keyboardDidHide`: the field's end position, read once the animation is over), native publishes the field frame converted to the Flutter view: `searchBar.searchTextField` when it is in a window, not hidden and not transparent; `CGRect.zero` otherwise. A change under 0.5pt is not sent; a failed send forgets the value (P2 rule).
 
 Dart turns it into `chromeInsets.bottom` with one pure function, `nativeSearchBottomInset(field, size, padding, viewInsets, active)` (§4.6). Only a field whose centre is in the lower half of the view counts (the iPhone tab-hosted field); a stacked field at the top is already in the top safe area.
 
@@ -502,9 +502,9 @@ UIKit draws the glass back circle (44×44 at x 16 on iPhone, research §4.1) for
 
 ### 7.7 Large title and the proxy scroll view
 
-Every `PageHostController` owns the proxy scroll view (§7.1). `setPageScroll(tab, offset)` sets `proxy.contentOffset.y = −proxy.adjustedContentInset.top + offset` for that tab's top host. UIKit then collapses the large title to the inline bar and draws its scroll-edge effect over the Flutter content (research §4.1: H on 26.5 and 27.0).
+Every `PageHostController` owns the proxy scroll view (§7.1). `setPageScroll(tab, offset)` sets `proxy.contentOffset.y = −max(expandedTop, proxy.adjustedContentInset.top) + offset` for that tab's top host. `expandedTop` is the host's top inset measured at offset ≤ 0 with the search inactive (the large title out); it is never force-read. Measuring from the current `adjustedContentInset.top` is wrong: once the title has collapsed it is the small bar's height, and offset 0 would never bring the large title back (Task 5 review). UIKit then collapses the large title to the inline bar and draws its scroll-edge effect over the Flutter content (research §4.1: H on 26.5 and 27.0).
 
-**Held top.** As the title collapses, the host's top safe area shrinks (168.7 → 116 on iPhone). Copied straight to Flutter, the page's padding would shrink under the user's finger every frame. `syncFlutter` therefore holds the host's top inset at its value when the proxy offset was ≤ 0 (`restingTop`), like P2's `heldTop`, as long as the proxy is scrolled. The hold does **not** apply to the search activation, where UIKit hides the large title on purpose: `restingTop` is re-read whenever the search's active state changes.
+**Held top.** As the title collapses, the host's top safe area shrinks (168.7 → 116 on iPhone). Copied straight to Flutter, the page's padding would shrink under the user's finger every frame. `syncFlutter` therefore holds the host's top inset at its value when the proxy offset was ≤ 0 (`restingTop`), like P2's `heldTop`, as long as the proxy is scrolled. The hold does **not** apply to the search activation, where UIKit hides the large title on purpose: `restingTop` is re-read whenever the search's active state changes. `restingTop` holds Flutter's padding only; it is never the proxy's base (`expandedTop` above), or a search on a scrolled page would leave the large title collapsed for good.
 
 Dart sends the offset from `LiquidPage`'s first vertical scroll view (`ScrollUpdateNotification`, depth 0), coalesced to one message per frame, only for the top page of a tab with a native bar.
 

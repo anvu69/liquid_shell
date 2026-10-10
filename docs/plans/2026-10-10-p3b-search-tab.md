@@ -2070,6 +2070,11 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ### Task 5: Native pages, insets, field frame and hit testing
 
+> **As built (Task 5 review, VK-407).** The code below is the plan as written; the implementation differs in three places:
+> - `setScrollOffset` measures from `expandedTop`, not `-proxy.adjustedContentInset.top` (spec §7.7): `proxy.contentOffset.y = -max(expandedTop, proxy.adjustedContentInset.top) + offset`. `PageHostController.expandedTop` is re-read in `rereadRestingTop` only at offset ≤ 0 with `navigationItem.searchController?.isActive != true`, never by `force`. `restingTop` keeps only the Flutter hold. Tests: `testTheLargeTitleReturnsAfterASearchOnAScrolledPage`, `testTheLargeTitleReturnsAfterScrollingTheResultsAndCancelling` (iPhone).
+> - `applyPages` syncs Flutter once more from the navigation transition's completion (spec §7.9). Test: `testThePushsCompletionSyncsFlutter`.
+> - `currentFieldFrame()`, `debugTap(.searchField)`, `selectedDestinationIndex` and `debugSnapshot().selectedTab` read the selection through `isSearchSelected` (iOS 26.5 keeps a stale `selectedTab` after a rebuild), as does `select()`'s guard.
+
 **Files:**
 - Modify: `liquid_shell_ios/ios/liquid_shell_ios/Sources/liquid_shell_ios/ShellNavController.swift`
 - Modify: `liquid_shell_ios/ios/liquid_shell_ios/Sources/liquid_shell_ios/SearchMath.swift`
