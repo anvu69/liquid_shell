@@ -432,7 +432,7 @@ It is documented in `doc/native_chrome.md` ("When the native chrome is used") an
 - **Teardown:** detach disposes the shader and removes the drift-guard entry.
 - **`precache`:** completes, and a second call reuses the program.
 
-The global test config sets `debugLiquidGlassCanRefractOverride = false`, so every existing P1 and P2 widget test keeps drawing frosted unchanged.
+The global test config resets `debugLiquidGlassCanRefractOverride` to `null` after each test. It does not set it to `false`: without `--enable-impeller` the probe already returns false, so every existing P1 and P2 widget test keeps drawing frosted unchanged, and a `false` would pin frosted in the `--enable-impeller` runs too (`make test-impeller`, the liquid goldens), so they could never draw liquid.
 
 ### 10.3 Impeller goldens (`make goldens`)
 

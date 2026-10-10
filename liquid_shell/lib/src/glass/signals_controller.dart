@@ -10,8 +10,15 @@ import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.
 /// probes.
 ///
 /// `flutter test` has no shader filters unless run with
-/// `--enable-impeller`, so glass there is frosted by default; tests of the
-/// liquid tier set this to `true` and inject a filter factory.
+/// `--enable-impeller`, so glass there is frosted by default. An app's
+/// widget tests can set this to `false` to keep frosted even under
+/// `--enable-impeller`. To test the liquid tier, run
+/// `flutter test --enable-impeller`, await `LiquidGlass.precache()` inside
+/// `tester.runAsync`, and leave this `null`. Setting it to `true` without
+/// Impeller does not help: building the lens filter then throws, which is
+/// reported as an error (failing the test) before the glass falls back to
+/// frosted. Reset it to `null` after each test;
+/// `debugResetLiquidGlassSignals` does not touch it.
 @visibleForTesting
 bool? debugLiquidGlassCanRefractOverride;
 

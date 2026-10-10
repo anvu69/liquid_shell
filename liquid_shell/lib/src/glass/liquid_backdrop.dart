@@ -73,8 +73,11 @@ class _LiquidBackdropState extends State<LiquidBackdrop> {
   }
 
   // An inactive element has no render object to repaint. Reactivation
-  // always runs didChangeDependencies (this state depends on ModalRoute
-  // and Scrollable, found or not), which subscribes again.
+  // runs didChangeDependencies, which subscribes again, only for an
+  // element with dependencies. ModalRoute.of guarantees one: it records a
+  // dependency even when no route is found. Scrollable.maybeOf does not
+  // (with no Scrollable it records nothing), so it must stay after a
+  // ModalRoute.of lookup.
   @override
   void deactivate() {
     _unlisten();
