@@ -1,10 +1,11 @@
 # The liquid tier
 
 `LiquidGlass` draws liquid glass by default wherever Flutter runs on
-Impeller (iOS, Android 10+, macOS). The lens is this package's own
-fragment shader; no other package is involved.
+Impeller: iOS, Android 10+ and macOS. The web, Windows and Linux have no
+Impeller shader filters by default, so glass there is frosted. The lens
+is this package's own fragment shader; no other package is involved.
 
-![Native iOS 26 (left) and Flutter liquid (right), iPhone](images/compare_iphone_basic.png)
+<img src="images/compare_iphone_basic.png" width="410" alt="Native iOS 26 (left) and Flutter liquid (right), iPhone">
 
 ## What it draws
 
@@ -31,18 +32,20 @@ lens and no rim.
 | `dispersion` | 0.3 | Colour fringe, 0–1 |
 | `liquidBlurSigma` | 2 | Blur under the lens; 0 for none |
 
-| `refraction: 0` | default | `refraction: 2` |
-|---|---|---|
-| ![](images/liquid_refraction_0.png) | ![](images/liquid_hero_iphone_light.png) | ![](images/liquid_refraction_2.png) |
+The same screen with one field changed at a time:
 
-| `dispersion: 0` | default (`dispersion: 0.3`) |
-|---|---|
-| ![](images/liquid_dispersion_0.png) | ![](images/liquid_hero_iphone_light.png) |
+| `refraction: 0` | default (`refraction: 1`) | `refraction: 2` |
+|---|---|---|
+| <img src="images/liquid_refraction_0.png" width="240" alt="refraction 0: flat glass"> | <img src="images/liquid_default.png" width="240" alt="default liquid glass"> | <img src="images/liquid_refraction_2.png" width="240" alt="refraction 2: twice the lens"> |
+
+| `dispersion: 0` | default (`dispersion: 0.3`) | default, dark |
+|---|---|---|
+| <img src="images/liquid_dispersion_0.png" width="240" alt="dispersion 0: no colour fringe"> | <img src="images/liquid_default.png" width="240" alt="default liquid glass"> | <img src="images/liquid_default_dark.png" width="240" alt="default liquid glass, dark"> |
 
 ## When it is not drawn
 
 The tier drops to **frosted** without Impeller (Android 9 and lower, the
-web), on Android devices without Vulkan 1.1 or with less than 3 GiB of
+web), on Android 10+ devices without Vulkan 1.1 or with less than 3 GiB of
 memory, in battery saver or iOS Low Power Mode, after sustained slow
 frames, inside another `BackdropFilter`, and until the shader has loaded.
 It drops to **solid** with Reduce Transparency, Increase Contrast, or

@@ -11,10 +11,13 @@ FLUTTER=${FLUTTER:-flutter}
 DART=${DART:-dart}
 IOS_RUNTIME=${IOS_RUNTIME:-com.apple.CoreSimulator.SimRuntime.iOS-26-5}
 created=()
-cleanup() { for u in "${created[@]}"; do xcrun simctl delete "$u" || true; done; }
+# ${arr[@]+...}: bash 3.2 (macOS) treats an empty array as unbound under set -u.
+cleanup() { for u in ${created[@]+"${created[@]}"}; do xcrun simctl delete "$u" || true; done; }
 trap cleanup EXIT
 
 shots=build/integration_screenshots
+# A stale shot from an earlier run would be paired silently.
+rm -rf "$shots" build/compare
 mkdir -p build/compare
 for pair in "iphone=com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro" \
             "ipad=com.apple.CoreSimulator.SimDeviceType.iPad-Air-11-inch-M4"; do

@@ -15,6 +15,9 @@ if [[ "$ANDROID_SERIAL" != emulator-* ]]; then
   exit 1
 fi
 shots=build/integration_screenshots
+# Keep the iOS native shots (the left half of every pair); drop stale
+# Android ones and earlier Android pairs.
+rm -f "$shots"/android_* build/compare/android_*
 mkdir -p build/compare
 # shellcheck disable=SC2086
 $FLUTTER drive --driver=test_driver/integration_test.dart \

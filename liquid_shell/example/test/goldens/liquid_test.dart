@@ -30,6 +30,59 @@ Widget _themed(_Adjust adjust, Widget child) => Builder(
   },
 );
 
+/// Margin around the glass in a chrome-band image, in logical pixels.
+const _bandMargin = 8.0;
+
+/// The chrome band: every liquid surface on screen plus [_bandMargin].
+Rect _chromeBand(WidgetTester tester) {
+  Rect? band;
+  for (final element
+      in find
+          .byWidgetPredicate(
+            (w) => w.runtimeType.toString() == 'LiquidBackdrop',
+          )
+          .evaluate()) {
+    final box = element.renderObject! as RenderBox;
+    final rect = box.localToGlobal(Offset.zero) & box.size;
+    band = band?.expandToInclude(rect) ?? rect;
+  }
+  expect(band, isNotNull, reason: 'no liquid glass on screen');
+  final screen = Offset.zero & tester.view.physicalSize / goldenPixelRatio;
+  return band!.inflate(_bandMargin).intersect(screen);
+}
+
+/// Compares only the chrome band with `bands/<name>.png`, so the 0.5 %
+/// tolerance (Q12) is a share of the glass, not of the whole screen: a
+/// change to the lens, the rim or the dispersion fails it.
+Future<void> _expectBand(WidgetTester tester, String name) async {
+  final band = _chromeBand(tester);
+  final source = Rect.fromLTRB(
+    (band.left * goldenPixelRatio).floorToDouble(),
+    (band.top * goldenPixelRatio).floorToDouble(),
+    (band.right * goldenPixelRatio).ceilToDouble(),
+    (band.bottom * goldenPixelRatio).ceilToDouble(),
+  );
+  final cropped = await tester.runAsync(() async {
+    final screen = await captureImage(tester.element(find.byType(MaterialApp)));
+    final recorder = ui.PictureRecorder();
+    Canvas(recorder).drawImageRect(
+      screen,
+      source,
+      Offset.zero & source.size,
+      Paint(),
+    );
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(
+      source.width.toInt(),
+      source.height.toInt(),
+    );
+    picture.dispose();
+    screen.dispose();
+    return image;
+  });
+  await expectLater(cropped, matchesGoldenFile('bands/$name.png'));
+}
+
 void main() {
   setUp(() {
     // These goldens are the liquid tier; a run without Impeller is a
@@ -72,13 +125,23 @@ void main() {
     );
   });
 
-  for (final (name, adjust) in <(String, _Adjust)>[
-    ('liquid_refraction_0', (t) => t.copyWith(refraction: 0)),
-    ('liquid_refraction_2', (t) => t.copyWith(refraction: 2)),
-    ('liquid_dispersion_0', (t) => t.copyWith(dispersion: 0)),
+  // BasicTabs on an iPhone, one theme field changed at a time: the doc
+  // image of each, and its chrome band as the regression check.
+  for (final (name, adjust, brightness) in <(String, _Adjust, Brightness)>[
+    ('liquid_default', (t) => t, Brightness.light),
+    ('liquid_default_dark', (t) => t, Brightness.dark),
+    ('liquid_refraction_0', (t) => t.copyWith(refraction: 0), Brightness.light),
+    ('liquid_refraction_2', (t) => t.copyWith(refraction: 2), Brightness.light),
+    ('liquid_dispersion_0', (t) => t.copyWith(dispersion: 0), Brightness.light),
   ]) {
     testWidgets(name, (tester) async {
-      await liquid(tester, name, _themed(adjust, const BasicTabsCase()));
+      await liquid(
+        tester,
+        name,
+        _themed(adjust, const BasicTabsCase()),
+        brightness: brightness,
+      );
+      await _expectBand(tester, name);
     });
   }
 }

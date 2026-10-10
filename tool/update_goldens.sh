@@ -25,4 +25,5 @@ $FLUTTER test --tags golden --update-goldens
 $FLUTTER test --enable-impeller --tags liquid_golden --update-goldens
 # Lossless: the pixels stay identical, only the PNG encoding shrinks.
 $DART run ../../tool/compress_pngs.dart ../doc/images
+$DART run ../../tool/compress_pngs.dart test/goldens/bands
 echo "✓ goldens and doc images updated in liquid_shell/doc/images (Flutter $version)"

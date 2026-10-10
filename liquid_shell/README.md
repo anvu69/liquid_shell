@@ -46,9 +46,10 @@ dependency.
 
 | Platform | Look | Signals |
 |---|---|---|
-| iOS 15+ | Glass pill and sidebar; native `UITabBarController` chrome on iOS 26 (opt-in) | Reduce Transparency, iPadOS 26 window controls |
-| Android | Same as iOS | Animations off / high contrast, battery saver, window blurs disabled (API 31+), low memory, no Vulkan 1.1 |
-| Web, macOS, Windows, Linux | Frosted glass | None (always frosted unless forced) |
+| iOS 15+ | Liquid glass pill and sidebar; native `UITabBarController` chrome on iOS 26 (opt-in) | Reduce Transparency, Increase Contrast, Low Power Mode, iPadOS 26 window controls |
+| Android 10+ | Liquid glass, as on iOS (frosted on Android 9 and lower: no Impeller) | Animations off / high contrast, battery saver, window blurs disabled (API 31+), low memory, no Vulkan 1.1 |
+| macOS | Liquid glass (Impeller is Flutter's default there) | None |
+| Web, Windows, Linux | Frosted glass (no Impeller shader filters by default) | None |
 
 ## Install
 
