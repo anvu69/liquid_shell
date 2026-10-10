@@ -39,7 +39,7 @@ void main() {
     });
 
     test('inward (negative), peaking about 27 near the edge', () {
-      // Bezel 20, thickness 48 (spec §3.6): past ~2 pt in, the shift falls
+      // Bezel 20, thickness 48 (spec §3.6.1): past ~2 pt in, the shift falls
       // faster than the depth grows, so the band mirrors what lies inside.
       expect(liquidDisplacement(0.02), closeTo(-22.384, 0.01));
       expect(liquidDisplacement(0.05), closeTo(-27.233, 0.01));

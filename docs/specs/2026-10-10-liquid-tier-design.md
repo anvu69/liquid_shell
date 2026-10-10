@@ -143,11 +143,11 @@ The validated shader ran through the real example in an Impeller golden (`flutte
 
 - **The lens, the rim and the screen-edge rule work as derived.** The sidebar on an iPad landscape golden bends the backdrop only at its inner edge.
 - **The first tint (22 %) and blur (σ 3) were far too clear.** Labels from the list behind the bar read through the tab labels, while native glass reads as frosty white. **50 % (light) or 55 % (dark) tint with σ 6** comes visibly close to native, so these are the defaults (Q3, Q4). The remaining gaps are the bar's size and layout (P1 geometry, not this phase) and the selection lens (non-goal).
-- **Superseded by the tuning round below.** That comparison used a single still doc image, and σ 6 + 50 % hid the lens.
+- **Superseded by the tuning session below (§3.6.1).** That comparison used a single still doc image, and σ 6 + 50 % hid the lens.
 
-#### 3.6.1 Tuning round against iOS 26 (VK-348, after Task 9)
+#### 3.6.1 Tuning session against iOS 26 (VK-348, after Task 9)
 
-Task 9's side-by-side pairs (iPhone 17 Pro, iOS 26.5 simulator) showed that the defaults above read as **frosted** glass: native visibly bends the content behind the bar, while σ 6 and a 50 % tint washed it out so the 12 pt lens had almost nothing to bend. The owner's direction is that the package draws Liquid Glass, and frosted is not an acceptable look. One tuning round (owner decision B1) changed the default **parameters and internal constants only**; the shader and its alpha handling are unchanged.
+Task 9's side-by-side pairs (iPhone 17 Pro, iOS 26.5 simulator) showed that the defaults above read as **frosted** glass: native visibly bends the content behind the bar, while σ 6 and a 50 % tint washed it out so the 12 pt lens had almost nothing to bend. The owner's direction is that the package draws Liquid Glass, and frosted is not an acceptable look. One tuning session (owner decision B1), in the seven rounds below, changed the default **parameters and internal constants only**; the shader and its alpha handling are unchanged.
 
 What native does, read off the pairs: the content behind the bar stays recognisable (a light blur and a light tint), and near the top and bottom edges the bar shows a **mirrored strip** of the text that lies further inside. That is what the §4.1 model gives once the displacement grows faster than the depth (`|dδ/dt| > 1`): the sample moves inward faster than the fragment moves inward, so the image flips. At bezel 12 pt and thickness 18 pt that band was a few points wide and blurred away; at **bezel 20 pt and thickness 48 pt** it spans about 2–11 pt in from the edge, with a peak shift of about 27 pt.
 
@@ -164,7 +164,7 @@ Rounds (light theme unless noted; `a` = card text across the bar's top edge, `b`
 | 6 (iPad sidebar open) | 0.35–0.45 / 0.40–0.50 | 1.5–3 | 20 / 48 | 0.3 | The full-height sidebar is a large pane: at 0.35 + σ 1.5 the list behind fights the sidebar labels, native looks between 0.40 + σ 2 and 0.45 + σ 2.5 |
 | 7 (iPhone, check) | 0.35–0.45 / — | 1.5–2.5 | 20 / 48 | 0.3 | 0.40 + σ 2 keeps the mirrored strip and the recognisable text on the bar; **chosen** |
 
-**Defaults after the round:** `liquidTint` `surface` @ **0.40** (light) / **0.45** (dark), `liquidBlurSigma` **2**, `refraction` 1 and `dispersion` 0.3 unchanged; internal bezel **20 pt** and thickness **48 pt** (`refraction` 1 now means 48 pt). The tint and blur stay a little stronger than the clearest round (0.35, σ 1.5) because one theme serves both the small bar and the large sidebar, and native keeps its labels legible with vibrancy, which this package does not have. What still differs from native is in Task 9's report: bar geometry, the selection capsule, SF Symbols and label weight (P1), and native's sharper mirrored strip.
+**Defaults after the session:** `liquidTint` `surface` @ **0.40** (light) / **0.45** (dark), `liquidBlurSigma` **2**, `refraction` 1 and `dispersion` 0.3 unchanged; internal bezel **20 pt** and thickness **48 pt** (`refraction` 1 now means 48 pt). The tint and blur stay a little stronger than the clearest round (0.35, σ 1.5) because one theme serves both the small bar and the large sidebar, and native keeps its labels legible with vibrancy, which this package does not have. What still differs from native is in Task 9's report: bar geometry, the selection capsule, SF Symbols and label weight (P1), and native's sharper mirrored strip.
 
 ## 4. The shader
 

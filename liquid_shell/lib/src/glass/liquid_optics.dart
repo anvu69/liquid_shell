@@ -8,7 +8,7 @@ import 'package:liquid_shell/src/glass/glass_theme.dart';
 /// pixels; [liquidUniforms] scales them to pass pixels.
 abstract final class LiquidOptics {
   /// Width of the curved band inside the edge. Wide and deep enough that
-  /// the band mirrors what lies inside it, as iOS 26 glass does (§3.6).
+  /// the band mirrors what lies inside it, as iOS 26 glass does (§3.6.1).
   static const double bezel = 20;
 
   /// Glass thickness at `refraction` 1.

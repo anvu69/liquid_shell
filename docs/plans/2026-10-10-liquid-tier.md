@@ -30,8 +30,8 @@
   - A forced tier wins over every signal.
   - The built-in liquid renderer is supported only with shader filters, a loaded program, and no ancestor `RenderBackdropFilter`.
 - **Thresholds.** `lowEnd` = `isLowRamDevice || totalMem < 3 GiB` (3 × 1024³ bytes). `glesOnly` = API ≥ 29 and no `FEATURE_VULKAN_HARDWARE_VERSION` ≥ `0x00401000`. The frame guard demotes after 3 consecutive 60-frame windows whose raster p90 is above 1.25 × (1 s / refresh rate). It is sticky, and runs in profile and release only.
-- **Theme defaults (Q3, Q4).** `liquidTint` = surface @ 0.50 (light) or 0.55 (dark); `refraction` 1.0; `dispersion` 0.3; `liquidBlurSigma` 6. These values were tuned against P2's native iPhone screenshot (spec §3.6).
-- **Optics constants (Q1).** Bezel 12 pt, thickness 18 pt × refraction, index 1.5, rim width 1.5 pt, saturation 1.1, light direction (−0.5, −0.85).
+- **Theme defaults (Q3, Q4).** `liquidTint` = surface @ 0.40 (light) or 0.45 (dark); `refraction` 1.0; `dispersion` 0.3; `liquidBlurSigma` 2. These values were tuned against iOS 26 native in the tuning session after Task 9 (spec §3.6.1). They replace the first values (0.50 / 0.55, σ 6, from spec §3.6).
+- **Optics constants (Q1).** Bezel 20 pt, thickness 48 pt × refraction (spec §3.6.1; first values were 12 pt and 18 pt), index 1.5, rim width 1.5 pt, saturation 1.1, light direction (−0.5, −0.85).
 - **Breaking changes (Q13).**
   - `LiquidGlassSignals.canBlur` is removed.
   - `debugLiquidGlassCanBlurOverride` becomes `debugLiquidGlassCanRefractOverride`.

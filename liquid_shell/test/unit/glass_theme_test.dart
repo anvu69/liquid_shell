@@ -147,7 +147,7 @@ void main() {
     );
 
     test('defaults', () {
-      // Tuned against iOS 26 native (spec §3.6): light enough that the
+      // Tuned against iOS 26 native (spec §3.6.1): light enough that the
       // lens shows what it bends.
       expect(light.liquidTint.a, closeTo(0.40, 1e-3));
       expect(dark.liquidTint.a, closeTo(0.45, 1e-3));
