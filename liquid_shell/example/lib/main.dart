@@ -1,13 +1,13 @@
-import 'dart:io' show Platform;
-
 import 'package:flutter/material.dart';
 import 'package:liquid_shell_example/cases/cases.dart';
 import 'package:liquid_shell_example/cases/native_alerts.dart';
 import 'package:liquid_shell_example/support/drawn_by_flutter.dart';
+import 'package:liquid_shell_example/support/launch_demo.dart';
 
-void main() => runApp(
-  ExampleApp(demo: Platform.environment['LIQUID_SHELL_EXAMPLE_DEMO']),
-);
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(ExampleApp(demo: await launchDemo()));
+}
 
 /// The seed colour of the example theme.
 const kExampleSeed = Color(0xFF3D5AFE);

@@ -358,7 +358,7 @@ VoiceOver on the alert and the sheet; Dynamic Type at AX5; dark mode; RTL (Arabi
   - "Action sheet without cancel";
   - a "Result: …" line;
   - `// #docregion readme`.
-  - `autorun` (from `LIQUID_SHELL_EXAMPLE_DEMO`, read with `Platform.environment` in `main.dart`) runs one demo after the first frame and answers with a "Result: <value>" native alert, for XCUITest.
+  - `autorun` (from `LIQUID_SHELL_EXAMPLE_DEMO`: Dart's `Platform.environment` is empty on iOS, so `main.dart` asks the Runner over the `liquid_shell_example/launch` channel) runs one demo after the first frame and answers with a "Result: <value>" native alert, for XCUITest.
 - **`discard_guard.dart` and `native_chrome.dart`:** `_confirmLeave` uses `showLiquidAlert<bool>` with "Keep editing" (cancel, `false`) and "Discard" (destructive, `true`) (L6). The README snippet follows the `docregion`.
 - `kCases` gains `alerts`. `cases_smoke_test` opens it on phone and tablet, and the existing guard smoke tests keep passing through the fallback (the same texts).
 
