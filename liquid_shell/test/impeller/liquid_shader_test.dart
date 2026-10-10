@@ -35,6 +35,42 @@ class _Stripes extends CustomPainter {
   bool shouldRepaint(_Stripes oldDelegate) => false;
 }
 
+/// A grey ramp across physical columns [_rampStart, _rampStart + 64): each
+/// column is 4 levels brighter than the one before, so a sample's source x
+/// is readable from its brightness (to the column: the shader's sampler
+/// is nearest). Grey, because the
+/// shader's saturation leaves grey unchanged.
+class _Ramp extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (var c = 0; c < 64; c++) {
+      canvas.drawRect(
+        Rect.fromLTWH((_rampStart + c) / _scale, 0, 1 / _scale, size.height),
+        Paint()..color = Color.fromARGB(255, c * 4, c * 4, c * 4),
+      );
+    }
+    canvas
+      ..drawRect(
+        Rect.fromLTWH(0, 0, _rampStart / _scale, size.height),
+        Paint()..color = const Color(0xFF000000),
+      )
+      ..drawRect(
+        Rect.fromLTWH((_rampStart + 64) / _scale, 0, size.width, size.height),
+        Paint()..color = const Color(0xFFFCFCFC),
+      );
+  }
+
+  @override
+  bool shouldRepaint(_Ramp oldDelegate) => false;
+}
+
+/// First physical column of [_Ramp].
+const _rampStart = 196;
+
+/// The source x (physical px) that a ramp [level] was sampled at: column
+/// c holds level 4·(c − start), and its centre is at c + 0.5.
+double _rampSource(num level) => level / 4 + _rampStart + 0.5;
+
 Future<ui.FragmentProgram> _program(WidgetTester tester) async =>
     (await tester.runAsync(
       () => ui.FragmentProgram.fromAsset('shaders/liquid_glass.frag'),
@@ -71,7 +107,11 @@ ui.ImageFilter _lens(
   return ui.ImageFilter.shader(shader);
 }
 
-Future<ByteData> _render(WidgetTester tester, Widget glass) async {
+Future<ByteData> _render(
+  WidgetTester tester,
+  Widget glass, {
+  CustomPainter? backdrop,
+}) async {
   tester.view
     ..devicePixelRatio = _scale
     ..physicalSize = _view * _scale;
@@ -81,7 +121,7 @@ Future<ByteData> _render(WidgetTester tester, Widget glass) async {
       textDirection: TextDirection.ltr,
       child: Stack(
         children: [
-          Positioned.fill(child: CustomPaint(painter: _Stripes())),
+          Positioned.fill(child: CustomPaint(painter: backdrop ?? _Stripes())),
           glass,
         ],
       ),
@@ -93,6 +133,35 @@ Future<ByteData> _render(WidgetTester tester, Widget glass) async {
   final layer = view.debugLayer! as OffsetLayer;
   final image = await tester.runAsync(() => layer.toImage(view.paintBounds));
   return (await tester.runAsync(() => image!.toByteData()))!;
+}
+
+/// The real lens over [glass], filtered with [params].
+Widget _glass(
+  ui.FragmentProgram program,
+  Rect glass,
+  LiquidOpticsParams params,
+) => Positioned.fromRect(
+  rect: glass,
+  child: ClipRect(
+    child: BackdropFilter(
+      filter: _lens(program, glass, params: params),
+      child: const SizedBox.expand(),
+    ),
+  ),
+);
+
+/// The shader's tint and saturation (spec §4.1 step 10) applied to [rgb]
+/// (0–255), in Dart, for expected values.
+List<double> _tintAndSaturate(List<double> rgb, Color tint) {
+  final mixed = [
+    for (final (i, c) in rgb.indexed)
+      c + ([tint.r, tint.g, tint.b][i] * 255 - c) * tint.a,
+  ];
+  final luma = 0.2126 * mixed[0] + 0.7152 * mixed[1] + 0.0722 * mixed[2];
+  return [
+    for (final c in mixed)
+      (luma + (c - luma) * LiquidOptics.saturation).clamp(0, 255).toDouble(),
+  ];
 }
 
 /// RGBA of the pixel at logical [p].
@@ -297,5 +366,130 @@ void main() {
       await tester.pump();
     }
     expect(tester.takeException(), isNull);
+  });
+
+  // Glass at logical x 100 (physical 200), bezel 24 px, thickness 36 px at
+  // scale 2. Output column X is fragment X + 0.5, at depth t = X + 0.5 − 200
+  // inside the left edge, and samples X + 0.5 − δ (δ < 0 is inward, +x).
+  const rampGlass = Rect.fromLTWH(100, 100, 200, 100);
+  double expectedSource(int column, {double index = LiquidOptics.index}) {
+    final p = column + 0.5;
+    final x = (p - 200) / (LiquidOptics.bezel * _scale);
+    return p -
+        liquidDisplacement(
+          x,
+          bezel: LiquidOptics.bezel * _scale,
+          thickness: LiquidOptics.thickness * _scale,
+          index: index,
+        );
+  }
+
+  testWidgets('the lens bends by liquidDisplacement (size pinned)', (
+    tester,
+  ) async {
+    final program = await _program(tester);
+    final data = await _render(
+      tester,
+      _glass(
+        program,
+        rampGlass,
+        const LiquidOpticsParams(
+          tint: Color(0x00000000),
+          rim: Color(0x00000000),
+          refraction: 1,
+          dispersion: 0,
+          blurSigma: 0,
+        ),
+      ),
+      backdrop: _Ramp(),
+    );
+    for (final column in [200, 201, 202, 204, 206, 210, 216, 230]) {
+      final pixel = _pixel(data, Offset(column / _scale, 150));
+      final source = _rampSource(pixel[1]);
+      final expected = expectedSource(column);
+      expect(
+        source,
+        // The backdrop is sampled nearest (levels come in steps of 4), so
+        // the reading is the source column ±0.5 px; 1.5 px leaves 1 px for
+        // the GPU. A 20 % error in the depth or the slope cap is ~3 px.
+        closeTo(expected, 1.5),
+        reason:
+            'column $column: sampled ${source.toStringAsFixed(2)} px, '
+            'liquidDisplacement says ${expected.toStringAsFixed(2)} px',
+      );
+    }
+  });
+
+  testWidgets('default dispersion 0.3: red bends less, blue more', (
+    tester,
+  ) async {
+    final program = await _program(tester);
+    final data = await _render(
+      tester,
+      _glass(
+        program,
+        rampGlass,
+        const LiquidOpticsParams(
+          tint: Color(0x00000000),
+          rim: Color(0x00000000),
+          refraction: 1,
+          dispersion: 0.3,
+          blurSigma: 0,
+        ),
+      ),
+      backdrop: _Ramp(),
+    );
+    // Index n ∓ 0.1 × 0.3 for red and blue (spec §4.1 step 8).
+    const spread = 0.1 * 0.3;
+    for (final column in [202, 204, 206]) {
+      final pixel = _pixel(data, Offset(column / _scale, 150));
+      double level(double index) =>
+          ((expectedSource(column, index: index) - _rampStart - 0.5) * 4).clamp(
+            0,
+            252,
+          );
+      final expected = _tintAndSaturate([
+        level(LiquidOptics.index - spread),
+        level(LiquidOptics.index),
+        level(LiquidOptics.index + spread),
+      ], const Color(0x00000000));
+      for (var c = 0; c < 3; c++) {
+        expect(
+          pixel[c],
+          closeTo(expected[c], 3),
+          reason: 'column $column channel $c: $pixel vs $expected',
+        );
+      }
+      expect(pixel[2], greaterThan(pixel[0] + 2), reason: 'fringe: $pixel');
+    }
+  });
+
+  testWidgets('a half-alpha tint mixes with the backdrop', (tester) async {
+    final program = await _program(tester);
+    const tint = Color(0x8000FF00);
+    final data = await _render(
+      tester,
+      _glass(
+        program,
+        rampGlass,
+        const LiquidOpticsParams(
+          tint: tint,
+          rim: Color(0x00000000),
+          refraction: 1,
+          dispersion: 0,
+          blurSigma: 0,
+        ),
+      ),
+    );
+    // 196 lies in a red stripe [192, 200), in the flat body.
+    final pixel = _pixel(data, const Offset(196, 150));
+    final expected = _tintAndSaturate([255, 0, 0], tint);
+    for (var c = 0; c < 3; c++) {
+      expect(
+        pixel[c],
+        closeTo(expected[c], 3),
+        reason: 'channel $c: $pixel vs $expected',
+      );
+    }
   });
 }
