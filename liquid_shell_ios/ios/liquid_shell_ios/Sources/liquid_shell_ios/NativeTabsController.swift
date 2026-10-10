@@ -582,6 +582,13 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     searchBridge.setText(text)
   }
 
+  /// The text a shell installed after a scene reconnect starts with (spec
+  /// §7.10): Dart's newest write, held for another tab or a composition,
+  /// else the field's.
+  var carriedSearchText: String {
+    heldSearchText ?? searchBridge.pendingText ?? searchBridge.text
+  }
+
   /// Dart's activate / deactivate. Activation needs the search tab
   /// selected; deactivation keeps the text.
   func setSearchActive(_ active: Bool) {

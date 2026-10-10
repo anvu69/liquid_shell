@@ -41,6 +41,12 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
   /// reinstall after a scene reconnect applies it at once, so the chrome
   /// is back before Dart answers the new shell's first state report.
   private var lastConfig: NativeChromeConfig?
+  /// The search text of the shell a scene disconnect took away, for the
+  /// shell a reconnect installs (spec P3b §7.10). Dart replays its text
+  /// only on a reconnect whose first state report is unchanged; on a
+  /// changed one it never sends the user's own text back (the one-way
+  /// rule), so the new field starts with the old one's.
+  private var carriedSearchText: String?
 
   init(
     events: NativeShellFlutterApiProtocol,
@@ -162,17 +168,28 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
     window.rootViewController = ShellContainerController(tabs: tabs, flutter: flutter)
     shell = tabs
     if let lastConfig { tabs.apply(lastConfig) }
+    if let text = carriedSearchText {
+      carriedSearchText = nil
+      tabs.setSearchText(text)
+    }
   }
 
   private func disconnect(_ scene: UIScene?) {
     guard let scene, scene === self.scene else { return }
-    // A reconnect gets a fresh install from the willConnect observer, which
-    // stays armed, with `lastConfig` applied; until then Dart sees "not
-    // installed". Dart's forced re-send after the new shell's first state
-    // report confirms it.
+    sceneDisconnected()
+  }
+
+  /// Our scene went away. A reconnect gets a fresh install from the
+  /// willConnect observer, which stays armed, with `lastConfig` applied;
+  /// until then Dart sees "not installed". Dart's forced re-send after the
+  /// new shell's first state report confirms it. Internal for tests.
+  func sceneDisconnected() {
+    if #available(iOS 26.0, *), let old = shell as? NativeTabsController {
+      carriedSearchText = old.carriedSearchText
+    }
     shell = nil
     flutter = nil
-    self.scene = nil
+    scene = nil
   }
 
   @available(iOS 26.0, *)

@@ -1347,6 +1347,66 @@ extension NativeTabsTests {
     bridge.updateSearchResults(for: bridge.controller)
   }
 
+  /// A scene reconnect whose first state report differs from the last one
+  /// (spec §7.10): to Dart that is a live size-class change, and it never
+  /// sends the user's own text back (the one-way rule). The installer
+  /// carries the old field's text to the reinstalled shell instead,
+  /// without reporting it as an edit.
+  func testASceneReconnectCarriesTheUsersSearchTextToTheNewShell() throws {
+    let (installer, window) = try installedByInstaller()
+    _ = try installer.attach()
+    try installer.update(config: searchConfig(selected: 2))
+    settle()
+    userTypes("hồ", into: try tabs(in: window).searchBridge)
+    let edits = events.searchTexts.count
+    // The scene goes away: its window and shell are released.
+    installer.sceneDisconnected()
+    window.rootViewController = UIViewController()
+    settle()
+
+    let scene = try XCTUnwrap(window.windowScene)
+    let next = UIWindow(windowScene: scene)
+    let flutter = UIViewController()
+    next.rootViewController = flutter
+    next.isHidden = false
+    extraWindows.append(next)
+    installer.install(flutter, in: next)
+    settle()
+
+    let shell = try tabs(in: next)
+    XCTAssertTrue(shell.selectedTab === shell.searchTab)
+    XCTAssertEqual(shell.searchBridge.text, "hồ")
+    XCTAssertEqual(events.searchTexts.count, edits, "not an edit")
+  }
+
+  /// Dart's newest text, held while another tab was selected, is the text
+  /// to carry: newer than the field's.
+  func testASceneReconnectCarriesDartsHeldTextOverTheField() throws {
+    let (installer, window) = try installedByInstaller()
+    _ = try installer.attach()
+    try installer.update(config: searchConfig(selected: 2))
+    settle()
+    userTypes("hồ", into: try tabs(in: window).searchBridge)
+    try installer.update(config: searchConfig(selected: 0))
+    settle()
+    try installer.setSearchText(text: "hà")
+    installer.sceneDisconnected()
+    window.rootViewController = UIViewController()
+    settle()
+
+    let scene = try XCTUnwrap(window.windowScene)
+    let next = UIWindow(windowScene: scene)
+    let flutter = UIViewController()
+    next.rootViewController = flutter
+    next.isHidden = false
+    extraWindows.append(next)
+    installer.install(flutter, in: next)
+    try installer.update(config: searchConfig(selected: 2))
+    settle()
+
+    XCTAssertEqual(try tabs(in: next).searchBridge.text, "hà")
+  }
+
   func testTheSearchDestinationIsUIKitsSearchTabWithTheAppsTitle() throws {
     let tabs = try installedSearchShell()
     let search = try XCTUnwrap(tabs.searchTab)
