@@ -12,7 +12,8 @@ LiquidShellIOS liquidShellIOSWithHost(NativeShellHostApi hostApi) =>
     LiquidShellIOS._(hostApi);
 
 /// The iOS platform: the event-channel signal reader plus the native
-/// iPadOS 26 shell and window controls over the Pigeon channel.
+/// iOS 26 shell (iPhone and iPad) and the iPadOS window controls over the
+/// Pigeon channel.
 ///
 /// Registered by the generated plugin registrant. Apps never use it.
 class LiquidShellIOS extends EventChannelLiquidShellPlatform {

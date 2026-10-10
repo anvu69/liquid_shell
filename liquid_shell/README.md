@@ -876,7 +876,8 @@ How it behaves:
   like Flutter taps; the native selection changes only when the guard
   accepts. The trailing action and the footer call your callbacks.
 - A page pushed above the shell hides the native chrome while it covers the
-  shell; a dialog above the shell makes it ignore touches.
+  shell; a dialog above the shell makes it ignore touches, and hides the
+  compact bar.
 - `LiquidHideChrome` hides it, as it hides the Flutter chrome.
 - `LiquidShellScope.of(context).nativeChrome` tells pages which chrome is
   on screen. `sidebarHeader` and `sidebarFooter` are Flutter widgets and

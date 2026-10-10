@@ -99,8 +99,8 @@ const kCases = <ExampleCase>[
   ),
   (
     id: 'native_chrome',
-    title: 'Native iPadOS chrome',
-    subtitle: 'UITabBarController sidebar on iPad 26, Flutter elsewhere',
+    title: 'Native chrome',
+    subtitle: 'UITabBarController on iOS 26 (iPhone, iPad), Flutter elsewhere',
     page: NativeChromeCase(),
   ),
 ];

@@ -5,7 +5,12 @@ A common platform interface for the [`liquid_shell`][app] plugin.
 It defines `LiquidShellPlatform`, the stream of `LiquidPlatformSignals`
 (reduce transparency, battery saver, system blur disabled) that make
 `liquid_shell` glass fall back to a solid fill, and the event-channel
-implementation shared by the iOS and Android packages.
+implementation shared by the iOS and Android packages. It also defines the
+native chrome contract (`LiquidNativeShellState`, `LiquidNativeChromeConfig`,
+`LiquidNativeEvent`), which the iOS package implements on every iOS 26
+iPhone and iPad, and `LiquidWindowControls` for the iPadOS window controls.
+Every native member has a default, so a platform without native chrome
+implements only `watchSignals`.
 
 ## Usage
 

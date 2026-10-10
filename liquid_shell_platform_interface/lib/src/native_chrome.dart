@@ -62,7 +62,11 @@ class LiquidNativeShellState {
   /// Whether the native container is installed in the window.
   final bool installed;
 
-  /// Whether the platform's horizontal size class is compact.
+  /// Whether the native chrome is in its compact layout: the floating tab
+  /// bar at the bottom, no sidebar. True on a phone (whatever its size
+  /// class: a large iPhone in landscape is regular and still compact here)
+  /// and in any window whose horizontal size class is compact (a narrow
+  /// iPad window).
   final bool compact;
 
   /// The native sidebar.
@@ -246,8 +250,9 @@ class LiquidNativeChromeConfig {
   /// Right-to-left layout for the native chrome.
   final bool rtl;
 
-  /// Hide the chrome while [engaged] (a page hides it, or the shell's route
-  /// is covered).
+  /// Hide the chrome while [engaged]: a page hides it, the shell's route
+  /// is covered, or, in the compact layout, any route (a dialog or sheet)
+  /// is above the shell's route.
   final bool hidden;
 
   /// Whether the chrome takes touches (false while a modal route is above

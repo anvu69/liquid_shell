@@ -22,6 +22,13 @@ drawing the body. Everywhere else the shell draws its Flutter chrome.
    the trailing action too (`LiquidTabAction.sfSymbol`) if you have one.
 3. Optionally pass `nativeSidebarFooter`.
 
+The app must use the UIScene life cycle, as the example app does
+(`UIApplicationSceneManifest` with `FlutterSceneDelegate` in Info.plist,
+plugins registered from `didInitializeImplicitFlutterEngine`): the plugin
+installs its container when the scene connects. An app still on the
+AppDelegate-only life cycle keeps the Flutter chrome, and
+`attachNativeChrome()` reports `rootNotFlutter`.
+
 `LiquidShell(nativeChrome: LiquidNativeChrome.off)` keeps the Flutter chrome
 for one shell.
 

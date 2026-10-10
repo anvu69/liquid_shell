@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell_example/support/demo_page.dart';
 
-/// Native iPadOS 26 chrome: the platform's own tab bar and sidebar. Every
-/// destination and the trailing action carry an SF Symbol, and the sidebar
-/// footer is native data. "Unsaved changes" makes a tab change ask first,
-/// through `beforeDestinationChange`, for native and Flutter taps alike.
+/// Native iOS 26 chrome, on iPhone and iPad: the platform's own tab bar
+/// and, at regular width, its sidebar. Every destination and the trailing
+/// action carry an SF Symbol, and the sidebar footer is native data.
+/// "Unsaved changes" makes a tab change ask first, through
+/// `beforeDestinationChange`, for native and Flutter taps alike.
 /// Elsewhere this case draws the Flutter chrome.
 class NativeChromeCase extends StatefulWidget {
   /// Creates the case.

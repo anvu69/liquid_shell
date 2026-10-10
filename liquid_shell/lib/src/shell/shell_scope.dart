@@ -53,14 +53,20 @@ class LiquidShellScopeData {
   /// `build`): the change then applies right after that frame.
   final ValueSetter<bool> setSidebarVisible;
 
-  /// Whether the platform draws the chrome (iPadOS 26 native chrome). The
-  /// insets then come from the platform's safe area: [chromeInsets] top is
-  /// the top padding while the native tab bar shows.
+  /// Whether the platform draws the chrome (native chrome on an iOS 26
+  /// iPhone or iPad). The insets then come from the platform's safe area:
+  /// at regular width [chromeInsets] top is the top padding while the
+  /// native top bar shows; at compact width (every iPhone, and a narrow
+  /// iPad window) [chromeInsets] bottom is the bottom padding while the
+  /// native floating tab bar shows.
   final bool nativeChrome;
 
-  /// The iPadOS 26 window controls, zero elsewhere and while [nativeChrome]
-  /// is true (the native bar and sidebar make room for them). Rows at the
-  /// top of a page clear them with `LiquidWindowControlsClearance`.
+  /// The iPadOS 26 window controls, zero elsewhere (always zero on an
+  /// iPhone). Zero while [nativeChrome] is true at regular width: the
+  /// native top bar and sidebar make room for them. Under the native
+  /// compact bar, which sits at the bottom, they are the real cluster.
+  /// Rows at the top of a page clear them with
+  /// `LiquidWindowControlsClearance`.
   final LiquidWindowControls windowControls;
 
   /// Field by field, except [setSidebarVisible] (spec §4.4). The setter is an

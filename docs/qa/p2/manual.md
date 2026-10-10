@@ -23,9 +23,10 @@ xcrun devicectl device process launch --device <UDID> vn.lasoai.liquidShellExamp
 
 Nếu cần log: `fvm flutter run -d <UDID>` thay cho ba lệnh cuối.
 
-Bản Task 7c do controller cài sẵn (`Runner.app` build profile, team
-`7T48W99FC5`, bundle id tạm `vn.lasoai.liquidshell.example`): mở app
-"Liquid Shell Example" trên máy, chọn case **"Native chrome"**.
+Nếu bản build đã được cài sẵn (`Runner.app`, ký bằng team
+`<YOUR_TEAM_ID>`; nếu phải đổi bundle id để ký thì dùng id đó trong lệnh
+`launch` ở trên): mở app "Liquid Shell Example" trên máy, chọn case
+**"Native chrome"**.
 
 ## iPad Air (iPadOS 27)
 
