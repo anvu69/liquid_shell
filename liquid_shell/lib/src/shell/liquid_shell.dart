@@ -296,7 +296,13 @@ class _LiquidShellState extends State<LiquidShell>
         widget.tabBarTrailing?.onPressed();
       case LiquidNativeFooterTapped():
         widget.nativeSidebarFooter?.onPressed();
-      case LiquidNativeStateChanged() || LiquidWindowControlsChanged():
+      case LiquidNativeStateChanged() ||
+          LiquidWindowControlsChanged() ||
+          LiquidNativeSearchTextChanged() ||
+          LiquidNativeSearchActiveChanged() ||
+          LiquidNativeSearchSubmitted() ||
+          LiquidNativeSearchFieldChanged() ||
+          LiquidNativeBackTapped():
         break;
     }
   }

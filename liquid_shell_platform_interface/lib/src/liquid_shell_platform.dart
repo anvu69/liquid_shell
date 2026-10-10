@@ -50,6 +50,21 @@ abstract class LiquidShellPlatform extends PlatformInterface {
   Future<LiquidWindowControls> readWindowControls() async =>
       LiquidWindowControls.zero;
 
+  /// Sets the native search field's text, once no IME composition is in
+  /// progress. Default: does nothing.
+  Future<void> setNativeSearchText(String text) async {}
+
+  /// Focuses (presents) or unfocuses the native search; unfocusing keeps
+  /// the text. Default: does nothing.
+  Future<void> setNativeSearchActive({required bool active}) async {}
+
+  /// The scroll offset of tab [tab]'s top page, for the native large title
+  /// and scroll-edge effect. Default: does nothing.
+  Future<void> setNativePageScroll({
+    required int tab,
+    required double offset,
+  }) async {}
+
   /// Native taps, native shell changes and window-control changes, as a
   /// broadcast stream. Default: no events.
   Stream<LiquidNativeEvent> get nativeEvents => const Stream.empty();
