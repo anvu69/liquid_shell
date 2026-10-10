@@ -2,8 +2,8 @@ import 'package:flutter/foundation.dart';
 
 /// Accessibility and power signals read from the operating system.
 ///
-/// Any of them being `true` makes `liquid_shell` draw solid instead of
-/// glass. Every field defaults to `false`; a signal that cannot be read is
+/// `liquid_shell` maps them to a glass tier (its spec 2026-10-10 §6).
+/// Every field defaults to `false`; a signal that cannot be read is
 /// reported as `false`.
 @immutable
 class LiquidPlatformSignals {
@@ -12,6 +12,8 @@ class LiquidPlatformSignals {
     this.reduceTransparency = false,
     this.powerSave = false,
     this.blurDisabled = false,
+    this.lowEnd = false,
+    this.glesOnly = false,
   });
 
   /// Lenient decoding of a channel payload.
@@ -25,6 +27,8 @@ class LiquidPlatformSignals {
       reduceTransparency: read('reduceTransparency'),
       powerSave: read('powerSave'),
       blurDisabled: read('blurDisabled'),
+      lowEnd: read('lowEnd'),
+      glesOnly: read('glesOnly'),
     );
   }
 
@@ -34,24 +38,39 @@ class LiquidPlatformSignals {
   /// iOS Reduce Transparency; on Android, animations off or high contrast.
   final bool reduceTransparency;
 
-  /// Android battery saver.
+  /// Android battery saver; iOS Low Power Mode.
   final bool powerSave;
 
   /// Android 12+: the system disabled window blurs.
   final bool blurDisabled;
+
+  /// Android: a low-RAM device or under 3 GiB of memory.
+  final bool lowEnd;
+
+  /// Android 10+ without Vulkan 1.1: Flutter renders with OpenGL ES.
+  final bool glesOnly;
 
   @override
   bool operator ==(Object other) =>
       other is LiquidPlatformSignals &&
       other.reduceTransparency == reduceTransparency &&
       other.powerSave == powerSave &&
-      other.blurDisabled == blurDisabled;
+      other.blurDisabled == blurDisabled &&
+      other.lowEnd == lowEnd &&
+      other.glesOnly == glesOnly;
 
   @override
-  int get hashCode => Object.hash(reduceTransparency, powerSave, blurDisabled);
+  int get hashCode => Object.hash(
+    reduceTransparency,
+    powerSave,
+    blurDisabled,
+    lowEnd,
+    glesOnly,
+  );
 
   @override
   String toString() =>
       'LiquidPlatformSignals(reduceTransparency: $reduceTransparency, '
-      'powerSave: $powerSave, blurDisabled: $blurDisabled)';
+      'powerSave: $powerSave, blurDisabled: $blurDisabled, '
+      'lowEnd: $lowEnd, glesOnly: $glesOnly)';
 }

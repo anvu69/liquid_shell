@@ -46,6 +46,22 @@ void main() {
     });
   });
 
+  test('reads lowEnd and glesOnly (spec 2026-10-10 §7.3)', () {
+    expect(
+      LiquidPlatformSignals.fromMap(const {'lowEnd': true, 'glesOnly': true}),
+      const LiquidPlatformSignals(lowEnd: true, glesOnly: true),
+    );
+    expect(LiquidPlatformSignals.fromMap(const {'lowEnd': 1}).lowEnd, isFalse);
+    expect(
+      const LiquidPlatformSignals(glesOnly: true),
+      isNot(const LiquidPlatformSignals(lowEnd: true)),
+    );
+    expect(
+      const LiquidPlatformSignals(lowEnd: true).toString(),
+      contains('lowEnd: true'),
+    );
+  });
+
   test('none has every signal off', () {
     expect(LiquidPlatformSignals.none.reduceTransparency, isFalse);
     expect(LiquidPlatformSignals.none.powerSave, isFalse);

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:liquid_shell/src/glass/glass_scope.dart';
 import 'package:liquid_shell/src/glass/glass_theme.dart';
@@ -5,7 +7,6 @@ import 'package:liquid_shell/src/glass/policy.dart';
 import 'package:liquid_shell/src/glass/renderer.dart';
 import 'package:liquid_shell/src/glass/shader_program.dart';
 import 'package:liquid_shell/src/glass/signals_controller.dart';
-import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
 /// A glass surface.
 ///
@@ -43,11 +44,18 @@ class LiquidGlass extends StatefulWidget {
 class _LiquidGlassState extends State<LiquidGlass> {
   static const _fade = Duration(milliseconds: 200);
   final LiquidSignalsController _signals = LiquidSignalsController.instance;
+  late final Listenable _changes = Listenable.merge([
+    _signals,
+    LiquidShaderProgram.instance,
+  ]);
 
   @override
   void initState() {
     super.initState();
     _signals.acquire();
+    if (liquidGlassCanRefract()) {
+      unawaited(LiquidShaderProgram.instance.load());
+    }
   }
 
   @override
@@ -59,10 +67,11 @@ class _LiquidGlassState extends State<LiquidGlass> {
   @override
   Widget build(
     BuildContext context,
-  ) => ValueListenableBuilder<LiquidPlatformSignals>(
-    valueListenable: _signals,
+  ) => ListenableBuilder(
+    listenable: _changes,
     child: widget.child,
-    builder: (context, platform, child) {
+    builder: (context, child) {
+      final platform = _signals.value;
       final policy = LiquidGlassScope.policyOf(context);
       // policy.resolve, then rendererFor, probing each renderer once.
       final renderer = resolveGlassRenderer(
@@ -73,7 +82,8 @@ class _LiquidGlassState extends State<LiquidGlass> {
           highContrast: MediaQuery.highContrastOf(context),
           powerSave: platform.powerSave,
           blurDisabled: platform.blurDisabled,
-          canBlur: liquidGlassCanBlur(),
+          lowEnd: platform.lowEnd,
+          glesOnly: platform.glesOnly,
         ),
       );
       final theme = LiquidGlassTheme.of(context);

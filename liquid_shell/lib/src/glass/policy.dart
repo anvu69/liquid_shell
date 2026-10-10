@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:liquid_shell/src/glass/frosted_renderer.dart';
+import 'package:liquid_shell/src/glass/liquid_renderer.dart';
 import 'package:liquid_shell/src/glass/renderer.dart';
 import 'package:liquid_shell/src/glass/solid_renderer.dart';
 import 'package:liquid_shell/src/glass/tier.dart';
@@ -9,13 +10,15 @@ import 'package:liquid_shell/src/glass/tier.dart';
 @immutable
 class LiquidGlassSignals {
   /// Creates a set of signals. Defaults describe a device with no
-  /// accessibility or power restriction that can blur.
+  /// accessibility, power or performance restriction.
   const LiquidGlassSignals({
     this.reduceTransparency = false,
     this.highContrast = false,
     this.powerSave = false,
     this.blurDisabled = false,
-    this.canBlur = true,
+    this.lowEnd = false,
+    this.glesOnly = false,
+    this.slowFrames = false,
   });
 
   /// iOS Reduce Transparency; Android animations off or high contrast.
@@ -24,22 +27,29 @@ class LiquidGlassSignals {
   /// `MediaQuery.highContrastOf` (reported by iOS only).
   final bool highContrast;
 
-  /// Android battery saver.
+  /// Android battery saver; iOS Low Power Mode.
   final bool powerSave;
 
-  /// Android 12+: the system disabled window blurs.
+  /// Android 12+: the system disabled window blurs. Battery saver does
+  /// that too, so it counts only while [powerSave] is off.
   final bool blurDisabled;
 
-  /// False on Android without Impeller (no shader filters, API ≤ 28).
-  final bool canBlur;
+  /// Android: a low-RAM device or under 3 GiB of memory.
+  final bool lowEnd;
 
-  /// Whether any signal asks for the solid tier.
+  /// Android 10+ without Vulkan 1.1 (Flutter renders with OpenGL ES).
+  final bool glesOnly;
+
+  /// Frames were too slow while liquid glass was shown (the frame guard).
+  final bool slowFrames;
+
+  /// Whether a signal asks for the solid tier: reduce transparency, high
+  /// contrast, or blur disabled for a reason other than battery saver.
   bool get prefersSolid =>
-      reduceTransparency ||
-      highContrast ||
-      powerSave ||
-      blurDisabled ||
-      !canBlur;
+      reduceTransparency || highContrast || (blurDisabled && !powerSave);
+
+  /// Whether a signal asks for frosted instead of liquid.
+  bool get prefersFrosted => powerSave || lowEnd || glesOnly || slowFrames;
 
   @override
   bool operator ==(Object other) =>
@@ -48,7 +58,9 @@ class LiquidGlassSignals {
       other.highContrast == highContrast &&
       other.powerSave == powerSave &&
       other.blurDisabled == blurDisabled &&
-      other.canBlur == canBlur;
+      other.lowEnd == lowEnd &&
+      other.glesOnly == glesOnly &&
+      other.slowFrames == slowFrames;
 
   @override
   int get hashCode => Object.hash(
@@ -56,7 +68,9 @@ class LiquidGlassSignals {
     highContrast,
     powerSave,
     blurDisabled,
-    canBlur,
+    lowEnd,
+    glesOnly,
+    slowFrames,
   );
 }
 
@@ -107,17 +121,18 @@ void _logForcedFallback(LiquidGlassTier forced, LiquidGlassTier used) {
 @immutable
 class LiquidGlassPolicy {
   /// Creates a policy. With no arguments it picks automatically and uses
-  /// the built-in frosted and solid renderers.
+  /// the built-in liquid, frosted and solid renderers.
   const LiquidGlassPolicy({this.forcedTier, this.renderers = const []});
 
   /// App override. Wins over every signal. `null` picks automatically.
   final LiquidGlassTier? forcedTier;
 
-  /// Extra renderers, for example a liquid adapter. For each tier the first
-  /// supported registered renderer wins; the built-in frosted and solid
-  /// renderers fill the rest. Solid is always available.
+  /// Extra renderers. For each tier the first supported registered
+  /// renderer wins; the built-in liquid, frosted and solid renderers fill
+  /// the rest. Solid is always available.
   final List<LiquidGlassRenderer> renderers;
 
+  static const _liquid = LiquidShaderRenderer();
   static const _frosted = FrostedGlassRenderer();
   static const _solid = SolidGlassRenderer();
 
@@ -126,8 +141,9 @@ class LiquidGlassPolicy {
   /// 1. [forcedTier], stepping down liquid → frosted → solid when it has no
   ///    supported renderer (logged once in debug builds).
   /// 2. [LiquidGlassSignals.prefersSolid] → solid.
-  /// 3. Otherwise liquid when a supported liquid renderer is registered,
-  ///    else frosted.
+  /// 3. [LiquidGlassSignals.prefersFrosted] → frosted.
+  /// 4. Otherwise liquid when a liquid renderer is supported (a registered
+  ///    one, else the built-in lens), else frosted.
   ///
   /// Override it to change the rule, for example to force solid on some
   /// devices; every `LiquidGlass` under this policy then draws
@@ -140,6 +156,9 @@ class LiquidGlassPolicy {
       return used;
     }
     if (signals.prefersSolid) return LiquidGlassTier.solid;
+    if (signals.prefersFrosted) {
+      return rendererFor(context, LiquidGlassTier.frosted).tier;
+    }
     return rendererFor(context, LiquidGlassTier.liquid).tier;
   }
 
@@ -148,7 +167,10 @@ class LiquidGlassPolicy {
     final registered = _registered(context, tier);
     if (registered != null) return registered;
     return switch (tier) {
-      LiquidGlassTier.liquid => rendererFor(context, LiquidGlassTier.frosted),
+      LiquidGlassTier.liquid =>
+        _supported(_liquid, context)
+            ? _liquid
+            : rendererFor(context, LiquidGlassTier.frosted),
       LiquidGlassTier.frosted => _frosted,
       LiquidGlassTier.solid => _solid,
     };

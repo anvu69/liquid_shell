@@ -601,7 +601,7 @@ void main() {
       expect(find.byType(BackdropFilter), findsNWidgets(2));
       expect(find.byType(BackdropGroup), findsOneWidget);
 
-      platform.emit(const LiquidPlatformSignals(powerSave: true));
+      platform.emit(const LiquidPlatformSignals(reduceTransparency: true));
       await tester.pumpAndSettle();
       expect(find.byType(BackdropFilter), findsNothing);
     });

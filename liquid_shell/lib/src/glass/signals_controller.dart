@@ -6,22 +6,21 @@ import 'package:liquid_shell/src/glass/policy.dart';
 import 'package:liquid_shell/src/glass/shader_program.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
-/// Test hook replacing the device blur probe. `null` (the default) probes.
+/// Test hook replacing the shader-filter probe. `null` (the default)
+/// probes.
 ///
-/// `flutter test` reports Android without shader filters, so tests that
-/// want frosted glass set this to `true`.
+/// `flutter test` has no shader filters unless run with
+/// `--enable-impeller`, so glass there is frosted by default; tests of the
+/// liquid tier set this to `true` and inject a filter factory.
 @visibleForTesting
-bool? debugLiquidGlassCanBlurOverride;
+bool? debugLiquidGlassCanRefractOverride;
 
-/// Whether this device can blur behind glass.
-///
-/// False only on Android without Impeller (`isShaderFilterSupported` is
-/// false on Skia, API ≤ 28). Reads `defaultTargetPlatform`, not the theme:
-/// the capability belongs to the device.
-bool liquidGlassCanBlur() =>
-    debugLiquidGlassCanBlurOverride ??
-    !(defaultTargetPlatform == TargetPlatform.android &&
-        !ui.ImageFilter.isShaderFilterSupported);
+/// Whether this device can draw the liquid lens: `ImageFilter.shader` is
+/// supported (Impeller). False on Skia (Android 9 and lower) and the web,
+/// which then draw frosted (spec 2026-10-10 §6).
+bool liquidGlassCanRefract() =>
+    debugLiquidGlassCanRefractOverride ??
+    ui.ImageFilter.isShaderFilterSupported;
 
 /// Process-wide platform signals.
 ///

@@ -1,7 +1,10 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
+import 'package:liquid_shell/src/glass/liquid_backdrop.dart';
 
 import '../helpers/fake_signals_platform.dart';
 
@@ -90,6 +93,21 @@ class _AlwaysSolidPolicy extends LiquidGlassPolicy {
       LiquidGlassTier.solid;
 }
 
+/// Builds blurs instead of shader filters: `ImageFilter.shader` throws
+/// without Impeller.
+void _installBlurFactory() {
+  debugLiquidFilterFactory = (shader, sigma) =>
+      ImageFilter.blur(sigmaX: sigma, sigmaY: sigma);
+  addTearDown(() => debugLiquidFilterFactory = null);
+}
+
+/// Shader filters on, the program loaded, blur in place of the shader.
+Future<void> _enableLiquid(WidgetTester tester) async {
+  debugLiquidGlassCanRefractOverride = true;
+  _installBlurFactory();
+  await tester.runAsync(LiquidGlass.precache);
+}
+
 void main() {
   final glassTheme = LiquidGlassTheme.fromColorScheme(_scheme);
 
@@ -100,7 +118,7 @@ void main() {
     expect(_fills(tester, glassTheme.tint), hasLength(1));
   });
 
-  testWidgets('each platform signal → solid; back to none → frosted', (
+  testWidgets('reduce transparency or blur disabled → solid; none → back', (
     tester,
   ) async {
     final platform = installFakeSignals();
@@ -109,7 +127,6 @@ void main() {
 
     for (final signals in const [
       LiquidPlatformSignals(reduceTransparency: true),
-      LiquidPlatformSignals(powerSave: true),
       LiquidPlatformSignals(blurDisabled: true),
     ]) {
       platform.emit(signals);
@@ -123,6 +140,32 @@ void main() {
     }
   });
 
+  testWidgets('battery saver, low end and GLES only → frosted, not liquid', (
+    tester,
+  ) async {
+    await _enableLiquid(tester);
+    final platform = installFakeSignals();
+    await tester.pumpWidget(_app());
+    await tester.pumpAndSettle();
+    expect(find.byType(LiquidBackdrop), findsOneWidget);
+
+    for (final signals in const [
+      LiquidPlatformSignals(powerSave: true),
+      LiquidPlatformSignals(powerSave: true, blurDisabled: true),
+      LiquidPlatformSignals(lowEnd: true),
+      LiquidPlatformSignals(glesOnly: true),
+    ]) {
+      platform.emit(signals);
+      await tester.pumpAndSettle();
+      expect(find.byType(LiquidBackdrop), findsNothing, reason: '$signals');
+      expect(_fills(tester, glassTheme.tint), hasLength(1));
+
+      platform.emit(LiquidPlatformSignals.none);
+      await tester.pumpAndSettle();
+      expect(find.byType(LiquidBackdrop), findsOneWidget);
+    }
+  });
+
   testWidgets('high contrast → solid', (tester) async {
     await tester.pumpWidget(
       _app(mediaQuery: const MediaQueryData(highContrast: true)),
@@ -131,26 +174,79 @@ void main() {
     expect(find.byType(BackdropFilter), findsNothing);
   });
 
-  testWidgets('cannot blur → solid', (tester) async {
-    debugLiquidGlassCanBlurOverride = false;
-    await tester.pumpWidget(_app());
-    await tester.pumpAndSettle();
-    expect(find.byType(BackdropFilter), findsNothing);
+  testWidgets('no shader filters → frosted, on every platform', (
+    tester,
+  ) async {
+    debugLiquidGlassCanRefractOverride = false;
+    for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+      debugDefaultTargetPlatformOverride = platform;
+      await tester.pumpWidget(_app(child: SizedBox(width: platform.index + 1)));
+      await tester.pumpAndSettle();
+      expect(find.byType(BackdropFilter), findsOneWidget);
+      expect(find.byType(LiquidBackdrop), findsNothing);
+    }
+    debugDefaultTargetPlatformOverride = null;
   });
 
-  testWidgets('the blur probe only demotes Android (Q6)', (tester) async {
-    debugLiquidGlassCanBlurOverride = null;
-    // flutter test has no shader filters, like Android on Skia.
-    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+  testWidgets('liquid by default with shader filters and the program', (
+    tester,
+  ) async {
+    await _enableLiquid(tester);
     await tester.pumpWidget(_app());
     await tester.pumpAndSettle();
-    expect(find.byType(BackdropFilter), findsNothing);
+    expect(find.byType(LiquidBackdrop), findsOneWidget);
+    expect(_fills(tester, glassTheme.tint), isEmpty);
+  });
 
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    await tester.pumpWidget(_app(child: const SizedBox(width: 121)));
+  testWidgets('frosted until the program loads, then liquid; child kept', (
+    tester,
+  ) async {
+    debugLiquidGlassCanRefractOverride = true;
+    _installBlurFactory();
+    _StatefulState.created = 0;
+    // The first frame is built before the load (started on mount) ends.
+    await tester.pumpWidget(_app(child: const _Stateful()));
+    expect(find.byType(LiquidBackdrop), findsNothing);
+
+    await tester.runAsync(LiquidGlass.precache);
     await tester.pumpAndSettle();
-    expect(find.byType(BackdropFilter), findsOneWidget);
-    debugDefaultTargetPlatformOverride = null;
+    expect(find.byType(LiquidBackdrop), findsOneWidget);
+    expect(_StatefulState.created, 1);
+  });
+
+  testWidgets('inside another BackdropFilter → frosted (Q10)', (tester) async {
+    await _enableLiquid(tester);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 2, sigmaY: 2),
+          child: const Center(
+            child: LiquidGlass(child: SizedBox(width: 120, height: 40)),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(LiquidBackdrop), findsNothing);
+  });
+
+  testWidgets('inside another LiquidGlass child it stays liquid', (
+    tester,
+  ) async {
+    await _enableLiquid(tester);
+    await tester.pumpWidget(
+      _app(
+        child: const SizedBox(
+          width: 200,
+          height: 100,
+          child: Center(
+            child: LiquidGlass(child: SizedBox(width: 80, height: 40)),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(LiquidBackdrop), findsNWidgets(2));
   });
 
   testWidgets('a forced tier from LiquidGlassScope wins', (tester) async {
@@ -235,7 +331,7 @@ void main() {
     try {
       await tester.pumpWidget(_app());
       await tester.pump();
-      platform.emit(const LiquidPlatformSignals(powerSave: true));
+      platform.emit(const LiquidPlatformSignals(reduceTransparency: true));
       await tester.pumpAndSettle();
       expect(find.byType(BackdropFilter), findsNothing);
 

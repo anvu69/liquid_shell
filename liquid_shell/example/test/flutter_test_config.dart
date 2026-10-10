@@ -8,13 +8,11 @@ import 'support/golden_harness.dart';
 
 /// Runs before every test file of the example.
 ///
-/// `flutter test` reports Android without shader filters, so without the
-/// override every golden would show the solid tier. `case_tier_solid` gets
-/// solid through `forcedTier`, not through this flag.
+/// Without `--enable-impeller` there are no shader filters, so the
+/// `golden` images show frosted glass; `liquid_golden` runs with
+/// `--enable-impeller` and shows the liquid tier.
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
-  setUp(() => debugLiquidGlassCanBlurOverride = true);
   tearDown(() {
-    debugLiquidGlassCanBlurOverride = null;
     debugResetLiquidGlassSignals();
     // Tests that install a native platform leave the native link started.
     debugResetLiquidNative();
