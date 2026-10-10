@@ -28,7 +28,9 @@ import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.
 /// Completes with the cancel action's value (or null without one) when
 /// the alert closes without a choice (Escape, Android back, a dismissal by
 /// the system), and with null when it could never be shown because
-/// [context] was unmounted first.
+/// [context] was unmounted first. If the root [Navigator] is disposed
+/// while the Flutter glass alert is up, the future never completes, as
+/// with `showDialog`.
 ///
 /// Throws [ArgumentError] at once, before anything is shown, for a blank
 /// [title], no actions, more than one cancel or preferred action, a blank
@@ -78,7 +80,9 @@ Future<T?> showLiquidAlert<T>(
 /// Completes with the cancel action's value (or null without one) when
 /// the sheet closes without a choice (a tap outside, Escape, Android back,
 /// a dismissal by the system), and with null when it could never be shown
-/// because [context] was unmounted first.
+/// because [context] was unmounted first. If the root [Navigator] is
+/// disposed while the Flutter glass sheet is up, the future never
+/// completes, as with `showDialog`.
 ///
 /// Throws [ArgumentError] at once, before anything is shown, for no
 /// actions, more than one cancel action, a blank label, more than one or

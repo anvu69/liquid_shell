@@ -45,6 +45,7 @@ Every dialog completes exactly once, whatever closes it:
 | iPhone action sheet: a tap on the dimmed area, with a cancel action | The cancel action's value (UIKit calls its handler) |
 | iPad popover: a tap outside (UIKit shows no cancel row in a popover) | Dismissed |
 | The dialog dismissed by someone else (another plugin dismissing the root, a scene closing) | Dismissed |
+| Another presentation is mid-transition (a second alert opened from the first one's answer) | The dialog waits for the transition to end, up to three times, and is then shown |
 | UIKit refuses the presentation (another one is stuck mid-transition) | The Flutter glass dialog is shown instead, and its answer counts |
 | The engine detaches | Dismissed (nobody is listening) |
 | Escape, Android back, a tap on a Flutter sheet's barrier | Dismissed |
@@ -122,6 +123,10 @@ instead. The user is still asked.
 - **Hot restart with an alert up** leaves an orphan alert in debug builds:
   the old Dart isolate is gone, so its answer is dropped. A tap only
   closes it. Release builds have no hot restart.
+- **The root `Navigator` disposed with the Flutter glass dialog up**
+  (for example the whole app widget replaced): the future never
+  completes, as with Flutter's `showDialog`. Popping or removing the
+  route is fine: that completes it with the cancel value.
 - **VoiceOver focus** goes back to the Flutter view after a system alert,
   not to the node that was tapped.
 - **No text fields in alerts.** `addTextField` (secure entry, keyboard

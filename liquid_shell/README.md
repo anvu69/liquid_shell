@@ -446,8 +446,9 @@ Future<String?> _photoAction(
 
 - A tap outside an action sheet, Escape or Android back completes with the
   cancel action's value, or null without one.
-- At most one `cancel` and one `preferred` action. A blank label or none
-  at all throws `ArgumentError`.
+- At most one `cancel` and one `preferred` action. A blank label, no
+  actions, a disabled preferred action or no enabled action throws
+  `ArgumentError`.
 - Every visible string is yours. The Flutter sheet's barrier uses
   `LiquidShellStrings.dismiss` for screen readers.
 
