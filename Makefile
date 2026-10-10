@@ -116,7 +116,7 @@ android-unit: ## JVM unit tests of the Android plugin (SignalReaderTest)
 # the whole run, build included (exit 124).
 IOS_UNIT_TIMEOUT ?= 900
 
-ios-unit: ## XCTest of liquid_shell_ios (example RunnerTests) on an iPad simulator; IOS_UNIT_DEVICE=<udid>
+ios-unit: ## XCTest of liquid_shell_ios (example RunnerTests) on an iPad or iPhone simulator; IOS_UNIT_DEVICE=<udid>
 	cd $(EXAMPLE) && $(FLUTTER) build ios --config-only --simulator --debug
 	cd $(EXAMPLE)/ios && $(CURDIR)/tool/with_timeout.sh $(IOS_UNIT_TIMEOUT) \
 	  xcodebuild test -workspace Runner.xcworkspace -scheme Runner \
@@ -129,7 +129,7 @@ ios-unit: ## XCTest of liquid_shell_ios (example RunnerTests) on an iPad simulat
 integration-ios: ## Signal channel round-trip on an iOS simulator
 	FLUTTER="$(FLUTTER)" tool/integration_ios.sh
 
-integration-ios-native: ## Native iPadOS 26 shell on an iPad and an iPhone simulator
+integration-ios-native: ## Native iOS 26 shell on an iPad and an iPhone simulator
 	FLUTTER="$(FLUTTER)" tool/integration_ios_native.sh
 
 integration-android: ## Signal channel + every Android signal on an emulator

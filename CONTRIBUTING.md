@@ -19,8 +19,8 @@
 | `make goldens-update` | Regenerate goldens and `liquid_shell/doc/images`, then recompress them losslessly with `tool/compress_pngs.dart` (macOS + 3.44 only) |
 | `make android-unit` | Kotlin JVM tests of the Android plugin |
 | `make integration-ios` / `make integration-android` | Signal channel tests on a simulator / emulator |
-| `make integration-ios-native` | Native iPadOS 26 shell on an iPad (installs) and an iPhone (does not) simulator; saves screenshots |
-| `make ios-unit IOS_UNIT_DEVICE=<udid>` | XCTest of `liquid_shell_ios` (example `RunnerTests`) on one simulator |
+| `make integration-ios-native` | Native iOS 26 shell on an iPad and an iPhone simulator (both install it); saves screenshots |
+| `make ios-unit IOS_UNIT_DEVICE=<udid>` | XCTest of `liquid_shell_ios` (example `RunnerTests`) on one simulator; CI runs it on the newest iPad and iPhone |
 | `make pigeon` / `make pigeon-check` | Regenerate the native channel / fail when the generated files drift (part of `verify`) |
 | `make pana` / `make publish-check` | pub.dev scoring and publish dry-run |
 

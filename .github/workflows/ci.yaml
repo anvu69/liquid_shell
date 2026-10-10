@@ -155,11 +155,18 @@ jobs:
           IOS_DEVICES: auto
 
   ios-unit:
+    # One job per idiom: the iPhone leg (compact, owner D1) runs the
+    # compact and phone-only XCTests, the iPad leg the top bar and sidebar.
+    name: ios-unit (${{ matrix.device }})
     runs-on: macos-latest
     # `make ios-unit` stops a stalled xcodebuild after IOS_UNIT_TIMEOUT
     # (tool/with_timeout.sh) and never collects test diagnostics, which
     # stalled a red run for minutes; this caps the whole job.
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [iPad, iPhone]
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -168,16 +175,23 @@ jobs:
           flutter-version: 3.44.x
           cache: true
       - run: make get
-      - name: XCTest of liquid_shell_ios on the newest iPad simulator
+      - name: XCTest of liquid_shell_ios on the newest ${{ matrix.device }} simulator
         run: |
-          udid=$(xcrun simctl list devices available | grep -F '    iPad' | tail -n1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          udid=$(xcrun simctl list devices available | grep -F "    ${{ matrix.device }}" | tail -n1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
           make ios-unit IOS_UNIT_DEVICE="$udid"
 
   integration-ios-native:
+    # Every iOS 26 iPhone and iPad installs the native chrome (owner D1):
+    # one job per idiom, so a stalled simulator costs one leg, not both.
+    name: integration-ios-native (${{ matrix.device }})
     runs-on: macos-latest
     # The script stops a stalled drive after 20 min (IOS_DRIVE_TIMEOUT 1200 s)
-    # and retries it once; two devices x 2 attempts = 80 min, plus build.
-    timeout-minutes: 100
+    # and retries it once: 40 min, plus the build.
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [iPad, iPhone]
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -186,17 +200,16 @@ jobs:
           flutter-version: 3.44.x
           cache: true
       - run: make get
-      - name: Native shell on an iPad (iOS 26+) and an iPhone
+      - name: Native shell on the newest ${{ matrix.device }} simulator (iOS 26+)
         run: |
-          ipad=$(xcrun simctl list devices available | grep -F '    iPad' | tail -n1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
-          iphone=$(xcrun simctl list devices available | grep -F '    iPhone' | tail -n1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
-          NATIVE_DEVICES="$ipad=true;$iphone=false" tool/integration_ios_native.sh
+          udid=$(xcrun simctl list devices available | grep -F "    ${{ matrix.device }}" | tail -n1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          NATIVE_DEVICES="$udid=true" tool/integration_ios_native.sh
         env:
           IOS_RUNTIME: ""
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: native-shell-screenshots
+          name: native-shell-screenshots-${{ matrix.device }}
           path: liquid_shell/example/build/integration_screenshots/
 
   goldens:

@@ -1,9 +1,13 @@
-# Native iPadOS chrome
+# Native iOS chrome
 
-On iPadOS 26 and later, `LiquidShell` can hand its chrome to the system: a
-`UITabBarController` in sidebar mode, with the Liquid Glass tab bar, the
-sidebar toggle, the sidebar and a native footer. Flutter keeps drawing the
-body. Everywhere else the shell draws its Flutter chrome.
+On iOS and iPadOS 26 and later, `LiquidShell` can hand its chrome to the
+system: a `UITabBarController` in sidebar mode, with the Liquid Glass tab
+bar. At regular width (a full-screen or wide iPad window) that is the top
+bar, the sidebar toggle, the sidebar and a native footer; at compact width
+(every iPhone, in either orientation, and a narrow iPad window) it is
+UIKit's floating tab bar at the bottom, with the trailing action as a
+separate search button. Flutter keeps
+drawing the body. Everywhere else the shell draws its Flutter chrome.
 
 ## Turning it on
 
@@ -29,8 +33,7 @@ only when every fact below holds. The first one that fails is the reason
 
 | Fact | Reason when it fails |
 |---|---|
-| The device is an iPad | `notIPad` |
-| iPadOS 26 or later | `osTooOld` |
+| iOS or iPadOS 26 or later | `osTooOld` |
 | Not an iPad app running on a Mac | `iPadAppOnMac` |
 | `LiquidShellNativeChrome` is `true` in Info.plist | `notEnabled` |
 | The environment variable `LIQUID_SHELL_NATIVE_OFF` is not `1` | `disabledByEnvironment` |
@@ -39,26 +42,24 @@ only when every fact below holds. The first one that fails is the reason
 
 Once installed, a shell uses it on every frame where all of these hold:
 `nativeChrome` is `auto`; the shell is the newest one on screen that asked
-for it; the platform's width is regular; the shell's own width is at least
-`breakpoints.regular`; there is no `chromeBuilder`; and every destination
-(and the trailing action) has an SF Symbol. Otherwise the container is
-dormant: it hides, gives Flutter the whole window, and lets every touch
-through.
+for it; there is no `chromeBuilder`; and every destination (and the
+trailing action) has an SF Symbol. Width does not matter: UIKit picks the
+compact bar or the top bar and sidebar from the window's size class, and
+the shell's `sizeClass` and `chromeKind` follow it (`bottomBar` when
+compact). An iPhone is always compact, also a Plus or Max iPhone in
+landscape, whose size class is regular: UIKit keeps the bottom bar there. Otherwise the container is dormant: it hides, gives Flutter the
+whole window, and lets every touch through.
 
 ### Waiting for the platform
 
 The platform answers `attachNativeChrome()` asynchronously. Until it does, a
 shell that would use native chrome draws no chrome at all rather than flash
-the Flutter one: on an iPad with the plist key set, that is the first one or
-two frames. Every other shell draws its Flutter chrome from the first frame:
-a compact one, one without symbols, one with a `chromeBuilder`, and any
-shell on a screen whose shorter side is under 744 points. That last rule is
-a shortcut for iPhones: no iPhone is that large in either orientation, so an
-iPhone, even in landscape, never waits. The screen's size is used, not the
-window's, so an iPad window in Split View still waits, and so does an iPad
-app on a Mac ("Designed for iPad"): the Mac's display passes the size check,
-and the platform then answers `iPadAppOnMac`. Platforms without native
-chrome (Android, web, desktop) answer at once.
+the Flutter one: on iOS that is the first one or two frames, on every
+iPhone and iPad, also on iOS before 26 and in an app without the plist key
+(only the platform knows), and in an iPad app on a Mac ("Designed for
+iPad"), which then answers `iPadAppOnMac`. A shell without symbols or with
+a `chromeBuilder` draws its Flutter chrome from the first frame. Platforms
+without native chrome (Android, web, desktop) answer at once.
 
 ## How it behaves
 
@@ -78,13 +79,31 @@ chrome (Android, web, desktop) answer at once.
   hides the native chrome while it covers the shell, and shows it again when
   the page is popped. A dialog, popup or sheet above the shell makes the
   native chrome ignore touches, so a tap outside the dialog reaches its
-  barrier.
+  barrier. The compact bar also hides while one is up: it is drawn above
+  the Flutter view and would cover the bottom of a sheet. The overlay lays
+  out against the home indicator, while the body behind it keeps the bar's
+  bottom inset, so nothing there jumps while a modal is up. A pushed page
+  covers the body, and the inset goes with the bar.
 - **Hide chrome.** `LiquidHideChrome` hides the native chrome as it hides the
   Flutter chrome.
-- **Insets.** The native tab bar row is part of Flutter's top safe area, and
-  a tiled sidebar is its start padding. The shell turns the tiled sidebar's
-  padding into real width for its body. Use
-  `LiquidShellScope.contentPaddingOf` as usual.
+- **Insets.** The native top bar row is part of Flutter's top safe area,
+  the compact bar is part of its bottom safe area, and a tiled sidebar is
+  its start padding. The shell turns the tiled sidebar's padding into real
+  width for its body. Use `LiquidShellScope.contentPaddingOf` as usual.
+- **Compact.** The compact bar has no sidebar: `setSidebarVisible` is
+  ignored, and a `sidebarOnly` destination is left out of the bar, as in
+  the Flutter bar; `onSelectedDestinationHidden` tells you when it was the
+  selected one. UIKit always highlights a tab, so while the selection is
+  hidden the bar highlights its first destination; a tap on it still
+  selects it. `minimizeOnScroll` applies to the Flutter bar only.
+- **Trailing action.** `tabBarTrailing` becomes a search-role tab
+  (`UISearchTab`) with your label and symbol: a separate round button at
+  the end of the compact bar, the trailing end of the top bar, the first
+  sidebar row. A tap only calls `onPressed`; the system search field
+  never opens. Give it a search-like action and symbol.
+- **Sidebar look.** The sidebar is UIKit's own. On iPadOS 26 it floats over
+  the content as a Liquid Glass panel; on iPadOS 27 it is a full-height
+  panel flush with the screen edge, as in Apple's own apps (Photos, Health).
 - **Several shells.** One window has one native chrome. The newest shell
   that asks for it owns it; when it goes away, the previous one gets it back,
   and with none left the native chrome hides. While another shell owns the
@@ -127,9 +146,12 @@ chrome (Android, web, desktop) answer at once.
 A windowed iPadOS 26 app has close, minimise and resize buttons in its
 top-leading corner. `LiquidShellScope.of(context).windowControls` gives their
 size (`leading`, `top`), measured from the safe area. It is zero on every
-other platform, in full screen, and while the native chrome is visible:
-UIKit's tab bar and sidebar make room for the buttons, as its navigation bar
-does, and your content starts below the bar row or beside the sidebar. The Flutter top bar and the Flutter sidebar header
+other platform, in full screen, and while the regular native chrome is
+visible: UIKit's top bar and sidebar make room for the buttons, as its
+navigation bar does, and your content starts below the bar row or beside
+the sidebar. Under the compact native bar, which is at the bottom, it is
+the real value on an iPad: the top of the window is your content's. An
+iPhone has no window controls, so it is zero there. The Flutter top bar and the Flutter sidebar header
 move past them on their own. For your own top rows, use
 `LiquidWindowControlsClearance`.
 
@@ -154,7 +176,7 @@ resize changes it, and jumps when the platform asks to reduce motion.
 - **`rootNotFlutter`**: the scene's root is not the Flutter view controller.
   Native chrome needs the standard Flutter scene setup.
 - **Native chrome installed but Flutter chrome shows**: a destination or the
-  trailing action has no `sfSymbol` (a debug log says so), the shell has a
-  `chromeBuilder`, or the window is compact.
+  trailing action has no `sfSymbol` (a debug log says so), or the shell has
+  a `chromeBuilder`.
 - **The outer shell lost its navigation**: an inner shell took the native
   chrome; set its `nativeChrome` to `off`.

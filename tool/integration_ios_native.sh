@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Native iPadOS 26 shell on simulators (spec P2 §9.4).
+# Native iOS 26 shell on simulators (spec P2 §9.4).
 #
 #   tool/integration_ios_native.sh
 #
 # IOS_RUNTIME     simctl runtime (default "iOS 26.5"; empty = any).
 # NATIVE_DEVICES  ';'-separated "name=expect" pairs; expect is true when the
-#                 native shell must install (iPad, iOS >= 26) and false when
-#                 it must not (default
-#                 "iPad Air 11-inch (M4)=true;iPhone 17 Pro=false").
+#                 native shell must install (iPhone or iPad, iOS >= 26) and
+#                 false when it must not (default
+#                 "iPad Air 11-inch (M4)=true;iPhone 17 Pro=true").
 #                 A 36-character UDID works in place of a name.
 # FLUTTER         flutter command (default: flutter).
 # IOS_DRIVE_TIMEOUT  seconds one `flutter drive` may run (default 1200).
@@ -25,7 +25,7 @@ cd "$tool_dir/../liquid_shell/example"
 FLUTTER=${FLUTTER:-flutter}
 IOS_DRIVE_TIMEOUT=${IOS_DRIVE_TIMEOUT:-1200}
 IOS_RUNTIME=${IOS_RUNTIME-iOS 26.5}
-NATIVE_DEVICES=${NATIVE_DEVICES:-iPad Air 11-inch (M4)=true;iPhone 17 Pro=false}
+NATIVE_DEVICES=${NATIVE_DEVICES:-iPad Air 11-inch (M4)=true;iPhone 17 Pro=true}
 
 udid_of() {
   local name=$1

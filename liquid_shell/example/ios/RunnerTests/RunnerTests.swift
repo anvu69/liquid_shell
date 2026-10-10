@@ -286,7 +286,7 @@ final class NativeTabsTests: XCTestCase {
   /// `landscape`: the same window turned on its side (wide enough for UIKit
   /// to tile the sidebar), whatever the simulator's orientation.
   private func portraitWindow(
-    root: UIViewController, landscape: Bool = false
+    root: UIViewController, landscape: Bool = false, width: CGFloat? = nil
   ) throws -> UIWindow {
     let scene = try XCTUnwrap(
       UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
@@ -295,7 +295,7 @@ final class NativeTabsTests: XCTestCase {
     let short = min(bounds.width, bounds.height)
     let long = max(bounds.width, bounds.height)
     window.frame = CGRect(
-      x: 0, y: 0, width: landscape ? long : short, height: landscape ? short : long)
+      x: 0, y: 0, width: width ?? (landscape ? long : short), height: landscape ? short : long)
     window.rootViewController = root
     window.isHidden = false
     return window
@@ -306,11 +306,12 @@ final class NativeTabsTests: XCTestCase {
   /// window's (a compact iPad window, or a regular one on an iPhone).
   private func installedShell(
     footer: Bool = false, trailing: Bool = false, reports: Bool = false,
-    landscape: Bool = false, sizeClass: UIUserInterfaceSizeClass? = nil, selected: Int64 = 0
+    landscape: Bool = false, sizeClass: UIUserInterfaceSizeClass? = nil, selected: Int64 = 0,
+    width: CGFloat? = nil
   ) throws -> NativeTabsController {
     let flutter = UIViewController()
     let tabs = NativeTabsController(flutter: flutter, events: events)
-    let window = try portraitWindow(root: UIViewController(), landscape: landscape)
+    let window = try portraitWindow(root: UIViewController(), landscape: landscape, width: width)
     let container = ShellContainerController(tabs: tabs, flutter: flutter)
     if let sizeClass { container.traitOverrides.horizontalSizeClass = sizeClass }
     window.rootViewController = container
@@ -669,6 +670,25 @@ final class NativeTabsTests: XCTestCase {
       "and so in Flutter's")
     let inbox = try centreOfLabel("Inbox", in: tabs.view, tabs)
     XCTAssertGreaterThan(inbox.y, root.bounds.height - host.safeAreaInsets.bottom, "a bottom bar")
+  }
+
+  /// A real narrow iPad window, no trait override: a 375pt-wide window is
+  /// compact to UIKit itself (the Split View or Stage Manager size), so
+  /// the shell shows the bottom bar, reports compact and leaves the
+  /// sidebar-only tab out.
+  func testANarrowIPadWindowIsCompactWithoutAnOverride() throws {
+    try requireIPad()
+    let tabs = try installedShell(trailing: true, reports: true, width: 375)
+    let root = try XCTUnwrap(tabs.parent?.view)
+    XCTAssertEqual(root.bounds.width, 375, "precondition: a narrow window")
+    XCTAssertEqual(tabs.traitCollection.horizontalSizeClass, .compact, "UIKit's own size class")
+    XCTAssertTrue(tabs.currentState().compact)
+    XCTAssertFalse(tabs.tabs.contains { $0.identifier == "destination2" }, "sidebar-only left out")
+    let host = try XCTUnwrap(tabs.selectedViewController?.view)
+    XCTAssertGreaterThan(host.safeAreaInsets.bottom, root.safeAreaInsets.bottom + 40, "a bottom bar")
+    XCTAssertEqual(tabs.flutter.view.safeAreaInsets.bottom, host.safeAreaInsets.bottom)
+    let inbox = try centreOfLabel("Inbox", in: tabs.view, tabs)
+    XCTAssertGreaterThan(inbox.y, root.bounds.height - host.safeAreaInsets.bottom)
   }
 
   /// The compact bar's items stay with UIKit; the content, and the row
