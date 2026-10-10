@@ -33,7 +33,7 @@ class ChromeModeScope
 /// The scope is always there (with no forced tier in
 /// [ExampleChromeMode.native]), so switching never rebuilds the case. The
 /// switch itself is drawn by `DemoPage` under its title (and by the form
-/// factors case in its app bar), never over the chrome.
+/// factors case at the top of its body), never over the chrome.
 class CaseFrame extends StatelessWidget {
   /// Frames [child].
   const CaseFrame({required this.child, super.key});
@@ -46,14 +46,40 @@ class CaseFrame extends StatelessWidget {
     final liquid =
         ChromeModeScope.maybeOf(context)?.value ==
         ExampleChromeMode.flutterLiquid;
-    return LiquidGlassScope(
-      policy: LiquidGlassPolicy(
-        forcedTier: liquid ? LiquidGlassTier.liquid : null,
-      ),
-      child: child,
+    final policy = LiquidGlassPolicy(
+      forcedTier: liquid ? LiquidGlassTier.liquid : null,
+    );
+    return _FramePolicy(
+      policy: policy,
+      child: LiquidGlassScope(policy: policy, child: child),
     );
   }
 }
+
+/// The policy [CaseFrame] applies. A switch whose nearest
+/// [LiquidGlassScope] holds another policy sits in a case that picks its
+/// own tier, where the mode has no effect.
+class _FramePolicy extends InheritedWidget {
+  const _FramePolicy({required this.policy, required super.child});
+
+  final LiquidGlassPolicy policy;
+
+  /// Whether a scope below the frame overrides it at [context].
+  static bool overriddenAt(BuildContext context) {
+    final framed = context
+        .dependOnInheritedWidgetOfExactType<_FramePolicy>()
+        ?.policy;
+    return framed != null &&
+        !identical(LiquidGlassScope.policyOf(context), framed);
+  }
+
+  @override
+  bool updateShouldNotify(_FramePolicy oldWidget) =>
+      !identical(policy, oldWidget.policy);
+}
+
+/// The note under a disabled [ChromeModeSwitch].
+const kPicksOwnTier = 'This case picks its own tier';
 
 /// "Native / Flutter liquid" (L4).
 class ChromeModeSwitch extends StatelessWidget {
@@ -66,7 +92,9 @@ class ChromeModeSwitch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ios = defaultTargetPlatform == TargetPlatform.iOS;
-    return Material(
+    // Shown disabled, not hidden, so the case does not look different.
+    final locked = _FramePolicy.overriddenAt(context);
+    final button = Material(
       type: MaterialType.transparency,
       child: Semantics(
         label: 'Chrome: native or Flutter liquid',
@@ -88,9 +116,18 @@ class ChromeModeSwitch extends StatelessWidget {
             ),
           ],
           selected: {mode.value},
-          onSelectionChanged: (s) => mode.value = s.single,
+          onSelectionChanged: locked ? null : (s) => mode.value = s.single,
         ),
       ),
+    );
+    if (!locked) return button;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        button,
+        const SizedBox(height: 4),
+        Text(kPicksOwnTier, style: Theme.of(context).textTheme.bodySmall),
+      ],
     );
   }
 }

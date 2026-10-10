@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell_example/main.dart';
+import 'package:liquid_shell_example/support/chrome_mode.dart';
 
 Future<void> _open(WidgetTester tester, String id) async {
   tester.view
@@ -68,5 +69,44 @@ void main() {
     await tester.tap(find.text('Flutter liquid'));
     await tester.pumpAndSettle();
     expect(_forced(tester), LiquidGlassTier.frosted);
+  });
+
+  testWidgets(
+    'on iOS the first segment reads Native',
+    (tester) async {
+      await _open(tester, 'basic');
+      expect(find.text('Native'), findsOneWidget);
+      expect(find.text('Auto'), findsNothing);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+  );
+
+  testWidgets('switching back to Auto drops the forced tier', (tester) async {
+    await _open(tester, 'basic');
+    await tester.tap(find.text('Flutter liquid'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Auto'));
+    await tester.pumpAndSettle();
+    expect(_forced(tester), isNull);
+  });
+
+  testWidgets('a case that picks its own tier shows the switch disabled', (
+    tester,
+  ) async {
+    await _open(tester, 'forced_tier');
+    expect(find.text('This case picks its own tier'), findsOneWidget);
+    final button = tester.widget<SegmentedButton<ExampleChromeMode>>(
+      find.byKey(const ValueKey('chrome-mode')),
+    );
+    expect(button.onSelectionChanged, isNull);
+  });
+
+  testWidgets('other cases show it enabled, without the note', (tester) async {
+    await _open(tester, 'basic');
+    expect(find.text('This case picks its own tier'), findsNothing);
+    final button = tester.widget<SegmentedButton<ExampleChromeMode>>(
+      find.byKey(const ValueKey('chrome-mode')),
+    );
+    expect(button.onSelectionChanged, isNotNull);
   });
 }
