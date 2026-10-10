@@ -45,14 +45,16 @@ class LiquidFrameGuard extends ValueNotifier<bool> {
   bool _subscribed = false;
   bool _logged = false;
   final List<Duration> _window = [];
+  // The p90s of the last windows, all measured against [_p90Budget].
   final List<Duration> _p90s = [];
+  Duration? _p90Budget;
 
   bool get _enabled =>
       kProfileMode || kReleaseMode || debugLiquidFrameGuardEnabled;
 
   /// The frame budget of the first display (60 Hz when unknown).
   Duration get budget {
-    final views = ui.PlatformDispatcher.instance.views;
+    final views = SchedulerBinding.instance.platformDispatcher.views;
     final hz = views.isEmpty ? 60.0 : views.first.display.refreshRate;
     return Duration(microseconds: (1e6 / (hz > 0 ? hz : 60)).round());
   }
@@ -77,7 +79,10 @@ class LiquidFrameGuard extends ValueNotifier<bool> {
     } else if (!wanted && _subscribed) {
       SchedulerBinding.instance.removeTimingsCallback(_onTimings);
       _subscribed = false;
+      // "Consecutive" means while liquid is shown: windows from before a
+      // detach do not carry over to the next attach.
       _window.clear();
+      _p90s.clear();
     }
   }
 
@@ -91,15 +96,22 @@ class LiquidFrameGuard extends ValueNotifier<bool> {
     for (final raster in rasters) {
       _window.add(raster);
       if (_window.length < kLiquidWindowFrames) continue;
+      // Read once per window. Windows measured at another refresh rate
+      // are not comparable, so a change starts the run again.
+      final windowBudget = budget;
+      if (windowBudget != _p90Budget) {
+        _p90s.clear();
+        _p90Budget = windowBudget;
+      }
       _p90s.add(p90(_window));
       _window.clear();
       if (_p90s.length > kLiquidSlowWindows) _p90s.removeAt(0);
-      if (liquidFramesTooSlow(_p90s, budget)) {
+      if (liquidFramesTooSlow(_p90s, windowBudget)) {
         if (kDebugMode && !_logged) {
           _logged = true;
           debugPrint(
             'liquid_shell: raster p90 ${_p90s.last.inMicroseconds}µs over '
-            'a ${budget.inMicroseconds}µs budget; drawing frosted.',
+            'a ${windowBudget.inMicroseconds}µs budget; drawing frosted.',
           );
         }
         value = true;
@@ -129,6 +141,7 @@ class LiquidFrameGuard extends ValueNotifier<bool> {
     _logged = false;
     _window.clear();
     _p90s.clear();
+    _p90Budget = null;
     value = false;
   }
 }

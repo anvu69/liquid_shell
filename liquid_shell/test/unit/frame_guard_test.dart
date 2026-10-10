@@ -1,6 +1,7 @@
-import 'dart:ui' show ImageFilter;
+import 'dart:ui' show FrameTiming, ImageFilter;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/glass/frame_guard.dart';
@@ -10,6 +11,23 @@ const _ms = Duration(milliseconds: 1);
 const _budget = Duration(microseconds: 16667);
 
 List<Duration> _window(Duration each) => List.filled(kLiquidWindowFrames, each);
+
+FrameTiming _timing({required Duration build, required Duration raster}) {
+  final b = build.inMicroseconds;
+  final end = b + raster.inMicroseconds;
+  return FrameTiming(
+    vsyncStart: 0,
+    buildStart: 0,
+    buildFinish: b,
+    rasterStart: b,
+    rasterFinish: end,
+    rasterFinishWallTime: end,
+  );
+}
+
+/// Delivers [timings] the way the engine does, to every timings callback.
+void _report(List<FrameTiming> timings) =>
+    SchedulerBinding.instance.platformDispatcher.onReportTimings!(timings);
 
 void main() {
   tearDown(() => debugLiquidFrameGuardEnabled = false);
@@ -71,6 +89,49 @@ void main() {
         ..._window(slow),
       ]);
       expect(guard.value, isFalse);
+    });
+
+    test('engine frame timings feed raster time, not build time', () {
+      debugLiquidFrameGuardEnabled = true;
+      guard.acquire();
+      final slow = guard.budget * 2;
+      const frames = kLiquidWindowFrames * kLiquidSlowWindows;
+      _report(
+        List.filled(frames, _timing(build: slow, raster: Duration.zero)),
+      );
+      expect(guard.value, isFalse, reason: 'slow build, fast raster');
+      _report(
+        List.filled(frames, _timing(build: Duration.zero, raster: slow)),
+      );
+      expect(guard.value, isTrue, reason: 'slow raster');
+      expect(guard.debugSubscribed, isFalse, reason: 'tripping unsubscribes');
+    });
+
+    test('windows from before a detach do not count after it', () {
+      debugLiquidFrameGuardEnabled = true;
+      final slow = guard.budget * 2;
+      guard
+        ..acquire()
+        ..addRasterTimes([..._window(slow), ..._window(slow)])
+        ..release()
+        ..acquire()
+        ..addRasterTimes(_window(slow));
+      expect(guard.value, isFalse);
+      guard.addRasterTimes([..._window(slow), ..._window(slow)]);
+      expect(guard.value, isTrue);
+    });
+
+    testWidgets('a refresh-rate change starts the run again', (tester) async {
+      addTearDown(tester.view.display.resetRefreshRate);
+      // Fine against a 60 Hz budget, slow against a 120 Hz one.
+      final p = _ms * 15;
+      tester.view.display.refreshRate = 60;
+      guard.addRasterTimes([..._window(p), ..._window(p)]);
+      tester.view.display.refreshRate = 120;
+      guard.addRasterTimes(_window(p));
+      expect(guard.value, isFalse, reason: '60 Hz windows judged at 60 Hz');
+      guard.addRasterTimes([..._window(p), ..._window(p)]);
+      expect(guard.value, isTrue);
     });
 
     test('subscribes only while a surface is held and enabled', () {
