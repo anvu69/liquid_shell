@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:liquid_shell/src/destinations/destination.dart';
 import 'package:liquid_shell/src/destinations/tab_action.dart';
+import 'package:liquid_shell/src/search/search_controller.dart';
 import 'package:liquid_shell/src/shell/shell_layout.dart';
 import 'package:liquid_shell/src/shell/strings.dart';
 
@@ -12,6 +13,10 @@ enum LiquidChromeSlot {
 
   /// The sidebar.
   sidebar,
+
+  /// The search field (fallback): the ⌕ circle that becomes the field at
+  /// compact width, the field below the top bar at regular width.
+  searchField,
 }
 
 /// Replaces or wraps the shell's chrome for one slot.
@@ -25,10 +30,46 @@ typedef LiquidChromeBuilder =
       Widget defaultChrome,
     );
 
+/// The search part of [LiquidChromeDetails].
+@immutable
+class LiquidSearchChromeDetails {
+  /// Creates the details.
+  const LiquidSearchChromeDetails({
+    required this.phase,
+    required this.controller,
+    required this.previousIndex,
+    required this.selectSearch,
+  });
+
+  /// The search phase.
+  final LiquidSearchPhase phase;
+
+  /// The app's controller.
+  final LiquidSearchController controller;
+
+  /// The destination the collapsed circle returns to.
+  final int previousIndex;
+
+  /// Selects the search tab through the guard.
+  final VoidCallback selectSearch;
+
+  @override
+  bool operator ==(Object other) =>
+      other is LiquidSearchChromeDetails &&
+      other.phase == phase &&
+      identical(other.controller, controller) &&
+      other.previousIndex == previousIndex &&
+      other.selectSearch == selectSearch;
+
+  @override
+  int get hashCode =>
+      Object.hash(phase, controller, previousIndex, selectSearch);
+}
+
 /// Everything a [LiquidChromeBuilder] needs to draw a slot.
 @immutable
 class LiquidChromeDetails {
-  /// Creates the details. Every field is required.
+  /// Creates the details. Every field but [search] is required.
   const LiquidChromeDetails({
     required this.slot,
     required this.kind,
@@ -42,6 +83,7 @@ class LiquidChromeDetails {
     required this.sidebarVisible,
     required this.setSidebarVisible,
     required this.strings,
+    this.search,
   });
 
   /// The slot being built.
@@ -83,6 +125,9 @@ class LiquidChromeDetails {
   /// The shell's strings.
   final LiquidShellStrings strings;
 
+  /// The shell's search, when it has a search tab.
+  final LiquidSearchChromeDetails? search;
+
   /// Field by field. Callbacks ([select], [expand], [setSidebarVisible])
   /// compare by identity.
   @override
@@ -99,7 +144,8 @@ class LiquidChromeDetails {
       other.expand == expand &&
       other.sidebarVisible == sidebarVisible &&
       other.setSidebarVisible == setSidebarVisible &&
-      other.strings == strings;
+      other.strings == strings &&
+      other.search == search;
 
   @override
   int get hashCode => Object.hash(
@@ -115,5 +161,6 @@ class LiquidChromeDetails {
     sidebarVisible,
     setSidebarVisible,
     strings,
+    search,
   );
 }

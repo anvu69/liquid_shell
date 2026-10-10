@@ -338,4 +338,112 @@ void main() {
       );
     });
   });
+
+  group('fallback geometry', () {
+    const size = Size(393, 852);
+    // P1's bottom row: 62pt pill, 21pt gap above the screen edge.
+    const rowBottom = 852.0 - 21;
+
+    CompactSearchRects rects(
+      LiquidSearchPhase phase, {
+      double keyboard = 0,
+      TextDirection direction = TextDirection.ltr,
+    }) => compactSearchRects(
+      phase: phase,
+      size: size,
+      rowBottom: rowBottom,
+      rowExtent: 62,
+      margin: 16,
+      keyboard: keyboard,
+      direction: direction,
+    );
+
+    test('idle: the ⌕ circle at the trailing end of the row', () {
+      expect(
+        rects(LiquidSearchPhase.idle).field,
+        const Rect.fromLTWH(393 - 16 - 62, rowBottom - 62, 62, 62),
+      );
+    });
+
+    test('selected: circle at 28, field from 88 to 28 from the end', () {
+      final r = rects(LiquidSearchPhase.selected);
+      expect(r.circle, const Rect.fromLTWH(28, rowBottom - 62 + 7, 48, 48));
+      expect(
+        r.field,
+        const Rect.fromLTRB(
+          88,
+          rowBottom - 62 + 7,
+          393 - 28,
+          rowBottom - 62 + 55,
+        ),
+      );
+    });
+
+    test('active: field and × 8pt above the keyboard', () {
+      final r = rects(LiquidSearchPhase.active, keyboard: 336);
+      const bottom = 852.0 - 336 - 8;
+      expect(
+        r.field,
+        const Rect.fromLTRB(8, bottom - 48, 393 - 8 - 48 - 8, bottom),
+      );
+      expect(r.cancel, const Rect.fromLTWH(393 - 8 - 48, bottom - 48, 48, 48));
+    });
+
+    test('active without a software keyboard stays in the row', () {
+      final r = rects(LiquidSearchPhase.active);
+      expect(r.field.bottom, rowBottom - 62 + 55);
+    });
+
+    test('RTL mirrors every rect', () {
+      final ltr = rects(LiquidSearchPhase.selected);
+      final rtl = rects(
+        LiquidSearchPhase.selected,
+        direction: TextDirection.rtl,
+      );
+      expect(rtl.circle.left, 393 - ltr.circle.right);
+      expect(rtl.field.right, 393 - ltr.field.left);
+    });
+
+    test(
+      'regular field top: one row below the bar, the bar row when active',
+      () {
+        expect(
+          regularSearchFieldTop(
+            phase: LiquidSearchPhase.selected,
+            paddingTop: 24,
+            barExtent: 52,
+            tiled: false,
+          ),
+          24 + 20 + 52 + 8,
+        );
+        expect(
+          regularSearchFieldTop(
+            phase: LiquidSearchPhase.active,
+            paddingTop: 24,
+            barExtent: 52,
+            tiled: false,
+          ),
+          24 + 20,
+        );
+        expect(
+          regularSearchFieldTop(
+            phase: LiquidSearchPhase.selected,
+            paddingTop: 24,
+            barExtent: 52,
+            tiled: true,
+          ),
+          24 + 54,
+        );
+        expect(
+          regularSearchFieldTop(
+            phase: LiquidSearchPhase.active,
+            paddingTop: 24,
+            barExtent: 52,
+            tiled: true,
+          ),
+          24 + 5,
+        );
+      },
+    );
+  });
 }
