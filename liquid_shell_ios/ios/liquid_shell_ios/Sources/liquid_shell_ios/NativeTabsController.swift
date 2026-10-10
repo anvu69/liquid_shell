@@ -26,8 +26,20 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   /// the compact bar, the trailing end of the top bar, the first sidebar
   /// row. It is never selected (`shouldSelectTab`).
   private var trailingTab: UISearchTab?
-  /// Sidebar-only flags plus "has trailing": a change rebuilds the tabs.
-  private var structure: [Bool] = []
+  /// The search destination (role search): UIKit's search tab, hosting the
+  /// search field (spec P3b §7). nil without one.
+  private(set) var searchTab: UISearchTab?
+  /// Its index in Dart's destinations.
+  private(set) var searchIndex: Int?
+  /// Tabs with a native navigation bar, by destination index (P3b-1: the
+  /// search tab only).
+  private(set) var navControllers: [Int: ShellNavController] = [:]
+  /// The search field and its delegates; one per shell, re-hosted when the
+  /// tabs are rebuilt.
+  let searchBridge = SearchBridge()
+  /// Per destination 0 fixed, 1 sidebar-only, 2 search; plus 1 when there
+  /// is a trailing action: a change rebuilds the tabs.
+  private var structure: [Int] = []
   private let footer = SidebarFooterView()
 
   /// The last config from Dart; nil until the first `update`.
@@ -57,6 +69,24 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     mode = .tabSidebar
     delegate = self
     sidebar.delegate = self
+    searchBridge.canReport = { [weak self] in
+      guard let self, let searchTab = self.searchTab else { return false }
+      return self.selectedTab === searchTab && !self.applyingFromDart
+    }
+    searchBridge.onText = { [weak self] text, composing in
+      self?.send("onSearchTextChanged") {
+        self?.events.onSearchTextChanged(text: text, composing: composing, completion: $0)
+      }
+    }
+    searchBridge.onActive = { [weak self] active in
+      self?.send("onSearchActiveChanged") {
+        self?.events.onSearchActiveChanged(active: active, completion: $0)
+      }
+      self?.syncFlutter()
+    }
+    searchBridge.onSubmit = { [weak self] text in
+      self?.send("onSearchSubmitted") { self?.events.onSearchSubmitted(text: text, completion: $0) }
+    }
   }
 
   @available(*, unavailable)
@@ -120,7 +150,9 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       rebuildTabsIfNeeded(new)
       for (tab, spec) in zip(destinationTabs, new.tabs) {
         tab.title = spec.title
-        tab.image = UIImage(systemName: spec.sfSymbol)
+        // A search tab without a symbol keeps the system's magnifying glass.
+        tab.image = UIImage(
+          systemName: spec.search && spec.sfSymbol.isEmpty ? "magnifyingglass" : spec.sfSymbol)
         tab.badgeValue = spec.badge
       }
       if let tab = trailingTab, let action = new.trailing {
@@ -128,6 +160,7 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
         tab.image = UIImage(systemName: action.sfSymbol)
       }
       showTabs(new)
+      applySearch(new)
       select(Int(new.selectedIndex))
     }
     setFooter(new.footer)
@@ -155,12 +188,32 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   }
 
   /// Creates the tabs when the structure changes; `showTabs` hands them to
-  /// UIKit.
+  /// UIKit. A live `UITab` is never reused for a new controller (UIKit
+  /// asserts): a structure change builds new tabs and controllers.
   private func rebuildTabsIfNeeded(_ new: NativeChromeConfig) {
-    let wanted = new.tabs.map(\.sidebarOnly) + [new.trailing != nil]
+    let wanted =
+      new.tabs.map { $0.search ? 2 : ($0.sidebarOnly ? 1 : 0) } + [new.trailing != nil ? 1 : 0]
     guard wanted != structure else { return }
     structure = wanted
+    // One search controller, one navigation item at a time.
+    for nav in navControllers.values { nav.rootHost.navigationItem.searchController = nil }
+    searchTab = nil
+    searchIndex = nil
+    navControllers = [:]
     destinationTabs = new.tabs.enumerated().map { index, spec in
+      if spec.search {
+        let root = PageHostController()
+        root.installSearch(
+          searchBridge, style: searchStyle(rootLargeTitle: spec.pages.first?.largeTitle ?? nil))
+        let nav = ShellNavController(root: root)
+        navControllers[index] = nav
+        let tab = UISearchTab { _ in nav }
+        // The video's state 2: selecting search does not focus the field (Q13).
+        tab.automaticallyActivatesSearch = false
+        searchTab = tab
+        searchIndex = index
+        return tab
+      }
       let tab = UITab(title: "", image: nil, identifier: "destination\(index)") { _ in
         TabHostController()
       }
@@ -168,10 +221,33 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       tab.preferredPlacement = spec.sidebarOnly ? .sidebarOnly : .fixed
       return tab
     }
-    trailingTab = new.trailing.map { _ in
-      // Pinned by default: the trailing end of the bar, the first sidebar row.
-      UISearchTab { _ in TabHostController() }
-    }
+    // Q9: never together. Dart asserts; should both arrive, the search
+    // destination wins (UIKit gives both search tabs one identifier).
+    trailingTab =
+      searchTab != nil
+      ? nil
+      : new.trailing.map { _ in
+        // Pinned by default: the trailing end of the bar, the first sidebar row.
+        UISearchTab { _ in TabHostController() }
+      }
+  }
+
+  private func searchStyle(rootLargeTitle: Bool?) -> SearchTabStyle {
+    SearchMath.style(
+      isPad: traitCollection.userInterfaceIdiom == .pad,
+      osMajor: ProcessInfo.processInfo.operatingSystemVersion.majorVersion,
+      rootLargeTitle: rootLargeTitle)
+  }
+
+  /// Placeholder and placement of the search tab (spec §7.2).
+  private func applySearch(_ new: NativeChromeConfig) {
+    guard let searchIndex, new.tabs.indices.contains(searchIndex),
+      let nav = navControllers[searchIndex]
+    else { return }
+    searchBridge.controller.searchBar.placeholder =
+      new.search?.placeholder ?? searchBridge.defaultPlaceholder
+    nav.rootHost.applySearchStyle(
+      searchStyle(rootLargeTitle: new.tabs[searchIndex].pages.first?.largeTitle ?? nil))
   }
 
   /// The tabs UIKit shows. Compact has no sidebar, and UIKit's compact bar
@@ -184,38 +260,55 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     guard !config.tabs.isEmpty else { return }
     let compact = isCompact
     let shown = zip(destinationTabs, config.tabs).filter { !(compact && $1.sidebarOnly) }.map(\.0)
-    let wanted = (trailingTab.map { [$0] } ?? []) + shown
+    // The search tab is pinned like the trailing one: first in the array
+    // is the trailing end of the bar and the first sidebar row.
+    let pinned = shown.filter { $0 === searchTab }
+    let wanted = (trailingTab.map { [$0] } ?? []) + pinned + shown.filter { $0 !== searchTab }
     guard wanted.map(ObjectIdentifier.init) != tabs.map(ObjectIdentifier.init) else { return }
     applyingFromDart = true
     setTabs(wanted, animated: false)
     applyingFromDart = false
-    showTrailingApart()
+    applyProminentTab()
   }
 
-  /// The trailing action is the separate ⌕ circle after the compact bar's
-  /// pill. iOS 27 draws that circle only for the prominent tab, and a
-  /// search tab is prominent by default only when it activates the system
-  /// search field, which this one never opens: without this, iOS 27 puts
-  /// it inside the pill as one more destination. Nil with no trailing
-  /// action. The iOS 27 SDK (Swift 6.4) declares the property.
-  private func showTrailingApart() {
+  /// One rule for the prominent tab, after `setTabs` (probe; spec P3b
+  /// §7.2). iOS 27 draws the separate circle after the compact bar's pill
+  /// only for the prominent tab, and a search tab is prominent by default
+  /// only when it activates the system search field, which neither of ours
+  /// does on selection:
+  /// - the trailing action, on every idiom: without it iOS 27 puts the ⌕
+  ///   inside the pill as one more destination (VK-426);
+  /// - the search destination, on an iPhone only (Q10); on an iPad Search
+  ///   stays inside the bar (Q1);
+  /// - neither: nil.
+  /// A shell never has both (Q9). The iOS 27 SDK (Swift 6.4) declares the
+  /// property.
+  private func applyProminentTab() {
     #if compiler(>=6.4)
-      if #available(iOS 27.0, *) { prominentTabIdentifier = trailingTab?.identifier }
+      if #available(iOS 27.0, *) {
+        let search = searchStyle(rootLargeTitle: nil).prominent ? searchTab : nil
+        let want = (trailingTab ?? search)?.identifier
+        if prominentTabIdentifier != want { prominentTabIdentifier = want }
+      }
     #endif
   }
 
   /// Selects destination [index]. A sidebar-only one is left out of the
-  /// compact bar: then the first shown destination. UIKit would otherwise
-  /// pick a tab itself, and its first tab is the search tab, whose
-  /// selection is the compact bar's search state. Dart keeps its own
-  /// selection and tells the app it is hidden; nothing is proposed.
+  /// compact bar: then the first shown ordinary destination, never the
+  /// search or the trailing tab (their selection is a search state). UIKit
+  /// would otherwise pick a tab itself. Dart keeps its own selection and
+  /// tells the app it is hidden; nothing is proposed. Leaving an active
+  /// search dismisses it and keeps its text (Q2).
   private func select(_ index: Int) {
     guard destinationTabs.indices.contains(index) else { return }
     let wanted = destinationTabs[index]
     let shown = tabs.contains { $0 === wanted }
-    guard let tab = shown ? wanted : tabs.first(where: { $0 !== trailingTab }),
+    guard
+      let tab = shown
+        ? wanted : tabs.first(where: { $0 !== trailingTab && $0 !== searchTab }),
       selectedTab !== tab
     else { return }
+    if let searchTab, selectedTab === searchTab { searchBridge.dismissKeepingText() }
     applyingFromDart = true
     selectedTab = tab
     applyingFromDart = false
@@ -421,10 +514,26 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     #endif
   }
 
-  // MARK: - Search and pages (P3b-1 Task 3 stubs; Tasks 4–5 implement)
+  // MARK: - Search (spec P3b §7.4)
 
-  func setSearchText(_ text: String) {}
-  func setSearchActive(_ active: Bool) {}
+  /// Dart's text: applied outside a composition, never echoed.
+  func setSearchText(_ text: String) {
+    searchBridge.setText(text)
+  }
+
+  /// Dart's activate / deactivate. Activation needs the search tab
+  /// selected; deactivation keeps the text.
+  func setSearchActive(_ active: Bool) {
+    if active {
+      guard let searchTab, selectedTab === searchTab else { return }
+      searchBridge.activate()
+    } else {
+      searchBridge.dismissKeepingText()
+    }
+  }
+
+  // MARK: - Pages (P3b-1 Task 3 stubs; Task 5 implements)
+
   func setPageScroll(tab: Int, offset: Double) {}
   func debugSnapshot() -> NativeDebugSnapshot { .empty }
 }
