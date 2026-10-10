@@ -506,7 +506,7 @@ Every `PageHostController` owns the proxy scroll view (§7.1). `setPageScroll(ta
 
 **Held top.** As the title collapses, the host's top safe area shrinks (168.7 → 116 on iPhone). Copied straight to Flutter, the page's padding would shrink under the user's finger every frame. `syncFlutter` therefore holds the host's top inset at its value when the proxy offset was ≤ 0 (`restingTop`), like P2's `heldTop`, as long as the proxy is scrolled. The hold does **not** apply to the search activation, where UIKit hides the large title on purpose: `restingTop` is re-read whenever the search's active state changes. `restingTop` holds Flutter's padding only; it is never the proxy's base (`expandedTop` above), or a search on a scrolled page would leave the large title collapsed for good.
 
-Dart sends the offset from `LiquidPage`'s first vertical scroll view (`ScrollUpdateNotification`, depth 0), coalesced to one message per frame, only for the top page of a tab with a native bar.
+Dart sends the offset from `LiquidPage`'s first vertical scroll view (`ScrollUpdateNotification` and `ScrollMetricsNotification`, depth 0, vertical), coalesced to one message per frame, only for the top page of a tab with a native bar. `ScrollMetricsNotification` carries the offset of a position that never scrolled: one restored from `PageStorage`, one rebuilt after a `GlobalKey` move, one clamped when the content shrinks. The shell caches the last offset per registered page and sends it once whenever the top page changes (a push, a pop, `pushReplacement`, native engaging late), as soon as that page's scroll view has reported one: native may reuse a host whose proxy keeps an old offset.
 
 ### 7.8 Hit testing
 
@@ -533,10 +533,10 @@ Every `PageHostController` calls `syncFlutter` from `viewIsAppearing`, `viewDidL
 
 | Event | Behaviour |
 |---|---|
-| Hot restart | Dart re-attaches and sends the config with `force` (P2). The search controller's text is Dart's again: Dart sends `setSearchText(controller.text)` after the first `update` that selects the search tab |
-| Scene reconnect | The installer replays the last config (P2 §5.7); the search text is replayed by Dart's forced resend + `setSearchText` |
+| Cold start, hot restart | Dart attaches; until the platform answers, configs go out with `engaged: false`. The search controller's text is Dart's: the first config that shows the search tab **natively** (engaged and selected) is followed by `setSearchText(controller.text)`, **even when the text is empty** (after a hot restart native may still show the old text). Text the app set while native was not engaged (pending, standby, Flutter chrome) goes out the same way |
+| Scene reconnect | The installer replays the last config (P2 §5.7). The host forwards the state report to the owner shell after its forced resend; the shell then replays `setSearchText(controller.text)` (empty included) with the next config that shows the search tab, at once if it is selected. State reports for other reasons (a size-class change) replay it too: harmless, native ignores an equal text and drops a stale one on user input (§7.4) |
 | A Flutter dialog or sheet above the shell while search is active | Dart sends `setSearchActive(false)` first: the keyboard and the field would sit above the barrier. The text is kept. On the compact bar the chrome also hides (P2 §14.3) |
-| A page above the shell (root navigator) | The native chrome hides (P2 §7.4); the search's native state is kept for its return |
+| A page above the shell (root navigator) | The native chrome hides (P2 §7.4). An active search is deactivated first, as for a dialog (`setSearchActive(false)`: the keyboard would stay up over the page); its text is kept, and the search tab's page stack is kept (§8.4) |
 | Dormant | The search tab is kept with the tabs (P2 §14.3 "dormant keeps the tabs") |
 
 ## 8. Dart behaviour (`liquid_shell`)
@@ -551,9 +551,9 @@ An internal `ShellSearch` object, owned by `_LiquidShellState`, attaches to `Liq
 
 - **Native → controller.** `LiquidNativeSearchTextChanged` sets `text` and `composing`, then calls `onChanged`. `ActiveChanged` sets `active`. `Submitted` calls `onSubmitted`. These writes are marked as coming from the platform, so the controller listener does not send them back.
 - **Controller → native.** A text the app set (not the platform) is sent with `setNativeSearchText`. `activate()` unfocuses Flutter's primary focus and sends `setNativeSearchActive(active: true)`; `deactivate()` sends false; `clear()` sends `''`.
-- **Query kept across tab switches (Q2 A).** The controller is the truth. Native suppresses the clears UIKit makes when the tab is left (§7.4). When the search tab is selected again, `ShellSearch` sends `setNativeSearchText(controller.text)` right after the config that selects it, if the text is not empty. The user's × clears it for good (native semantics; Q2).
+- **Query kept across tab switches (Q2 A).** The controller is the truth. Native suppresses the clears UIKit makes when the tab is left (§7.4). When the search tab is selected again, `ShellSearch` sends `setNativeSearchText(controller.text)` right after the config that selects it, if the text is not empty (the first native entry after an attach or a reconnect sends it even when empty, §7.10). The user's × clears it for good (native semantics; Q2).
 - **Phase.** `searchPhase` is `idle` while another index is selected, `active` while `value.active`, else `selected`. Leaving the search tab while active sets `active` to false.
-- **Dialogs.** When the shell's route stops being current (a dialog or sheet above it) while active, `setNativeSearchActive(false)` is sent first (§7.10).
+- **Dialogs and pages above.** When the shell's route stops being current (a dialog, a sheet or a page above it) while active, `setNativeSearchActive(false)` is sent first, once per covering (§7.10).
 - **Fallback.** The same object drives the Flutter field (§9.4), with the same controller rules.
 
 ### 8.3 Insets and scope
@@ -569,14 +569,17 @@ An internal `ShellSearch` object, owned by `_LiquidShellState`, attaches to `Liq
 After each frame in which registrations, routes or the selection changed, the shell computes the selected tab's stack with a pure function:
 1. The **top page** is the registered page whose route `isCurrent` and whose `TickerMode` is enabled (on screen, not covered, not in an offstage branch).
 2. The **stack** is every registered page in the top page's navigator whose route `isActive`, in sequence order (registration order is push order).
-3. No top page → an empty stack: the native root shows the destination's label (a tab whose pages do not use `LiquidPage`).
+3. No top page → an empty stack: the native root shows the destination's label (a tab whose pages do not use `LiquidPage`, or a page without `LiquidPage` pushed above one). **Except under a cover**, where the last stack stays (less pages that left or whose route is gone), so native neither pops to the root nor pushes everything again, animated, when the cover goes:
+   - the shell's own route is covered (a page or dialog above the shell);
+   - the last top page's route is still current in its navigator (it is hidden only from outside, including the frame where the shell is uncovered before that page has noticed);
+   - the last top page is still on screen under a popup route (a modal bottom sheet in the tab's navigator).
 
 Stacks are kept per destination index; a tab's stack is recomputed only while it is selected. They travel in `LiquidNativeTab.pages`.
 
 `LiquidNativeBackTapped(tab)` → if `tab` is the selected index, `maybePop()` on the top page's navigator. Otherwise dropped.
 
 `LiquidPage` itself:
-- Under a native page bar (`nativePageBar` true): draws only its child, inside a `NotificationListener<ScrollUpdateNotification>` that forwards the offset (§7.7).
+- Under a native page bar (`nativePageBar` true): draws only its child, inside a `NotificationListener` that forwards the offset from `ScrollUpdateNotification` and `ScrollMetricsNotification` (§7.7).
 - Otherwise: the Flutter bar of §9.5.
 - The child is always the first child of the same wrapper chain, so switching between native and Flutter bars (native chrome on/off) never rebuilds it.
 
