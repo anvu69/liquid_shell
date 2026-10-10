@@ -16,7 +16,7 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
     required this.rimHighlight,
     required this.shadow,
     required this.labelStyle,
-    required this.liquidTint,
+    this._liquidTint,
     this.borderWidth = 1,
     this.blurSigma = 10,
     this.borderRadius = const BorderRadius.all(Radius.circular(999)),
@@ -88,8 +88,20 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
   /// Compact tab labels.
   final TextStyle labelStyle;
 
-  /// Tint inside the liquid lens; lighter than [tint] (spec §5.6).
-  final Color liquidTint;
+  /// Tint inside the liquid lens; lighter than [tint]. The liquid tier
+  /// reads this, not [tint].
+  ///
+  /// When not given, it is [solid] at 0.40 alpha, or 0.45 when [solid] is
+  /// dark: the same as [LiquidGlassTheme.fromColorScheme], and it follows
+  /// `copyWith(solid: …)`.
+  Color get liquidTint =>
+      _liquidTint ??
+      solid.withValues(
+        alpha: ThemeData.estimateBrightnessForColor(solid) == Brightness.dark
+            ? 0.45
+            : 0.40,
+      );
+  final Color? _liquidTint;
 
   /// Liquid lens thickness multiplier: 0 is flat glass, 1 the default.
   final double refraction;
@@ -125,7 +137,7 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
     blurSigma: blurSigma ?? this.blurSigma,
     borderRadius: borderRadius ?? this.borderRadius,
     labelStyle: labelStyle ?? this.labelStyle,
-    liquidTint: liquidTint ?? this.liquidTint,
+    liquidTint: liquidTint ?? _liquidTint,
     refraction: refraction ?? this.refraction,
     dispersion: dispersion ?? this.dispersion,
     liquidBlurSigma: liquidBlurSigma ?? this.liquidBlurSigma,
@@ -144,7 +156,7 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
       blurSigma: lerpDouble(blurSigma, other.blurSigma, t)!,
       borderRadius: BorderRadius.lerp(borderRadius, other.borderRadius, t)!,
       labelStyle: TextStyle.lerp(labelStyle, other.labelStyle, t)!,
-      liquidTint: Color.lerp(liquidTint, other.liquidTint, t)!,
+      liquidTint: Color.lerp(liquidTint, other.liquidTint, t),
       refraction: lerpDouble(refraction, other.refraction, t)!,
       dispersion: lerpDouble(dispersion, other.dispersion, t)!,
       liquidBlurSigma: lerpDouble(liquidBlurSigma, other.liquidBlurSigma, t)!,

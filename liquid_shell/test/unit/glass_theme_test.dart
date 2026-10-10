@@ -177,6 +177,67 @@ void main() {
       expect(half.liquidBlurSigma, 1);
     });
 
+    group('liquidTint is optional (spec §5.6: every field has a default)', () {
+      LiquidGlassTheme bare(Color solid) => LiquidGlassTheme(
+        tint: solid.withValues(alpha: 0.72),
+        solid: solid,
+        border: const Color(0x47000000),
+        rimHighlight: const Color(0x80FFFFFF),
+        shadow: const BoxShadow(),
+        labelStyle: const TextStyle(),
+      );
+
+      test('defaults to solid @ 0.40 over a light solid', () {
+        final scheme = ColorScheme.fromSeed(seedColor: const Color(0xFF3366CC));
+        final theme = bare(scheme.surface);
+        expect(theme.liquidTint, scheme.surface.withValues(alpha: 0.40));
+        expect(
+          theme.liquidTint,
+          LiquidGlassTheme.fromColorScheme(scheme).liquidTint,
+        );
+      });
+
+      test('defaults to solid @ 0.45 over a dark solid', () {
+        final scheme = ColorScheme.fromSeed(
+          seedColor: const Color(0xFF3366CC),
+          brightness: Brightness.dark,
+        );
+        final theme = bare(scheme.surface);
+        expect(theme.liquidTint, scheme.surface.withValues(alpha: 0.45));
+        expect(
+          theme.liquidTint,
+          LiquidGlassTheme.fromColorScheme(scheme).liquidTint,
+        );
+      });
+
+      test('a derived default follows copyWith(solid:)', () {
+        final theme = bare(const Color(0xFFFFFFFF));
+        final moved = theme.copyWith(solid: const Color(0xFF000000));
+        expect(
+          moved.liquidTint,
+          const Color(0xFF000000).withValues(alpha: 0.45),
+        );
+      });
+
+      test('an explicit liquidTint survives copyWith(solid:)', () {
+        final theme = bare(
+          const Color(0xFFFFFFFF),
+        ).copyWith(liquidTint: const Color(0x11223344));
+        final moved = theme.copyWith(solid: const Color(0xFF000000));
+        expect(moved.liquidTint, const Color(0x11223344));
+      });
+
+      test('== and hashCode compare the resolved tint', () {
+        const white = Color(0xFFFFFFFF);
+        final derived = bare(white);
+        final explicit = derived.copyWith(
+          liquidTint: white.withValues(alpha: 0.40),
+        );
+        expect(derived, explicit);
+        expect(derived.hashCode, explicit.hashCode);
+      });
+    });
+
     test('LiquidOpticsParams.fromTheme maps the fields', () {
       expect(
         LiquidOpticsParams.fromTheme(light),
