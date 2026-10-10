@@ -172,6 +172,54 @@ void main() {
     _expectInPlace(tester);
   });
 
+  testWidgets('a reparented lens ignores movers while inactive', (
+    tester,
+  ) async {
+    await _setUp(tester);
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    final key = GlobalKey();
+    final glass = KeyedSubtree(key: key, child: _glass());
+    // The scroll view builds first, so the glass is inactive while _Jump
+    // scrolls; then the glass is retaken below.
+    Widget tree({required bool inList}) => Directionality(
+      textDirection: TextDirection.ltr,
+      child: Column(
+        children: [
+          SizedBox(
+            height: 300,
+            child: SingleChildScrollView(
+              controller: controller,
+              child: Column(
+                children: [
+                  const SizedBox(height: 100),
+                  // As in a ListView: scrolling alone does not repaint it.
+                  if (inList) RepaintBoundary(child: glass),
+                  const SizedBox(height: 2000),
+                ],
+              ),
+            ),
+          ),
+          _Jump(controller, by: inList ? 0 : 10),
+          if (!inList) glass,
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(tree(inList: true));
+    await tester.pumpWidget(tree(inList: false));
+    expect(tester.takeException(), isNull);
+    _expectInPlace(tester);
+
+    // Back in the scroll view, it follows scrolling again.
+    await tester.pumpWidget(tree(inList: true));
+    final before = _render(tester).debugPaintedRect!;
+    controller.jumpTo(controller.offset + 30);
+    await tester.pump();
+    _expectInPlace(tester);
+    expect(_render(tester).debugPaintedRect!.top, before.top - 90);
+  });
+
   testWidgets('one throwing check does not stop the drift guard', (
     tester,
   ) async {
@@ -230,4 +278,18 @@ class _ThrowingBackdrop extends RenderLiquidBackdrop {
 
   @override
   void checkDrift() => throw StateError('drift check failed');
+}
+
+/// Scrolls [controller] by [by] while it builds.
+class _Jump extends StatelessWidget {
+  const _Jump(this.controller, {required this.by});
+
+  final ScrollController controller;
+  final double by;
+
+  @override
+  Widget build(BuildContext context) {
+    if (by != 0) controller.jumpTo(controller.offset + by);
+    return const SizedBox.shrink();
+  }
 }
