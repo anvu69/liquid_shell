@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
+import 'package:liquid_shell/src/glass/frame_guard.dart';
 import 'package:liquid_shell/src/glass/glass_scope.dart';
 import 'package:liquid_shell/src/glass/glass_theme.dart';
 import 'package:liquid_shell/src/glass/policy.dart';
@@ -47,6 +48,7 @@ class _LiquidGlassState extends State<LiquidGlass> {
   late final Listenable _changes = Listenable.merge([
     _signals,
     LiquidShaderProgram.instance,
+    LiquidFrameGuard.instance,
   ]);
 
   @override
@@ -84,6 +86,7 @@ class _LiquidGlassState extends State<LiquidGlass> {
           blurDisabled: platform.blurDisabled,
           lowEnd: platform.lowEnd,
           glesOnly: platform.glesOnly,
+          slowFrames: LiquidFrameGuard.instance.value,
         ),
       );
       final theme = LiquidGlassTheme.of(context);

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:liquid_shell/src/glass/drift_guard.dart';
+import 'package:liquid_shell/src/glass/frame_guard.dart';
 import 'package:liquid_shell/src/glass/liquid_optics.dart';
 import 'package:liquid_shell/src/glass/shader_program.dart';
 
@@ -219,11 +220,13 @@ class RenderLiquidBackdrop extends RenderProxyBox {
   void attach(PipelineOwner owner) {
     super.attach(owner);
     LiquidDriftGuard.instance.add(this);
+    LiquidFrameGuard.instance.acquire();
   }
 
   @override
   void detach() {
     LiquidDriftGuard.instance.remove(this);
+    LiquidFrameGuard.instance.release();
     // Off screen nothing samples the shader; a reattach paints a new one.
     _disposeShader();
     super.detach();

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
+import 'package:liquid_shell/src/glass/frame_guard.dart';
 import 'package:liquid_shell/src/glass/policy.dart';
 import 'package:liquid_shell/src/glass/shader_program.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
@@ -96,4 +97,5 @@ void debugResetLiquidGlassSignals() {
     .._set(LiquidPlatformSignals.none);
   debugResetPolicyLogging();
   LiquidShaderProgram.instance.debugReset();
+  LiquidFrameGuard.instance.debugReset();
 }
