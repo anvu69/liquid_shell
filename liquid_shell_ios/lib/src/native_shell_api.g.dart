@@ -1120,6 +1120,10 @@ abstract class NativeShellFlutterApi {
 
   void onBackTapped(int tab);
 
+  /// UIKit asked to pop tab [tab] to the page at [index] (the back menu, a
+  /// pop-to-root); native did not pop.
+  void onPopToPage(int tab, int index);
+
   static void setUp(
     NativeShellFlutterApi? api, {
     BinaryMessenger? binaryMessenger,
@@ -1365,6 +1369,32 @@ abstract class NativeShellFlutterApi {
           final int arg_tab = args[0]! as int;
           try {
             api.onBackTapped(arg_tab);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          } catch (e) {
+            return wrapResponse(
+              error: PlatformException(code: 'error', message: e.toString()),
+            );
+          }
+        });
+      }
+    }
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+        'dev.flutter.pigeon.liquid_shell_ios.NativeShellFlutterApi.onPopToPage$messageChannelSuffix',
+        pigeonChannelCodec,
+        binaryMessenger: binaryMessenger,
+      );
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          final List<Object?> args = message! as List<Object?>;
+          final int arg_tab = args[0]! as int;
+          final int arg_index = args[1]! as int;
+          try {
+            api.onPopToPage(arg_tab, arg_index);
             return wrapResponse(empty: true);
           } on PlatformException catch (e) {
             return wrapResponse(error: e);

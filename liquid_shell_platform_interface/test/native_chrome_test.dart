@@ -456,6 +456,18 @@ void main() {
         isNot(const LiquidNativeBackTapped(1)),
       );
       expect(
+        const LiquidNativePopToPage(2, index: 0),
+        const LiquidNativePopToPage(2, index: 0),
+      );
+      expect(
+        const LiquidNativePopToPage(2, index: 0),
+        isNot(const LiquidNativePopToPage(2, index: 1)),
+      );
+      expect(
+        const LiquidNativePopToPage(2, index: 0),
+        isNot(const LiquidNativePopToPage(1, index: 0)),
+      );
+      expect(
         const LiquidNativeSearchTextChanged('a', composing: false).toString(),
         'LiquidNativeSearchTextChanged(a, composing: false)',
       );
@@ -493,6 +505,11 @@ void main() {
           const LiquidNativeBackTapped(1),
           const LiquidNativeBackTapped(1),
           'LiquidNativeBackTapped(1)',
+        ),
+        (
+          const LiquidNativePopToPage(1, index: 0),
+          const LiquidNativePopToPage(1, index: 0),
+          'LiquidNativePopToPage(1, index: 0)',
         ),
       ];
       for (final (a, b, text) in pairs) {

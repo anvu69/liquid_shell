@@ -358,6 +358,8 @@ class _LiquidShellState extends State<LiquidShell>
         _search.onNativeEvent(event);
       case LiquidNativeBackTapped(:final tab):
         _onNativeBack(tab);
+      case LiquidNativePopToPage(:final tab, :final index):
+        unawaited(_onNativePopTo(tab, index));
       case LiquidNativeStateChanged(:final state):
         // After the host's forced resend. The same state as the last build
         // saw is a reconnected scene, whose field lost the text.
@@ -469,6 +471,36 @@ class _LiquidShellState extends State<LiquidShell>
         ? _stackRecords[tab]?.lastOrNull?.entry
         : null;
     unawaited((_topPageEntry ?? kept)?.navigator?.maybePop());
+  }
+
+  /// UIKit's other pops (spec P3b §7.6): the back button's long-press
+  /// menu, an accessibility escape, a pop-to-root. Native did not pop; the
+  /// pages above [index] pop here, top first, each through its PopScope.
+  /// A refused pop ends it, and the native stack follows what is left.
+  /// One page down is exactly a back tap.
+  Future<void> _onNativePopTo(int tab, int index) async {
+    final stack = _stackRecords[tab];
+    if (stack == null || index < 0 || index >= stack.length - 1) return;
+    if (index == stack.length - 2) return _onNativeBack(tab);
+    if (tab !=
+            resolveSelectedIndex(
+              widget.selectedIndex,
+              widget.destinations.length,
+            ) ||
+        !_routeCurrent ||
+        _covered) {
+      return;
+    }
+    for (final record in stack.sublist(index + 1).reversed) {
+      final route = record.entry.route;
+      final navigator = record.entry.navigator;
+      if (!mounted || route == null || navigator == null) return;
+      if (!route.isActive) continue;
+      // Only the top page pops: something else on top (a sheet) ends it.
+      if (!route.isCurrent) return;
+      await navigator.maybePop();
+      if (route.isActive) return;
+    }
   }
 
   /// Sends the top page's offset after the frame: one message per frame,

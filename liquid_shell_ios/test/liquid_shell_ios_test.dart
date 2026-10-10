@@ -453,6 +453,7 @@ void main() {
         isTrue,
       );
       expect(await deliver('onBackTapped', [2]), isTrue);
+      expect(await deliver('onPopToPage', [2, 0]), isTrue);
 
       expect(events, [
         const LiquidNativeSearchTextChanged('hô', composing: true),
@@ -460,6 +461,7 @@ void main() {
         const LiquidNativeSearchSubmitted('hồ'),
         const LiquidNativeSearchFieldChanged(Rect.fromLTWH(8, 490, 330, 48)),
         const LiquidNativeBackTapped(2),
+        const LiquidNativePopToPage(2, index: 0),
       ]);
     },
   );

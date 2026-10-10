@@ -23,6 +23,42 @@ final class ShellNavController: UINavigationController {
   @available(*, unavailable)
   required init?(coder: NSCoder) { nil }
 
+  /// Dart's answer to every pop UIKit starts by itself (spec P3b §7.6):
+  /// the page index that should end on top. Set by `applyPages`.
+  private var proposePop: ((Int) -> Void)?
+
+  // UIKit pops without the back button's `backAction` from its long-press
+  // menu (`_tryRequestPopToItem` → `popToViewController`), an
+  // accessibility escape or a keyboard back (`popViewController`) and a
+  // pop-to-root. Each is a proposal here, as the back tap is: native keeps
+  // its stack, Dart pops the Flutter pages (their PopScope runs), and the
+  // next config pops natively through `setViewControllers`. Popping here
+  // would leave Flutter on the old page with no back button.
+
+  override func popViewController(animated: Bool) -> UIViewController? {
+    guard proposePop != nil, viewControllers.count > 1 else {
+      return super.popViewController(animated: animated)
+    }
+    proposePop?(viewControllers.count - 2)
+    return nil
+  }
+
+  override func popToViewController(
+    _ viewController: UIViewController, animated: Bool
+  ) -> [UIViewController]? {
+    guard proposePop != nil, let index = viewControllers.firstIndex(of: viewController) else {
+      return super.popToViewController(viewController, animated: animated)
+    }
+    if index < viewControllers.count - 1 { proposePop?(index) }
+    return []
+  }
+
+  override func popToRootViewController(animated: Bool) -> [UIViewController]? {
+    guard proposePop != nil else { return super.popToRootViewController(animated: animated) }
+    if viewControllers.count > 1 { proposePop?(0) }
+    return []
+  }
+
   override func viewDidLoad() {
     super.viewDidLoad()
     view.backgroundColor = .clear
@@ -43,6 +79,15 @@ final class ShellNavController: UINavigationController {
     events: NativeShellFlutterApiProtocol
   ) {
     let wanted = pages.isEmpty ? [NativePage(title: rootTitle, largeTitle: nil)] : pages
+    proposePop = { index in
+      events.onPopToPage(tab: Int64(tabIndex), index: Int64(index)) { result in
+        #if DEBUG
+          if case .failure(let error) = result {
+            NSLog("[liquid_shell] sending onPopToPage to Dart failed: %@", String(describing: error))
+          }
+        #endif
+      }
+    }
     rootHost.title = wanted[0].title
     var hosts = viewControllers.compactMap { $0 as? PageHostController }
     if hosts.count > wanted.count { hosts = Array(hosts.prefix(wanted.count)) }

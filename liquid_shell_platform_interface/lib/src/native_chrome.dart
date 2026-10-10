@@ -573,3 +573,32 @@ final class LiquidNativeBackTapped extends LiquidNativeEvent {
   @override
   String toString() => 'LiquidNativeBackTapped($tab)';
 }
+
+/// UIKit asked to pop tab [tab]'s native stack down to the page at [index]
+/// (0 is the root) by a path other than the back tap: the back button's
+/// long-press menu, an accessibility escape, a pop-to-root. Native did not
+/// pop: like a back tap, this is a proposal. The shell pops the Flutter
+/// pages above [index], each through its `PopScope`, and the native stack
+/// follows.
+final class LiquidNativePopToPage extends LiquidNativeEvent {
+  /// Creates the event.
+  const LiquidNativePopToPage(this.tab, {required this.index});
+
+  /// Index of the destination whose pages should pop.
+  final int tab;
+
+  /// The page that should end on top, counted from the tab's root (0).
+  final int index;
+
+  @override
+  bool operator ==(Object other) =>
+      other is LiquidNativePopToPage &&
+      other.tab == tab &&
+      other.index == index;
+
+  @override
+  int get hashCode => Object.hash(tab, index);
+
+  @override
+  String toString() => 'LiquidNativePopToPage($tab, index: $index)';
+}

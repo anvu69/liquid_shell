@@ -179,4 +179,8 @@ final class _NativeReceiver implements NativeShellFlutterApi {
 
   @override
   void onBackTapped(int tab) => _emit(LiquidNativeBackTapped(tab));
+
+  @override
+  void onPopToPage(int tab, int index) =>
+      _emit(LiquidNativePopToPage(tab, index: index));
 }

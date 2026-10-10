@@ -237,4 +237,8 @@ abstract class NativeShellFlutterApi {
   void onSearchFieldChanged(NativeRect frame);
 
   void onBackTapped(int tab);
+
+  /// UIKit asked to pop tab [tab] to the page at [index] (the back menu, a
+  /// pop-to-root); native did not pop.
+  void onPopToPage(int tab, int index);
 }

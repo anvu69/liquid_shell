@@ -326,6 +326,14 @@ final class RecordingEvents: NativeShellFlutterApiProtocol {
     sent.append("back \(tabArg)")
     completion(.success(()))
   }
+
+  func onPopToPage(
+    tab tabArg: Int64, index indexArg: Int64,
+    completion: @escaping (Result<Void, PigeonError>) -> Void
+  ) {
+    sent.append("popTo \(tabArg) \(indexArg)")
+    completion(.success(()))
+  }
 }
 
 /// The UIKit half of the shell (`NativeTabsController` inside the container)
@@ -1793,6 +1801,33 @@ extension NativeTabsTests {
     top.onBack?()
     XCTAssertEqual(events.sent.last, "back 2")
     XCTAssertEqual(nav.viewControllers.count, 2, "Dart pops; native follows")
+  }
+
+  /// Every pop UIKit starts by itself is a proposal, like the back tap:
+  /// the back button's long-press menu (UIKit calls `popToViewController`
+  /// from `_tryRequestPopToItem`), a pop (an accessibility escape, a
+  /// keyboard back), a pop-to-root (a tab reselect). Native keeps its
+  /// stack; Dart pops the Flutter pages and the next config pops here.
+  func testEveryUIKitPopIsAProposalForDart() throws {
+    let tabs = try installedSearchShell(
+      selected: 2,
+      pages: [NativePage(title: "Search"), NativePage(title: "A"), NativePage(title: "B")])
+    let nav = try XCTUnwrap(tabs.navControllers[2])
+    let lastPop = { self.events.sent.last { $0.hasPrefix("popTo") } }
+    XCTAssertEqual(nav.popToViewController(nav.viewControllers[0], animated: false) ?? [], [])
+    XCTAssertEqual(lastPop(), "popTo 2 0", "the back menu")
+    XCTAssertNil(nav.popViewController(animated: false))
+    XCTAssertEqual(lastPop(), "popTo 2 1", "a pop")
+    XCTAssertEqual(nav.popToRootViewController(animated: false) ?? [], [])
+    XCTAssertEqual(lastPop(), "popTo 2 0", "a pop-to-root")
+    settle()
+    XCTAssertEqual(titles(nav), ["Search", "A", "B"], "Dart pops; native follows")
+    // Q14: Flutter owns the swipe; UIKit's own swipes stay off.
+    XCTAssertEqual(nav.interactivePopGestureRecognizer?.isEnabled, false)
+    XCTAssertEqual(nav.interactiveContentPopGestureRecognizer?.isEnabled, false)
+    tabs.apply(searchConfig(selected: 2, pages: [NativePage(title: "Search")]))
+    settle()
+    XCTAssertEqual(titles(nav), ["Search"], "Dart's shorter stack pops natively")
   }
 
   func testFlutterKeepsTheTabsFrameAndGetsTheTopPagesInsets() throws {

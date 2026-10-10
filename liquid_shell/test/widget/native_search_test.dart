@@ -383,6 +383,81 @@ void main() {
     expect(fake.last.tabs.last.pages, hasLength(2));
   });
 
+  /// Pushes [titles] as LiquidPages in the search tab; [guarded] refuses to
+  /// pop (PopScope).
+  Future<void> pushPages(
+    WidgetTester tester,
+    List<String> titles, {
+    String? guarded,
+  }) async {
+    for (final title in titles) {
+      final page = LiquidPage(
+        title: title,
+        child: TestPage(label: title),
+      );
+      _searchNavigator.currentState!
+          .push(
+            MaterialPageRoute<void>(
+              builder: (_) => title == guarded
+                  ? PopScope(canPop: false, child: page)
+                  : page,
+            ),
+          )
+          .ignore();
+      await tester.pumpAndSettle();
+    }
+  }
+
+  List<String> pages(FakeNativePlatform fake) =>
+      fake.last.tabs.last.pages.map((p) => p.title).toList();
+
+  testWidgets('a native pop to the root (the back menu) pops every page '
+      'above it', (tester) async {
+    final (fake, _, _) = await _pump(tester);
+    await pushPages(tester, ['A', 'B']);
+    expect(pages(fake), ['Search', 'A', 'B']);
+    fake.emitNative(const LiquidNativePopToPage(2, index: 0));
+    await tester.pumpAndSettle();
+    expect(pages(fake), ['Search']);
+    expect(find.byKey(const ValueKey('list-A')), findsNothing);
+  });
+
+  testWidgets('a native pop to the previous page pops one page', (
+    tester,
+  ) async {
+    final (fake, _, _) = await _pump(tester);
+    await pushPages(tester, ['A', 'B']);
+    fake.emitNative(const LiquidNativePopToPage(2, index: 1));
+    await tester.pumpAndSettle();
+    expect(pages(fake), ['Search', 'A']);
+  });
+
+  testWidgets('a native pop-to stops at a page that refuses to pop', (
+    tester,
+  ) async {
+    final (fake, _, _) = await _pump(tester);
+    await pushPages(tester, ['A', 'Form', 'B'], guarded: 'Form');
+    fake.emitNative(const LiquidNativePopToPage(2, index: 0));
+    await tester.pumpAndSettle();
+    expect(pages(fake), ['Search', 'A', 'Form']);
+  });
+
+  testWidgets('a native pop-to for another tab, the top page or out of '
+      'range is dropped', (tester) async {
+    final (fake, _, _) = await _pump(tester);
+    await pushPages(tester, ['A']);
+    for (final event in const [
+      LiquidNativePopToPage(0, index: 0),
+      LiquidNativePopToPage(2, index: 1),
+      LiquidNativePopToPage(2, index: 5),
+      LiquidNativePopToPage(2, index: -1),
+    ]) {
+      fake.emitNative(event);
+      await tester.pumpAndSettle();
+      expect(pages(fake), ['Search', 'A'], reason: '$event');
+    }
+  });
+
   testWidgets('a back tap for another tab is dropped', (tester) async {
     final (fake, _, _) = await _pump(tester);
     _searchNavigator.currentState!
@@ -1335,6 +1410,46 @@ void main() {
         'Search',
         'Hồ Hoàn Kiếm',
       ]);
+    });
+
+    testWidgets('a native pop-to under a sheet in the tab ends at the sheet: '
+        'no page pops', (tester) async {
+      final (fake, _, _) = await _pump(tester);
+      await pushPages(tester, ['A', 'B']);
+      showModalBottomSheet<void>(
+        context: tester.element(find.byKey(const ValueKey('list-B'))),
+        builder: (_) => const SizedBox(height: 200, child: Text('Sheet')),
+      ).ignore();
+      await tester.pumpAndSettle();
+      fake.emitNative(const LiquidNativePopToPage(2, index: 0));
+      await tester.pumpAndSettle();
+      expect(find.text('Sheet'), findsOneWidget);
+      expect(pages(fake), ['Search', 'A', 'B']);
+    });
+
+    testWidgets('a native pop-to under a page above the shell pops nothing', (
+      tester,
+    ) async {
+      final (fake, _, _) = await _pump(tester);
+      await pushPages(tester, ['A', 'B']);
+      final root = Navigator.of(
+        tester.element(find.byKey(const ValueKey('list-B'))),
+        rootNavigator: true,
+      );
+      root
+          .push(
+            MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(body: Text('Above')),
+            ),
+          )
+          .ignore();
+      await tester.pumpAndSettle();
+      fake.emitNative(const LiquidNativePopToPage(2, index: 0));
+      await tester.pumpAndSettle();
+      expect(find.text('Above'), findsOneWidget);
+      root.pop();
+      await tester.pumpAndSettle();
+      expect(pages(fake), ['Search', 'A', 'B']);
     });
 
     testWidgets('N-5: a back tap under a page above the shell pops nothing '

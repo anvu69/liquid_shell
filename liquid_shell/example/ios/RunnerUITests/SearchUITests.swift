@@ -65,6 +65,59 @@ final class SearchUITests: XCTestCase {
     XCTAssertEqual((field.value as? String) ?? "", field.placeholderValue ?? "")
   }
 
+  /// The back button's long-press menu pops UIKit without its
+  /// `backAction`: Flutter must pop too, or it keeps the detail page with
+  /// no back button (Task 12 finding).
+  /// Searches "ho hoan" and opens the result's detail page; returns the
+  /// app, the native back button and the detail's heading.
+  private func openDetail() -> (XCUIApplication, XCUIElement, XCUIElement) {
+    let app = launch()
+    let tab = searchTabButton(app)
+    XCTAssertTrue(tab.waitForExistence(timeout: timeout))
+    tab.tap()
+    let field = app.searchFields.firstMatch
+    XCTAssertTrue(field.waitForExistence(timeout: 10))
+    field.tap()
+    field.typeText("ho hoan")
+    let result = flutterRow(app, "Hồ Hoàn Kiếm")
+    XCTAssertTrue(result.waitForExistence(timeout: 10))
+    result.tap()
+    let back = app.navigationBars.buttons["BackButton"]
+    XCTAssertTrue(back.waitForExistence(timeout: 10), "the native glass back button")
+    let heading = app.staticTexts["Hồ Hoàn Kiếm"]
+    XCTAssertTrue(heading.waitForExistence(timeout: 10), "the detail")
+    return (app, back, heading)
+  }
+
+  func testTheBackMenuPopsTheFlutterPageToo() {
+    let (app, back, heading) = openDetail()
+
+    // Hold, then lift away from the button: the menu stays open.
+    back.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+      .press(forDuration: 1.5, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)))
+    let entry = app.buttons.matching(
+      NSPredicate(format: "label == 'Search' AND identifier != 'BackButton'")
+    ).allElementsBoundByIndex.first { $0.frame.minY < app.frame.midY }
+    XCTAssertNotNil(entry, "the back menu's entry for the search root")
+    entry?.tap()
+
+    XCTAssertTrue(back.waitForNonExistence(timeout: 10), "native popped")
+    XCTAssertTrue(heading.waitForNonExistence(timeout: 10), "Flutter popped the detail too")
+    XCTAssertTrue(flutterRow(app, "Hồ Hoàn Kiếm").waitForExistence(timeout: 10), "the results")
+  }
+
+  /// Q14: Flutter owns the edge swipe; the native bar follows its pop.
+  func testAnEdgeSwipePopsFlutterAndTheNativeBarFollows() {
+    let (app, back, heading) = openDetail()
+    app.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5)).withOffset(CGVector(dx: 2, dy: 0))
+      .press(
+        forDuration: 0.05,
+        thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)))
+    XCTAssertTrue(heading.waitForNonExistence(timeout: 10), "Flutter popped the detail")
+    XCTAssertTrue(back.waitForNonExistence(timeout: 10), "the native bar followed")
+    XCTAssertTrue(flutterRow(app, "Hồ Hoàn Kiếm").waitForExistence(timeout: 10), "the results")
+  }
+
   func testTheCollapsedCircleReturnsToThePreviousTab() throws {
     try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .phone, "iPhone only")
     let app = launch()
