@@ -37,6 +37,9 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   /// The search field and its delegates; one per shell, re-hosted when the
   /// tabs are rebuilt.
   let searchBridge = SearchBridge()
+  /// Dart's text sent while another tab is selected: applied when the
+  /// search tab is (spec §7.4).
+  private var heldSearchText: String?
   /// Per destination 0 fixed, 1 sidebar-only, 2 search; plus 1 when there
   /// is a trailing action: a change rebuilds the tabs.
   private var structure: [Int] = []
@@ -70,8 +73,8 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     delegate = self
     sidebar.delegate = self
     searchBridge.canReport = { [weak self] in
-      guard let self, let searchTab = self.searchTab else { return false }
-      return self.selectedTab === searchTab && !self.applyingFromDart
+      guard let self else { return false }
+      return self.isSearchSelected && !self.applyingFromDart
     }
     searchBridge.onText = { [weak self] text, composing in
       self?.send("onSearchTextChanged") {
@@ -195,7 +198,9 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       new.tabs.map { $0.search ? 2 : ($0.sidebarOnly ? 1 : 0) } + [new.trailing != nil ? 1 : 0]
     guard wanted != structure else { return }
     structure = wanted
-    // One search controller, one navigation item at a time.
+    // One search controller, one navigation item at a time. An active
+    // search is dismissed first and keeps its text, as leaving the tab does.
+    searchBridge.dismissKeepingText()
     for nav in navControllers.values { nav.rootHost.navigationItem.searchController = nil }
     searchTab = nil
     searchIndex = nil
@@ -230,6 +235,15 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
         // Pinned by default: the trailing end of the bar, the first sidebar row.
         UISearchTab { _ in TabHostController() }
       }
+  }
+
+  /// Whether the search destination is selected, read from the selected
+  /// controller: after a rebuild that keeps the search tab selected, iOS
+  /// 26.5 reports a `selectedTab` that is not the new search tab (both
+  /// carry UIKit's one search identifier) while it shows the new one.
+  private var isSearchSelected: Bool {
+    guard let searchIndex, let nav = navControllers[searchIndex] else { return false }
+    return selectedViewController === nav
   }
 
   private func searchStyle(rootLargeTitle: Bool?) -> SearchTabStyle {
@@ -308,10 +322,14 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
         ? wanted : tabs.first(where: { $0 !== trailingTab && $0 !== searchTab }),
       selectedTab !== tab
     else { return }
-    if let searchTab, selectedTab === searchTab { searchBridge.dismissKeepingText() }
+    if isSearchSelected { searchBridge.dismissKeepingText() }
     applyingFromDart = true
     selectedTab = tab
     applyingFromDart = false
+    if isSearchSelected, let held = heldSearchText {
+      heldSearchText = nil
+      searchBridge.setText(held)
+    }
   }
 
   private func setFooter(_ data: NativeFooter?) {
@@ -516,8 +534,14 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
 
   // MARK: - Search (spec P3b §7.4)
 
-  /// Dart's text: applied outside a composition, never echoed.
+  /// Dart's text: applied outside a composition, never echoed; held while
+  /// another tab is selected.
   func setSearchText(_ text: String) {
+    guard isSearchSelected else {
+      heldSearchText = text
+      return
+    }
+    heldSearchText = nil
     searchBridge.setText(text)
   }
 
@@ -525,7 +549,7 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   /// selected; deactivation keeps the text.
   func setSearchActive(_ active: Bool) {
     if active {
-      guard let searchTab, selectedTab === searchTab else { return }
+      guard isSearchSelected else { return }
       searchBridge.activate()
     } else {
       searchBridge.dismissKeepingText()

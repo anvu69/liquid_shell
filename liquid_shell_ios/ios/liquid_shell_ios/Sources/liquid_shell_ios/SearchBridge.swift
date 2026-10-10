@@ -17,12 +17,17 @@ final class SearchBridge: NSObject, UISearchResultsUpdating, UISearchControllerD
   /// Whether an IME composition (marked text) is in progress. Injectable
   /// for tests: XCTest cannot type marked text.
   var isComposing: () -> Bool = { false }
-  /// Dart's text, held while a composition runs.
+  /// Dart's text, held while a composition runs. The user's input wins:
+  /// any edit, the commit included, discards it.
   private(set) var pendingText: String?
   /// The system placeholder, put back when Dart sends none.
   private(set) var defaultPlaceholder: String?
-  /// The text to keep through a dismissal Dart asked for (UIKit may clear it).
+  /// The text to keep through a dismissal Dart asked for (UIKit empties
+  /// the field). Reset when that dismissal ends, or by the next activation.
   private var keepOnDismiss: String?
+  /// Dart asked for activation while a dismissal was still running, which
+  /// UIKit ignores: activate once it ends.
+  private var activateAfterDismiss = false
   /// What Dart knows: its own last write, or the last edit reported. UIKit
   /// calls back without a change (after a programmatic `text =`, probe P8;
   /// when the search presents or dismisses): only a change is a user edit.
@@ -50,17 +55,18 @@ final class SearchBridge: NSObject, UISearchResultsUpdating, UISearchControllerD
 
   /// Dart's text: now, or once the composition ends.
   func setText(_ new: String) {
+    if keepOnDismiss != nil {
+      // A dismissal Dart asked for is running: UIKit empties the field,
+      // then `didDismiss` puts back Dart's newest text.
+      keepOnDismiss = new
+      pendingText = nil
+      return
+    }
     if isComposing() {
       pendingText = new
       return
     }
     pendingText = nil
-    if keepOnDismiss != nil {
-      // A dismissal Dart asked for is running: UIKit empties the field,
-      // then `didDismiss` puts back Dart's newest text.
-      keepOnDismiss = new
-      return
-    }
     guard new != text else { return }
     write(new)
   }
@@ -68,26 +74,40 @@ final class SearchBridge: NSObject, UISearchResultsUpdating, UISearchControllerD
   /// Presents the search and focuses the field (research spike: the first
   /// responder must be asked on the next run-loop turn).
   func activate() {
+    activateAfterDismiss = false
     controller.isActive = true
+    if !controller.isActive, controller.transitionCoordinator != nil {
+      // A dismissal is still running (a quick deactivate → activate):
+      // `didDismiss` restores the text, then activates.
+      activateAfterDismiss = true
+      return
+    }
+    // No dismissal runs: a kept text left over is the text.
+    restoreKept()
     DispatchQueue.main.async { [weak self] in
       _ = self?.controller.searchBar.searchTextField.becomeFirstResponder()
     }
   }
 
   /// Dismisses the search and keeps the text: a dismissal Dart asked for
-  /// (a dialog above, another tab) is not the user's ×.
+  /// (a dialog above, another tab) is not the user's ×. Dart text held for
+  /// a composition is newer than the field's.
   func dismissKeepingText() {
+    activateAfterDismiss = false
     guard controller.isActive else { return }
-    keepOnDismiss = text
+    keepOnDismiss = pendingText ?? text
+    pendingText = nil
     controller.isActive = false
   }
 
-  /// Debug builds: what UIKit does for a tap on × (clear, then dismiss).
-  func debugCancel() {
-    controller.searchBar.text = ""
-    updateSearchResults(for: controller)
-    controller.isActive = false
-  }
+  #if DEBUG
+    /// Debug builds: what UIKit does for a tap on × (clear, then dismiss).
+    func debugCancel() {
+      controller.searchBar.text = ""
+      updateSearchResults(for: controller)
+      controller.isActive = false
+    }
+  #endif
 
   private func write(_ new: String) {
     writing = true
@@ -96,19 +116,28 @@ final class SearchBridge: NSObject, UISearchResultsUpdating, UISearchControllerD
     writing = false
   }
 
+  private func restoreKept() {
+    guard let kept = keepOnDismiss else { return }
+    keepOnDismiss = nil
+    if kept != text { write(kept) }
+  }
+
   // MARK: UISearchResultsUpdating
 
   func updateSearchResults(for searchController: UISearchController) {
-    let composing = isComposing()
-    if !composing, let pending = pendingText {
-      setText(pending)
-      return
-    }
+    // Dart's own write, or UIKit emptying the field for a dismissal Dart
+    // asked for: not user input.
     if writing || keepOnDismiss != nil { return }
-    let now = Known(text: text, composing: composing)
-    guard now != known, canReport() else { return }
-    known = now
-    onText(now.text, now.composing)
+    let now = Known(text: text, composing: isComposing())
+    if now != known {
+      // User input wins over Dart text held for the composition.
+      pendingText = nil
+      guard canReport() else { return }
+      known = now
+      onText(now.text, now.composing)
+    } else if !now.composing, let pending = pendingText {
+      setText(pending)
+    }
   }
 
   // MARK: UISearchControllerDelegate
@@ -118,9 +147,17 @@ final class SearchBridge: NSObject, UISearchResultsUpdating, UISearchControllerD
   }
 
   func didDismissSearchController(_ searchController: UISearchController) {
-    if let kept = keepOnDismiss {
-      keepOnDismiss = nil
-      if kept != text { write(kept) }
+    restoreKept()
+    if activateAfterDismiss {
+      // Dart wants the search active again: no inactive report, unless
+      // UIKit refuses the activation.
+      activateAfterDismiss = false
+      DispatchQueue.main.async { [weak self] in
+        guard let self else { return }
+        self.activate()
+        if !self.controller.isActive, !self.activateAfterDismiss { self.onActive(false) }
+      }
+      return
     }
     // Always: inactive is idempotent on the Dart side.
     onActive(false)

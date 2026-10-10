@@ -1304,7 +1304,14 @@ extension NativeTabsTests {
     while count() == before, Date() < deadline {
       RunLoop.current.run(until: Date().addingTimeInterval(0.05))
     }
+    if count() == before { XCTFail("no \(message) within 3 s: \(events.sent)") }
     settle()
+  }
+
+  /// A user edit typed into the field.
+  fileprivate func userTypes(_ text: String, into bridge: SearchBridge) {
+    bridge.controller.searchBar.text = text
+    bridge.updateSearchResults(for: bridge.controller)
   }
 
   func testTheSearchDestinationIsUIKitsSearchTabWithTheAppsTitle() throws {
@@ -1540,6 +1547,105 @@ extension NativeTabsTests {
     XCTAssertFalse(new === old, "precondition: rebuilt")
     XCTAssertNil(old.navigationItem.searchController)
     XCTAssertTrue(new.navigationItem.searchController === tabs.searchBridge.controller)
+  }
+
+  /// A quick deactivate → activate (a dialog that opens and closes) does
+  /// not leave the bridge holding a dismissal: the text is kept, the search
+  /// stays active and the user's edits are reported again.
+  func testAQuickDeactivateThenActivateKeepsReportingEdits() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let bridge = tabs.searchBridge
+    tabs.setSearchText("phố")
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    tabs.setSearchActive(false)
+    tabs.setSearchActive(true)
+    RunLoop.current.run(until: Date().addingTimeInterval(1.5))
+    XCTAssertEqual(bridge.text, "phố")
+    XCTAssertTrue(bridge.controller.isActive)
+    XCTAssertEqual(events.sent.filter { $0.hasPrefix("searchActive") }.last, "searchActive true")
+    XCTAssertFalse(events.sent.contains("searchText "), "UIKit's clear is not the user's")
+    userTypes("phốc", into: bridge)
+    XCTAssertEqual(events.sent.last, "searchText phốc", "\(events.sent)")
+  }
+
+  /// A dismissal whose end UIKit never reports must not leave the bridge
+  /// mute: the next activation resets the kept text.
+  func testAnActivationResetsADismissalThatNeverEnded() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let bridge = tabs.searchBridge
+    tabs.setSearchText("phố")
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    bridge.controller.delegate = nil  // no `didDismiss`
+    tabs.setSearchActive(false)
+    RunLoop.current.run(until: Date().addingTimeInterval(1.5))
+    bridge.controller.delegate = bridge
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    XCTAssertEqual(bridge.text, "phố")
+    userTypes("phốc", into: bridge)
+    XCTAssertEqual(events.sent.last, "searchText phốc", "\(events.sent)")
+  }
+
+  /// IMEs with marked text: the user's committed input wins over Dart text
+  /// held for the composition; the commit is reported once.
+  func testAnIMECommitWinsOverDartsPendingText() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let bridge = tabs.searchBridge
+    var composing = true
+    bridge.isComposing = { composing }
+    userTypes("hô", into: bridge)
+    tabs.setSearchText("ho")
+    XCTAssertEqual(bridge.pendingText, "ho", "precondition: held for the composition")
+    composing = false
+    bridge.updateSearchResults(for: bridge.controller)
+    bridge.updateSearchResults(for: bridge.controller)
+    XCTAssertEqual(bridge.text, "hô", "the user's input wins")
+    XCTAssertNil(bridge.pendingText)
+    XCTAssertEqual(events.searchTexts.filter { $0.0 == "hô" && !$0.1 }.count, 1)
+    XCTAssertEqual(events.searchTexts.last?.0, "hô")
+  }
+
+  /// Dart text held for a composition is the text a dismissal keeps.
+  func testDartsTextHeldForACompositionIsKeptThroughADismissal() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let bridge = tabs.searchBridge
+    tabs.setSearchText("phố")
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    var composing = true
+    bridge.isComposing = { composing }
+    tabs.setSearchText("hồ")
+    settle(sending: "searchActive false") {
+      composing = false
+      tabs.setSearchActive(false)
+    }
+    XCTAssertEqual(bridge.text, "hồ")
+    XCTAssertNil(bridge.pendingText)
+    XCTAssertFalse(events.sent.contains { $0.hasPrefix("searchText") }, "\(events.sent)")
+  }
+
+  /// A structure change while the search is active dismisses it and keeps
+  /// the text, as leaving the tab does.
+  func testARebuildDuringAnActiveSearchKeepsTheText() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let bridge = tabs.searchBridge
+    tabs.setSearchText("phố")
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    settle(sending: "searchActive false") { tabs.apply(searchConfig(selected: 3, reports: true)) }
+    XCTAssertEqual(bridge.text, "phố")
+    XCTAssertFalse(events.sent.contains { $0.hasPrefix("searchText") }, "\(events.sent)")
+    userTypes("phốc", into: bridge)
+    XCTAssertEqual(events.sent.last, "searchText phốc", "still reporting")
+  }
+
+  /// Spec §7.4: Dart's text sent before the search tab is selected waits
+  /// for the selection.
+  func testDartsTextBeforeSelectionWaitsForTheSearchTab() throws {
+    let tabs = try installedSearchShell(selected: 0)
+    tabs.setSearchText("phố")
+    XCTAssertEqual(tabs.searchBridge.text, "", "held until the search tab is selected")
+    tabs.apply(searchConfig(selected: 2))
+    settle()
+    XCTAssertEqual(tabs.searchBridge.text, "phố")
+    XCTAssertFalse(events.sent.contains { $0.hasPrefix("searchText") }, "\(events.sent)")
   }
 
   func testAHiddenSelectionNeverSelectsTheSearchDestination() throws {
