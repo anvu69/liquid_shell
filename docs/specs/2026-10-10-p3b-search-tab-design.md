@@ -838,6 +838,8 @@ Frame numbers are listed in `docs/qa/p3b/compare.md` by name only. The composed 
 
 ## Quyết định cần chủ sản phẩm xác nhận
 
+> **Chủ sản phẩm chấp nhận toàn bộ đề xuất Q1–Q20 (10/10/2026: "Ok hết").** Lưu ý Q16: số phiên bản theo thứ tự merge thực tế.
+
 Mỗi dòng có đề xuất mặc định; anh không trả lời thì dùng đề xuất. Q1–Q4 là đề xuất của nghiên cứu (research §7), em đã chấp nhận làm đề xuất của mình.
 
 | Q# | câu hỏi | đề xuất |
