@@ -639,11 +639,20 @@ class _LiquidShellState extends State<LiquidShell>
 
   void _expand() => _minimized.value = false;
 
+  /// Selects the search tab through the guard. A tear-off, so search
+  /// chrome details compare equal across builds.
+  void _selectSearch() {
+    final index = searchIndexOf(widget.destinations);
+    if (index != null) _onSelect(index);
+  }
+
   bool _onScroll(UserScrollNotification notification, LiquidChromeKind kind) {
     // Only vertical scrolling reads as "moving through content"; a carousel
     // or PageView swipe leaves the bar alone.
+    // Suspended while the search tab is selected (spec P3b §9.2).
     if (!widget.minimizeOnScroll ||
         kind != LiquidChromeKind.bottomBar ||
+        _search.selected ||
         notification.metrics.axis != Axis.vertical) {
       return false;
     }
@@ -782,15 +791,15 @@ class _LiquidShellState extends State<LiquidShell>
     final size = constraints.biggest;
     final presentation = presentationFor(size, widget.breakpoints);
     final native = _resolveNative(context, presentation);
-    if (native != null) return native;
-    // The one time the Flutter field changes parent (spec P3b §9.4): the
-    // compact row and the regular top field are different places.
-    final previousPresentation = _presentation;
-    if (previousPresentation != null &&
-        sizeClassOf(previousPresentation) != sizeClassOf(presentation) &&
-        _search.focus.hasFocus) {
-      _search.focus.unfocus();
+    if (native != null) {
+      // Native chrome draws no Flutter field.
+      if (_search.focus.hasFocus) _search.releaseField();
+      return native;
     }
+    final previousPresentation = _presentation;
+    final sizeClassChanged =
+        previousPresentation != null &&
+        sizeClassOf(previousPresentation) != sizeClassOf(presentation);
     _sidebarVisible = sidebarVisibleFor(
       previous: _presentation,
       current: presentation,
@@ -832,6 +841,18 @@ class _LiquidShellState extends State<LiquidShell>
       // Release fallback for an empty list (§7): body only, no chrome.
       hidden: _hideRequests > 0 || widget.destinations.isEmpty,
     );
+    // The Flutter field keeps focus only while it is shown and stays where
+    // it is (spec P3b §8.2, §9.4). Hidden chrome, another tab (a sidebar
+    // row, the app's selectedIndex) or the other size class (the compact
+    // row and the regular top field are different parents) let go of it
+    // first; ShellSearch then ends any composition.
+    final fieldShown =
+        phase != null &&
+        phase != LiquidSearchPhase.idle &&
+        kind != LiquidChromeKind.hidden;
+    if (_search.focus.hasFocus && (!fieldShown || sizeClassChanged)) {
+      _search.releaseField();
+    }
     final barKey = (sizeClass, media.textScaler.scale(14));
     final bottomGap = bottomGapFor(
       platform: Theme.of(context).platform,
@@ -922,7 +943,14 @@ class _LiquidShellState extends State<LiquidShell>
       kind: kind,
       destinations: widget.destinations,
       visibleIndices: slot == LiquidChromeSlot.tabBar
-          ? tabBarIndices(widget.destinations)
+          ? [
+              for (final i in tabBarIndices(widget.destinations))
+                // The compact pill holds the other destinations (§9.2).
+                if (!(phase != null &&
+                    kind == LiquidChromeKind.bottomBar &&
+                    i == searchIndex))
+                  i,
+            ]
           : [for (var i = 0; i < widget.destinations.length; i++) i],
       selectedIndex: selected,
       select: _onSelect,
@@ -938,7 +966,7 @@ class _LiquidShellState extends State<LiquidShell>
               phase: phase,
               controller: _search.controller!,
               previousIndex: _previousIndex,
-              selectSearch: () => _onSelect(searchIndex!),
+              selectSearch: _selectSearch,
             ),
     );
 
@@ -1000,9 +1028,9 @@ class _LiquidShellState extends State<LiquidShell>
             CompactSearchChrome(
               phase: phase,
               rects: compactRects,
-              pill: Positioned(
-                left: margin,
-                right: margin + rowExtent + kLiquidTabBarTrailingGap,
+              pill: PositionedDirectional(
+                start: margin,
+                end: margin + rowExtent + kLiquidTabBarTrailingGap,
                 bottom: bottomGap,
                 child: IgnorePointer(
                   ignoring: !idle,
@@ -1013,20 +1041,34 @@ class _LiquidShellState extends State<LiquidShell>
                     child: Align(
                       alignment: Alignment.bottomCenter,
                       heightFactor: 1,
-                      child: measured(
-                        slot(
-                          details(LiquidChromeSlot.tabBar),
-                          LiquidTabBar(
-                            destinations: widget.destinations.sublist(
-                              0,
-                              searchIndex,
+                      child: ValueListenableBuilder<bool>(
+                        valueListenable: _minimized,
+                        builder: (context, minimized, _) {
+                          // Minimizes in idle only: suspended while the
+                          // search tab is selected (spec P3b §9.2).
+                          final isMinimized =
+                              widget.minimizeOnScroll && minimized && idle;
+                          return measured(
+                            slot(
+                              details(
+                                LiquidChromeSlot.tabBar,
+                                minimized: isMinimized,
+                              ),
+                              LiquidTabBar(
+                                destinations: widget.destinations.sublist(
+                                  0,
+                                  searchIndex,
+                                ),
+                                selectedIndex: idle ? selected : _previousIndex,
+                                onDestinationSelected: _onSelect,
+                                minimized: isMinimized,
+                                onExpand: _expand,
+                                strings: widget.strings,
+                                narrow: narrow,
+                              ),
                             ),
-                            selectedIndex: idle ? selected : _previousIndex,
-                            onDestinationSelected: _onSelect,
-                            strings: widget.strings,
-                            narrow: narrow,
-                          ),
-                        ),
+                          );
+                        },
                       ),
                     ),
                   ),

@@ -25,6 +25,8 @@ Future<(LiquidSearchController, List<int>, List<String>)> _pump(
   TextDirection direction = TextDirection.ltr,
   TargetPlatform platform = TargetPlatform.iOS,
   LiquidChromeBuilder? chromeBuilder,
+  List<LiquidDestination> destinations = _destinations,
+  Widget Function(int index)? pageBuilder,
 }) async {
   final controller = LiquidSearchController();
   addTearDown(controller.dispose);
@@ -33,8 +35,9 @@ Future<(LiquidSearchController, List<int>, List<String>)> _pump(
   await pumpShell(
     tester,
     TestShell(
-      destinations: _destinations,
+      destinations: destinations,
       initialIndex: initialIndex,
+      pageBuilder: pageBuilder,
       selections: selections,
       chromeBuilder: chromeBuilder,
       search: LiquidSearch(controller: controller, onChanged: changes.add),
@@ -58,6 +61,68 @@ double _opacity(WidgetTester tester, Key key) => tester
           .first,
     )
     .opacity;
+
+/// Focuses the field and composes "hoo"; the app writes "phố" (held, a
+/// composition is in progress); the user goes on composing "hoon".
+Future<TextEditingController> _composeWithHeldWrite(
+  WidgetTester tester,
+  LiquidSearchController controller,
+) async {
+  await tester.tap(find.byType(TextField));
+  await tester.pump();
+  final editing = tester.widget<TextField>(find.byType(TextField)).controller!
+    ..value = const TextEditingValue(
+      text: 'hoo',
+      selection: TextSelection.collapsed(offset: 3),
+      composing: TextRange(start: 0, end: 3),
+    );
+  await tester.pump();
+  controller.text = 'phố';
+  editing.value = const TextEditingValue(
+    text: 'hoon',
+    selection: TextSelection.collapsed(offset: 4),
+    composing: TextRange(start: 0, end: 4),
+  );
+  await tester.pump();
+  expect(editing.text, 'hoon', reason: 'held while composing');
+  expect(controller.value.composing, isTrue);
+  expect(controller.isActive, isTrue);
+  return editing;
+}
+
+/// The field let go: no focus, no keyboard, no composition anywhere, and
+/// the held write applied.
+void _expectReleased(
+  WidgetTester tester,
+  LiquidSearchController controller,
+  TextEditingController editing,
+) {
+  expect(
+    FocusManager.instance.primaryFocus?.debugLabel,
+    isNot('LiquidShell search'),
+  );
+  expect(tester.testTextInput.isVisible, isFalse);
+  expect(editing.value.composing.isCollapsed, isTrue);
+  expect(controller.value.composing, isFalse);
+  expect(controller.isActive, isFalse);
+  expect(editing.text, 'phố', reason: 'the held app write is applied');
+  expect(controller.text, 'phố');
+}
+
+const _five = [
+  LiquidDestination(icon: Icon(Icons.home), label: 'Home'),
+  LiquidDestination(icon: Icon(Icons.book), label: 'Library'),
+  LiquidDestination(icon: Icon(Icons.map), label: 'Places'),
+  LiquidDestination(icon: Icon(Icons.person), label: 'Profile'),
+  LiquidDestination(
+    icon: Icon(Icons.search),
+    label: 'Search',
+    role: LiquidDestinationRole.search,
+  ),
+];
+
+LiquidTabBar _pill(WidgetTester tester) =>
+    tester.widget<LiquidTabBar>(find.byType(LiquidTabBar));
 
 void main() {
   testWidgets('idle: the pill without Search, and a separate ⌕ circle', (
@@ -91,8 +156,11 @@ void main() {
     );
     expect(_opacity(tester, kSearchCollapsedKey), 1);
     expect(
-      find.bySemanticsLabel('Home'),
-      findsWidgets,
+      find.descendant(
+        of: find.byKey(kSearchCollapsedKey),
+        matching: find.bySemanticsLabel('Home'),
+      ),
+      findsOneWidget,
       reason: 'the previous tab',
     );
     expect(tester.testTextInput.isVisible, isFalse);
@@ -230,7 +298,7 @@ void main() {
     await tester.tap(find.byType(TextField));
     await tester.pumpAndSettle();
     expect(identical(tester.element(find.byType(TextField)), selected), isTrue);
-    await tester.tap(find.byTooltip('Cancel search'));
+    await tester.tap(find.bySemanticsLabel('Cancel search'));
     await tester.pumpAndSettle();
     expect(identical(tester.element(find.byType(TextField)), selected), isTrue);
   });
@@ -339,37 +407,170 @@ void main() {
     expect(seen, contains(LiquidSearchPhase.selected));
   });
 
-  testWidgets('a previous tab that is gone falls back to the first', (
+  for (final (name, after, index) in [
+    ('is now the search tab', _destinations, 2),
+    ('is out of range', [_destinations.first, _destinations[2]], 1),
+  ]) {
+    testWidgets('a previous tab that $name falls back to the first', (
+      tester,
+    ) async {
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      Future<void> show(List<LiquidDestination> destinations, int index) =>
+          pumpShell(
+            tester,
+            LiquidShell(
+              destinations: destinations,
+              selectedIndex: index,
+              onDestinationSelected: (_) {},
+              search: LiquidSearch(controller: controller),
+              body: const SizedBox.expand(),
+            ),
+          );
+      const places = LiquidDestination(icon: Icon(Icons.map), label: 'Places');
+      final four = [..._destinations.take(2), places, _destinations[2]];
+      await show(four, 2);
+      // Search selected: the previous tab is 2 (Places).
+      await show(four, 3);
+      await show(after, index);
+      expect(tester.takeException(), isNull);
+      expect(
+        tester
+            .widget<CompactSearchChrome>(find.byType(CompactSearchChrome))
+            .previous
+            .label,
+        'Home',
+      );
+    });
+  }
+
+  group('a hidden field lets go of focus and composition', () {
+    testWidgets('LiquidHideChrome turns on', (tester) async {
+      final hide = ValueNotifier(false);
+      addTearDown(hide.dispose);
+      final (controller, _, _) = await _pump(
+        tester,
+        initialIndex: 2,
+        pageBuilder: (i) => i == 2
+            ? ValueListenableBuilder<bool>(
+                valueListenable: hide,
+                builder: (_, hidden, child) =>
+                    LiquidHideChrome(enabled: hidden, child: child!),
+                child: const TestPage(label: 'Search'),
+              )
+            : TestPage(label: _destinations[i].label),
+      );
+      final editing = await _composeWithHeldWrite(tester, controller);
+      hide.value = true;
+      await tester.pumpAndSettle();
+      expect(find.byType(TextField), findsNothing);
+      _expectReleased(tester, controller, editing);
+    });
+
+    testWidgets('a tiled sidebar row is tapped', (tester) async {
+      final (controller, selections, _) = await _pump(
+        tester,
+        size: kTabletLandscape,
+        initialIndex: 2,
+      );
+      final editing = await _composeWithHeldWrite(tester, controller);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(LiquidSidebar),
+          matching: find.text('Home'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(selections, [0]);
+      expect(find.byType(TextField), findsNothing);
+      _expectReleased(tester, controller, editing);
+    });
+
+    testWidgets('the app selects another tab at compact width', (
+      tester,
+    ) async {
+      final (controller, _, _) = await _pump(tester, initialIndex: 2);
+      final editing = await _composeWithHeldWrite(tester, controller);
+      tester.state<TestShellState>(find.byType(TestShell)).select(1);
+      await tester.pumpAndSettle();
+      expect(scopeOf(tester, 'Library').searchPhase, LiquidSearchPhase.idle);
+      _expectReleased(tester, controller, editing);
+    });
+  });
+
+  testWidgets('RTL idle: the pill clears the ⌕ circle on the left', (
     tester,
   ) async {
-    final controller = LiquidSearchController();
-    addTearDown(controller.dispose);
-    Future<void> show(List<LiquidDestination> destinations, int index) =>
-        pumpShell(
-          tester,
-          LiquidShell(
-            destinations: destinations,
-            selectedIndex: index,
-            onDestinationSelected: (_) {},
-            search: LiquidSearch(controller: controller),
-            body: const SizedBox.expand(),
-          ),
-        );
-    const places = LiquidDestination(icon: Icon(Icons.map), label: 'Places');
-    await show([..._destinations.take(2), places, _destinations[2]], 2);
-    await show([..._destinations.take(2), places, _destinations[2]], 3);
-    String previous() => tester
-        .widget<CompactSearchChrome>(find.byType(CompactSearchChrome))
-        .previous
-        .label;
-    // Index 2 is now the search tab itself.
-    await show(_destinations, 2);
-    expect(tester.takeException(), isNull);
-    expect(previous(), 'Home');
-    // Index 2 is now out of range.
-    await show([_destinations.first, _destinations[2]], 1);
-    expect(tester.takeException(), isNull);
-    expect(previous(), 'Home');
+    await _pump(tester, destinations: _five, direction: TextDirection.rtl);
+    final circle = _rect(tester, kSearchFieldKey);
+    expect(circle.left, 16);
+    final pill = tester.getRect(find.byType(LiquidTabBar));
+    expect(pill.left, greaterThanOrEqualTo(circle.right + 8));
+    expect(pill.right, lessThanOrEqualTo(393 - 16));
+  });
+
+  group('minimize on scroll', () {
+    testWidgets('idle: the pill minimizes, the ⌕ circle stays', (
+      tester,
+    ) async {
+      await _pump(tester);
+      final circle = _rect(tester, kSearchFieldKey);
+      await tester.drag(
+        find.byKey(const ValueKey('list-Home')),
+        const Offset(0, -300),
+      );
+      await tester.pumpAndSettle();
+      expect(_pill(tester).minimized, isTrue);
+      expect(_rect(tester, kSearchFieldKey), circle);
+      await tester.tap(find.byType(LiquidTabBar));
+      await tester.pumpAndSettle();
+      expect(_pill(tester).minimized, isFalse, reason: 'a tap expands');
+    });
+
+    testWidgets('selected: suspended, scrolling the search page', (
+      tester,
+    ) async {
+      final (_, selections, _) = await _pump(tester, initialIndex: 1);
+      await tester.tap(find.bySemanticsLabel('Search'));
+      await tester.pumpAndSettle();
+      expect(_pill(tester).minimized, isFalse);
+      await tester.drag(
+        find.byKey(const ValueKey('list-Search')),
+        const Offset(0, -300),
+      );
+      await tester.pumpAndSettle();
+      expect(_pill(tester).minimized, isFalse);
+      await tester.tap(find.byKey(kSearchCollapsedKey));
+      await tester.pumpAndSettle();
+      expect(selections, [2, 1]);
+      expect(_pill(tester).minimized, isFalse, reason: 'back in idle');
+    });
+  });
+
+  testWidgets('chromeBuilder: the pill slot lists the other tabs, and the '
+      'search details compare equal across builds', (tester) async {
+    final pill = <List<int>>[];
+    final search = <LiquidSearchChromeDetails?>[];
+    await _pump(
+      tester,
+      chromeBuilder: (context, details, chrome) {
+        switch (details.slot) {
+          case LiquidChromeSlot.tabBar:
+            pill.add(details.visibleIndices);
+          case LiquidChromeSlot.searchField:
+            search.add(details.search);
+          case LiquidChromeSlot.sidebar:
+            break;
+        }
+        return chrome;
+      },
+    );
+    expect(pill.last, [0, 1]);
+    final before = search.length;
+    tester.state<TestShellState>(find.byType(TestShell)).select(0);
+    await tester.pump();
+    expect(search.length, greaterThan(before));
+    expect(search.last, search[before - 1]);
   });
 
   testWidgets('LiquidSearchScopeBar selects a scope', (tester) async {
@@ -394,6 +595,7 @@ void main() {
         isButton: true,
         isSelected: true,
         hasTapAction: true,
+        isInMutuallyExclusiveGroup: true,
         label: 'Places',
       ),
     );

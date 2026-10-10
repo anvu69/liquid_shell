@@ -16,6 +16,11 @@ enum LiquidChromeSlot {
 
   /// The search field (fallback): the ⌕ circle that becomes the field at
   /// compact width, the field below the top bar at regular width.
+  ///
+  /// Keep `defaultChrome` at the same place in what you return in every
+  /// phase (wrap it the same way, never under a phase-dependent key or
+  /// parent): it holds the focused `TextField`, and rebuilding it while the
+  /// user types breaks IME composition (Vietnamese Telex, Japanese kana).
   searchField,
 }
 

@@ -115,10 +115,17 @@ class SearchFieldGlass extends StatelessWidget {
                           ),
                         ),
                         if (cancel != null && phase == LiquidSearchPhase.active)
-                          IconButton(
-                            icon: const Icon(Icons.close, size: 18),
-                            tooltip: cancelLabel,
-                            onPressed: cancel,
+                          Semantics(
+                            container: true,
+                            button: true,
+                            label: cancelLabel,
+                            onTap: cancel,
+                            excludeSemantics: true,
+                            child: IconButton(
+                              icon: const Icon(Icons.close, size: 18),
+                              tooltip: cancelLabel,
+                              onPressed: cancel,
+                            ),
                           )
                         else
                           const SizedBox(width: 14),

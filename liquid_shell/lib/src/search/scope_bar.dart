@@ -41,6 +41,7 @@ class LiquidSearchScopeBar extends StatelessWidget {
                     container: true,
                     button: true,
                     selected: value.scopeIndex == i,
+                    inMutuallyExclusiveGroup: true,
                     label: title,
                     onTap: () => controller.scopeIndex = i,
                     excludeSemantics: true,

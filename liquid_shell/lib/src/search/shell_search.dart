@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:liquid_shell/src/native/native_host.dart';
@@ -45,6 +47,7 @@ final class ShellSearch implements SearchDriver {
   bool _userText = false;
   bool _native = false;
   bool _writing = false;
+  bool _disposed = false;
   String? _pendingFieldText;
 
   /// Whether the native field shows the search (native chrome engaged).
@@ -253,6 +256,19 @@ final class ShellSearch implements SearchDriver {
     focus.unfocus();
   }
 
+  /// The shell will not show the Flutter field in this frame (hidden
+  /// chrome, another tab, the other size class): let go of its focus, then
+  /// end its composition and active state (spec P3b §8.2, §9.4). A focused
+  /// field taken out of the tree never hears its focus loss (the focus
+  /// manager drops a detached node silently), so this does not wait for
+  /// the listener. The microtask runs after the focus manager's.
+  void releaseField() {
+    focus.unfocus();
+    scheduleMicrotask(() {
+      if (!_disposed) _onFocus();
+    });
+  }
+
   /// The keyboard's Search key in the Flutter field.
   void submit(String text) => _config?.onSubmitted?.call(text);
 
@@ -277,11 +293,21 @@ final class ShellSearch implements SearchDriver {
     final value = editing.value;
     final composing = !value.composing.isCollapsed;
     final pending = _pendingFieldText;
+    final controller = _controller;
     if (!composing && pending != null) {
       _writeField(pending);
+      // The app's write lands once the composition ends: the controller
+      // holds it again and the composition is over (spec P3b §9.4).
+      if (controller != null &&
+          (controller.text != pending || controller.value.composing)) {
+        applySearchEdit(
+          controller,
+          controller.value.copyWith(text: pending, composing: false),
+        );
+        _userText = false;
+      }
       return;
     }
-    final controller = _controller;
     if (controller == null) return;
     if (value.text == controller.text &&
         composing == controller.value.composing) {
@@ -296,6 +322,14 @@ final class ShellSearch implements SearchDriver {
   }
 
   void _onFocus() {
+    // A field that loses focus mid-composition (hidden, taken out of the
+    // tree, another tab) ends the composition here: EditableText only does
+    // while it is mounted. Otherwise the stale range would reach the IME on
+    // the next focus and a held app write would land on the user's next
+    // edit (spec P3b §9.4).
+    if (!focus.hasFocus && !editing.value.composing.isCollapsed) {
+      editing.value = editing.value.copyWith(composing: TextRange.empty);
+    }
     if (native) return;
     final controller = _controller;
     if (controller == null) return;
@@ -307,6 +341,7 @@ final class ShellSearch implements SearchDriver {
 
   /// Releases the controller and the field's resources.
   void dispose() {
+    _disposed = true;
     detach();
     _internal?.dispose();
     editing.dispose();
