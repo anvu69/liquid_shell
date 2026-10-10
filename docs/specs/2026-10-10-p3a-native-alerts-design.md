@@ -395,6 +395,8 @@ VoiceOver on the alert and the sheet; Dynamic Type at AX5; dark mode; RTL (Arabi
 
 ## Quyết định cần chủ sản phẩm xác nhận
 
+> **Chủ sản phẩm chấp nhận toàn bộ đề xuất (10/10/2026: "chốt làm cả 3 việc đi").** Riêng Q10 → 0.1.0-dev.3 hoặc dev.4 tuỳ phần nào merge trước (B16).
+
 Mỗi dòng có đề xuất mặc định. Nếu chủ sản phẩm im lặng, đề xuất được áp dụng.
 
 | Q# | câu hỏi | đề xuất |
