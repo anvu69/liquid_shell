@@ -220,18 +220,6 @@ class LiquidShellPlugin : FlutterPlugin, ActivityAware, EventChannel.StreamHandl
         blurWindowManager = null
     }
 
-    /** Runs [block]; any SecurityException or other runtime failure → null. */
-    private inline fun <T> attempt(block: () -> T): T? =
-        try {
-            block()
-        } catch (e: SecurityException) {
-            null
-        } catch (e: Settings.SettingNotFoundException) {
-            null
-        } catch (e: RuntimeException) {
-            null
-        }
-
     private companion object {
         const val CHANNEL = "vn.lasoai.liquid_shell/signals"
         const val HIGH_TEXT_CONTRAST = "high_text_contrast_enabled"
