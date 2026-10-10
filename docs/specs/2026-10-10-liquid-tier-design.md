@@ -569,6 +569,8 @@ Plane VK-348 has state Todo with label `spec:approved` once the owner answers. E
 
 ## Quyết định cần chủ sản phẩm xác nhận
 
+> **Chủ sản phẩm chấp nhận toàn bộ đề xuất (10/10/2026: "chốt làm cả 3 việc đi").** Riêng Q16 → 0.1.0-dev.3 hoặc dev.4 tuỳ phần nào merge trước.
+
 Mỗi dòng có đề xuất mặc định. Chủ sản phẩm trả lời "Ok hết" thì áp dụng toàn bộ đề xuất.
 
 | Q# | câu hỏi | đề xuất |
