@@ -113,7 +113,17 @@ fi
 
 # Device facts behind lowEnd and glesOnly (spec 2026-10-10 §7.1), read the
 # way the plugin reads them: MemTotal is ActivityManager's totalMem.
-mem_kb=$(adb shell cat /proc/meminfo | tr -d '\r' | awk '/^MemTotal:/ {print $2}')
+# Without MemTotal the expectation would be a guess (an empty value reads as
+# not low end), so the script stops instead.
+if ! meminfo=$(adb shell cat /proc/meminfo); then
+  echo "✗ could not read /proc/meminfo on $ANDROID_SERIAL" >&2
+  exit 1
+fi
+mem_kb=$(tr -d '\r' <<< "$meminfo" | awk '/^MemTotal:/ {print $2}')
+if ! [[ "$mem_kb" =~ ^[0-9]+$ ]]; then
+  echo "✗ no MemTotal in /proc/meminfo on $ANDROID_SERIAL; cannot tell whether it is low end" >&2
+  exit 1
+fi
 low_ram=$(adb shell getprop ro.config.low_ram | tr -d '\r')
 low_end=false
 if [ "$low_ram" = true ] || [ "$mem_kb" -lt 3145728 ]; then low_end=true; fi
