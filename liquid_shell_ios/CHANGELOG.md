@@ -1,3 +1,7 @@
+## 0.1.0-dev.3
+
+- Reports Low Power Mode as `powerSave`.
+
 ## 0.1.0-dev.2
 
 - The native iOS 26 shell on iPhone and iPad: a `UITabBarController` in

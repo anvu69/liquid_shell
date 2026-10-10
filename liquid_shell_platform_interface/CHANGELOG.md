@@ -1,3 +1,7 @@
+## 0.1.0-dev.3
+
+- `LiquidPlatformSignals.lowEnd` and `glesOnly`.
+
 ## 0.1.0-dev.2
 
 - Native chrome and window-control members on `LiquidShellPlatform`, all

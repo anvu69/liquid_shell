@@ -1,3 +1,20 @@
+## 0.1.0-dev.3
+
+- **Liquid glass by default.** A built-in, clean-room lens shader draws the
+  `liquid` tier on Impeller: edge refraction, a specular rim, light
+  dispersion, blur and tint. `LiquidGlass.precache()` loads it before the
+  first frame. New `LiquidGlassTheme` fields: `liquidTint`, `refraction`,
+  `dispersion`, `liquidBlurSigma`.
+- Frosted instead of liquid without Impeller, on Android without Vulkan 1.1
+  or under 3 GiB of memory, in battery saver and iOS Low Power Mode, after
+  sustained slow frames, and inside another `BackdropFilter`.
+- A `forcedTier` keeps shells under it on Flutter chrome.
+- **Breaking:** `LiquidGlassSignals.canBlur` is removed (Skia now draws
+  frosted, not solid); `debugLiquidGlassCanBlurOverride` is now
+  `debugLiquidGlassCanRefractOverride`; battery saver gives frosted, not
+  solid. `LiquidGlassSignals` gains `lowEnd`, `glesOnly`, `slowFrames` and
+  `prefersFrosted`.
+
 ## 0.1.0-dev.2
 
 - Native iOS 26 chrome (opt-in) on iPhone and iPad, compact windows
