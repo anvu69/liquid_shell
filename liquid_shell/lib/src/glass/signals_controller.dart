@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:liquid_shell/src/glass/policy.dart';
+import 'package:liquid_shell/src/glass/shader_program.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
 /// Test hook replacing the device blur probe. `null` (the default) probes.
@@ -88,4 +89,5 @@ void debugResetLiquidGlassSignals() {
     .._users = 0
     .._set(LiquidPlatformSignals.none);
   debugResetPolicyLogging();
+  LiquidShaderProgram.instance.debugReset();
 }

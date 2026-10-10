@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
+import 'package:liquid_shell/src/glass/liquid_optics.dart';
 
 void main() {
   final light = ColorScheme.fromSeed(seedColor: const Color(0xFF3366CC));
@@ -132,5 +133,58 @@ void main() {
     expect(a, b);
     expect(a.hashCode, b.hashCode);
     expect(a, isNot(a.copyWith(borderWidth: 2)));
+  });
+
+  group('liquid fields (spec §5.6)', () {
+    final light = LiquidGlassTheme.fromColorScheme(
+      ColorScheme.fromSeed(seedColor: const Color(0xFF3366CC)),
+    );
+    final dark = LiquidGlassTheme.fromColorScheme(
+      ColorScheme.fromSeed(
+        seedColor: const Color(0xFF3366CC),
+        brightness: Brightness.dark,
+      ),
+    );
+
+    test('defaults', () {
+      expect(light.liquidTint.a, closeTo(0.5, 1e-3));
+      expect(dark.liquidTint.a, closeTo(0.55, 1e-3));
+      expect(light.refraction, 1);
+      expect(light.dispersion, 0.3);
+      expect(light.liquidBlurSigma, 6);
+    });
+
+    test('copyWith, lerp and equality cover them', () {
+      final changed = light.copyWith(
+        liquidTint: const Color(0x11223344),
+        refraction: 2,
+        dispersion: 0,
+        liquidBlurSigma: 0,
+      );
+      expect(changed.liquidTint, const Color(0x11223344));
+      expect(changed.refraction, 2);
+      expect(changed.dispersion, 0);
+      expect(changed.liquidBlurSigma, 0);
+      expect(changed, isNot(light));
+      expect(light.copyWith(), light);
+      expect(light.copyWith().hashCode, light.hashCode);
+      final half = light.lerp(changed, 0.5);
+      expect(half.refraction, 1.5);
+      expect(half.dispersion, closeTo(0.15, 1e-9));
+      expect(half.liquidBlurSigma, 3);
+    });
+
+    test('LiquidOpticsParams.fromTheme maps the fields', () {
+      expect(
+        LiquidOpticsParams.fromTheme(light),
+        LiquidOpticsParams(
+          tint: light.liquidTint,
+          rim: light.rimHighlight,
+          refraction: 1,
+          dispersion: 0.3,
+          blurSigma: 6,
+        ),
+      );
+    });
   });
 }

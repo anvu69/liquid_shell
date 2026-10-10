@@ -16,9 +16,13 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
     required this.rimHighlight,
     required this.shadow,
     required this.labelStyle,
+    required this.liquidTint,
     this.borderWidth = 1,
     this.blurSigma = 10,
     this.borderRadius = const BorderRadius.all(Radius.circular(999)),
+    this.refraction = 1,
+    this.dispersion = 0.3,
+    this.liquidBlurSigma = 6,
   });
 
   /// Defaults for light and dark, derived from [scheme] (spec §5.9).
@@ -27,6 +31,7 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
     return LiquidGlassTheme(
       tint: scheme.surface.withValues(alpha: light ? 0.72 : 0.90),
       solid: scheme.surface,
+      liquidTint: scheme.surface.withValues(alpha: light ? 0.5 : 0.55),
       border: light
           ? scheme.outline.withValues(alpha: 0.28)
           : scheme.onSurface.withValues(alpha: 0.18),
@@ -83,6 +88,18 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
   /// Compact tab labels.
   final TextStyle labelStyle;
 
+  /// Tint inside the liquid lens; lighter than [tint] (spec §5.6).
+  final Color liquidTint;
+
+  /// Liquid lens thickness multiplier: 0 is flat glass, 1 the default.
+  final double refraction;
+
+  /// Liquid colour fringe in the bezel, 0 (off) to 1. Default 0.3.
+  final double dispersion;
+
+  /// Logical sigma of the blur under the liquid lens. 0 turns it off.
+  final double liquidBlurSigma;
+
   @override
   LiquidGlassTheme copyWith({
     Color? tint,
@@ -94,6 +111,10 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
     double? blurSigma,
     BorderRadius? borderRadius,
     TextStyle? labelStyle,
+    Color? liquidTint,
+    double? refraction,
+    double? dispersion,
+    double? liquidBlurSigma,
   }) => LiquidGlassTheme(
     tint: tint ?? this.tint,
     solid: solid ?? this.solid,
@@ -104,6 +125,10 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
     blurSigma: blurSigma ?? this.blurSigma,
     borderRadius: borderRadius ?? this.borderRadius,
     labelStyle: labelStyle ?? this.labelStyle,
+    liquidTint: liquidTint ?? this.liquidTint,
+    refraction: refraction ?? this.refraction,
+    dispersion: dispersion ?? this.dispersion,
+    liquidBlurSigma: liquidBlurSigma ?? this.liquidBlurSigma,
   );
 
   @override
@@ -119,6 +144,10 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
       blurSigma: lerpDouble(blurSigma, other.blurSigma, t)!,
       borderRadius: BorderRadius.lerp(borderRadius, other.borderRadius, t)!,
       labelStyle: TextStyle.lerp(labelStyle, other.labelStyle, t)!,
+      liquidTint: Color.lerp(liquidTint, other.liquidTint, t)!,
+      refraction: lerpDouble(refraction, other.refraction, t)!,
+      dispersion: lerpDouble(dispersion, other.dispersion, t)!,
+      liquidBlurSigma: lerpDouble(liquidBlurSigma, other.liquidBlurSigma, t)!,
     );
   }
 
@@ -133,7 +162,11 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
       other.shadow == shadow &&
       other.blurSigma == blurSigma &&
       other.borderRadius == borderRadius &&
-      other.labelStyle == labelStyle;
+      other.labelStyle == labelStyle &&
+      other.liquidTint == liquidTint &&
+      other.refraction == refraction &&
+      other.dispersion == dispersion &&
+      other.liquidBlurSigma == liquidBlurSigma;
 
   @override
   int get hashCode => Object.hash(
@@ -146,5 +179,9 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
     blurSigma,
     borderRadius,
     labelStyle,
+    liquidTint,
+    refraction,
+    dispersion,
+    liquidBlurSigma,
   );
 }

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
+import 'package:liquid_shell/src/glass/glass_theme.dart';
 
 /// Internal optics of the liquid tier (spec §4, §5.6). Lengths are logical
 /// pixels; [liquidUniforms] scales them to pass pixels.
@@ -43,6 +44,16 @@ class LiquidOpticsParams {
     required this.dispersion,
     required this.blurSigma,
   });
+
+  /// The liquid fields of [theme]; the rim uses `rimHighlight`.
+  factory LiquidOpticsParams.fromTheme(LiquidGlassTheme theme) =>
+      LiquidOpticsParams(
+        tint: theme.liquidTint,
+        rim: theme.rimHighlight,
+        refraction: theme.refraction,
+        dispersion: theme.dispersion,
+        blurSigma: theme.liquidBlurSigma,
+      );
 
   /// Tint mixed over the refracted backdrop (alpha = amount).
   final Color tint;

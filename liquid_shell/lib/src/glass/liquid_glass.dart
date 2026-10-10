@@ -3,6 +3,7 @@ import 'package:liquid_shell/src/glass/glass_scope.dart';
 import 'package:liquid_shell/src/glass/glass_theme.dart';
 import 'package:liquid_shell/src/glass/policy.dart';
 import 'package:liquid_shell/src/glass/renderer.dart';
+import 'package:liquid_shell/src/glass/shader_program.dart';
 import 'package:liquid_shell/src/glass/signals_controller.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
@@ -24,6 +25,19 @@ class LiquidGlass extends StatefulWidget {
 
   @override
   State<LiquidGlass> createState() => _LiquidGlassState();
+
+  /// Loads the liquid lens shader now, so the first frame can already be
+  /// liquid. Optional: without it the first frame or two are frosted and
+  /// then cross-fade. Safe to call more than once; never throws.
+  ///
+  /// ```dart
+  /// Future<void> main() async {
+  ///   WidgetsFlutterBinding.ensureInitialized();
+  ///   await LiquidGlass.precache();
+  ///   runApp(const MyApp());
+  /// }
+  /// ```
+  static Future<void> precache() => LiquidShaderProgram.instance.load();
 }
 
 class _LiquidGlassState extends State<LiquidGlass> {
