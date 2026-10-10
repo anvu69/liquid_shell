@@ -137,7 +137,7 @@ ios-unit: ## XCTest of liquid_shell_ios (example RunnerTests) on an iPad or iPho
 integration-ios: ## Signal channel round-trip on an iOS simulator
 	FLUTTER="$(FLUTTER)" tool/integration_ios.sh
 
-integration-ios-native: ## Native iOS 26 shell on an iPad and an iPhone simulator
+integration-ios-native: ## Native iOS 26 shell and search tab on iPad and iPhone simulators
 	FLUTTER="$(FLUTTER)" tool/integration_ios_native.sh
 
 integration-android: ## Signal channel + every Android signal on an emulator

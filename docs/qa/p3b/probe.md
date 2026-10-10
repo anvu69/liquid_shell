@@ -135,3 +135,31 @@ Stop rule: P3 and P5 pass on all four simulators. Task 2 may start.
 
   If both ever arrive, Dart's Q9 assert has already failed. Native then
   builds the search destination and drops the trailing action.
+
+## Integration
+
+`native_search_test.dart` (Task 11, `make integration-ios-native`) on fresh
+iPhone 17 Pro and iPad Air 11-inch (M4) simulators. Frames are in Flutter
+logical points; `insets` is the shell's `chromeInsets`, `padding` the search
+page's `MediaQuery` padding.
+
+```
+iPhone 26.5  liquid_shell search selected: placement inline field 88.0,798.0 286.0x48.0 insets EdgeInsets(0.0, 0.0, 0.0, 83.0) padding EdgeInsets(0.0, 168.7, 0.0, 83.0)
+iPhone 27.0  liquid_shell search selected: placement inline field 88.0,798.0 286.0x48.0 insets EdgeInsets(0.0, 0.0, 0.0, 83.0) padding EdgeInsets(0.0, 168.7, 0.0, 83.0)
+iPad 26.5    liquid_shell search selected: placement stacked field 20.0,87.0 780.0x44.0 insets EdgeInsets(0.0, 146.0, 0.0, 0.0) padding EdgeInsets(0.0, 146.0, 0.0, 20.0)
+iPad 27.0    liquid_shell search selected: placement stacked field 20.0,86.0 780.0x44.0 insets EdgeInsets(0.0, 140.0, 0.0, 0.0) padding EdgeInsets(0.0, 140.0, 0.0, 20.0)
+```
+
+Active, with the software keyboard up (the keyboard observers publish the
+field's end position):
+
+```
+iPhone 26.5  liquid_shell search active: keyboard 335.0 field 8.0,483.0 330.0x48.0 insets EdgeInsets(0.0, 0.0, 0.0, 399.0)
+iPhone 27.0  liquid_shell search active: keyboard 328.0 field 8.0,490.0 330.0x48.0 insets EdgeInsets(0.0, 0.0, 0.0, 392.0)
+iPad 26.5    liquid_shell search active: keyboard 337.0 field 20.0,38.0 780.0x44.0 insets EdgeInsets(0.0, 90.0, 0.0, 0.0)
+iPad 27.0    liquid_shell search active: keyboard 337.0 field 20.0,32.0 780.0x44.0 insets EdgeInsets(0.0, 86.0, 0.0, 0.0)
+```
+
+The placement and every frame match the P6 rows above: `.stacked` is
+realised on iPadOS 26.5 as on 27.0. The iPhone's active field frame, which
+P6 could read only from the accessibility tree, now reaches Flutter.
