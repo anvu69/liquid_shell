@@ -246,7 +246,9 @@ final class NativeTabsTests: XCTestCase {
         NativeTab(title: "Inbox", sfSymbol: "tray", sidebarOnly: false),
       ] + (reports ? [NativeTab(title: "Reports", sfSymbol: "chart.bar", sidebarOnly: true)] : []),
       selectedIndex: selected,
-      trailing: trailing ? NativeAction(title: "Search", sfSymbol: "magnifyingglass") : nil,
+      // Not UISearchTab's own "Search" and magnifyingglass: the app's
+      // label must be seen to reach the tab.
+      trailing: trailing ? NativeAction(title: "Find", sfSymbol: "sparkle.magnifyingglass") : nil,
       footer: footer
         ? NativeFooter(
           title: "Ann Lee", subtitle: "Account", sfSymbol: "person.crop.circle",
@@ -289,7 +291,7 @@ final class NativeTabsTests: XCTestCase {
   /// window's (a compact iPad window, or a regular one on an iPhone).
   private func installedShell(
     footer: Bool = false, trailing: Bool = false, reports: Bool = false,
-    landscape: Bool = false, sizeClass: UIUserInterfaceSizeClass? = nil
+    landscape: Bool = false, sizeClass: UIUserInterfaceSizeClass? = nil, selected: Int64 = 0
   ) throws -> NativeTabsController {
     let flutter = UIViewController()
     let tabs = NativeTabsController(flutter: flutter, events: events)
@@ -298,7 +300,7 @@ final class NativeTabsTests: XCTestCase {
     if let sizeClass { container.traitOverrides.horizontalSizeClass = sizeClass }
     window.rootViewController = container
     self.window = window
-    tabs.apply(config(footer: footer, trailing: trailing, reports: reports))
+    tabs.apply(config(footer: footer, trailing: trailing, reports: reports, selected: selected))
     settle()
     return tabs
   }
@@ -308,6 +310,12 @@ final class NativeTabsTests: XCTestCase {
   private func requireIPad() throws {
     try XCTSkipUnless(
       UIDevice.current.userInterfaceIdiom == .pad, "an iPad layout (overlay, tiled, top bar)")
+  }
+
+  /// Every iPhone is compact, also at a regular size class (a Plus or Max
+  /// iPhone in landscape): only an iPad shows the top bar and sidebar.
+  private func requirePhone() throws {
+    try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .phone, "an iPhone")
   }
 
   func testHidingTheChromeClosesAnOverlaySidebar() throws {
@@ -666,8 +674,56 @@ final class NativeTabsTests: XCTestCase {
       "the centre")
     XCTAssertTrue(
       try hit(tabs, CGPoint(x: root.bounds.midX, y: 4)) === tabs.flutter.view, "the top edge")
+    // The separate ⌕ circle is native, the gap before it is Flutter's. An
+    // iPhone always draws the circle; iPadOS 27 at the 820pt compact
+    // override puts the search tab inside the pill instead.
+    let (pill, circle) = try compactBarParts(tabs, inbox: inbox)
+    if UIDevice.current.userInterfaceIdiom == .phone { XCTAssertNotNil(circle, "the ⌕ circle") }
+    if let circle {
+      XCTAssertTrue(
+        isNative(try hit(tabs, CGPoint(x: circle.midX, y: circle.midY)), tabs), "the ⌕ circle")
+      XCTAssertGreaterThan(circle.minX - pill.maxX, 8, "precondition: a gap between pill and circle")
+      XCTAssertTrue(
+        try hit(tabs, CGPoint(x: (pill.maxX + circle.minX) / 2, y: inbox.y)) === tabs.flutter.view,
+        "the gap between the pill and the circle")
+    }
     tabs.apply(config(interactive: false, trailing: true))
     XCTAssertTrue(try hit(tabs, inbox) === tabs.flutter.view, "inert under a dialog")
+  }
+
+  /// The compact bar's pill (the drawn tab bar subview around [inbox]) and
+  /// the separate ⌕ circle, if UIKit draws one: the drawn subview furthest
+  /// to the trailing side that does not overlap the pill. Drawn: shown,
+  /// with something shown inside (UIKit keeps an empty circle container
+  /// when the search tab sits in the pill).
+  private func compactBarParts(
+    _ tabs: NativeTabsController, inbox: CGPoint
+  ) throws -> (pill: CGRect, circle: CGRect?) {
+    func drawn(_ view: UIView) -> Bool {
+      !view.isHidden && view.alpha > 0.01 && !view.bounds.isEmpty
+        && (view.subviews.isEmpty || view.subviews.contains(where: drawn))
+    }
+    let root = try XCTUnwrap(tabs.parent?.view)
+    let frames = tabs.tabBar.subviews.filter(drawn).map { $0.convert($0.bounds, to: root) }
+    let pill = try XCTUnwrap(frames.first { $0.contains(inbox) }, "the pill")
+    let circle = frames.filter { !$0.intersects(pill) }.max { $0.maxX < $1.maxX }
+    return (pill, circle)
+  }
+
+  /// Hidden (a sheet or dialog above the shell, or a page pushed), the
+  /// compact bar is not there for touch, and Flutter's bottom safe area is
+  /// the window's own (the home indicator): a sheet lays out against it.
+  func testAHiddenCompactBarLeavesFlutterTheWindowsSafeArea() throws {
+    let tabs = try installedShell(trailing: true, sizeClass: .compact)
+    let root = try XCTUnwrap(tabs.parent?.view)
+    let inbox = try centreOfLabel("Inbox", in: tabs.view, tabs)
+
+    tabs.apply(config(hidden: true, trailing: true))
+    settle()
+    XCTAssertEqual(tabs.flutter.view.frame, root.bounds)
+    XCTAssertEqual(
+      tabs.flutter.view.safeAreaInsets.bottom, root.safeAreaInsets.bottom, "the home indicator")
+    XCTAssertTrue(try hit(tabs, inbox) === tabs.flutter.view, "hidden")
   }
 
   /// Compact has no sidebar, so a sidebar-only destination is left out of
@@ -675,6 +731,7 @@ final class NativeTabsTests: XCTestCase {
   /// back at regular width, selected again if Dart still selects it.
   /// Neither is a user's selection: nothing is proposed to Dart.
   func testASidebarOnlyDestinationIsLeftOutOfTheCompactBar() throws {
+    try requireIPad()  // An iPhone stays compact at a regular size class.
     let tabs = try installedShell(reports: true, sizeClass: .compact)
     let container = try XCTUnwrap(tabs.parent)
     func shown() -> [String] { tabs.tabs.map(\.identifier) }
@@ -745,7 +802,8 @@ final class NativeTabsTests: XCTestCase {
   func testTheTrailingActionIsASearchTabThatOnlyCallsTheApp() throws {
     let tabs = try installedShell(trailing: true, sizeClass: .compact)
     let search = try XCTUnwrap(tabs.tabs.first as? UISearchTab)
-    XCTAssertEqual(search.title, "Search")
+    XCTAssertEqual(search.title, "Find", "the app's label, read by VoiceOver")
+    XCTAssertEqual(search.image, UIImage(systemName: "sparkle.magnifyingglass"), "the app's symbol")
     XCTAssertFalse(tabs.tabBarController(tabs, shouldSelectTab: search))
     XCTAssertEqual(events.sent.last, "trailing")
     XCTAssertEqual(tabs.selectedTab?.identifier, "destination0", "nothing selected")
@@ -754,6 +812,7 @@ final class NativeTabsTests: XCTestCase {
   /// A window resized across the size-class boundary (Stage Manager,
   /// Split View): UIKit swaps the bar, and Dart hears the new state.
   func testResizingAcrossTheSizeClassRepublishesTheState() throws {
+    try requireIPad()  // An iPhone stays compact at a regular size class.
     let tabs = try installedShell(sizeClass: .regular)
     let container = try XCTUnwrap(tabs.parent)
     tabs.dartAttached = true
@@ -771,6 +830,77 @@ final class NativeTabsTests: XCTestCase {
     settle()
     XCTAssertFalse(tabs.currentState().compact)
     XCTAssertEqual(events.sent.filter { $0 == "state" }.count, before + 2)
+  }
+
+  /// A sidebar-only selection is left out of the compact bar. UIKit would
+  /// then pick a tab itself, and its first tab is the ⌕ search tab: a
+  /// selected search tab is the compact bar's search state, which the
+  /// trailing action must never enter. The shell selects the first shown
+  /// destination instead and proposes nothing: Dart keeps its selection
+  /// and tells the app it is hidden (`onSelectedDestinationHidden`).
+  /// (a) A regular iPad window narrows (Split View, Stage Manager).
+  func testANarrowedWindowWithAHiddenSelectionNeverSelectsTheSearchTab() throws {
+    try requireIPad()
+    let tabs = try installedShell(trailing: true, reports: true, sizeClass: .regular, selected: 2)
+    let container = try XCTUnwrap(tabs.parent)
+    XCTAssertEqual(tabs.selectedTab?.identifier, "destination2", "precondition")
+
+    container.traitOverrides.horizontalSizeClass = .compact
+    settle()
+    XCTAssertFalse(tabs.tabs.contains { $0.identifier == "destination2" }, "precondition: left out")
+    XCTAssertFalse(tabs.selectedTab is UISearchTab, "never the search tab")
+    XCTAssertEqual(tabs.selectedTab?.identifier, "destination0", "the first shown destination")
+    XCTAssertFalse(events.sent.contains { $0.hasPrefix("destination") || $0 == "trailing" })
+  }
+
+  /// (b) The first config already selects a sidebar-only destination at
+  /// compact width (an iPhone, a narrow iPad window).
+  func testAHiddenSelectionAtInstallNeverSelectsTheSearchTab() throws {
+    let tabs = try installedShell(trailing: true, reports: true, sizeClass: .compact, selected: 2)
+    XCTAssertFalse(tabs.tabs.contains { $0.identifier == "destination2" }, "precondition: left out")
+    XCTAssertFalse(tabs.selectedTab is UISearchTab, "never the search tab")
+    XCTAssertEqual(tabs.selectedTab?.identifier, "destination0", "the first shown destination")
+    XCTAssertFalse(events.sent.contains { $0.hasPrefix("destination") || $0 == "trailing" })
+  }
+
+  /// A size-class change while dormant (no shell asks for the chrome)
+  /// leaves UIKit's tabs and selection alone, as the dormant config does.
+  func testASizeClassChangeWhileDormantLeavesTheSelectionAlone() throws {
+    let tabs = try installedShell(sizeClass: .regular, selected: 1)
+    let container = try XCTUnwrap(tabs.parent)
+    XCTAssertEqual(tabs.selectedTab?.identifier, "destination1", "precondition")
+    tabs.apply(
+      NativeChromeConfig(
+        engaged: false, tabs: [], selectedIndex: 0, tintArgb: 0xFF00_7AFF, dark: false,
+        rtl: false, hidden: false, interactive: true))
+    settle()
+
+    container.traitOverrides.horizontalSizeClass = .compact
+    settle()
+    XCTAssertEqual(tabs.selectedTab?.identifier, "destination1", "dormant: not moved")
+  }
+
+  /// Every iPhone is compact (owner D1), also where its size class is
+  /// regular: a Plus or Max iPhone, or the iPhone Air, in landscape. UIKit
+  /// draws the bottom bar there, never the top bar or a sidebar, so the
+  /// shell must say compact (Dart maps it to the bottom bar, hides it
+  /// under sheets) and leave sidebar-only tabs out.
+  func testAnIPhoneAtARegularSizeClassIsCompact() throws {
+    try requirePhone()
+    let tabs = try installedShell(trailing: true, reports: true, sizeClass: .regular)
+    XCTAssertEqual(tabs.traitCollection.horizontalSizeClass, .regular, "precondition")
+    let state = tabs.currentState()
+    XCTAssertTrue(state.compact, "compact")
+    XCTAssertEqual(state.sidebar, .hidden, "no sidebar")
+    XCTAssertFalse(tabs.tabs.contains { $0.identifier == "destination2" }, "sidebar-only left out")
+
+    tabs.setSidebarVisible(true)
+    settle()
+    XCTAssertEqual(tabs.currentState().sidebar, .hidden, "the request is ignored")
+
+    let windowed = NativeWindowControls(leading: 66, top: 44)
+    tabs.readWindowControls = { _ in windowed }
+    XCTAssertEqual(tabs.windowControls(), windowed, "read, as under any compact bar")
   }
 
   /// VK-403 guard: a tiled sidebar does not resize the Flutter view; its

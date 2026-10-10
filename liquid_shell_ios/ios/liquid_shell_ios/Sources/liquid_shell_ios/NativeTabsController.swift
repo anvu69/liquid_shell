@@ -62,6 +62,16 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   @available(*, unavailable)
   required init?(coder: NSCoder) { nil }
 
+  /// Compact: UIKit's floating tab bar at the bottom, no top bar, no
+  /// sidebar. Every iPhone, also at a regular size class (a Plus or Max
+  /// iPhone, or the iPhone Air, in landscape: UIKit keeps the bottom bar
+  /// there), and an iPad window of compact width. The one signal for the
+  /// tabs shown, the sidebar, the state sent to Dart and the window
+  /// controls.
+  var isCompact: Bool {
+    traitCollection.userInterfaceIdiom == .phone || traitCollection.horizontalSizeClass == .compact
+  }
+
   /// Whether the chrome is on screen: a shell engaged it and nothing hides it.
   var chromeVisible: Bool {
     guard let config else { return false }
@@ -75,10 +85,14 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     footer.onTap = { [weak self] in self?.footerTapped() }
     registerForTraitChanges([UITraitHorizontalSizeClass.self]) {
       (self: NativeTabsController, _: UITraitCollection) in
-      if let config = self.config {
+      // Dormant (no tabs in the config): leave UIKit's tabs and selection
+      // alone, as `apply` does.
+      if let config = self.config, !config.tabs.isEmpty {
         self.showTabs(config)
         self.select(Int(config.selectedIndex))
       }
+      // Defensive: the layout pass that follows a size-class change syncs
+      // too (`viewDidLayoutSubviews`), and no test tells the two apart.
       self.syncFlutter()
     }
   }
@@ -136,7 +150,7 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   }
 
   func setSidebarVisible(_ visible: Bool) {
-    guard chromeVisible, traitCollection.horizontalSizeClass != .compact else { return }
+    guard chromeVisible, !isCompact else { return }
     sidebar.isHidden = !visible
   }
 
@@ -168,7 +182,7 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   /// selection: nothing is proposed to Dart.
   private func showTabs(_ config: NativeChromeConfig) {
     guard !config.tabs.isEmpty else { return }
-    let compact = traitCollection.horizontalSizeClass == .compact
+    let compact = isCompact
     let shown = zip(destinationTabs, config.tabs).filter { !(compact && $1.sidebarOnly) }.map(\.0)
     let wanted = (trailingTab.map { [$0] } ?? []) + shown
     guard wanted.map(ObjectIdentifier.init) != tabs.map(ObjectIdentifier.init) else { return }
@@ -177,14 +191,20 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     applyingFromDart = false
   }
 
-  /// Selects destination [index] when UIKit shows it (a sidebar-only one
-  /// is left out of the compact bar).
+  /// Selects destination [index]. A sidebar-only one is left out of the
+  /// compact bar: then the first shown destination. UIKit would otherwise
+  /// pick a tab itself, and its first tab is the search tab, whose
+  /// selection is the compact bar's search state. Dart keeps its own
+  /// selection and tells the app it is hidden; nothing is proposed.
   private func select(_ index: Int) {
-    guard destinationTabs.indices.contains(index), selectedTab !== destinationTabs[index],
-      tabs.contains(where: { $0 === destinationTabs[index] })
+    guard destinationTabs.indices.contains(index) else { return }
+    let wanted = destinationTabs[index]
+    let shown = tabs.contains { $0 === wanted }
+    guard let tab = shown ? wanted : tabs.first(where: { $0 !== trailingTab }),
+      selectedTab !== tab
     else { return }
     applyingFromDart = true
-    selectedTab = destinationTabs[index]
+    selectedTab = tab
     applyingFromDart = false
   }
 
@@ -215,15 +235,14 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   }
 
   private func currentSidebar() -> NativeSidebar {
-    let compact = traitCollection.horizontalSizeClass == .compact
-    guard chromeVisible, !compact, !sidebar.isHidden else { return .hidden }
+    guard chromeVisible, !isCompact, !sidebar.isHidden else { return .hidden }
     return isTiled ? .tiled : .overlay
   }
 
   func currentState() -> NativeShellState {
     NativeShellState(
       installed: true,
-      compact: traitCollection.horizontalSizeClass == .compact,
+      compact: isCompact,
       sidebar: currentSidebar())
   }
 
@@ -293,8 +312,7 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   /// alone would read as a cluster (`ShellMath.fallbackClusterTop`). The
   /// compact bar is at the bottom: the top is Flutter's, so it is read.
   func windowControls() -> NativeWindowControls {
-    let compact = traitCollection.horizontalSizeClass == .compact
-    if chromeVisible, !compact { return NativeWindowControls(leading: 0, top: 0) }
+    if chromeVisible, !isCompact { return NativeWindowControls(leading: 0, top: 0) }
     return readWindowControls(flutter.viewIfLoaded)
   }
 
