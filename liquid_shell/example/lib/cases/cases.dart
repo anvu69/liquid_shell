@@ -8,6 +8,7 @@ import 'package:liquid_shell_example/cases/forced_tier.dart';
 import 'package:liquid_shell_example/cases/form_factors.dart';
 import 'package:liquid_shell_example/cases/hide_chrome.dart';
 import 'package:liquid_shell_example/cases/narrow_width.dart';
+import 'package:liquid_shell_example/cases/native_alerts.dart';
 import 'package:liquid_shell_example/cases/native_chrome.dart';
 import 'package:liquid_shell_example/cases/sidebar_only.dart';
 import 'package:liquid_shell_example/cases/sidebar_slots.dart';
@@ -68,6 +69,13 @@ const kCases = <ExampleCase>[
     subtitle: 'beforeDestinationChange',
     drawnByFlutter: null,
     page: DiscardGuardCase(),
+  ),
+  (
+    id: 'alerts',
+    title: 'Alerts and action sheets',
+    subtitle: 'Native on iOS 26, Flutter glass elsewhere',
+    drawnByFlutter: null,
+    page: NativeAlertsCase(),
   ),
   (
     id: 'hide_chrome',

@@ -1,16 +1,25 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:liquid_shell_example/cases/cases.dart';
+import 'package:liquid_shell_example/cases/native_alerts.dart';
 import 'package:liquid_shell_example/support/drawn_by_flutter.dart';
 
-void main() => runApp(const ExampleApp());
+void main() => runApp(
+  ExampleApp(demo: Platform.environment['LIQUID_SHELL_EXAMPLE_DEMO']),
+);
 
 /// The seed colour of the example theme.
 const kExampleSeed = Color(0xFF3D5AFE);
 
 /// The example app: a list of cases, each opening one screen.
 class ExampleApp extends StatelessWidget {
-  /// Creates the app.
-  const ExampleApp({super.key});
+  /// Creates the app. With [demo], it opens straight on the alerts case and
+  /// runs that demo (UI tests, spec P3a §9.4).
+  const ExampleApp({this.demo, super.key});
+
+  /// `alert` or `sheet`; null shows the case list.
+  final String? demo;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -20,7 +29,7 @@ class ExampleApp extends StatelessWidget {
       colorSchemeSeed: kExampleSeed,
       brightness: Brightness.dark,
     ),
-    home: const CaseList(),
+    home: demo == null ? const CaseList() : NativeAlertsCase(autorun: demo),
   );
 }
 

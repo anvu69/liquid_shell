@@ -335,21 +335,21 @@ bool _dirty = true;
 
 Future<bool> _confirmLeave(int index) async {
   if (!_dirty || index == _index) return true;
-  final discard = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Discard changes?'),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: const Text('Keep editing'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, true),
-          child: const Text('Discard'),
-        ),
-      ],
-    ),
+  final discard = await showLiquidAlert<bool>(
+    context,
+    title: 'Discard changes?',
+    actions: const [
+      LiquidAlertAction(
+        label: 'Keep editing',
+        value: false,
+        style: LiquidAlertActionStyle.cancel,
+      ),
+      LiquidAlertAction(
+        label: 'Discard',
+        value: true,
+        style: LiquidAlertActionStyle.destructive,
+      ),
+    ],
   );
   return discard ?? false;
 }
@@ -377,6 +377,75 @@ Widget build(BuildContext context) => LiquidShell(
 ```
 
 <img src="doc/images/case_guard.png" width="260" alt="Discard changes dialog">
+
+### Alerts and action sheets
+
+`showLiquidAlert` and `showLiquidActionSheet` complete with the value of the
+action the user picked. On iOS 26 and later they are the system's own
+`UIAlertController`, with Liquid Glass, above the native tab bar and
+sidebar. On Android and on iOS before 26 they are drawn by Flutter, with the
+same glass as the shell (`LiquidGlass`). Pass
+`presentation: LiquidDialogPresentation.flutter` to draw Flutter everywhere,
+or `.system` for UIKit's alert on every iOS.
+
+<?code-excerpt "native_alerts.dart (readme)"?>
+```dart
+Future<DemoChoice?> _alert() => showLiquidAlert<DemoChoice>(
+  context,
+  title: 'Discard changes?',
+  message: 'Your edits will be lost.',
+  actions: const [
+    LiquidAlertAction(
+      label: 'Keep editing',
+      value: DemoChoice.keep,
+      style: LiquidAlertActionStyle.cancel,
+    ),
+    LiquidAlertAction(
+      label: 'Discard',
+      value: DemoChoice.discard,
+      style: LiquidAlertActionStyle.destructive,
+    ),
+  ],
+  presentation: _presentation,
+);
+
+// Pass the tapped button's context: on iPad the sheet points at it.
+Future<DemoChoice?> _actionSheet(BuildContext button) =>
+    showLiquidActionSheet<DemoChoice>(
+      button,
+      title: 'Photo',
+      actions: const [
+        LiquidAlertAction(
+          label: 'Delete photo',
+          value: DemoChoice.delete,
+          style: LiquidAlertActionStyle.destructive,
+        ),
+        LiquidAlertAction(label: 'Share', value: DemoChoice.share),
+        LiquidAlertAction(
+          label: 'Cancel',
+          value: DemoChoice.cancel,
+          style: LiquidAlertActionStyle.cancel,
+        ),
+      ],
+      presentation: _presentation,
+    );
+```
+
+| | iOS 26+ | iOS 15–25 | Android |
+|---|---|---|---|
+| `auto` (default) | `UIAlertController` (glass) | Flutter glass | Flutter glass |
+| `system` | `UIAlertController` (glass) | `UIAlertController` | Flutter glass |
+| `flutter` | Flutter glass | Flutter glass | Flutter glass |
+
+- A tap outside an action sheet, Escape or Android back completes with the
+  cancel action's value, or null without one.
+- At most one `cancel` and one `preferred` action. A blank label or none
+  at all throws `ArgumentError`.
+- Every visible string is yours. The Flutter sheet's barrier uses
+  `LiquidShellStrings.dismiss` for screen readers.
+
+<img src="doc/images/case_alert.png" width="260" alt="Glass alert">
+<img src="doc/images/case_action_sheet.png" width="360" alt="Glass action sheet at its button">
 
 ### Hide the chrome, or none at all
 
