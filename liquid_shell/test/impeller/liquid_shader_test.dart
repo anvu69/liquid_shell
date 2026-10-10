@@ -7,6 +7,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:liquid_shell/src/glass/liquid_backdrop.dart';
 import 'package:liquid_shell/src/glass/liquid_optics.dart';
 
 const _scale = 2.0;
@@ -247,5 +248,54 @@ void main() {
       brightness(_pixel(data, const Offset(119.5, 150))),
       greaterThan(body + 100),
     );
+  });
+
+  testWidgets('RenderLiquidBackdrop places the real lens while moving', (
+    tester,
+  ) async {
+    final program = await _program(tester);
+    final left = ValueNotifier<double>(100);
+    addTearDown(left.dispose);
+    tester.view
+      ..devicePixelRatio = _scale
+      ..physicalSize = _view * _scale;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: Stack(
+          children: [
+            Positioned.fill(child: CustomPaint(painter: _Stripes())),
+            ValueListenableBuilder<double>(
+              valueListenable: left,
+              builder: (_, x, _) => Positioned(
+                left: x,
+                top: 100,
+                width: 200,
+                height: 100,
+                child: ClipRect(
+                  child: LiquidBackdrop(
+                    program: program,
+                    borderRadius: BorderRadius.zero,
+                    params: const LiquidOpticsParams(
+                      tint: Color(0x00000000),
+                      rim: Color(0x00000000),
+                      refraction: 1,
+                      dispersion: 0.3,
+                      blurSigma: 3,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    for (var i = 0; i < 5; i++) {
+      left.value += 3;
+      await tester.pump();
+    }
+    expect(tester.takeException(), isNull);
   });
 }
