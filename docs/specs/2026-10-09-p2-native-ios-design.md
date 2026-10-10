@@ -3,6 +3,7 @@
 - **Plane:** VK-346 (parent VK-343)
 - **Date:** 2026-10-09
 - **Status:** draft for the owner. The owner approves this spec and the plan `docs/plans/2026-10-09-p2-native-ios.md` together. Open choices are in §13, each with a recommended default; if the owner says nothing, the default applies.
+- **Amended:** 2026-10-10, after the owner's device test (VK-403). §14 records decisions D1–D4, the VK-403 root cause and the fix design, and supersedes every earlier statement it contradicts; those places carry a *Superseded (§14)* note. The plan's Task 7 implements it.
 - **Branch:** `VK-346-p2-native-ios`, from `main` at `8f437df` (P1 merged, VK-388 floor raise merged).
 - **Floor:** Flutter 3.44.6 / Dart 3.12 (VK-388), iOS 15.0, `very_good_analysis` 10.3.0.
 - **Sources:**
@@ -13,6 +14,8 @@
   - The dry run of the plan, `docs/plans/2026-10-09-p2-native-ios.md` §"Dry-run notes": every Dart test, an XCTest run and a native integration run on an iPad simulator, with measured numbers quoted below.
 
 > **Tóm tắt (cho chủ sản phẩm).** P2 đưa khung iPad gốc của Văn Khấn (VK-242) vào `liquid_shell_ios`, đổi tên hết, và nối nó với `LiquidShell` của P1. Trên iPad iPadOS 26 ở khổ rộng, khi app bật khoá `LiquidShellNativeChrome` trong Info.plist và mọi đích có `sfSymbol`, khung là `UITabBarController(.tabSidebar)` thật của hệ thống: viên tab, nút sidebar, sidebar (dọc thì phủ, ngang thì nằm cạnh), nút phụ ⌕ ghim cuối viên, và footer native. Mọi nơi khác (iPhone, Android, iPad < 26, cửa sổ iPad hẹp) vẫn là khung Flutter của P1. Cách lắp giữ "cách C": FlutterView nằm dưới cùng, không bao giờ đổi cha; `UITabBarController` trong suốt phủ lên; chạm vào nền rơi xuống Flutter. Chạm tab native chỉ là *đề nghị*: Dart chạy `beforeDestinationChange` rồi mới chọn, nên lỗi mất dữ liệu I1 của VK-242 không thể lặp lại. Trang đẩy lên trên shell thì khung native ẩn; dialog thì khung native không nhận chạm. P2 cũng đọc cụm nút cửa sổ iPadOS 26 (`{leading, top}`), đưa vào `LiquidShellScope`, đẩy hàng đỉnh của khung Flutter và tiêu đề lớn qua cụm đó; ô tìm, tab tìm và nút quay lại để P3. Kênh dùng Pigeon (đã giải thích ở §6). Bản chạy thử đã xanh: 409 test Dart, 12 XCTest, 6/6 integration trên simulator iPad iOS 26.5. Các lựa chọn còn mở nằm ở bảng §13.
+>
+> **Sửa đổi 10/10 (§14).** Sau khi chủ sản phẩm thử trên iPad Air M3 thật (iPadOS 27), quyết định D1–D4: thanh tab native Liquid Glass có trên **mọi** iPhone và iPad iOS 26, kể cả cửa sổ hẹp (thay Q3); ⌕ là tab vai trò tìm kiếm. VK-403 không phải lỗi bố cục: khung hình "ngang" trong video thật ra là màn **dọc** bị xoay (sidebar overlay che nội dung là đúng thiết kế UIKit), ngang thì thân Flutter nằm cạnh sidebar trên cả máy thật lẫn simulator 26.5/27.0; sidebar xám phẳng là dáng mới của chính iPadOS 27 (Photos, Health giống hệt); còn "thanh tab ngang bị bóp méo, không có liquid glass" là viên Flutter của P1 trong cửa sổ hẹp theo Q3. Task 7 làm D1 và các chốt chặn hồi quy; P2 chỉ merge sau Task 7 (D4).
 
 ---
 
@@ -43,11 +46,11 @@ VK-343 asked for one library that owns the app's navigation chrome on every plat
 
 - **P3:** the glass back button and title bar, the search field, a selectable search tab (`UISearchTab`), and the sidebar search row. P2 exposes only the window-controls inset P3 needs.
 - **The native liquid renderer for iOS 26.** P1 §2.3 listed it under P2; the approved P2 decomposition does not. It moves to P4 with the other liquid renderer (Q11).
-- Native chrome on iPhone, on iPadOS before 26, or on Android. They keep the Flutter chrome (the same as P1).
+- ~~Native chrome on iPhone, on iPadOS before 26, or on Android. They keep the Flutter chrome (the same as P1).~~ *Superseded (§14, D1):* every iOS 26 iPhone and iPad gets native chrome; iOS before 26 and Android keep the Flutter chrome.
 - Multiple scenes and Stage Manager multi-window (`UIApplicationSupportsMultipleScenes = true`). An app with multiple scenes gets the Flutter chrome in every scene except the first one that connects.
 - "Designed for iPad" on Apple-silicon Macs. These apps never install the native shell.
 - A native sidebar header. `sidebarHeader` is a Flutter widget and appears only in the Flutter sidebar.
-- `tabBarMinimizeBehavior`, keyboard shortcuts for tabs, sidebar groups, and the "Edit" button in the sidebar (every tab is `.fixed`, so it never appears).
+- `tabBarMinimizeBehavior` (still out after D1: a probe found no way to drive it from Flutter scrolling, §14.3), keyboard shortcuts for tabs, sidebar groups, and the "Edit" button in the sidebar (every tab is `.fixed`, so it never appears).
 - Swift Package Manager verification. This stays the P6 gate from P1 O2.
 - Any change to Văn Khấn. P5 migrates it.
 
@@ -224,7 +227,7 @@ The plugin's `register(with:)` arms a `UIScene.willConnectNotification` observer
 
 | # | Fact | Reason when false |
 |---|---|---|
-| 1 | `UIDevice.current.userInterfaceIdiom == .pad` | `notIPad` |
+| ~~1~~ | ~~`UIDevice.current.userInterfaceIdiom == .pad`~~ | ~~`notIPad`~~ *Superseded (§14, D1): no idiom fact; `notIPad` is removed from the channel and the interface* |
 | 2 | `#available(iOS 26.0, *)` | `osTooOld` |
 | 3 | not `isiOSAppOnMac` / `isMacCatalystApp` | `iPadAppOnMac` |
 | 4 | `Info.plist` `LiquidShellNativeChrome == true` (Q2) | `notEnabled` |
@@ -234,7 +237,9 @@ The plugin's `register(with:)` arms a `UIScene.willConnectNotification` observer
 
 The install step detaches the FVC from the root role, then sets `window.rootViewController = ShellContainerController(tabs:flutter:)`. Doing it in this order avoids `UIViewControllerHierarchyInconsistency`. A scene whose root FVC belongs to another engine is ignored, so a second engine that registers the plugin (headless background work, add-to-app) never claims the app's scene; a simulator probe with a headless engine registered before the scene confirmed it. For fact 6, a Flutter view inside an installed `ShellContainerController` counts as on screen, like one that is the root.
 
-**The width rule.** "Install" puts the container in the window on every qualifying iPad. That is the only time it can happen. Whether the native chrome is *used* is decided on every frame by Dart (§7.1). It needs the platform's horizontal size class to be regular **and** the shell's own width to be at least `breakpoints.regular`. Below either, the container is **dormant**: the tab bar controller's view is hidden, the Flutter view fills the window with no added safe area, and every touch falls through. P1's Flutter chrome draws as on any other device (Q3).
+> *Superseded (§14, D1): there is no width rule. Native chrome is used at both size classes; UIKit shows the compact floating tab bar at the bottom or the top bar and sidebar, and Dart follows its size class. See the fallback matrix, §14.4.*
+
+~~**The width rule.** "Install" puts the container in the window on every qualifying iPad. That is the only time it can happen. Whether the native chrome is *used* is decided on every frame by Dart (§7.1). It needs the platform's horizontal size class to be regular **and** the shell's own width to be at least `breakpoints.regular`. Below either, the container is **dormant**: the tab bar controller's view is hidden, the Flutter view fills the window with no added safe area, and every touch falls through. P1's Flutter chrome draws as on any other device (Q3).~~
 
 ### 5.2 Approach C (unchanged from ADR 0012)
 
@@ -337,6 +342,8 @@ Boundary checks (CLAUDE.md, P1 §7): Dart drops a destination index outside `0..
 
 ### 7.1 Engagement
 
+> *Superseded in part (§14.3): the `!state.compact` and `presentationFor(size) != compact` conditions are gone; at compact size class the kind is `bottomBar` with the bottom padding as its inset; `sizeClass` follows UIKit once engaged; pending no longer has the 744pt screen rule; standby has no compact condition.*
+
 `nativeChromeEngaged(...)` is a pure function, tested over every input:
 
 ```
@@ -360,9 +367,11 @@ When the shell is engaged, its build keeps P1's body chain exactly: `PopScope �
 
 `sizeClass` is `regular`, `sidebarVisible` mirrors the native state, and `nativeChrome` is `true`. `LiquidShellScope.contentPaddingOf` keeps working unchanged: chrome insets and system padding are combined per side with `max`.
 
+> *Superseded (§14.3): pending applies to every iOS screen (iPhone too); `nativeChromeScreenPossible` and `kNativeChromeMinScreenSide` are removed.*
+
 **Pending.** On iOS, `supportsNativeChrome` is true, and for a frame or two before `attach` answers the shell does not know which chrome to draw. If every condition Dart knows without the platform holds (`auto`, owner, shell width ≥ `breakpoints.regular`, no `chromeBuilder`, every `sfSymbol`: `nativeChromePossible`; and a screen whose short side is at least 744pt, the iPad mini's: `nativeChromeScreenPossible` on `View.display`, which the iOS embedder fills before the first frame), it draws **no** chrome (`hidden`, `sizeClass: regular`), rather than flash the Flutter chrome before the native one appears. Otherwise the answer is already Flutter chrome, and the shell draws it from its first frame with its real size class: every iPhone, in portrait and in landscape (every iPhone screen is under 500pt on its short side), and every app without `sfSymbol`s or with a `chromeBuilder` (P1 apps). Whether the app opted in (Info.plist) is known only natively, so an iPad app with every `sfSymbol` but no opt-in still waits one frame or two, and so does an iPad app on a Mac ("Designed for iPad"), whose display passes the 744pt check until `attach` answers `iPadAppOnMac`. A display whose pixel ratio is still 0 counts as unknown (possible), never as a NaN comparison. On every other platform the answer is synchronous (`unavailable`), so P1 behaviour is untouched: all 242 P1 widget tests pass unchanged.
 
-**Not engaged but owner.** The shell still sends its config with `engaged: false`, so the platform hides its chrome while the shell draws the Flutter one (compact width, missing symbols). This is the double-chrome guard.
+**Not engaged but owner.** The shell still sends its config with `engaged: false`, so the platform hides its chrome while the shell draws the Flutter one (~~compact width,~~ missing symbols, a `chromeBuilder`). This is the double-chrome guard.
 
 A debug log fires once per process when the device supports native chrome but the app has not opted in (`notEnabled`), and once per process when native chrome is installed but a symbol is missing on a shell that asked for it (`auto`, no `chromeBuilder`).
 
@@ -445,6 +454,7 @@ Values reach Dart three ways:
 | P1 bottom bar | Unaffected: it is at the bottom |
 | Page large titles | Apps wrap the title row in `LiquidWindowControlsClearance(rowTop: contentPaddingOf(context).top − paddingOf(context).top)`. The example's `DemoPage` does, so every case shows it. Rows below the band never move (Music's look), and neither do rows that start past the cluster horizontally: beside a tiled sidebar (Flutter or native) the page starts at the sidebar's edge, so its title stays put. The check uses the row's position in the window, not in the page, read only while the page's route is at rest (no push, pop or route above it moving), so a title does not slide during a transition. Until it is first read, a row counts as under the cluster, except in a shell with a tiled sidebar |
 | Native chrome | UIKit adapts its own bar and sidebar; the value is published as 0 while the native chrome is visible (§8.1), and an engaged shell's scope and clearance widgets use 0 |
+| Native compact bar (§14) | The bar is at the bottom, so the top is the body's: the real value is published and used (scope and clearance use zero only for native **regular** chrome) |
 | P3 (later) | The back button / title bar and the search page read `LiquidShellScope.of(context).windowControls` or use the clearance widget. Nothing else is needed from P2 |
 
 When there is no cluster, every P1 position is unchanged; widget tests pin this for the toggle, the pill and the sidebar header.
@@ -485,6 +495,8 @@ On an **iPad Air 11-inch (M4), iOS 26.5** with `EXPECT_NATIVE=true` it checks:
 - the sidebar opens from Dart and reports back; footer → callback;
 - a page above hides the chrome (its top padding drops), and the chrome returns after the pop.
 
+> *Superseded (§14.3): the iPhone leg runs with `EXPECT_NATIVE=true` (compact native bar); `notIPad` no longer exists. The sidebar test also asserts the VK-403 layout (tiled: the body starts past the sidebar and ends at the window edge; overlay: full width).*
+
 On an **iPhone 17 Pro** with `EXPECT_NATIVE=false` it checks `notIPad` and the Flutter chrome. P1's `signals_test.dart` now pumps a shell with `nativeChrome: off`, because the example opts in. A `.ignore()`/`unawaited` push style follows VK-388's analyzer fix.
 
 **Manual (owner / Task 1 and Task 6 QA, with screenshots in `docs/qa/p2/`):**
@@ -494,7 +506,7 @@ On an **iPhone 17 Pro** with `EXPECT_NATIVE=false` it checks `notIPad` and the F
 - landscape tiled (the content narrows);
 - refused-guard row taps (the highlight stays put);
 - VoiceOver on the tab bar, the sidebar and the footer;
-- Split View ⅓ (Flutter bottom bar, **one** bar);
+- Split View ⅓ (~~Flutter bottom bar~~ the native compact bar after D1, **one** bar);
 - iOS 27.0 runtime;
 - hot restart.
 
@@ -557,6 +569,8 @@ These jobs are added to `.github/workflows/ci.yaml`:
 
 ## 12. Risks
 
+> D1 adds the risks in §14.5.
+
 | Risk | Mitigation |
 |---|---|
 | **Hit-test debt.** The pass-through depends on the `UITabBarController` view tree; a new iOS can route touches wrongly | Tracked in `doc/native_chrome.md` and the README; XCTest hit tests on UIKit's real tree (CI `ios-unit`, newest iPad simulator); real taps and scrolls by hand on every Xcode/iOS bump (`manual.md`); `LIQUID_SHELL_NATIVE_OFF=1` diagnosis |
@@ -582,14 +596,86 @@ Each row has a recommended default; silence means the default.
 |---|---|---|
 | Q1 | Channel for the native shell: Pigeon or the P1 hand-written channel pattern? | **Pigeon 27.3.0**, iOS package only: five host calls, five events and nested types in both directions, generated both ends, with a drift gate. Costs a dev dependency and the SDK-pinned `meta` runtime dependency; the CLAUDE.md dependency rule names it. P1's signals EventChannel is unchanged |
 | Q2 | Install by default on every qualifying iPad, or opt-in? | **Opt-in** with `LiquidShellNativeChrome = true` in Info.plist. A public package must not swap every iPad app's root view controller just because it depends on liquid_shell; plugins that cast the root to `FlutterViewController` would break. Debug log when the device supports it but the key is missing |
-| Q3 | iPad at compact width (Split View, small window): UIKit's own bottom tab bar, or P1's Flutter bottom bar? | **P1's Flutter bottom bar** (container dormant), as decomposed: one look for every compact layout. Native needs both UIKit-regular and shell width ≥ `breakpoints.regular` |
+| Q3 | iPad at compact width (Split View, small window): UIKit's own bottom tab bar, or P1's Flutter bottom bar? | **P1's Flutter bottom bar** (container dormant), as decomposed: one look for every compact layout. Native needs both UIKit-regular and shell width ≥ `breakpoints.regular` | ***Superseded 2026-10-10 by D1 (§14):** native compact bar everywhere on iOS 26.*
 | Q4 | Selection model for native taps | **Propose, then accept.** Native never selects until Dart's guard accepts; `didSelectTab` is the safety net. Fallback if Task 1 sees a glitch: let UIKit select and re-sync on refusal (VK-242 model) |
 | Q5 | Should a native footer tap run `beforeDestinationChange`? | **No.** It is an app callback, like P1's trailing action and Flutter `sidebarFooter`; the dartdoc says to guard it. The guard's signature is per destination index |
 | Q6 | Engage native chrome when the app passes `chromeBuilder`? | **No.** The app asked for custom Flutter chrome; native would silently drop it |
 | Q7 | A destination without `sfSymbol` | **Flutter chrome** plus one debug log; no placeholder symbol |
 | Q8 | A page pushed above the shell | **Hide the native chrome** while the shell's route is covered (`secondaryAnimation`); a dialog only makes it non-interactive. Closes I1 structurally. (VK-242 kept a tiled sidebar usable beside root pages) |
-| Q9 | Native form of `tabBarTrailing` | **`UITab` with `.pinned`** (end of the bar, first sidebar row) in P2; a real `UISearchTab` comes with the search tab in P3 |
+| Q9 | Native form of `tabBarTrailing` | **`UITab` with `.pinned`** (end of the bar, first sidebar row) in P2; a real `UISearchTab` comes with the search tab in P3 | ***Amended by §14.3:** a search-role `UISearchTab` (pinned) from Task 7, still never selected; P3 reuses it for real search.*
 | Q10 | Window-controls constants before the spike | **Ignore a leading delta under 24pt when top reads 0** (rounded corner, measured 9.5pt full screen); **top = 44** when only the horizontal adaptation reads. Task 1 re-measures and may change both |
 | Q11 | The native liquid glass renderer P1 listed under P2 | **Move it to P4**, beside the other liquid renderer; not in the approved P2 decomposition |
 | Q12 | Version | **`0.1.0-dev.2`** for all four packages, CHANGELOG entries; no publishing (P6) |
 | Q13 | Swift tests | **XCTest in the example's `RunnerTests`** for the pure parts plus the hit-test rule, a macOS CI job, and UIKit behaviour through the simulator integration test |
+
+## 14. Owner decisions 2026-10-10 (after device test)
+
+The owner tested P2 on a real iPad Air M3 with iPadOS 27 (screen recording, 2026-10-10 08:42, 153 s; Plane VK-403), asked for the decisions below, and answered "Ok hết" to all four. This section supersedes every earlier statement it contradicts; those places carry a *Superseded (§14)* note. The plan's **Task 7** implements it.
+
+### 14.1 Decisions
+
+| D | Decision | Replaces |
+|---|---|---|
+| D1 | The native Liquid Glass tab bar appears on **every** iOS 26 iPhone and iPad, compact and narrow windows included. On iPhone it is `UITabBarController`'s compact floating glass tab bar over Flutter, in the same approach-C container (§5.2). | Q3 (compact iPad → Flutter chrome); the §2.2 non-goal "native chrome on iPhone"; §5.1 fact 1 and the width rule; the width and size-class conditions of §7.1; the 744pt pending rule |
+| D2 | Order of work: ① VK-403 fix + D1 inside P2, before merge (Task 7); ② native alerts and action sheets (P3a); ③ nav bar and search spike; ④ native nav bar, back and search (P3b); ⑤ controls. | The P3 order of the P1/P2 roadmap |
+| D3 | List rows, text fields and Flutter-content sheets stay Flutter-drawn. | — (bounds P3 and later) |
+| D4 | P2 is not merged until ① is done. | — |
+
+### 14.2 VK-403: root cause
+
+The owner's words were "thanh tabbar ngang bị bóp méo, không có hiệu ứng liquid glass" (the horizontal tab bar is squashed and has no Liquid Glass). The first reading of the video was "in landscape with the tiled sidebar the Flutter body spans the full screen under it, the rows look squashed, and the sidebar is flat grey". Evidence (`.superpowers/sdd/ls-p2-vk403-rootcause.md` in vankhan, with logs and screenshots):
+
+1. **The "landscape" frame is portrait.** The recording is a fixed 1000×695 landscape canvas. In frames 4–9 and `t_12.jpg` the status bar runs along the canvas's **short** edge: the UI is portrait, drawn rotated, so rows look like tall thin bars. `t_12` is the portrait **overlay** sidebar: UIKit draws it over the content by design, with its dimming view (the rows are darker than in frame 4), the tab bar hidden, and the content held still (§5.4). A full-width body under an overlay sidebar is correct.
+2. **Real landscape is right on the device.** Frames 2, 10 and 11 (landscape, full screen and windowed) show the body laid out beside the tiled sidebar.
+3. **Same numbers on simulators, iPadOS 26.5 and 27.0.** Own iPad Air 11-inch (M3) simulators, rotated with idb's HID orientation event, logged both sides: tiled, the host's safe area is `{32, 280, 20, 0}`, Flutter gets `additionalSafeAreaInsets.left = 280` with its frame unchanged at `1180×820`, and Dart lays the page out at `x 280…1180` (width 900); portrait overlay, host top 96 (held), page `0…820`. Live rotation portrait → landscape → portrait converges; the only odd pass (portrait size with the tiled 280 inset) lasts 7 ms inside UIKit's rotation transaction, with no Flutter frame in between.
+4. **The flat grey sidebar is iPadOS 27's own.** On 26.5 UIKit's sidebar view (`_UITabOutlineView`) floats at `{10, 32, 270, 1138}` with a shadow (`_UIDuoShadowView`); on 27.0 it is flush, `{0, 0, 280, 1180}`, with no shadow, still a blur backdrop (`_UIVisualEffectBackdropView` + `UIVisualEffectView`) over the Flutter view. Apple's Photos and Health on the 27.0 simulator show the same flush grey sidebar. Every view of ours under it is clear (tab hosts, the tab bar controller's layout container), and the Flutter content shows blurred through it. It is not ours to restyle.
+5. **The squashed bar without Liquid Glass is P1's Flutter pill.** For about 110 of the 153 seconds the app is in a narrow window. There, as Q3 decided, the shell drew P1's Flutter bottom bar: a frosted `BackdropFilter` pill, squeezed to the window (labels under icons, the ⌕ circle beside it), not Liquid Glass. The native top bar seen in frames 4 and 13 is real Liquid Glass.
+
+**Root cause.** No layout defect in Tasks 4–5: the tiled inset is reported and applied correctly on iPadOS 26.5 and 27. VK-403 is (a) Q3's choice of the Flutter pill at compact width, which D1 replaces, plus (b) iPadOS 27's flush sidebar style, which is the system's, read through (c) rotated portrait frames.
+
+### 14.3 Fix design (Task 7)
+
+- **Install rule.** The idiom fact goes: iPhone and iPad both install. `notIPad` is removed from the Pigeon enum, the interface enum and the mapping. Facts, in order: iOS 26, not an iPad app on a Mac, the Info.plist opt-in, no `LIQUID_SHELL_NATIVE_OFF=1`, not registered late, the scene root is this engine's `FlutterViewController`.
+- **Engagement.** `auto && owner && installed && no chromeBuilder && every sfSymbol`. Width and size class no longer gate it. UIKit's size class picks the bar, and `LiquidShellScopeData.sizeClass` follows `state.compact` once engaged (before the first answer, the shell's own width).
+- **Compact kind and inset.** Compact → `LiquidChromeKind.bottomBar`, `chromeInsets = EdgeInsets.only(bottom: MediaQuery.padding.bottom)`: UIKit puts its bar in the tab host's bottom safe area, and the existing copy (§5.4) hands it to Flutter. Measured: 83pt on an iPhone 17 Pro (iOS 26.5, portrait); 72pt on an iPad in a compact window (iPadOS 27), where the glass pill rises 5pt above that line, so content runs a little under the glass edge, as UIKit intends.
+- **Pending and standby.** Every iOS shell that could use native chrome waits one or two frames (iPhone too, also on iOS before 26 and without the opt-in: only the platform knows). `nativeChromeScreenPossible` and `kNativeChromeMinScreenSide` are removed. Standby no longer depends on compact.
+- **Trailing ⌕.** A search-role `UISearchTab` (pinned by default) replaces Q9's `.pinned` `UITab`: the separate ⌕ circle at the end of the compact bar, the trailing end of the top bar, the first sidebar row. `shouldSelectTab` still returns false and sends `onTrailingTapped`: it never selects and never opens a system search field.
+- **Sidebar-only destinations at compact width.** UIKit's compact bar shows a `.sidebarOnly` tab, and `UITab.isHidden` does not hide it there (iOS 26.5, measured). Native leaves sidebar-only tabs out of `setTabs` while compact and puts them back at regular width, selecting Dart's selection again. Dart reports a hidden selection through `onSelectedDestinationHidden`, as P1 does.
+- **Size-class transitions** (Split View, Stage Manager resize, rotation of a narrow window). The horizontal-size-class trait change re-shows the tabs, re-selects, syncs Flutter and publishes the state. Dart switches between `bottomBar` and `topBar`/sidebar kinds on the same body chain, so the body keeps its state.
+- **Window controls.** Under the compact native bar the value is read and published (the bar is at the bottom, so the top is the body's). Under regular native chrome it stays zero (§8.1). Dart's scope and `LiquidWindowControlsClearance` use zero only for native **regular** chrome.
+- **Routes above the shell, compact.** The compact bar is drawn above the Flutter view and would cover the bottom of a sheet or dialog drawn there. In compact the config is `hidden: true` while any non-page route is above the shell, as for a page. Regular keeps §7.4 (inert only).
+- **Dormant keeps the tabs.** The dormant config (no tabs) hides the chrome and no longer empties UIKit's tabs. Emptied and refilled, UIKit brought the compact bar back hidden, with no bar in the host's safe area (found by the dry run, pinned by an XCTest).
+- **Unchanged.** The guard flow (propose, then accept), badges (`UITab.badgeValue`), the hit-test rule (§5.3), approach C, hide on push.
+- **Hit testing, compact.** New XCTests on the real compact tree: bar items stay with UIKit; 4pt above the `UITabBar`'s frame, the centre and the top edge reach Flutter; everything reaches Flutter while inert. They run on iPhone (natural compact) and on iPad (compact trait override), and CI gains an `ios-unit` step on the newest iPhone.
+- **Minimize on scroll: not in P2.** A probe set `tabBarMinimizeBehavior = .onScrollDown` with a proxy `UIScrollView` registered by `setContentScrollView(_:for: .bottom)` and moved by code. The bar did not minimise (frames unchanged, iPhone, iOS 26.5): UIKit follows a user-tracked scroll view, and Flutter's scrolling is not one. `minimizeOnScroll` stays Flutter-only and is documented; it goes to the P3b nav-bar spike (D2 ③).
+- **VK-403 regression guards.** XCTest `testATiledSidebarIsFluttersStartSafeArea` (a tiled sidebar keeps the Flutter frame and becomes its start safe area). The integration sidebar test asserts that a tiled body starts past 200pt and ends at the window edge, and that an overlay body is full width. The plan's dry run ran it in landscape on iPadOS 27.0.
+- **iPadOS 27 sidebar look.** Documented in `doc/native_chrome.md` and the owner's manual checklist, not changed.
+
+### 14.4 Fallback matrix
+
+Supersedes the width rule (§5.1) and the width conditions of §7.1.
+
+| Where | iOS / iPadOS before 26 | iOS / iPadOS 26+, opted in, every `sfSymbol`, no `chromeBuilder`, `auto` |
+|---|---|---|
+| iPhone, portrait or landscape | Flutter bottom pill | **native** compact floating tab bar at the bottom, ⌕ separate |
+| iPad, compact window (Split View ⅓–½, Slide Over, narrow Stage Manager window) | Flutter bottom pill | **native** compact floating tab bar |
+| iPad, regular, portrait | Flutter top bar, overlay sidebar | native top bar, overlay sidebar |
+| iPad, regular, landscape | Flutter tiled sidebar | native tiled sidebar (flush on iPadOS 27) |
+| iPad app on a Mac ("Designed for iPad") | Flutter | Flutter (`iPadAppOnMac`) |
+| No opt-in, a missing symbol, a `chromeBuilder`, `nativeChrome: off` | Flutter | Flutter |
+| Android, web, desktop | Flutter | Flutter |
+
+### 14.5 Risks added by D1
+
+| Risk | Mitigation |
+|---|---|
+| **iPhone native tab bar over Flutter content.** The compact bar is a UIKit view above the Flutter view. Content must not hide under it | The bar is in Flutter's bottom safe area and in `chromeInsets.bottom`, as P1's bar is; apps already pad with `LiquidShellScope.contentPaddingOf`. Integration asserts the inset (> 40pt) on iPhone. On iPadOS 27 the pill rises 5pt above the safe area by UIKit's design |
+| **Flutter sheets and dialogs under the compact bar** (D3 keeps them Flutter-drawn) | The compact bar hides while a non-page route is above the shell (widget test with `showModalBottomSheet`; integration checks the guard dialog on iPhone). While hidden, the bottom safe area drops to the home indicator: a sheet lays out against that |
+| **Hit-test debt now on iPhone too** | XCTests on the real compact tree; CI runs `ios-unit` on the newest iPhone as well as the newest iPad; integration iPhone leg expects native. Real touches and scrolling stay a manual check per iOS bump |
+| **No minimise on scroll natively** | Documented; Flutter `minimizeOnScroll` unaffected; revisit in the P3b spike |
+| **Pending frames on iPhone, and on iOS before 26** | One or two frames without chrome while `attach` is in flight. Accepted: Dart never parses OS versions (§3.2, M3) |
+| **Third-party plugins that cast the root** now also on iPhone | Opt-in only, unchanged (Q2) |
+| **Keyboard with Flutter text fields** (D3) under the compact bar | UIKit keeps the bar below the keyboard; Flutter's `viewInsets` is unaffected by the container. Manual check on device |
+| **The flush iPadOS 27 sidebar reads as "flat grey"** | It is the system's style (Photos, Health); documented, not overridden |
+| **UIKit shows `.sidebarOnly` tabs at compact width** | Native leaves them out while compact; XCTest pins it |
+| **Emptying and refilling UIKit's tabs loses the compact bar** | Dormant keeps the tabs; XCTest pins it |
