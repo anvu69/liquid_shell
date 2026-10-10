@@ -115,16 +115,24 @@ android-unit: ## JVM unit tests of the Android plugin (SignalReaderTest)
 # seconds. Test timeouts stop a stuck test, and tool/with_timeout.sh stops
 # the whole run, build included (exit 124).
 IOS_UNIT_TIMEOUT ?= 900
+# `-quiet` names a failing test but not its failed assertion: a red run
+# prints the result bundle's summary (failure messages), so a CI-only
+# failure says why.
+IOS_UNIT_RESULT := $(CURDIR)/$(EXAMPLE)/build/ios-unit.xcresult
 
 ios-unit: ## XCTest of liquid_shell_ios (example RunnerTests) on an iPad or iPhone simulator; IOS_UNIT_DEVICE=<udid>
 	cd $(EXAMPLE) && $(FLUTTER) build ios --config-only --simulator --debug
+	rm -rf $(IOS_UNIT_RESULT)
 	cd $(EXAMPLE)/ios && $(CURDIR)/tool/with_timeout.sh $(IOS_UNIT_TIMEOUT) \
 	  xcodebuild test -workspace Runner.xcworkspace -scheme Runner \
 	  -destination "id=$${IOS_UNIT_DEVICE:?set IOS_UNIT_DEVICE to a simulator UDID}" \
 	  -only-testing:RunnerTests -parallel-testing-enabled NO \
 	  -collect-test-diagnostics never \
 	  -test-timeouts-enabled YES -default-test-execution-time-allowance 60 \
-	  -maximum-test-execution-time-allowance 120 -quiet
+	  -maximum-test-execution-time-allowance 120 \
+	  -resultBundlePath $(IOS_UNIT_RESULT) -quiet \
+	  || { status=$$?; [ ! -d $(IOS_UNIT_RESULT) ] || \
+	    xcrun xcresulttool get test-results summary --path $(IOS_UNIT_RESULT); exit $$status; }
 
 integration-ios: ## Signal channel round-trip on an iOS simulator
 	FLUTTER="$(FLUTTER)" tool/integration_ios.sh
