@@ -356,10 +356,10 @@ class _LiquidShellState extends State<LiquidShell>
         _search.onNativeEvent(event);
       case LiquidNativeBackTapped(:final tab):
         _onNativeBack(tab);
-      case LiquidNativeStateChanged():
-        // After the host's forced resend (a reconnected scene may have
-        // lost the field's text): replay it with the next config.
-        _search.replay();
+      case LiquidNativeStateChanged(:final state):
+        // After the host's forced resend. The same state as the last build
+        // saw is a reconnected scene, whose field lost the text.
+        _search.replay(reconnect: state == _nativeState);
         _rebuild();
       case LiquidWindowControlsChanged():
         break;

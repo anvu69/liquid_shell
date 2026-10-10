@@ -40,17 +40,23 @@ final class ShellSearch implements SearchDriver {
   // The next native entry sends the text even when empty: native may
   // still show another one (a hot restart, a reconnected scene).
   bool _replay = true;
+  // The controller's text came from the user's typing in the field (not
+  // from the app): native has it, unless its scene was rebuilt.
+  bool _userText = false;
   bool _native = false;
   bool _writing = false;
   String? _pendingFieldText;
 
   /// Whether the native field shows the search (native chrome engaged).
   /// A build without it (pending, standby, Flutter chrome) makes the next
-  /// native entry send the text again: native never got what the app set
-  /// meanwhile.
+  /// native entry send the text again, empty included: native never got
+  /// what the app set meanwhile, a cleared query too.
   bool get native => _native;
   set native(bool value) {
-    if (!value) _sentShown = false;
+    if (!value) {
+      _sentShown = false;
+      _replay = true;
+    }
     _native = value;
   }
 
@@ -94,14 +100,22 @@ final class ShellSearch implements SearchDriver {
         claim()?.setSearchText(next.text);
       }
     }
+    // A new controller's text is the app's.
+    _userText = false;
     next.addListener(_onValue);
     _lastActive = next.isActive;
     _writeField(next.text);
   }
 
-  /// The native scene reconnected (or reported its state again): the next
-  /// config that shows the search tab sends the text, empty or not.
-  void replay() {
+  /// A native state report. [reconnect]: the same state again, which only
+  /// a rebuilt native controller sends (a live one reports changes only):
+  /// its field lost the text, so the next config that shows the search tab
+  /// sends it, empty or not. A changed state (an iPad crossing the size
+  /// class) comes from a live field the user may be typing in: the user's
+  /// own text is never sent back to it (the one-way rule, spec §7.4); only
+  /// a text the app set is replayed.
+  void replay({required bool reconnect}) {
+    if (!reconnect && _userText) return;
     _sentShown = false;
     _replay = true;
   }
@@ -143,6 +157,7 @@ final class ShellSearch implements SearchDriver {
           controller,
           value.copyWith(text: text, composing: composing),
         );
+        _userText = true;
         _config?.onChanged?.call(text);
       case LiquidNativeSearchActiveChanged(:final active):
         final next = active && selected;
@@ -213,6 +228,7 @@ final class ShellSearch implements SearchDriver {
 
   @override
   void textSetByApp(String text) {
+    _userText = false;
     if (native) {
       claim()?.setSearchText(text);
     } else {
@@ -230,6 +246,7 @@ final class ShellSearch implements SearchDriver {
         controller,
         controller.value.copyWith(text: '', composing: false),
       );
+      _userText = true;
       _config?.onChanged?.call('');
     }
     _writeField('');
@@ -274,6 +291,7 @@ final class ShellSearch implements SearchDriver {
       controller,
       controller.value.copyWith(text: value.text, composing: composing),
     );
+    _userText = true;
     _config?.onChanged?.call(value.text);
   }
 

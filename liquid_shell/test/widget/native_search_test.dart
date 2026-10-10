@@ -1109,4 +1109,110 @@ void main() {
       expect(controller.text, '', reason: 'the text is kept (none here)');
     });
   });
+  group('re-review fixes', () {
+    const regular = LiquidNativeShellState(installed: true);
+
+    testWidgets("N-2: a size-class report never sends the user's own text "
+        'back (Telex one-way rule)', (tester) async {
+      final (fake, _, _) = await _pump(tester);
+      fake
+        ..emitNative(const LiquidNativeSearchActiveChanged(true))
+        ..emitNative(
+          const LiquidNativeSearchTextChanged('hồ', composing: false),
+        );
+      await tester.pump();
+      // A live controller reports only a changed state (iPad: the window
+      // crossed the size class) while the user may still be typing.
+      fake.pushState(regular);
+      await tester.pumpAndSettle();
+      expect(fake.searchTexts, isEmpty);
+      fake.pushState(_compact);
+      await tester.pumpAndSettle();
+      expect(fake.searchTexts, isEmpty);
+    });
+
+    testWidgets('N-2: a changed state report still replays an app-set text', (
+      tester,
+    ) async {
+      final (fake, controller, _) = await _pump(tester);
+      fake.emitNative(
+        const LiquidNativeSearchTextChanged('hồ', composing: false),
+      );
+      await tester.pump();
+      // The app's write replaces the user's text: that one is replayed.
+      controller.text = 'hà';
+      await tester.pump();
+      fake.searchTexts.clear();
+      fake.pushState(regular);
+      await tester.pumpAndSettle();
+      expect(fake.searchTexts, ['hà']);
+    });
+
+    testWidgets('N-1: a query cleared while native chrome is off reaches '
+        'native when it is back', (tester) async {
+      final fake = installFakeNative(state: _compact);
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      Widget shell(LiquidNativeChrome mode) => TestShell(
+        destinations: _destinations,
+        initialIndex: 2,
+        pageBuilder: _page,
+        nativeChrome: mode,
+        search: LiquidSearch(controller: controller),
+      );
+      await pumpShell(
+        tester,
+        shell(LiquidNativeChrome.auto),
+        padding: _compactPadding,
+      );
+      fake.emitNative(
+        const LiquidNativeSearchTextChanged('hà', composing: false),
+      );
+      await tester.pump();
+      await pumpShell(
+        tester,
+        shell(LiquidNativeChrome.off),
+        padding: _compactPadding,
+      );
+      controller.text = '';
+      await tester.pump();
+      fake.searchTexts.clear();
+      await pumpShell(
+        tester,
+        shell(LiquidNativeChrome.auto),
+        padding: _compactPadding,
+      );
+      expect(fake.searchTexts, ['']);
+    });
+
+    testWidgets("N-3: a root page in the shell's own route keeps the stack "
+        'under a page above the shell', (tester) async {
+      final (fake, _, _) = await _pump(
+        tester,
+        pageBuilder: (index) => index == 2
+            ? const LiquidPage(
+                title: 'Find',
+                child: TestPage(label: 'Search'),
+              )
+            : _page(index),
+      );
+      expect(fake.last.tabs.last.pages.map((p) => p.title), ['Find']);
+      final from = fake.configs.length;
+      final root = Navigator.of(
+        tester.element(find.byKey(const ValueKey('list-Search'))),
+      );
+      root
+          .push(
+            MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(body: Text('Above')),
+            ),
+          )
+          .ignore();
+      await tester.pumpAndSettle();
+      root.pop();
+      await tester.pumpAndSettle();
+      expect(_searchStacks(fake, from), isNotEmpty);
+      expect(_searchStacks(fake, from), everyElement(['Find']));
+    });
+  });
 }
