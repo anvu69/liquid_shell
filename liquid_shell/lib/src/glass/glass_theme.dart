@@ -61,25 +61,27 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
         LiquidGlassTheme.fromColorScheme(theme.colorScheme);
   }
 
-  /// Frosted fill.
+  /// Fill of the frosted tier only; the liquid tier reads [liquidTint].
   final Color tint;
 
-  /// Solid fill.
+  /// Fill of the solid tier.
   final Color solid;
 
-  /// Outline colour.
+  /// Outline colour of the frosted and solid tiers (liquid has none).
   final Color border;
 
   /// Outline width in logical pixels.
   final double borderWidth;
 
-  /// Frosted top-edge highlight, fading to transparent at mid-height.
+  /// Frosted top-edge highlight, fading to transparent at mid-height; also
+  /// the colour of the liquid tier's specular rim.
   final Color rimHighlight;
 
   /// Drop shadow, drawn outside the shape only.
   final BoxShadow shadow;
 
-  /// Backdrop blur sigma of the frosted tier.
+  /// Backdrop blur sigma of the frosted tier only; the liquid tier reads
+  /// [liquidBlurSigma].
   final double blurSigma;
 
   /// Default bar shape (a pill).

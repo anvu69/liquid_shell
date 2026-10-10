@@ -631,6 +631,10 @@ Widget build(BuildContext context) {
     brightness: _brightness,
   );
   final glass = LiquidGlassTheme.fromColorScheme(scheme).copyWith(
+    // Liquid: the default tier on Impeller (iOS, Android 10+, macOS).
+    liquidTint: scheme.primaryContainer.withValues(alpha: 0.5),
+    liquidBlurSigma: 3,
+    // Frosted: no Impeller, battery saver, Low Power Mode, slow frames.
     tint: scheme.primaryContainer.withValues(alpha: 0.6),
     blurSigma: 18,
     labelStyle: const TextStyle(
@@ -665,9 +669,14 @@ Widget build(BuildContext context) {
 }
 ```
 
-<img src="doc/images/case_custom_theme.png" width="260" alt="Brand-tinted glass">
+| Liquid (Impeller: the default tier) | Frosted |
+|---|---|
+| <img src="doc/images/case_custom_theme_liquid.png" width="260" alt="Brand-tinted liquid glass"> | <img src="doc/images/case_custom_theme.png" width="260" alt="Brand-tinted frosted glass"> |
 
-See [doc/theming.md](doc/theming.md) for every field and its default.
+Each tier reads its own fields: `liquidTint` and `liquidBlurSigma` style
+the liquid tier, `tint` and `blurSigma` only frosted. Set both pairs for a
+brand theme. See [doc/theming.md](doc/theming.md) for every field and its
+default.
 
 ### Liquid glass
 

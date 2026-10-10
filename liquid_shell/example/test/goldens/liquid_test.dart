@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell_example/cases/basic_tabs.dart';
+import 'package:liquid_shell_example/cases/custom_theme.dart';
 import 'package:liquid_shell_example/cases/forced_tier.dart';
 import 'package:liquid_shell_example/cases/sidebar_slots.dart';
 
@@ -123,6 +124,11 @@ void main() {
       'case_tier_liquid',
       const ForcedTierCase(initialTier: LiquidGlassTier.liquid),
     );
+  });
+
+  // The brand theme on the default tier: its liquidTint must show.
+  testWidgets('case_custom_theme_liquid', (tester) async {
+    await liquid(tester, 'case_custom_theme_liquid', const CustomThemeCase());
   });
 
   // BasicTabs on an iPhone, one theme field changed at a time: the doc

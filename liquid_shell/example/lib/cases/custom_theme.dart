@@ -23,6 +23,10 @@ class _CustomThemeCaseState extends State<CustomThemeCase> {
       brightness: _brightness,
     );
     final glass = LiquidGlassTheme.fromColorScheme(scheme).copyWith(
+      // Liquid: the default tier on Impeller (iOS, Android 10+, macOS).
+      liquidTint: scheme.primaryContainer.withValues(alpha: 0.5),
+      liquidBlurSigma: 3,
+      // Frosted: no Impeller, battery saver, Low Power Mode, slow frames.
       tint: scheme.primaryContainer.withValues(alpha: 0.6),
       blurSigma: 18,
       labelStyle: const TextStyle(
