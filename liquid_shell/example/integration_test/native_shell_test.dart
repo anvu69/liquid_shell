@@ -152,7 +152,7 @@ void main() {
 
     await platform.debugTap(NativeTapTarget.trailing);
     await _settle(tester);
-    expect(find.text('Searches: 1'), findsOneWidget);
+    expect(find.text('Drafts: 1'), findsOneWidget);
   });
 
   // The guard round trip on the real native chrome (final review I2): the

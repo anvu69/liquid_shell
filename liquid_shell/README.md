@@ -21,7 +21,7 @@ dependency.
 - **Router-agnostic.** You pass `selectedIndex`, `onDestinationSelected` and
   a `body`. Works with `IndexedStack`, `Navigator` or any router.
 - **Badges**, **sidebar-only destinations**, **sidebar header and footer**,
-  a **trailing action** (for example search) and an async **"Discard
+  a **trailing action** (for example compose) and an async **"Discard
   changes?" guard**.
 - **Per-tab state survives** sidebar toggles, rotation and size changes: the
   body is never rebuilt under a new parent.
@@ -283,9 +283,11 @@ Widget build(BuildContext context) {
 ### Trailing action
 
 The action is a separate glass circle at the end of the tab bar, and the
-first row of the sidebar while the sidebar is shown. The search page sits
+first row of the sidebar while the sidebar is shown. The compose page sits
 above the shell, so it wraps itself in `LiquidNoChrome` (see
-[Hide the chrome, or none at all](#hide-the-chrome-or-none-at-all)).
+[Hide the chrome, or none at all](#hide-the-chrome-or-none-at-all)). For
+search, use a search destination ([next section](#search-tab)), not a page
+pushed above the shell.
 
 <?code-excerpt "trailing_action.dart (readme)"?>
 ```dart
@@ -298,11 +300,11 @@ Widget build(BuildContext context) {
     selectedIndex: _index,
     onDestinationSelected: (i) => setState(() => _index = i),
     tabBarTrailing: LiquidTabAction(
-      icon: const Icon(Icons.search),
-      semanticLabel: 'Search',
-      sfSymbol: 'magnifyingglass',
+      icon: const Icon(Icons.edit_outlined),
+      semanticLabel: 'Compose',
+      sfSymbol: 'square.and.pencil',
       onPressed: () => Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: _searchPage),
+        MaterialPageRoute<void>(builder: _composePage),
       ),
     ),
     body: DemoPage(title: kDemoDestinations[_index].label),
@@ -310,17 +312,95 @@ Widget build(BuildContext context) {
 }
 
 // Pushed above the shell (on the app's navigator): no chrome covers it.
-Widget _searchPage(BuildContext context) => const LiquidNoChrome(
+Widget _composePage(BuildContext context) => const LiquidNoChrome(
   child: Scaffold(
     body: DemoPage(
-      title: 'Search',
-      children: [TextField(decoration: InputDecoration(hintText: 'Find'))],
+      title: 'New message',
+      children: [TextField(decoration: InputDecoration(hintText: 'Message'))],
     ),
   ),
 );
 ```
 
-<img src="doc/images/case_trailing.png" width="260" alt="Search circle beside the tab bar">
+<img src="doc/images/case_trailing.png" width="260" alt="Compose circle beside the tab bar">
+
+### Search tab
+
+Search is a destination with `role: LiquidDestinationRole.search`, the last
+one, plus `LiquidShell.search`. The app owns the `LiquidSearchController`, so
+the query survives tab switches; results, recents and the
+`LiquidSearchScopeBar` are the page's own content, padded with
+`LiquidShellScope.contentPaddingOf`. A result pushes inside the tab's
+navigator, under the glass back button of `LiquidPage`.
+
+<?code-excerpt "search.dart (search)"?>
+```dart
+int _index = 0;
+final _search = LiquidSearchController();
+final _recents = ValueNotifier<List<String>>(const []);
+final List<GlobalKey<NavigatorState>> _navigators = [
+  for (var i = 0; i < 3; i++) GlobalKey<NavigatorState>(),
+];
+
+static const _destinations = [
+  LiquidDestination(
+    icon: Icon(Icons.home_outlined),
+    selectedIcon: Icon(Icons.home),
+    label: 'Home',
+    sfSymbol: 'house',
+  ),
+  LiquidDestination(
+    icon: Icon(Icons.library_music_outlined),
+    selectedIcon: Icon(Icons.library_music),
+    label: 'Library',
+    sfSymbol: 'books.vertical',
+  ),
+  LiquidDestination(
+    icon: Icon(Icons.search),
+    label: 'Search',
+    role: LiquidDestinationRole.search,
+  ),
+];
+
+@override
+Widget build(BuildContext context) => LiquidShell(
+  destinations: _destinations,
+  selectedIndex: _index,
+  onDestinationSelected: (i) {
+    // Reselecting a tab pops it to its root.
+    if (i == _index) _navigators[i].currentState?.popUntil((r) => r.isFirst);
+    setState(() => _index = i);
+  },
+  search: LiquidSearch(
+    controller: _search,
+    placeholder: 'Songs, places',
+    onSubmitted: _remember,
+  ),
+  body: IndexedStack(
+    index: _index,
+    children: [
+      _branch(0, _ListPage(title: 'Home', items: _home)),
+      _branch(1, _ListPage(title: 'Library', items: _library)),
+      _branch(
+        2,
+        _SearchPage(
+          controller: _search,
+          recents: _recents,
+          onRemember: _remember,
+        ),
+      ),
+    ],
+  ),
+);
+
+/// Each tab has its own navigator: a detail pushes inside the tab.
+Widget _branch(int index, Widget root) => Navigator(
+  key: _navigators[index],
+  onGenerateRoute: (_) => MaterialPageRoute<void>(builder: (_) => root),
+);
+```
+
+<img src="doc/images/case_search_phone_selected.png" width="260" alt="Search tab selected: the tabs collapse to one circle beside the field, over a category grid"> <img src="doc/images/case_search_phone_active.png" width="260" alt="Search active: the field above the keyboard, a scope bar and recent searches"> <img src="doc/images/case_search_tablet_selected.png" width="260" alt="Search tab on a tablet: the field under the top bar">
 
 ### "Discard changes?" guard
 
@@ -449,22 +529,22 @@ Widget _branch() => NavigatorPopHandler(
 A page pushed **above** the shell (on the app's navigator) is not covered by
 the chrome. `LiquidNoChrome` tells its content so, and
 `LiquidShellScope.contentPaddingOf` then pads only for the system insets.
-This is the search page of the trailing-action snippet:
+This is the compose page of the trailing-action snippet:
 
 <?code-excerpt "trailing_action.dart (no-chrome)"?>
 ```dart
 // Pushed above the shell (on the app's navigator): no chrome covers it.
-Widget _searchPage(BuildContext context) => const LiquidNoChrome(
+Widget _composePage(BuildContext context) => const LiquidNoChrome(
   child: Scaffold(
     body: DemoPage(
-      title: 'Search',
-      children: [TextField(decoration: InputDecoration(hintText: 'Find'))],
+      title: 'New message',
+      children: [TextField(decoration: InputDecoration(hintText: 'Message'))],
     ),
   ),
 );
 ```
 
-<img src="doc/images/case_no_chrome.png" width="260" alt="The search page, above the shell, without chrome">
+<img src="doc/images/case_no_chrome.png" width="260" alt="The compose page, above the shell, without chrome">
 
 ### Custom chrome
 
@@ -826,7 +906,7 @@ Glass tab bar. At regular width that is the top bar, the sidebar toggle,
 the sidebar (over the content in portrait, beside it in landscape) and a
 native footer; at compact width (every iPhone, in either orientation, and
 a narrow iPad window) it is UIKit's floating tab bar at the bottom, with
-the trailing action as a separate round search button. Your Flutter body stays exactly
+the trailing action as a separate round button. Your Flutter body stays exactly
 where it is. Everywhere else (Android, iOS before 26) the same
 `LiquidShell` draws its Flutter chrome.
 
@@ -845,7 +925,7 @@ that only lacks symbols logs one line, once per shell, naming them.
 <?code-excerpt "native_chrome.dart (readme)"?>
 ```dart
 int _index = 0;
-int _searches = 0;
+int _drafts = 0;
 
 static const _destinations = [
   LiquidDestination(
@@ -883,10 +963,10 @@ Widget build(BuildContext context) {
       _index = i;
     }),
     tabBarTrailing: LiquidTabAction(
-      icon: const Icon(Icons.search),
-      semanticLabel: 'Search',
-      sfSymbol: 'magnifyingglass',
-      onPressed: () => setState(() => _searches++),
+      icon: const Icon(Icons.edit_outlined),
+      semanticLabel: 'Compose',
+      sfSymbol: 'square.and.pencil',
+      onPressed: () => setState(() => _drafts++),
     ),
     nativeSidebarFooter: LiquidNativeSidebarFooter(
       title: 'Ann Lee',
@@ -898,7 +978,7 @@ Widget build(BuildContext context) {
     body: DemoPage(
       title: _destinations[_index].label,
       children: [
-        Text('Searches: $_searches'),
+        Text('Drafts: $_drafts'),
         SwitchListTile(
           title: const Text('Unsaved changes'),
           value: _dirty,

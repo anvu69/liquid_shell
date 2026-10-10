@@ -86,13 +86,13 @@ void main() {
     );
   });
 
-  // The search page pushed above the shell: LiquidNoChrome.
+  // The compose page pushed above the shell: LiquidNoChrome.
   testWidgets('case_no_chrome', (tester) async {
     await golden(
       tester,
       'case_no_chrome',
       const TrailingActionCase(),
-      interact: () => tester.tap(find.byTooltip('Search')),
+      interact: () => tester.tap(find.byTooltip('Compose')),
     );
   });
 

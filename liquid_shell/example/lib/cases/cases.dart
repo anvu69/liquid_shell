@@ -9,6 +9,7 @@ import 'package:liquid_shell_example/cases/form_factors.dart';
 import 'package:liquid_shell_example/cases/hide_chrome.dart';
 import 'package:liquid_shell_example/cases/narrow_width.dart';
 import 'package:liquid_shell_example/cases/native_chrome.dart';
+import 'package:liquid_shell_example/cases/search.dart';
 import 'package:liquid_shell_example/cases/sidebar_only.dart';
 import 'package:liquid_shell_example/cases/sidebar_slots.dart';
 import 'package:liquid_shell_example/cases/standalone_widgets.dart';
@@ -58,9 +59,16 @@ const kCases = <ExampleCase>[
   (
     id: 'trailing',
     title: 'Trailing search action',
-    subtitle: 'Opens a page above the shell',
+    subtitle: 'Compose: opens a page above the shell',
     drawnByFlutter: null,
     page: TrailingActionCase(),
+  ),
+  (
+    id: 'search',
+    title: 'Search tab',
+    subtitle: 'A real search tab: field, scopes, recents, live results',
+    drawnByFlutter: null,
+    page: SearchCase(),
   ),
   (
     id: 'guard',
