@@ -180,6 +180,30 @@ jobs:
           udid=$(xcrun simctl list devices available | grep -F "    ${{ matrix.device }}" | tail -n1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
           make ios-unit IOS_UNIT_DEVICE="$udid"
 
+  ios-ui:
+    # Real taps on native dialogs (XCUITest, spec P3a §9.4). Non-blocking:
+    # simulator UI tests are slow and can flake on shared runners.
+    name: ios-ui (${{ matrix.device }})
+    runs-on: macos-latest
+    continue-on-error: true
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [iPad, iPhone]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.44.x
+          cache: true
+      - run: make get
+      - name: XCUITest on the newest ${{ matrix.device }} simulator
+        run: |
+          udid=$(xcrun simctl list devices available | grep -F "    ${{ matrix.device }}" | tail -n1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          make ios-ui IOS_UNIT_DEVICE="$udid"
+
   integration-ios-native:
     # Every iOS 26 iPhone and iPad installs the native chrome (owner D1):
     # one job per idiom, so a stalled simulator costs one leg, not both.
