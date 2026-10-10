@@ -189,6 +189,19 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     applyingFromDart = true
     setTabs(wanted, animated: false)
     applyingFromDart = false
+    showTrailingApart()
+  }
+
+  /// The trailing action is the separate ⌕ circle after the compact bar's
+  /// pill. iOS 27 draws that circle only for the prominent tab, and a
+  /// search tab is prominent by default only when it activates the system
+  /// search field, which this one never opens: without this, iOS 27 puts
+  /// it inside the pill as one more destination. Nil with no trailing
+  /// action. The iOS 27 SDK (Swift 6.4) declares the property.
+  private func showTrailingApart() {
+    #if compiler(>=6.4)
+      if #available(iOS 27.0, *) { prominentTabIdentifier = trailingTab?.identifier }
+    #endif
   }
 
   /// Selects destination [index]. A sidebar-only one is left out of the

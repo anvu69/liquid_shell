@@ -418,11 +418,9 @@ final class NativeTabsTests: XCTestCase {
     return view !== tabs.flutter.view && view.isDescendant(of: tabs.view)
   }
 
-  /// The centre, in container coordinates, of the on-screen label [text]
-  /// inside [container] (a label with no hidden ancestor), if any.
-  private func labelCentre(
-    _ text: String, in container: UIView, _ tabs: NativeTabsController
-  ) -> CGPoint? {
+  /// The on-screen label [text] inside [container] (a label with no hidden
+  /// ancestor), if any.
+  private func shownLabel(_ text: String, in container: UIView) -> UILabel? {
     func labels(_ view: UIView) -> [UILabel] {
       ((view as? UILabel).map { [$0] } ?? []) + view.subviews.flatMap(labels)
     }
@@ -434,9 +432,17 @@ final class NativeTabsTests: XCTestCase {
       }
       return true
     }
-    guard let root = tabs.parent?.view,
-      let label = labels(container).first(where: { $0.text == text && shown($0) })
-    else { return nil }
+    return labels(container).first { $0.text == text && shown($0) }
+  }
+
+  /// The centre, in container coordinates, of the on-screen label [text]
+  /// inside [container], if any.
+  private func labelCentre(
+    _ text: String, in container: UIView, _ tabs: NativeTabsController
+  ) -> CGPoint? {
+    guard let root = tabs.parent?.view, let label = shownLabel(text, in: container) else {
+      return nil
+    }
     return label.convert(CGPoint(x: label.bounds.midX, y: label.bounds.midY), to: root)
   }
 
@@ -694,6 +700,7 @@ final class NativeTabsTests: XCTestCase {
   /// The compact bar's items stay with UIKit; the content, and the row
   /// just above the bar, reach Flutter. The bar's own top, not the safe
   /// area's: on iPadOS 27 the pill rises 5pt above the 72pt safe area.
+  /// The ⌕ circle: `testTheTrailingActionIsTheSeparateCircleAfterThePill`.
   func testTouchesAboveTheCompactBarReachFlutter() throws {
     let tabs = try installedShell(trailing: true, sizeClass: .compact)
     let root = try XCTUnwrap(tabs.parent?.view)
@@ -709,40 +716,83 @@ final class NativeTabsTests: XCTestCase {
       "the centre")
     XCTAssertTrue(
       try hit(tabs, CGPoint(x: root.bounds.midX, y: 4)) === tabs.flutter.view, "the top edge")
-    // The separate ⌕ circle is native, the gap before it is Flutter's. An
-    // iPhone always draws the circle; iPadOS 27 at the 820pt compact
-    // override puts the search tab inside the pill instead.
-    let (pill, circle) = try compactBarParts(tabs, inbox: inbox)
-    if UIDevice.current.userInterfaceIdiom == .phone { XCTAssertNotNil(circle, "the ⌕ circle") }
-    if let circle {
-      XCTAssertTrue(
-        isNative(try hit(tabs, CGPoint(x: circle.midX, y: circle.midY)), tabs), "the ⌕ circle")
-      XCTAssertGreaterThan(circle.minX - pill.maxX, 8, "precondition: a gap between pill and circle")
-      XCTAssertTrue(
-        try hit(tabs, CGPoint(x: (pill.maxX + circle.minX) / 2, y: inbox.y)) === tabs.flutter.view,
-        "the gap between the pill and the circle")
-    }
     tabs.apply(config(interactive: false, trailing: true))
     XCTAssertTrue(try hit(tabs, inbox) === tabs.flutter.view, "inert under a dialog")
   }
 
-  /// The compact bar's pill (the drawn tab bar subview around [inbox]) and
-  /// the separate ⌕ circle, if UIKit draws one: the drawn subview furthest
-  /// to the trailing side that does not overlap the pill. Drawn: shown,
-  /// with something shown inside (UIKit keeps an empty circle container
-  /// when the search tab sits in the pill).
-  private func compactBarParts(
-    _ tabs: NativeTabsController, inbox: CGPoint
-  ) throws -> (pill: CGRect, circle: CGRect?) {
+  /// The trailing action is the separate ⌕ circle after the pill on every
+  /// compact bar (spec §14), not one more item inside it. iOS 27 draws
+  /// the circle only for the prominent tab (`prominentTabIdentifier`),
+  /// which a search tab is by default only when it activates the system
+  /// search field. The circle is native; the gap before it is Flutter's.
+  func testTheTrailingActionIsTheSeparateCircleAfterThePill() throws {
+    let tabs = try installedShell(trailing: true, sizeClass: .compact)
+    // UIKit lays the bar out on its own passes: poll with a deadline, as
+    // `openSidebar` does. Without the circle (iOS 27 with ⌕ in the pill)
+    // the bar is stable and the asserts below fail after the deadline.
+    let deadline = Date().addingTimeInterval(3)
+    var bar = compactBar(tabs)
+    while bar.circle == nil || bar.find != nil, Date() < deadline {
+      RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+      bar = compactBar(tabs)
+    }
+    XCTAssertNil(bar.find, "no Find item inside the pill; \(bar)")
+    let inbox = try XCTUnwrap(bar.inbox, "the Inbox label; \(bar)")
+    let pill = try XCTUnwrap(bar.pill, "the pill; \(bar)")
+    let ring = try XCTUnwrap(bar.circle, "the ⌕ circle; \(bar)")
+    let onRing = try hit(tabs, CGPoint(x: ring.midX, y: ring.midY))
+    XCTAssertTrue(isNative(onRing, tabs), "the ⌕ circle; hit \(viewType(onRing)); \(bar)")
+    XCTAssertGreaterThan(
+      ring.minX - pill.maxX, 8, "precondition: a gap between pill and circle; \(bar)")
+    let inGap = try hit(tabs, CGPoint(x: (pill.maxX + ring.minX) / 2, y: inbox.y))
+    XCTAssertTrue(
+      inGap === tabs.flutter.view,
+      "the gap between the pill and the circle; hit \(viewType(inGap)); \(bar)")
+  }
+
+  private func viewType(_ view: UIView?) -> String {
+    view.map { "\(type(of: $0))" } ?? "nil"
+  }
+
+  /// The compact bar as drawn, in container coordinates: the drawn tab bar
+  /// subviews, the pill (the one around the Inbox label), the separate ⌕
+  /// circle if UIKit draws one (the drawn subview furthest to the trailing
+  /// side that does not overlap the pill), and a shown "Find" label, which
+  /// only an item inside the pill has (the circle's title is hidden).
+  /// Drawn: shown, with something shown inside (UIKit keeps an empty
+  /// circle container when the search tab sits in the pill). Its
+  /// description goes into failure messages.
+  private struct CompactBar: CustomStringConvertible {
+    var drawn: [CGRect] = []
+    var inbox: CGPoint?
+    var pill: CGRect?
+    var circle: CGRect?
+    var find: String?
+
+    var description: String {
+      "inbox \(String(describing: inbox)), pill \(String(describing: pill)), "
+        + "circle \(String(describing: circle)), drawn tab bar subviews \(drawn), "
+        + "shown Find label \(find ?? "none")"
+    }
+  }
+
+  private func compactBar(_ tabs: NativeTabsController) -> CompactBar {
     func drawn(_ view: UIView) -> Bool {
       !view.isHidden && view.alpha > 0.01 && !view.bounds.isEmpty
         && (view.subviews.isEmpty || view.subviews.contains(where: drawn))
     }
-    let root = try XCTUnwrap(tabs.parent?.view)
-    let frames = tabs.tabBar.subviews.filter(drawn).map { $0.convert($0.bounds, to: root) }
-    let pill = try XCTUnwrap(frames.first { $0.contains(inbox) }, "the pill")
-    let circle = frames.filter { !$0.intersects(pill) }.max { $0.maxX < $1.maxX }
-    return (pill, circle)
+    var bar = CompactBar()
+    guard let root = tabs.parent?.view else { return bar }
+    bar.drawn = tabs.tabBar.subviews.filter(drawn).map { $0.convert($0.bounds, to: root) }
+    bar.inbox = labelCentre("Inbox", in: tabs.view, tabs)
+    if let inbox = bar.inbox { bar.pill = bar.drawn.first { $0.contains(inbox) } }
+    if let pill = bar.pill {
+      bar.circle = bar.drawn.filter { !$0.intersects(pill) }.max { $0.maxX < $1.maxX }
+    }
+    if let find = shownLabel("Find", in: tabs.view) {
+      bar.find = "\(find.convert(find.bounds, to: root)) in \(viewType(find.superview))"
+    }
+    return bar
   }
 
   /// Hidden (a sheet or dialog above the shell, or a page pushed), the
