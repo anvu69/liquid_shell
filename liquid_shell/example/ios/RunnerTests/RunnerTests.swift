@@ -1764,6 +1764,61 @@ extension NativeTabsTests {
     XCTAssertEqual(host.view.safeAreaInsets.top, restingHostTop, accuracy: 0.5)
   }
 
+  /// Spec §7.7: the proxy's base is the top at offset 0 with the search
+  /// inactive. A search on a scrolled page (it re-reads the held top on
+  /// purpose) must not leave the large title collapsed.
+  func testTheLargeTitleReturnsAfterASearchOnAScrolledPage() throws {
+    try requirePhone()
+    let tabs = try installedSearchShell(selected: 2)
+    let host = try XCTUnwrap(tabs.topHost(ofTab: 2))
+    let expanded = host.view.safeAreaInsets.top
+    tabs.setPageScroll(tab: 2, offset: 400)
+    settle()
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    settle(sending: "searchActive false") { tabs.setSearchActive(false) }
+    tabs.setPageScroll(tab: 2, offset: 0)
+    settle()
+    XCTAssertEqual(host.view.safeAreaInsets.top, expanded, accuracy: 0.5, "the large title is back")
+  }
+
+  /// The results scrolled while the search is active, then ×: back at 0 the
+  /// large title returns.
+  func testTheLargeTitleReturnsAfterScrollingTheResultsAndCancelling() throws {
+    try requirePhone()
+    let tabs = try installedSearchShell(selected: 2)
+    let host = try XCTUnwrap(tabs.topHost(ofTab: 2))
+    let expanded = host.view.safeAreaInsets.top
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    tabs.setPageScroll(tab: 2, offset: 400)
+    settle()
+    settle(sending: "searchActive false") { tabs.debugTap(.searchCancel, index: 2) }
+    tabs.setPageScroll(tab: 2, offset: 0)
+    settle()
+    XCTAssertEqual(host.view.safeAreaInsets.top, expanded, accuracy: 0.5, "the large title is back")
+  }
+
+  /// Spec §7.9: Flutter is synced once more when a push ends, whatever
+  /// changed during the animation.
+  func testThePushsCompletionSyncsFlutter() throws {
+    let tabs = try installedSearchShell(selected: 2, pages: [NativePage(title: "Search")])
+    let nav = try XCTUnwrap(tabs.navControllers[2])
+    tabs.apply(
+      searchConfig(selected: 2, pages: [NativePage(title: "Search"), NativePage(title: "Detail")]))
+    let coordinator = try XCTUnwrap(nav.transitionCoordinator, "an animated push")
+    var ended = false
+    coordinator.animate(
+      alongsideTransition: { _ in
+        tabs.flutter.additionalSafeAreaInsets = UIEdgeInsets(top: 300, left: 0, bottom: 0, right: 0)
+      }, completion: { _ in ended = true })
+    let deadline = Date().addingTimeInterval(3)
+    while !ended, Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.05)) }
+    XCTAssertTrue(ended, "the push ended")
+    let top = try XCTUnwrap(nav.topViewController)
+    XCTAssertEqual(
+      tabs.flutter.view.safeAreaInsets.top, top.view.safeAreaInsets.top, accuracy: 0.5,
+      "re-synced when the push ended")
+  }
+
   func testTheFieldFrameIsPublishedInFlutterCoordinatesWhileSelected() throws {
     let tabs = try installedSearchShell(selected: 2)
     let frame = try XCTUnwrap(events.fieldFrames.last)

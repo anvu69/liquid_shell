@@ -69,6 +69,12 @@ final class ShellNavController: UINavigationController {
     }
     let animated = viewIfLoaded?.window != nil && !UIAccessibility.isReduceMotionEnabled
     setViewControllers(hosts, animated: animated)
+    // Spec §7.9: once more when the push or pop ends, so Flutter ends on the
+    // new top page's insets. Without an animation the shell syncs at the end
+    // of `apply`.
+    transitionCoordinator?.animate(alongsideTransition: nil) { [weak self] _ in
+      (self?.tabBarController as? NativeTabsController)?.syncFlutter()
+    }
   }
 }
 
@@ -83,8 +89,14 @@ final class PageHostController: UIViewController {
   /// the scroll-edge effect, moved by code from Flutter's scroll offset
   /// (spec §7.7; research §4.1).
   let proxy = UIScrollView()
-  /// The top safe-area inset with the proxy at rest.
+  /// Flutter's held top: the top safe-area inset with the proxy at rest,
+  /// re-read on purpose when the search's active state changes.
   private(set) var restingTop: CGFloat = 0
+  /// The proxy's base (spec §7.7): the top inset at offset 0 with the
+  /// search inactive, i.e. with the large title out. Never force-read: an
+  /// active search hides the title on purpose, and the title must come back
+  /// after it.
+  private(set) var expandedTop: CGFloat = 0
   private var offset: Double = 0
   /// The native back button's proposal (set for pushed pages).
   var onBack: (() -> Void)? {
@@ -101,17 +113,21 @@ final class PageHostController: UIViewController {
   func setScrollOffset(_ value: Double) {
     loadViewIfNeeded()
     offset = max(0, value)
-    // From the resting top, not the current inset: once the title has
+    // From the expanded top, not the current inset: once the title has
     // collapsed the proxy's inset is the small bar's, and offset 0 must pull
     // the large title back out, as a real scroll view does.
-    let top = max(restingTop, proxy.adjustedContentInset.top)
+    let top = max(expandedTop, proxy.adjustedContentInset.top)
     proxy.contentOffset.y = -top + CGFloat(offset)
   }
 
   /// Re-reads the resting top: at rest, or always with [force] (a search
   /// activation hides the large title on purpose; that is not a scroll).
+  /// The expanded top only at rest with the search inactive.
   func rereadRestingTop(force: Bool = false) {
     if force || offset <= 0 { restingTop = view.safeAreaInsets.top }
+    if offset <= 0, !(navigationItem.searchController?.isActive ?? false) {
+      expandedTop = view.safeAreaInsets.top
+    }
   }
 
   override func viewDidLoad() {
