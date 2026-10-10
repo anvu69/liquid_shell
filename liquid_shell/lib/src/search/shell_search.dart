@@ -323,12 +323,22 @@ final class ShellSearch implements SearchDriver {
 
   void _onFocus() {
     // A field that loses focus mid-composition (hidden, taken out of the
-    // tree, another tab) ends the composition here: EditableText only does
+    // tree, another tab) ends the composition: EditableText only does
     // while it is mounted. Otherwise the stale range would reach the IME on
     // the next focus and a held app write would land on the user's next
-    // edit (spec P3b §9.4).
+    // edit (spec P3b §9.4). Deferred: this listener runs before
+    // EditableText's, so a collapse now would flush the held write into
+    // the still-open IME connection. A mounted field closes the connection
+    // and collapses first, leaving the microtask nothing to do.
     if (!focus.hasFocus && !editing.value.composing.isCollapsed) {
-      editing.value = editing.value.copyWith(composing: TextRange.empty);
+      scheduleMicrotask(() {
+        if (_disposed ||
+            focus.hasFocus ||
+            editing.value.composing.isCollapsed) {
+          return;
+        }
+        editing.value = editing.value.copyWith(composing: TextRange.empty);
+      });
     }
     if (native) return;
     final controller = _controller;

@@ -109,6 +109,47 @@ void _expectReleased(
   expect(controller.text, 'phố');
 }
 
+/// Composes "hoo" through the platform IME (marked text), has the app
+/// write "phố" (held), then clears the text input log.
+Future<void> _composeFromImeWithHeldWrite(
+  WidgetTester tester,
+  LiquidSearchController controller,
+) async {
+  await tester.tap(find.byType(TextField));
+  await tester.pump();
+  tester.testTextInput.updateEditingValue(
+    const TextEditingValue(
+      text: 'hoo',
+      selection: TextSelection.collapsed(offset: 3),
+      composing: TextRange(start: 0, end: 3),
+    ),
+  );
+  await tester.pump();
+  expect(controller.value.composing, isTrue);
+  controller.text = 'phố';
+  // Settled: the × has faded in.
+  await tester.pumpAndSettle();
+  expect(
+    tester.widget<TextField>(find.byType(TextField)).controller!.text,
+    'hoo',
+    reason: 'held while composing',
+  );
+  tester.testTextInput.log.clear();
+}
+
+/// The IME connection closed before anything was written into it: no
+/// `setEditingState` reaches the live marked text.
+void _expectClosedBeforeAnyWrite(WidgetTester tester) {
+  final methods = [for (final call in tester.testTextInput.log) call.method];
+  expect(methods, contains('TextInput.clearClient'));
+  final closed = methods.indexOf('TextInput.clearClient');
+  expect(
+    methods.take(closed),
+    isNot(contains('TextInput.setEditingState')),
+    reason: 'written into the composition before the IME closed: $methods',
+  );
+}
+
 const _five = [
   LiquidDestination(icon: Icon(Icons.home), label: 'Home'),
   LiquidDestination(icon: Icon(Icons.book), label: 'Library'),
@@ -495,6 +536,42 @@ void main() {
       await tester.pumpAndSettle();
       expect(scopeOf(tester, 'Library').searchPhase, LiquidSearchPhase.idle);
       _expectReleased(tester, controller, editing);
+    });
+  });
+
+  group('a mounted field mid-composition: the IME closes before any write', () {
+    testWidgets('tap ×', (tester) async {
+      final (controller, _, _) = await _pump(tester, initialIndex: 2);
+      await _composeFromImeWithHeldWrite(tester, controller);
+      await tester.tap(find.bySemanticsLabel('Cancel search'));
+      await tester.pumpAndSettle();
+      _expectClosedBeforeAnyWrite(tester);
+      expect(controller.value.composing, isFalse);
+      expect(controller.isActive, isFalse);
+    });
+
+    testWidgets('a plain unfocus (tap outside, keyboard dismissed)', (
+      tester,
+    ) async {
+      final (controller, _, _) = await _pump(tester, initialIndex: 2);
+      await _composeFromImeWithHeldWrite(tester, controller);
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      _expectClosedBeforeAnyWrite(tester);
+      expect(controller.value.composing, isFalse);
+      expect(controller.text, 'phố', reason: 'the held write is applied');
+    });
+
+    testWidgets('the app selects another tab at compact width', (
+      tester,
+    ) async {
+      final (controller, _, _) = await _pump(tester, initialIndex: 2);
+      await _composeFromImeWithHeldWrite(tester, controller);
+      tester.state<TestShellState>(find.byType(TestShell)).select(1);
+      await tester.pumpAndSettle();
+      _expectClosedBeforeAnyWrite(tester);
+      expect(controller.value.composing, isFalse);
+      expect(controller.text, 'phố', reason: 'the held write is applied');
     });
   });
 

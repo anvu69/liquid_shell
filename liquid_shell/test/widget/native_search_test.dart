@@ -980,6 +980,48 @@ void main() {
       expect(fake.searchTexts, ['hà']);
     });
 
+    testWidgets('native takes over a focused, composing Flutter field: it '
+        'lets go', (tester) async {
+      installFakeNative(state: _compact);
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      await pumpShell(
+        tester,
+        searchShell(controller, nativeChrome: LiquidNativeChrome.off),
+        padding: _compactPadding,
+      );
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      final editing = tester
+          .widget<TextField>(find.byType(TextField))
+          .controller!;
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: 'hoo',
+          selection: TextSelection.collapsed(offset: 3),
+          composing: TextRange(start: 0, end: 3),
+        ),
+      );
+      await tester.pump();
+      controller.text = 'phố';
+      await tester.pump();
+      expect(editing.text, 'hoo', reason: 'held while composing');
+
+      await pumpShell(
+        tester,
+        searchShell(controller),
+        padding: _compactPadding,
+      );
+      expect(find.byType(TextField), findsNothing, reason: 'native now');
+      expect(
+        FocusManager.instance.primaryFocus?.debugLabel,
+        isNot('LiquidShell search'),
+      );
+      expect(editing.value.composing.isCollapsed, isTrue);
+      expect(editing.text, 'phố', reason: 'the held app write is applied');
+      expect(controller.value.composing, isFalse);
+    });
+
     testWidgets('scene reconnect: the text is replayed after the resend', (
       tester,
     ) async {
