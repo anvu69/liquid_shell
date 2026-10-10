@@ -40,6 +40,13 @@ const kNative = [
 /// safe area (24 status bar + 72).
 const _nativePadding = EdgeInsets.only(top: 96, bottom: 20);
 
+/// iPhone portrait with UIKit's compact tab bar copied into the bottom
+/// safe area (34 home indicator + 49).
+const _compactPadding = EdgeInsets.only(top: 62, bottom: 83);
+
+/// UIKit's compact size class: the floating tab bar at the bottom.
+const _compact = LiquidNativeShellState(installed: true, compact: true);
+
 Future<void> _pumpNative(
   WidgetTester tester, {
   Widget? shell,
@@ -115,23 +122,61 @@ void main() {
       expect(native.last.interactive, isTrue);
     });
 
-    testWidgets('compact width draws the Flutter bottom bar', (tester) async {
-      final native = installFakeNative();
-      await _pumpNative(tester, size: kPhone);
-      expect(find.byType(LiquidTabBar), findsOneWidget);
-      expect(_scope(tester).nativeChrome, isFalse);
-      expect(native.last.engaged, isFalse);
-    });
-
-    testWidgets('a compact platform size class draws Flutter chrome', (
+    // Owner D1: the native bar on every iOS 26 iPhone and iPad, compact
+    // windows included. UIKit's compact bar is in the bottom safe area.
+    testWidgets('compact: the native bottom bar, compact scope', (
       tester,
     ) async {
-      final native = installFakeNative(
-        state: const LiquidNativeShellState(installed: true, compact: true),
+      final native = installFakeNative(state: _compact);
+      await _pumpNative(tester, size: kPhone, padding: _compactPadding);
+      expect(_flutterChrome(), isFalse);
+      final scope = _scope(tester);
+      expect(scope.nativeChrome, isTrue);
+      expect(scope.sizeClass, LiquidSizeClass.compact);
+      expect(scope.chromeKind, LiquidChromeKind.bottomBar);
+      expect(scope.chromeInsets, const EdgeInsets.only(bottom: 83));
+      expect(scope.sidebarVisible, isFalse);
+      expect(native.last.engaged, isTrue);
+      expect(native.last.visible, isTrue);
+    });
+
+    // P1 parity: the compact bar has no sidebar, so a sidebar-only
+    // selection is hidden there and the app hears about it.
+    testWidgets('compact: a sidebar-only selection is reported hidden', (
+      tester,
+    ) async {
+      installFakeNative(state: _compact);
+      final hidden = <int>[];
+      await _pumpNative(
+        tester,
+        shell: TestShell(
+          destinations: kNative,
+          initialIndex: 2,
+          onHidden: hidden.add,
+        ),
+        size: kPhone,
+        padding: _compactPadding,
       );
+      expect(hidden, [2]);
+    });
+
+    // UIKit decides the bar, not the shell's own width.
+    testWidgets('a compact platform at a regular shell width: bottom bar', (
+      tester,
+    ) async {
+      installFakeNative(state: _compact);
       await _pumpNative(tester);
-      expect(_flutterChrome(), isTrue);
-      expect(native.last.engaged, isFalse);
+      expect(_scope(tester).chromeKind, LiquidChromeKind.bottomBar);
+      expect(_scope(tester).sizeClass, LiquidSizeClass.compact);
+    });
+
+    testWidgets('a regular platform at a phone shell width: top bar', (
+      tester,
+    ) async {
+      installFakeNative();
+      await _pumpNative(tester, size: kPhone);
+      expect(_scope(tester).chromeKind, LiquidChromeKind.topBar);
+      expect(_scope(tester).sizeClass, LiquidSizeClass.regular);
     });
 
     testWidgets('a destination without sfSymbol keeps Flutter chrome', (
@@ -236,28 +281,21 @@ void main() {
       expect(native.last.engaged, isTrue);
     });
 
-    // Pending only where native chrome is possible: everywhere else the
-    // answer is already known to be Flutter chrome, so draw it at once.
-    testWidgets('pending at phone width: the Flutter tab bar, compact', (
-      tester,
-    ) async {
+    // D1: an iPhone may install native chrome too, so it waits like an
+    // iPad, at its own size class.
+    testWidgets('pending at phone width waits too, compact', (tester) async {
       installFakeNative().attachGate = Completer<LiquidNativeShellState>();
       await _pumpNative(tester, size: kPhone, settle: false);
-      expect(find.byType(LiquidTabBar), findsOneWidget);
+      expect(_flutterChrome(), isFalse);
       final scope = _scope(tester);
       expect(scope.sizeClass, LiquidSizeClass.compact);
-      expect(scope.chromeKind, LiquidChromeKind.bottomBar);
+      expect(scope.chromeKind, LiquidChromeKind.hidden);
     });
 
-    // Every iPhone screen is under 744pt on its short side, every iPad
-    // (mini included) at least that: no iPhone can install native chrome,
-    // so one in landscape (a regular-width shell) does not wait for it.
-    testWidgets('pending on an iPhone in landscape: the Flutter chrome on '
-        'the first frame', (tester) async {
+    testWidgets('pending on an iPhone in landscape waits too', (tester) async {
       installFakeNative().attachGate = Completer<LiquidNativeShellState>();
       await _pumpNative(tester, size: kPhoneLandscape, settle: false);
-      expect(_flutterChrome(), isTrue);
-      expect(_scope(tester).chromeKind, isNot(LiquidChromeKind.hidden));
+      expect(_flutterChrome(), isFalse);
     });
 
     testWidgets('pending in an iPad window narrower than its screen still '
@@ -295,25 +333,24 @@ void main() {
       expect(_flutterChrome(), isTrue);
     });
 
-    testWidgets('the state flipping to compact falls back, and back again', (
-      tester,
-    ) async {
+    testWidgets('a window resized across the size class swaps the native '
+        'bar; the body keeps its state', (tester) async {
       final native = installFakeNative();
       await _pumpNative(tester);
       final counter = find.byKey(const ValueKey('counter-Home'));
       await tester.tap(counter);
       await tester.pump();
 
-      native.pushState(
-        const LiquidNativeShellState(installed: true, compact: true),
-      );
+      native.pushState(_compact);
       await tester.pumpAndSettle();
-      expect(_flutterChrome(), isTrue);
-      expect(native.last.engaged, isFalse);
+      expect(_flutterChrome(), isFalse);
+      expect(_scope(tester).chromeKind, LiquidChromeKind.bottomBar);
+      expect(native.last.engaged, isTrue);
 
       native.pushState(kInstalled);
       await tester.pumpAndSettle();
       expect(_flutterChrome(), isFalse);
+      expect(_scope(tester).chromeKind, LiquidChromeKind.topBar);
       // §5.6: the body never moved, so its State survived both switches.
       expect(find.text('Home page: 1'), findsOneWidget);
     });
@@ -808,6 +845,59 @@ void main() {
       tester.state<NavigatorState>(find.byType(Navigator)).pop();
       await tester.pumpAndSettle();
       expect(native.last.interactive, isTrue);
+    });
+
+    // D1 on iPhone: the compact native bar is drawn above the Flutter view,
+    // so it would cover a sheet's bottom (or a dialog's) drawn in Flutter.
+    // There it hides while anything is above the shell, as for a page.
+    testWidgets('compact: a sheet above hides the native bar until it pops', (
+      tester,
+    ) async {
+      final native = installFakeNative(state: _compact);
+      await _pumpNative(tester, size: kPhone, padding: _compactPadding);
+      unawaited(
+        showModalBottomSheet<void>(
+          context: tester.element(find.byType(TestPage).first),
+          builder: (_) => const Text('sheet'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(native.last.hidden, isTrue);
+      expect(native.last.interactive, isFalse);
+
+      tester.state<NavigatorState>(find.byType(Navigator)).pop();
+      await tester.pumpAndSettle();
+      expect(native.last.hidden, isFalse);
+      expect(native.last.interactive, isTrue);
+    });
+
+    // Hide on push (§7.4) holds under the compact bar too, from the first
+    // frame of the push to the first frame of the pop.
+    testWidgets('compact: a page pushed above hides the native bar until it '
+        'pops', (tester) async {
+      final native = installFakeNative(state: _compact);
+      await _pumpNative(tester, size: kPhone, padding: _compactPadding);
+      final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+      navigator
+          .push(
+            MaterialPageRoute<void>(
+              builder: (_) => const LiquidNoChrome(child: Text('above')),
+            ),
+          )
+          .ignore();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(native.last.hidden, isTrue);
+      await tester.pumpAndSettle();
+      expect(native.last.hidden, isTrue);
+
+      navigator.pop();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(native.last.hidden, isFalse);
+      await tester.pumpAndSettle();
+      expect(native.last.visible, isTrue);
+      expect(_scope(tester).chromeKind, LiquidChromeKind.bottomBar);
     });
 
     testWidgets('a second shell owns the chrome; the first gets it back', (

@@ -9,63 +9,39 @@ import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.
 /// Whether the shell's chrome is native right now (spec P2 §5.1). Pure.
 ///
 /// Every condition must hold: the app allows it, this shell owns the
-/// window's native chrome, the platform installed it, the platform's size
-/// class is regular, the shell's own width is regular, the shell has no
+/// window's native chrome, the platform installed it, the shell has no
 /// custom Flutter chrome, and every destination (and the trailing action)
-/// can be drawn natively.
+/// can be drawn natively. Width does not matter (owner D1): UIKit draws
+/// the compact bar at the bottom and the top bar or sidebar at regular
+/// width, and reports which in [LiquidNativeShellState.compact].
 bool nativeChromeEngaged({
   required LiquidNativeChrome mode,
   required bool owner,
   required LiquidNativeShellState? state,
-  required ShellPresentation presentation,
   required bool hasChromeBuilder,
   required bool describable,
 }) =>
     nativeChromePossible(
       mode: mode,
-      presentation: presentation,
       hasChromeBuilder: hasChromeBuilder,
       describable: describable,
     ) &&
     owner &&
     state != null &&
-    state.installed &&
-    !state.compact;
+    state.installed;
 
 /// The conditions of [nativeChromeEngaged] that the shell knows without the
-/// platform: the app allows it, the shell's width is regular, it has no
-/// custom Flutter chrome, and it can be drawn natively. Pure.
+/// platform: the app allows it, it has no custom Flutter chrome, and it
+/// can be drawn natively. Pure.
 ///
 /// While the platform has not answered (pending), only a shell for which
 /// this holds waits with no chrome; every other one draws Flutter chrome
 /// from its first frame.
 bool nativeChromePossible({
   required LiquidNativeChrome mode,
-  required ShellPresentation presentation,
   required bool hasChromeBuilder,
   required bool describable,
-}) =>
-    mode == LiquidNativeChrome.auto &&
-    presentation != ShellPresentation.compact &&
-    !hasChromeBuilder &&
-    describable;
-
-/// Whether a screen of [screen] logical pixels can be an iPad's: its short
-/// side is at least 744pt (iPad mini), while every iPhone's is under 500pt
-/// in either orientation. Window size does not matter, only the screen's:
-/// an iPad window in Split View is still on an iPad. An unknown screen
-/// (empty, or not finite: a display whose pixel ratio is still 0) counts
-/// as possible. Pure.
-///
-/// Native chrome installs only on iPad, so a shell on any other screen
-/// never waits for the platform's answer (pending).
-bool nativeChromeScreenPossible(Size screen) =>
-    !screen.isFinite ||
-    screen.isEmpty ||
-    screen.shortestSide >= kNativeChromeMinScreenSide;
-
-/// The short side of the smallest iPad screen (iPad mini), in points.
-const double kNativeChromeMinScreenSide = 744;
+}) => mode == LiquidNativeChrome.auto && !hasChromeBuilder && describable;
 
 /// Whether every destination and the trailing action have an SF Symbol.
 bool nativeDescribable(
@@ -86,13 +62,14 @@ String? nativeBadgeText(LiquidBadge? badge) {
   };
 }
 
-/// The chrome kind while native chrome is engaged. The tab bar shows when
-/// the sidebar is hidden; UIKit's own compact bar never engages.
+/// The chrome kind while native chrome is engaged: UIKit's compact bar at
+/// the bottom, else the top bar while the sidebar is hidden.
 LiquidChromeKind nativeChromeKind({
   required LiquidNativeShellState state,
   required bool hidden,
 }) {
   if (hidden) return LiquidChromeKind.hidden;
+  if (state.compact) return LiquidChromeKind.bottomBar;
   return switch (state.sidebar) {
     LiquidNativeSidebar.hidden => LiquidChromeKind.topBar,
     LiquidNativeSidebar.overlay => LiquidChromeKind.sidebarOverlay,
@@ -100,15 +77,17 @@ LiquidChromeKind nativeChromeKind({
   };
 }
 
-/// The insets of native chrome: the tab bar (or the overlay's held top) is
-/// already in the Flutter view's safe area, so the top inset is the top
-/// padding; tiled and hidden cover nothing.
+/// The insets of native chrome. The bar is already in the Flutter view's
+/// safe area [padding]: the top bar (or the overlay's held top) in the
+/// top padding, the compact bar in the bottom padding. Tiled and hidden
+/// cover nothing.
 EdgeInsets nativeChromeInsets({
   required LiquidChromeKind kind,
-  required double topPadding,
+  required EdgeInsets padding,
 }) => switch (kind) {
   LiquidChromeKind.topBar ||
-  LiquidChromeKind.sidebarOverlay => EdgeInsets.only(top: topPadding),
+  LiquidChromeKind.sidebarOverlay => EdgeInsets.only(top: padding.top),
+  LiquidChromeKind.bottomBar => EdgeInsets.only(bottom: padding.bottom),
   _ => EdgeInsets.zero,
 };
 

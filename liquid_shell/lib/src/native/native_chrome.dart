@@ -3,8 +3,8 @@ import 'package:flutter/foundation.dart';
 /// Whether a `LiquidShell` may hand its chrome to the platform.
 enum LiquidNativeChrome {
   /// Native chrome wherever the platform offers it and the shell can
-  /// describe itself natively (spec P2 §5.1): today iPadOS 26 at regular
-  /// width, in an app that opted in. Flutter chrome everywhere else.
+  /// describe itself natively (spec P2 §5.1): today iOS 26 on iPhone and
+  /// iPad, in an app that opted in. Flutter chrome everywhere else.
   auto,
 
   /// Always Flutter chrome.

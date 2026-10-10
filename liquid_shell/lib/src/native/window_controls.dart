@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
+import 'package:liquid_shell/src/shell/breakpoints.dart';
 import 'package:liquid_shell/src/shell/shell_layout.dart';
 import 'package:liquid_shell/src/shell/shell_scope.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
@@ -211,8 +212,11 @@ class _LiquidWindowControlsClearanceState
     // Beside a tiled sidebar the body starts past the cluster: a new row
     // there is never drawn under it, not even for its first frame.
     final tiled = scope?.chromeKind == LiquidChromeKind.sidebarTiled;
-    // Native chrome makes room for the cluster itself (spec P2 §8.3).
-    final native = scope?.nativeChrome ?? false;
+    // Regular native chrome makes room for the cluster itself (spec P2
+    // §8.3); the compact native bar is at the bottom and does not.
+    final native =
+        (scope?.nativeChrome ?? false) &&
+        scope?.sizeClass == LiquidSizeClass.regular;
     _scheduleMeasure();
     return _LayoutProbe(
       onLayout: _scheduleMeasure,

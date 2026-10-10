@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/native/native_layout.dart';
-import 'package:liquid_shell/src/shell/shell_layout.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
 const _installed = LiquidNativeShellState(installed: true);
@@ -11,23 +10,26 @@ bool _engaged({
   LiquidNativeChrome mode = LiquidNativeChrome.auto,
   bool owner = true,
   LiquidNativeShellState? state = _installed,
-  ShellPresentation presentation = ShellPresentation.tiled,
   bool hasChromeBuilder = false,
   bool describable = true,
 }) => nativeChromeEngaged(
   mode: mode,
   owner: owner,
   state: state,
-  presentation: presentation,
   hasChromeBuilder: hasChromeBuilder,
   describable: describable,
 );
 
 void main() {
   group('nativeChromeEngaged', () {
-    test('every condition holds → engaged', () {
+    test('every condition holds → engaged, at either size class (D1)', () {
       expect(_engaged(), isTrue);
-      expect(_engaged(presentation: ShellPresentation.overlay), isTrue);
+      expect(
+        _engaged(
+          state: const LiquidNativeShellState(installed: true, compact: true),
+        ),
+        isTrue,
+      );
     });
 
     test('each failing condition disengages', () {
@@ -38,13 +40,6 @@ void main() {
         _engaged(state: const LiquidNativeShellState(installed: false)),
         isFalse,
       );
-      expect(
-        _engaged(
-          state: const LiquidNativeShellState(installed: true, compact: true),
-        ),
-        isFalse,
-      );
-      expect(_engaged(presentation: ShellPresentation.compact), isFalse);
       expect(_engaged(hasChromeBuilder: true), isFalse);
       expect(_engaged(describable: false), isFalse);
     });
@@ -53,42 +48,23 @@ void main() {
   group('nativeChromePossible (what Dart knows before the platform)', () {
     bool possible({
       LiquidNativeChrome mode = LiquidNativeChrome.auto,
-      ShellPresentation presentation = ShellPresentation.tiled,
       bool hasChromeBuilder = false,
       bool describable = true,
     }) => nativeChromePossible(
       mode: mode,
-      presentation: presentation,
       hasChromeBuilder: hasChromeBuilder,
       describable: describable,
     );
 
-    test('auto, regular, no chromeBuilder, describable → possible', () {
+    test('auto, no chromeBuilder, describable → possible', () {
       expect(possible(), isTrue);
-      expect(possible(presentation: ShellPresentation.overlay), isTrue);
     });
 
     test('each failing condition rules it out', () {
       expect(possible(mode: LiquidNativeChrome.off), isFalse);
-      expect(possible(presentation: ShellPresentation.compact), isFalse);
       expect(possible(hasChromeBuilder: true), isFalse);
       expect(possible(describable: false), isFalse);
     });
-  });
-
-  test('nativeChromeScreenPossible: an iPad screen, not an iPhone one', () {
-    // iPad mini (744 × 1133) is the smallest iPad.
-    expect(nativeChromeScreenPossible(const Size(744, 1133)), isTrue);
-    expect(nativeChromeScreenPossible(const Size(1194, 834)), isTrue);
-    // iPhone 17 Pro Max, either way round: 440pt short side.
-    expect(nativeChromeScreenPossible(const Size(956, 440)), isFalse);
-    expect(nativeChromeScreenPossible(const Size(440, 956)), isFalse);
-    // Unknown screen: possible (wait for the platform, as before).
-    expect(nativeChromeScreenPossible(Size.zero), isTrue);
-    // A display not described yet (ratio 0): the caller's size / ratio is
-    // NaN (empty) or infinite. Unknown too, never a NaN comparison.
-    expect(nativeChromeScreenPossible(Size.zero / 0), isTrue);
-    expect(nativeChromeScreenPossible(const Size(2388, 1668) / 0), isTrue);
   });
 
   test('nativeDescribable needs every symbol, the trailing one too', () {
@@ -140,12 +116,28 @@ void main() {
     expect(nativeBadgeText(const LiquidBadge.dot()), '');
   });
 
-  test('nativeChromeKind maps the sidebar; hidden wins', () {
-    LiquidChromeKind kind(LiquidNativeSidebar sidebar, {bool hidden = false}) =>
-        nativeChromeKind(
-          state: LiquidNativeShellState(installed: true, sidebar: sidebar),
-          hidden: hidden,
-        );
+  test('nativeChromeKind maps the sidebar; compact is the bottom bar; '
+      'hidden wins', () {
+    LiquidChromeKind kind(
+      LiquidNativeSidebar sidebar, {
+      bool compact = false,
+      bool hidden = false,
+    }) => nativeChromeKind(
+      state: LiquidNativeShellState(
+        installed: true,
+        compact: compact,
+        sidebar: sidebar,
+      ),
+      hidden: hidden,
+    );
+    expect(
+      kind(LiquidNativeSidebar.hidden, compact: true),
+      LiquidChromeKind.bottomBar,
+    );
+    expect(
+      kind(LiquidNativeSidebar.hidden, compact: true, hidden: true),
+      LiquidChromeKind.hidden,
+    );
     expect(kind(LiquidNativeSidebar.hidden), LiquidChromeKind.topBar);
     expect(kind(LiquidNativeSidebar.overlay), LiquidChromeKind.sidebarOverlay);
     expect(kind(LiquidNativeSidebar.tiled), LiquidChromeKind.sidebarTiled);
@@ -155,15 +147,17 @@ void main() {
     );
   });
 
-  test('nativeChromeInsets: the top padding under the bar, else zero', () {
+  test('nativeChromeInsets: the padding on the side of the bar, else zero', () {
+    const padding = EdgeInsets.only(top: 96, bottom: 83);
     for (final kind in LiquidChromeKind.values) {
-      final insets = nativeChromeInsets(kind: kind, topPadding: 96);
-      final covered =
-          kind == LiquidChromeKind.topBar ||
-          kind == LiquidChromeKind.sidebarOverlay;
       expect(
-        insets,
-        covered ? const EdgeInsets.only(top: 96) : EdgeInsets.zero,
+        nativeChromeInsets(kind: kind, padding: padding),
+        switch (kind) {
+          LiquidChromeKind.topBar ||
+          LiquidChromeKind.sidebarOverlay => const EdgeInsets.only(top: 96),
+          LiquidChromeKind.bottomBar => const EdgeInsets.only(bottom: 83),
+          _ => EdgeInsets.zero,
+        },
       );
     }
   });

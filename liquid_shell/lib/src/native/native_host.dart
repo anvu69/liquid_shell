@@ -74,7 +74,7 @@ final class NativeChromeHost extends ChangeNotifier {
         state.unavailableReason == LiquidNativeUnavailableReason.notEnabled) {
       debugLogOnce(
         'notEnabled',
-        'liquid_shell: native iPadOS chrome is available on this device but '
+        'liquid_shell: native iOS chrome is available on this device but '
             'not enabled; add <key>LiquidShellNativeChrome</key><true/> to '
             'Info.plist to use it.',
       );

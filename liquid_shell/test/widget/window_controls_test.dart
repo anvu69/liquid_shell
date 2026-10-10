@@ -308,6 +308,45 @@ void main() {
       expect(scope.windowControls, LiquidWindowControls.zero);
       expect(tester.getTopLeft(find.text('Title 0')).dx, 0);
     });
+
+    // D1: in a compact iPad window the native bar is at the bottom; the
+    // top row is Flutter's, so it must clear the cluster itself.
+    testWidgets('under the compact native bar the page clears the cluster', (
+      tester,
+    ) async {
+      final native = installFakeNative(
+        state: const LiquidNativeShellState(installed: true, compact: true),
+      )..controls = _controls;
+      await pumpShell(
+        tester,
+        const TestShell(
+          destinations: [
+            LiquidDestination(
+              icon: Icon(Icons.home_outlined),
+              label: 'Home',
+              sfSymbol: 'house',
+            ),
+            LiquidDestination(
+              icon: Icon(Icons.inbox_outlined),
+              label: 'Inbox',
+              sfSymbol: 'tray',
+            ),
+          ],
+          pageBuilder: _titlePage,
+        ),
+        size: const Size(500, 800),
+        padding: const EdgeInsets.only(top: 24, bottom: 83),
+      );
+      native.emitNative(const LiquidWindowControlsChanged(_controls));
+      await tester.pumpAndSettle();
+      final scope = LiquidShellScope.of(
+        tester.element(find.text('Title 0')),
+      );
+      expect(scope.nativeChrome, isTrue);
+      expect(scope.chromeKind, LiquidChromeKind.bottomBar);
+      expect(scope.windowControls, _controls);
+      expect(tester.getTopLeft(find.text('Title 0')).dx, 66);
+    });
   });
 
   group('scope', () {

@@ -61,8 +61,8 @@ String _repeatedLabels(List<LiquidDestination> destinations) {
 /// route, not in `MaterialApp.builder`. Without them the chrome fails a
 /// debug assert.
 ///
-/// On iPadOS 26 at regular width, in an app that opted in, the chrome is
-/// the platform's own `UITabBarController` sidebar and tab bar
+/// On iOS 26, on iPhone and iPad, in an app that opted in, the chrome is
+/// the platform's own `UITabBarController` tab bar and sidebar
 /// ([nativeChrome]); everywhere else it is drawn in Flutter.
 class LiquidShell extends StatefulWidget {
   /// Creates a shell.
@@ -815,7 +815,6 @@ class _LiquidShellState extends State<LiquidShell>
     );
     final possible = nativeChromePossible(
       mode: widget.nativeChrome,
-      presentation: presentation,
       hasChromeBuilder: widget.chromeBuilder != null,
       describable: describable,
     );
@@ -823,7 +822,6 @@ class _LiquidShellState extends State<LiquidShell>
       mode: widget.nativeChrome,
       owner: owner,
       state: state,
-      presentation: presentation,
       hasChromeBuilder: widget.chromeBuilder != null,
       describable: describable,
     );
@@ -859,42 +857,53 @@ class _LiquidShellState extends State<LiquidShell>
           tint: theme.colorScheme.primary,
           dark: theme.brightness == Brightness.dark,
           rtl: rtl,
-          hidden: _hideRequests > 0 || _covered,
+          // The compact bar is drawn above the Flutter view: it would
+          // cover the bottom of a sheet or dialog drawn there, so it hides
+          // while one is above the shell. The top bar and sidebar only
+          // turn inert (§7.4).
+          hidden:
+              _hideRequests > 0 ||
+              _covered ||
+              ((state?.compact ?? false) && !_routeCurrent),
           interactive: _routeCurrent && !_guardPending,
         ),
       );
     }
-    // Pending: the platform may install native chrome but has not answered
-    // yet, and this shell would use it. Draw no chrome rather than flash
-    // the Flutter one (a frame or two). A shell that could not use native
-    // chrome anyway (compact width, a missing sfSymbol, a chromeBuilder, a
-    // screen that is no iPad's, such as an iPhone in landscape) draws
-    // Flutter chrome from its first frame.
-    final display = View.of(context).display;
+    // Pending: the platform may install native chrome (any iOS 26 iPhone
+    // or iPad, owner D1) but has not answered yet, and this shell would use
+    // it. Draw no chrome rather than flash the Flutter one (a frame or
+    // two). A shell that could not use native chrome anyway (a missing
+    // sfSymbol, a chromeBuilder) draws Flutter chrome from its first frame.
     final pending =
         possible &&
         owner &&
         state == null &&
-        LiquidShellPlatform.instance.supportsNativeChrome &&
-        nativeChromeScreenPossible(display.size / display.devicePixelRatio);
+        LiquidShellPlatform.instance.supportsNativeChrome;
     // Standby: another shell (pushed above, or nested) owns the native
     // chrome, which this one would otherwise use. Draw no chrome, so no
     // Flutter chrome shows beside the native one while the other shell's
     // route slides in or out; this one engages when it owns it again.
-    final standby =
-        possible &&
-        !owner &&
-        (state?.installed ?? false) &&
-        !(state?.compact ?? true);
+    final standby = possible && !owner && (state?.installed ?? false);
     if (!engaged && !pending && !standby) return null;
 
     final kind = engaged
         ? nativeChromeKind(state: state!, hidden: _hideRequests > 0)
         : LiquidChromeKind.hidden;
-    final insets = nativeChromeInsets(
-      kind: kind,
-      topPadding: media.padding.top,
-    );
+    final insets = nativeChromeInsets(kind: kind, padding: media.padding);
+    // UIKit's size class decides the bar once it has answered; before
+    // that, the shell's own width.
+    final sizeClass = engaged
+        ? (state!.compact ? LiquidSizeClass.compact : LiquidSizeClass.regular)
+        : sizeClassOf(presentation);
+    // UIKit's compact bar hides sidebar-only destinations, as P1's does.
+    if (engaged) {
+      _reportHiddenSelection(
+        sizeClass == LiquidSizeClass.compact
+            ? ShellPresentation.compact
+            : ShellPresentation.overlay,
+        selected,
+      );
+    }
     // Tiled: UIKit does not resize the Flutter view; it reports the
     // sidebar's width as the start padding. Make it real width here.
     final tiled = kind == LiquidChromeKind.sidebarTiled;
@@ -916,16 +925,16 @@ class _LiquidShellState extends State<LiquidShell>
       },
       child: ShellScopeMarker(
         data: LiquidShellScopeData(
-          // Regular: native and pending both need a regular presentation.
-          sizeClass: sizeClassOf(presentation),
+          sizeClass: sizeClass,
           chromeKind: kind,
           chromeInsets: insets,
           sidebarVisible: state?.sidebarVisible ?? false,
           setSidebarVisible: _setSidebarVisible,
           nativeChrome: engaged,
-          // UIKit's bar and sidebar make room for the cluster; the body
-          // starts below or beside them (spec P2 §8.3).
-          windowControls: engaged
+          // UIKit's top bar and sidebar make room for the cluster; the
+          // body starts below or beside them (spec P2 §8.3). The compact
+          // bar is at the bottom: the top is the body's to clear.
+          windowControls: engaged && sizeClass == LiquidSizeClass.regular
               ? LiquidWindowControls.zero
               : _windowControls.value.value,
         ),
