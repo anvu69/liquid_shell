@@ -863,12 +863,21 @@ Widget build(BuildContext context) {
             // Native chrome spans the window, not this 320pt shell.
             nativeChrome: LiquidNativeChrome.off,
             tabBarTrailing: LiquidTabAction(
-              icon: const Icon(Icons.search),
-              semanticLabel: 'Search',
+              icon: const Icon(Icons.edit_outlined),
+              semanticLabel: 'Compose',
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (_) => const LiquidNoChrome(
-                    child: Scaffold(body: DemoPage(title: 'Search')),
+                    child: Scaffold(
+                      body: DemoPage(
+                        title: 'New message',
+                        children: [
+                          TextField(
+                            decoration: InputDecoration(hintText: 'Message'),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -891,7 +900,7 @@ Widget build(BuildContext context) {
 }
 ```
 
-<img src="doc/images/case_narrow.png" width="260" alt="Five tabs and a search circle in a 320pt shell">
+<img src="doc/images/case_narrow.png" width="260" alt="Five tabs and a compose circle in a 320pt shell">
 
 Trade-off: between text scale 1 and 1.6 a narrow bar's labels can shrink
 below the size the user chose, down to 10pt. The icon-only cells and the

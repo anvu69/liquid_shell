@@ -222,10 +222,9 @@ class _SearchPage extends StatelessWidget {
         ListTile(
           leading: const Icon(Icons.history),
           title: Text(query),
-          // Never write the field's text under an IME composition.
-          onTap: () {
-            if (!controller.value.composing) controller.text = query;
-          },
+          // Safe mid-composition too: the shell holds the write until the
+          // IME composition ends.
+          onTap: () => controller.text = query,
         ),
   ];
 }

@@ -58,7 +58,7 @@ const kCases = <ExampleCase>[
   ),
   (
     id: 'trailing',
-    title: 'Trailing search action',
+    title: 'Trailing action',
     subtitle: 'Compose: opens a page above the shell',
     drawnByFlutter: null,
     page: TrailingActionCase(),

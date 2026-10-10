@@ -124,6 +124,17 @@ void main() {
     expect(LiquidShellScope.of(field), LiquidShellScopeData.none());
   });
 
+  testWidgets('narrow: the trailing compose opens a page with no chrome', (
+    tester,
+  ) async {
+    await _openCase(tester, 'narrow');
+    await tester.tap(find.byTooltip('Compose'));
+    await tester.pumpAndSettle();
+    expect(find.text('New message'), findsOneWidget);
+    final field = tester.element(find.byType(TextField));
+    expect(LiquidShellScope.of(field), LiquidShellScopeData.none());
+  });
+
   testWidgets('a sidebar-only selection falls back to the first tab on a '
       'phone', (tester) async {
     tester.view
@@ -189,7 +200,10 @@ void main() {
     expect(cells.first.left - shell.left, 8 + 4);
     final circle = tester.getRect(
       find.ancestor(
-        of: find.descendant(of: bar, matching: find.byIcon(Icons.search)),
+        of: find.descendant(
+          of: bar,
+          matching: find.byIcon(Icons.edit_outlined),
+        ),
         matching: find.byType(LiquidGlass),
       ),
     );

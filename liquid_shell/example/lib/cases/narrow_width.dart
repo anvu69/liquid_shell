@@ -43,12 +43,21 @@ class _NarrowWidthCaseState extends State<NarrowWidthCase> {
               // Native chrome spans the window, not this 320pt shell.
               nativeChrome: LiquidNativeChrome.off,
               tabBarTrailing: LiquidTabAction(
-                icon: const Icon(Icons.search),
-                semanticLabel: 'Search',
+                icon: const Icon(Icons.edit_outlined),
+                semanticLabel: 'Compose',
                 onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
                     builder: (_) => const LiquidNoChrome(
-                      child: Scaffold(body: DemoPage(title: 'Search')),
+                      child: Scaffold(
+                        body: DemoPage(
+                          title: 'New message',
+                          children: [
+                            TextField(
+                              decoration: InputDecoration(hintText: 'Message'),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),

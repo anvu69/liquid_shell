@@ -33,6 +33,49 @@ void main() {
       expect(foldVietnamese('Hồ'), 'ho');
     });
 
+    test('foldVietnamese: every vowel with each tone, upper case, NFC and '
+        'NFD, and đ (spec §12.1)', () {
+      // Precomposed (NFC): the base, then grave, acute, hook, tilde, dot.
+      const nfc = {
+        'a': ['aàáảãạ', 'ăằắẳẵặ', 'âầấẩẫậ'],
+        'e': ['eèéẻẽẹ', 'êềếểễệ'],
+        'i': ['iìíỉĩị'],
+        'o': ['oòóỏõọ', 'ôồốổỗộ', 'ơờớởỡợ'],
+        'u': ['uùúủũụ', 'ưừứửữự'],
+        'y': ['yỳýỷỹỵ'],
+      };
+      // Decomposed (NFD): the base letter, its vowel mark, then the tone.
+      const vowelMarks = {
+        'ă': 'a\u0306',
+        'â': 'a\u0302',
+        'ê': 'e\u0302',
+        'ô': 'o\u0302',
+        'ơ': 'o\u031B',
+        'ư': 'u\u031B',
+      };
+      const tones = ['', '\u0300', '\u0301', '\u0309', '\u0303', '\u0323'];
+      var cases = 0;
+      for (final MapEntry(key: base, value: rows) in nfc.entries) {
+        for (final row in rows) {
+          final letters = row.runes.map(String.fromCharCode).toList();
+          expect(letters, hasLength(6), reason: row);
+          final vowel = letters.first;
+          for (final (tone, composed) in letters.indexed) {
+            final decomposed = '${vowelMarks[vowel] ?? vowel}${tones[tone]}';
+            for (final form in [composed, decomposed]) {
+              for (final text in [form, form.toUpperCase()]) {
+                expect(foldVietnamese(text), base, reason: text);
+                cases++;
+              }
+            }
+          }
+        }
+      }
+      expect(foldVietnamese('đ'), 'd');
+      expect(foldVietnamese('Đ'), 'd');
+      expect(cases + 2, 290);
+    });
+
     test('a query matches when every word starts a word of the item', () {
       SearchItem find(String title) =>
           kSearchItems.firstWhere((i) => i.title == title);
@@ -141,6 +184,71 @@ void main() {
       await tester.tap(find.text('Clear'));
       await tester.pumpAndSettle();
       expect(find.widgetWithText(ListTile, 'da lat'), findsNothing);
+    });
+
+    testWidgets('tapping a recent search fills the field', (tester) async {
+      await _pump(tester);
+      await _openSearch(tester);
+      await tester.tap(find.byType(TextField));
+      await tester.enterText(find.byType(TextField), 'da lat');
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.enterText(find.byType(TextField), '');
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ListTile, 'da lat'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'da lat',
+      );
+      expect(find.text('Đà Lạt'), findsOneWidget);
+    });
+
+    testWidgets('a recent tapped mid-composition lands once it ends', (
+      tester,
+    ) async {
+      await _pump(tester);
+      await _openSearch(tester);
+      await tester.tap(find.byType(TextField));
+      await tester.enterText(find.byType(TextField), 'da lat');
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.enterText(find.byType(TextField), '');
+      await tester.pumpAndSettle();
+      // The IME composes a blank: the recents still show.
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: ' ',
+          selection: TextSelection.collapsed(offset: 1),
+          composing: TextRange(start: 0, end: 1),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ListTile, 'da lat'));
+      await tester.pumpAndSettle();
+      final field = tester.widget<TextField>(find.byType(TextField));
+      expect(field.controller!.text, ' ', reason: 'held during composition');
+      // The composition ends: the library applies the held write.
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: ' ',
+          selection: TextSelection.collapsed(offset: 1),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(field.controller!.text, 'da lat');
+      expect(find.text('Đà Lạt'), findsOneWidget);
+    });
+
+    testWidgets('a scope narrows the live results', (tester) async {
+      await _pump(tester);
+      await _openSearch(tester);
+      await tester.tap(find.byType(TextField));
+      await tester.enterText(find.byType(TextField), 'ha noi');
+      await tester.pumpAndSettle();
+      expect(find.text('Hồ Hoàn Kiếm'), findsOneWidget);
+      await tester.tap(find.bySemanticsLabel('Songs'));
+      await tester.pumpAndSettle();
+      expect(find.text('Hồ Hoàn Kiếm'), findsNothing);
+      expect(find.text('Nồng nàn Hà Nội'), findsOneWidget);
     });
 
     testWidgets('the query is kept across tab switches', (tester) async {
