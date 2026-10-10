@@ -212,4 +212,21 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
   func debugTap(target: NativeTapTarget, index: Int64) throws {
     if #available(iOS 26.0, *) { tabs?.debugTap(target, index: Int(index)) }
   }
+
+  func setSearchText(text: String) throws {
+    if #available(iOS 26.0, *) { tabs?.setSearchText(text) }
+  }
+
+  func setSearchActive(active: Bool) throws {
+    if #available(iOS 26.0, *) { tabs?.setSearchActive(active) }
+  }
+
+  func setPageScroll(tab: Int64, offset: Double) throws {
+    if #available(iOS 26.0, *) { tabs?.setPageScroll(tab: Int(tab), offset: offset) }
+  }
+
+  func debugSnapshot() throws -> NativeDebugSnapshot {
+    if #available(iOS 26.0, *), let tabs { return tabs.debugSnapshot() }
+    return NativeDebugSnapshot.empty
+  }
 }

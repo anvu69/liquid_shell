@@ -229,6 +229,45 @@ final class RecordingEvents: NativeShellFlutterApiProtocol {
     controls.append(controlsArg)
     completion(.success(()))
   }
+
+  var searchTexts: [(String, Bool)] = []
+  var fieldFrames: [NativeRect] = []
+
+  func onSearchTextChanged(
+    text textArg: String, composing composingArg: Bool,
+    completion: @escaping (Result<Void, PigeonError>) -> Void
+  ) {
+    sent.append("searchText \(textArg)")
+    searchTexts.append((textArg, composingArg))
+    completion(.success(()))
+  }
+
+  func onSearchActiveChanged(
+    active activeArg: Bool, completion: @escaping (Result<Void, PigeonError>) -> Void
+  ) {
+    sent.append("searchActive \(activeArg)")
+    completion(.success(()))
+  }
+
+  func onSearchSubmitted(
+    text textArg: String, completion: @escaping (Result<Void, PigeonError>) -> Void
+  ) {
+    sent.append("searchSubmitted \(textArg)")
+    completion(.success(()))
+  }
+
+  func onSearchFieldChanged(
+    frame frameArg: NativeRect, completion: @escaping (Result<Void, PigeonError>) -> Void
+  ) {
+    sent.append("field")
+    fieldFrames.append(frameArg)
+    completion(.success(()))
+  }
+
+  func onBackTapped(tab tabArg: Int64, completion: @escaping (Result<Void, PigeonError>) -> Void) {
+    sent.append("back \(tabArg)")
+    completion(.success(()))
+  }
 }
 
 /// The UIKit half of the shell (`NativeTabsController` inside the container)
@@ -257,9 +296,15 @@ final class NativeTabsTests: XCTestCase {
     NativeChromeConfig(
       engaged: engaged,
       tabs: [
-        NativeTab(title: "Home", sfSymbol: "house", sidebarOnly: false),
-        NativeTab(title: "Inbox", sfSymbol: "tray", sidebarOnly: false),
-      ] + (reports ? [NativeTab(title: "Reports", sfSymbol: "chart.bar", sidebarOnly: true)] : []),
+        NativeTab(title: "Home", sfSymbol: "house", sidebarOnly: false, search: false, pages: []),
+        NativeTab(title: "Inbox", sfSymbol: "tray", sidebarOnly: false, search: false, pages: []),
+      ]
+        + (reports
+          ? [
+            NativeTab(
+              title: "Reports", sfSymbol: "chart.bar", sidebarOnly: true, search: false, pages: [])
+          ]
+          : []),
       selectedIndex: selected,
       // Not UISearchTab's own "Search" and magnifyingglass: the app's
       // label must be seen to reach the tab.

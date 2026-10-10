@@ -415,9 +415,18 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
         _ = tabBarController(self, shouldSelectTab: trailingTab)
       case .footer:
         footerTapped()
+      case .searchField, .searchCancel, .back:
+        break
       }
     #endif
   }
+
+  // MARK: - Search and pages (P3b-1 Task 3 stubs; Tasks 4–5 implement)
+
+  func setSearchText(_ text: String) {}
+  func setSearchActive(_ active: Bool) {}
+  func setPageScroll(tab: Int, offset: Double) {}
+  func debugSnapshot() -> NativeDebugSnapshot { .empty }
 }
 
 /// The empty, transparent controller of every tab. The Flutter view never
@@ -469,5 +478,14 @@ extension UIColor {
       green: CGFloat((value >> 8) & 0xFF) / 255,
       blue: CGFloat(value & 0xFF) / 255,
       alpha: CGFloat((value >> 24) & 0xFF) / 255)
+  }
+}
+
+extension NativeDebugSnapshot {
+  /// Release builds and "nothing installed".
+  static var empty: NativeDebugSnapshot {
+    NativeDebugSnapshot(
+      selectedTab: "", searchActive: false, searchText: "", placement: "", pageTitles: [],
+      fieldFrame: NativeRect(x: 0, y: 0, width: 0, height: 0), firstResponderIsSearch: false)
   }
 }

@@ -54,6 +54,41 @@ class _FakeHost extends NativeShellHostApi {
     calls.add('debugTap(${target.name}, $index)');
     _maybeFail();
   }
+
+  @override
+  Future<void> setSearchText(String text) async {
+    calls.add('setSearchText($text)');
+    _maybeFail();
+  }
+
+  @override
+  Future<void> setSearchActive(bool active) async {
+    calls.add('setSearchActive($active)');
+    _maybeFail();
+  }
+
+  @override
+  Future<void> setPageScroll(int tab, double offset) async {
+    calls.add('setPageScroll($tab, $offset)');
+    _maybeFail();
+  }
+
+  NativeDebugSnapshot snapshot = NativeDebugSnapshot(
+    selectedTab: 'destination2',
+    searchActive: true,
+    searchText: 'hồ',
+    placement: 'stacked',
+    pageTitles: ['Search', 'Hồ Hoàn Kiếm'],
+    fieldFrame: NativeRect(x: 20, y: 86, width: 780, height: 44),
+    firstResponderIsSearch: true,
+  );
+
+  @override
+  Future<NativeDebugSnapshot> debugSnapshot() async {
+    calls.add('debugSnapshot');
+    _maybeFail();
+    return snapshot;
+  }
 }
 
 const _config = LiquidNativeChromeConfig(
@@ -311,4 +346,121 @@ void main() {
       const LiquidWindowControls(leading: 66),
     );
   });
+
+  test('updateNativeChrome sends search, pages and the placeholder', () async {
+    final host = _FakeHost();
+    await liquidShellIOSWithHost(host).updateNativeChrome(
+      const LiquidNativeChromeConfig(
+        engaged: true,
+        tabs: [
+          LiquidNativeTab(title: 'Home', sfSymbol: 'house'),
+          LiquidNativeTab(
+            title: 'Search',
+            sfSymbol: '',
+            search: true,
+            pages: [
+              LiquidNativePage(title: 'Search', largeTitle: true),
+              LiquidNativePage(title: 'Hồ Hoàn Kiếm'),
+            ],
+          ),
+        ],
+        search: LiquidNativeSearchConfig(placeholder: 'Songs, places'),
+      ),
+    );
+    final sent = host.calls.single as NativeChromeConfig;
+    expect(sent.tabs.map((t) => t.search), [false, true]);
+    expect(sent.tabs.first.pages, isEmpty);
+    expect(sent.tabs.last.pages.map((p) => p.title), [
+      'Search',
+      'Hồ Hoàn Kiếm',
+    ]);
+    expect(sent.tabs.last.pages.map((p) => p.largeTitle), [true, null]);
+    expect(sent.search?.placeholder, 'Songs, places');
+  });
+
+  test('no search config maps to null', () async {
+    final host = _FakeHost();
+    await liquidShellIOSWithHost(host).updateNativeChrome(_config);
+    expect((host.calls.single as NativeChromeConfig).search, isNull);
+  });
+
+  test('search commands and page scroll reach the host', () async {
+    final host = _FakeHost();
+    final platform = liquidShellIOSWithHost(host);
+    await platform.setNativeSearchText('hồ');
+    await platform.setNativeSearchActive(active: true);
+    await platform.setNativePageScroll(tab: 2, offset: 48.5);
+    expect(host.calls, [
+      'setSearchText(hồ)',
+      'setSearchActive(true)',
+      'setPageScroll(2, 48.5)',
+    ]);
+  });
+
+  test('a non-finite page scroll offset is not sent', () async {
+    final host = _FakeHost();
+    final platform = liquidShellIOSWithHost(host);
+    await platform.setNativePageScroll(tab: 0, offset: double.nan);
+    await platform.setNativePageScroll(tab: 0, offset: double.infinity);
+    expect(host.calls, isEmpty);
+  });
+
+  test('failed search commands are swallowed and logged once each', () async {
+    final logs = captureLogs();
+    final host = _FakeHost()..failure = PlatformException(code: 'gone');
+    final platform = liquidShellIOSWithHost(host);
+    await platform.setNativeSearchText('a');
+    await platform.setNativeSearchText('b');
+    await platform.setNativeSearchActive(active: false);
+    expect(logs.where((l) => l.contains('setSearchText')), hasLength(1));
+    expect(logs.where((l) => l.contains('setSearchActive')), hasLength(1));
+  });
+
+  test('debugSnapshot passes the native snapshot through', () async {
+    final host = _FakeHost();
+    final snapshot = await liquidShellIOSWithHost(host).debugSnapshot();
+    expect(snapshot.pageTitles, ['Search', 'Hồ Hoàn Kiếm']);
+    expect(snapshot.placement, 'stacked');
+    expect(host.calls, ['debugSnapshot']);
+  });
+
+  test('rectFromNative maps, and zeroes a non-finite rect', () {
+    expect(
+      rectFromNative(NativeRect(x: 8, y: 490, width: 330, height: 48)),
+      const Rect.fromLTWH(8, 490, 330, 48),
+    );
+    expect(
+      rectFromNative(NativeRect(x: double.nan, y: 0, width: 1, height: 1)),
+      Rect.zero,
+    );
+  });
+
+  test(
+    'native search and back calls on the real channel arrive as events',
+    () async {
+      final platform = liquidShellIOSWithHost(_FakeHost());
+      final events = <LiquidNativeEvent>[];
+      final subscription = platform.nativeEvents.listen(events.add);
+      addTearDown(subscription.cancel);
+
+      expect(await deliver('onSearchTextChanged', ['hô', true]), isTrue);
+      expect(await deliver('onSearchActiveChanged', [true]), isTrue);
+      expect(await deliver('onSearchSubmitted', ['hồ']), isTrue);
+      expect(
+        await deliver('onSearchFieldChanged', [
+          NativeRect(x: 8, y: 490, width: 330, height: 48),
+        ]),
+        isTrue,
+      );
+      expect(await deliver('onBackTapped', [2]), isTrue);
+
+      expect(events, [
+        const LiquidNativeSearchTextChanged('hô', composing: true),
+        const LiquidNativeSearchActiveChanged(true),
+        const LiquidNativeSearchSubmitted('hồ'),
+        const LiquidNativeSearchFieldChanged(Rect.fromLTWH(8, 490, 330, 48)),
+        const LiquidNativeBackTapped(2),
+      ]);
+    },
+  );
 }

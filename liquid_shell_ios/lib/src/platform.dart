@@ -88,6 +88,29 @@ class LiquidShellIOS extends EventChannelLiquidShellPlatform {
     }
   }
 
+  @override
+  Future<void> setNativeSearchText(String text) =>
+      _send('setSearchText', () => _host.setSearchText(text));
+
+  @override
+  Future<void> setNativeSearchActive({required bool active}) =>
+      _send('setSearchActive', () => _host.setSearchActive(active));
+
+  @override
+  Future<void> setNativePageScroll({
+    required int tab,
+    required double offset,
+  }) async {
+    // Checked at the boundary: a NaN or infinite offset never crosses.
+    if (!offset.isFinite) return;
+    await _send('setPageScroll', () => _host.setPageScroll(tab, offset));
+  }
+
+  /// Debug builds of the plugin report the native search and page state;
+  /// release builds an empty snapshot. For integration tests.
+  @visibleForTesting
+  Future<NativeDebugSnapshot> debugSnapshot() => _host.debugSnapshot();
+
   /// Debug builds of the plugin run the code path of a user tap on
   /// [target]; release builds ignore it. For integration tests. Like every
   /// other call, a channel failure is logged once and never thrown.
@@ -137,4 +160,23 @@ final class _NativeReceiver implements NativeShellFlutterApi {
   @override
   void onWindowControlsChanged(NativeWindowControls controls) =>
       _emit(LiquidWindowControlsChanged(controlsFromNative(controls)));
+
+  @override
+  void onSearchTextChanged(String text, bool composing) =>
+      _emit(LiquidNativeSearchTextChanged(text, composing: composing));
+
+  @override
+  void onSearchActiveChanged(bool active) =>
+      _emit(LiquidNativeSearchActiveChanged(active));
+
+  @override
+  void onSearchSubmitted(String text) =>
+      _emit(LiquidNativeSearchSubmitted(text));
+
+  @override
+  void onSearchFieldChanged(NativeRect frame) =>
+      _emit(LiquidNativeSearchFieldChanged(rectFromNative(frame)));
+
+  @override
+  void onBackTapped(int tab) => _emit(LiquidNativeBackTapped(tab));
 }
