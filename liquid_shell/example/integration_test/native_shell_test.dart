@@ -156,9 +156,10 @@ void main() {
   });
 
   // The guard round trip on the real native chrome (final review I2): the
-  // tap only proposes, the app's dialog answers, and the native selection
-  // follows the answer. Started from the portrait overlay sidebar when the
-  // simulator is portrait, where the dialog must not open under it (I1).
+  // tap only proposes, the app's native alert answers, and the native
+  // selection follows the answer. Started from the portrait overlay sidebar
+  // when the simulator is portrait, where the dialog must not open under it
+  // (I1).
   testWidgets('a dirty page: a native tap asks first; keep stays, discard '
       'leaves', (tester) async {
     if (!_expectNative) return;
@@ -179,27 +180,26 @@ void main() {
 
     await recorder.debugTap(NativeTapTarget.destination, 1);
     await _settle(tester);
-    expect(find.text('Discard changes?'), findsOneWidget);
-    // The body behind the dialog keeps its bottom padding, also where the
-    // compact bar hid (owner decision): nothing behind it jumps.
+    final guard = await recorder.debugNativeDialog();
+    expect(guard?.title, 'Discard changes?');
+    expect(guard?.labels, ['Keep editing', 'Discard']);
+    // The body keeps its bottom padding.
     expect(bodyBottom(), bottom);
-    // Inert under the dialog; an overlay sidebar closed natively (UIKit
-    // reports it hidden), so nothing native covers the dialog.
+    // Inert while the guard runs; an overlay sidebar closed natively.
     expect(recorder.configs.last.interactive, isFalse);
     expect(recorder.configs.last.selectedIndex, 0);
     if (overlay) expect(_scope(tester).sidebarVisible, isFalse);
-    // The compact bar would cover the dialog's bottom: it hides.
-    final compact = _scope(tester).sizeClass == LiquidSizeClass.compact;
-    expect(recorder.configs.last.hidden, compact);
+    // The native alert is above the compact bar, so the bar stays (spec
+    // P3a §8); P2 hid it under a Flutter dialog.
+    expect(recorder.configs.last.hidden, isFalse);
     await binding.takeScreenshot('native_${_runName}_guard');
 
     final beforeKeep = recorder.configs.length;
-    await tester.tap(find.text('Keep editing'));
+    await recorder.debugRespondToNativeDialog(0); // Keep editing
     await _settle(tester);
-    expect(find.text('Discard changes?'), findsNothing);
+    expect(await recorder.debugNativeDialog(), isNull);
     expect(_title(tester), 'Home');
     expect(bodyBottom(), bottom);
-    // Re-synced: the current selection went back to UIKit, interactive.
     final resent = recorder.configs.sublist(beforeKeep);
     expect(resent, isNotEmpty);
     expect(resent.last.selectedIndex, 0);
@@ -207,7 +207,7 @@ void main() {
 
     await recorder.debugTap(NativeTapTarget.destination, 1);
     await _settle(tester);
-    await tester.tap(find.text('Discard'));
+    await recorder.debugRespondToNativeDialog(1); // Discard
     await _settle(tester);
     expect(_title(tester), 'Inbox');
     expect(recorder.configs.last.selectedIndex, 1);

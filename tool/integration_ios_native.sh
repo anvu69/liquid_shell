@@ -9,6 +9,8 @@
 #                 false when it must not (default
 #                 "iPad Air 11-inch (M4)=true;iPhone 17 Pro=true").
 #                 A 36-character UDID works in place of a name.
+# NATIVE_TARGETS  space-separated integration tests to drive on each device
+#                 (default "native_shell_test.dart native_dialogs_test.dart").
 # FLUTTER         flutter command (default: flutter).
 # IOS_DRIVE_TIMEOUT  seconds one `flutter drive` may run (default 1200).
 #
@@ -26,6 +28,7 @@ FLUTTER=${FLUTTER:-flutter}
 IOS_DRIVE_TIMEOUT=${IOS_DRIVE_TIMEOUT:-1200}
 IOS_RUNTIME=${IOS_RUNTIME-iOS 26.5}
 NATIVE_DEVICES=${NATIVE_DEVICES:-iPad Air 11-inch (M4)=true;iPhone 17 Pro=true}
+NATIVE_TARGETS=${NATIVE_TARGETS:-native_shell_test.dart native_dialogs_test.dart}
 
 udid_of() {
   local name=$1
@@ -45,7 +48,7 @@ drive() {
   # shellcheck disable=SC2086 # FLUTTER may be "fvm flutter"
   "$tool_dir/with_timeout.sh" "$IOS_DRIVE_TIMEOUT" $FLUTTER drive \
     --driver=test_driver/integration_test.dart \
-    --target=integration_test/native_shell_test.dart \
+    --target=integration_test/$4 \
     -d "$udid" \
     --dart-define=EXPECT_NATIVE="$expect" \
     --dart-define=RUN_NAME="$run"
@@ -63,15 +66,18 @@ for pair in "${pairs[@]}"; do
   run=${name//[^A-Za-z0-9]/_}
   echo "▸ $name ($udid), native expected: $expect"
   boot "$udid"
-  status=0
-  drive "$udid" "$expect" "$run" || status=$?
-  if [ "$status" -eq 124 ]; then
-    echo "▸ flutter drive stalled; restarting $name and retrying once" >&2
-    xcrun simctl shutdown "$udid" 2>/dev/null || true
-    boot "$udid"
+  for target in $NATIVE_TARGETS; do
+    echo "▸ $name: $target"
     status=0
-    drive "$udid" "$expect" "$run" || status=$?
-  fi
-  [ "$status" -eq 0 ] || exit "$status"
+    drive "$udid" "$expect" "$run" "$target" || status=$?
+    if [ "$status" -eq 124 ]; then
+      echo "▸ flutter drive stalled; restarting $name and retrying once" >&2
+      xcrun simctl shutdown "$udid" 2>/dev/null || true
+      boot "$udid"
+      status=0
+      drive "$udid" "$expect" "$run" "$target" || status=$?
+    fi
+    [ "$status" -eq 0 ] || exit "$status"
+  done
 done
 echo "✓ native shell integration passed"
