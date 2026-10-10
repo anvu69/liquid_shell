@@ -219,14 +219,21 @@ class RenderLiquidBackdrop extends RenderProxyBox {
   @override
   void detach() {
     LiquidDriftGuard.instance.remove(this);
+    // Off screen nothing samples the shader; a reattach paints a new one.
+    _disposeShader();
     super.detach();
   }
 
   @override
   void dispose() {
+    _disposeShader();
+    super.dispose();
+  }
+
+  void _disposeShader() {
     _shader?.dispose();
     _shader = null;
-    super.dispose();
+    _filter = null;
   }
 
   void _invalidate() {

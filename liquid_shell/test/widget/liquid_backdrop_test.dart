@@ -15,16 +15,27 @@ const _params = LiquidOpticsParams(
   blurSigma: 3,
 );
 
+const _sigma5 = LiquidOpticsParams(
+  tint: Color(0x38FFFFFF),
+  rim: Color(0x80FFFFFF),
+  refraction: 1,
+  dispersion: 0.3,
+  blurSigma: 5,
+);
+
 late ui.FragmentProgram _program;
 final _built = <double>[];
+final _shaders = <ui.FragmentShader>[];
 
 Future<void> _setUp(WidgetTester tester, {double ratio = 3}) async {
   _program = (await tester.runAsync(
     () => ui.FragmentProgram.fromAsset('shaders/liquid_glass.frag'),
   ))!;
   _built.clear();
+  _shaders.clear();
   debugLiquidFilterFactory = (shader, sigma) {
     _built.add(sigma);
+    _shaders.add(shader);
     return ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma);
   };
   addTearDown(() => debugLiquidFilterFactory = null);
@@ -101,6 +112,50 @@ void main() {
       ),
     );
     expect(_built, [3, 5]);
+  });
+
+  testWidgets('disposes a replaced shader, and its shader on detach', (
+    tester,
+  ) async {
+    await _setUp(tester);
+    final key = GlobalKey();
+    await tester.pumpWidget(
+      Center(
+        child: KeyedSubtree(key: key, child: _glass()),
+      ),
+    );
+    await tester.pumpWidget(
+      Center(
+        child: KeyedSubtree(
+          key: key,
+          child: _glass(params: _sigma5),
+        ),
+      ),
+    );
+    expect(_shaders, hasLength(2));
+    expect(_shaders[0].debugDisposed, isTrue);
+    expect(_shaders[1].debugDisposed, isFalse);
+
+    // Reparenting detaches and reattaches the same render object.
+    final render = _render(tester);
+    await tester.pumpWidget(
+      Center(
+        child: Padding(
+          padding: EdgeInsets.zero,
+          child: KeyedSubtree(
+            key: key,
+            child: _glass(params: _sigma5),
+          ),
+        ),
+      ),
+    );
+    expect(_render(tester), same(render));
+    expect(_shaders[1].debugDisposed, isTrue);
+    expect(_shaders, hasLength(3));
+    expect(_shaders[2].debugDisposed, isFalse);
+
+    await tester.pumpWidget(const SizedBox());
+    expect(_shaders[2].debugDisposed, isTrue);
   });
 
   testWidgets('shares the nearest BackdropGroup', (tester) async {
