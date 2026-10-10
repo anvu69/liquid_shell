@@ -172,6 +172,34 @@ void main() {
     _expectInPlace(tester);
   });
 
+  testWidgets('one throwing check does not stop the drift guard', (
+    tester,
+  ) async {
+    await _setUp(tester);
+    final offset = ValueNotifier(Offset.zero);
+    addTearDown(offset.dispose);
+    await tester.pumpWidget(
+      ValueListenableBuilder<Offset>(
+        valueListenable: offset,
+        builder: (_, value, child) =>
+            Transform.translate(offset: value, child: child),
+        child: RepaintBoundary(child: Center(child: _glass())),
+      ),
+    );
+    final throwing = _ThrowingBackdrop();
+    LiquidDriftGuard.instance.add(throwing);
+    addTearDown(() => LiquidDriftGuard.instance.remove(throwing));
+    tester.binding.scheduleFrame();
+    await tester.pump();
+    expect(tester.takeException(), isA<StateError>());
+    LiquidDriftGuard.instance.remove(throwing);
+
+    offset.value = const Offset(0, 40);
+    await tester.pump();
+    await tester.pump();
+    _expectInPlace(tester);
+  });
+
   testWidgets('registers with the drift guard while attached', (tester) async {
     await _setUp(tester);
     final before = LiquidDriftGuard.instance.debugCount;
@@ -189,4 +217,17 @@ void main() {
       const Rect.fromLTWH(100, 370, 200, 60),
     );
   });
+}
+
+/// A backdrop whose drift check throws, standing in for a bug in one entry.
+class _ThrowingBackdrop extends RenderLiquidBackdrop {
+  _ThrowingBackdrop()
+    : super(
+        program: _program,
+        borderRadius: BorderRadius.zero,
+        params: _params,
+      );
+
+  @override
+  void checkDrift() => throw StateError('drift check failed');
 }

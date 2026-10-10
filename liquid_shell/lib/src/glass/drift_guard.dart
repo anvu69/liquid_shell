@@ -35,10 +35,14 @@ class LiquidDriftGuard {
     _scheduled = true;
     SchedulerBinding.instance.addPostFrameCallback((_) {
       _scheduled = false;
-      for (final backdrop in _backdrops.toList()) {
-        backdrop.checkDrift();
+      try {
+        for (final backdrop in _backdrops.toList()) {
+          backdrop.checkDrift();
+        }
+      } finally {
+        // The error is still reported, but must not end the guard.
+        _schedule();
       }
-      _schedule();
     }, debugLabel: 'LiquidDriftGuard');
   }
 }
