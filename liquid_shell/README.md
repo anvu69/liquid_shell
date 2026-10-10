@@ -28,9 +28,11 @@ dependency.
 - **Narrow windows.** Down to 320pt (Slide Over, ⅓ Split View, small
   phones), 5 tabs plus a trailing action keep 44pt-wide cells at text
   scale 1, and the labels shrink to fit.
-- **Glass tiers** (liquid, frosted, solid) behind a `LiquidGlassRenderer`
-  seam, with automatic **solid fallback** for Reduce Transparency, battery
-  saver, disabled window blurs and devices that cannot blur.
+- **Liquid glass by default**: the package's own lens shader on Impeller
+  (iOS, Android 10+), with automatic **frosted** fallback (no Impeller,
+  low-end or GLES-only Android, battery saver, Low Power Mode, slow frames)
+  and **solid** for Reduce Transparency, Increase Contrast and disabled
+  window blurs.
 - **Accessible**: semantics, large-text icon-only cells with a large content
   viewer, RTL, and every string replaceable through `LiquidShellStrings`.
 - **Native iOS 26 chrome**, opt-in: the system's own
@@ -45,7 +47,7 @@ dependency.
 | Platform | Look | Signals |
 |---|---|---|
 | iOS 15+ | Glass pill and sidebar; native `UITabBarController` chrome on iOS 26 (opt-in) | Reduce Transparency, iPadOS 26 window controls |
-| Android | Same as iOS | Animations off / high contrast, battery saver, window blurs disabled (API 31+), no Impeller |
+| Android | Same as iOS | Animations off / high contrast, battery saver, window blurs disabled (API 31+), low memory, no Vulkan 1.1 |
 | Web, macOS, Windows, Linux | Frosted glass | None (always frosted unless forced) |
 
 ## Install
@@ -666,6 +668,21 @@ Widget build(BuildContext context) {
 
 See [doc/theming.md](doc/theming.md) for every field and its default.
 
+### Liquid glass
+
+iOS 26 native (left) and Flutter liquid (right):
+
+<img src="doc/images/compare_iphone_basic.png" width="410" alt="iOS 26 native (left) and Flutter liquid (right), iPhone">
+
+<img src="doc/images/compare_ipad_sidebar_slots.png" width="820" alt="iOS 26 native (left) and Flutter liquid (right), iPad">
+
+iOS 26 native iPhone (left) and Flutter liquid on Android (right):
+
+<img src="doc/images/compare_android_basic.png" width="410" alt="iOS 26 native (left) and Flutter liquid on Android (right)">
+
+What the lens draws, its theme fields, when it falls back and what it
+costs: [doc/liquid.md](doc/liquid.md).
+
 ### Forced tier
 
 <?code-excerpt "forced_tier.dart (readme)"?>
@@ -705,12 +722,12 @@ Widget build(BuildContext context) {
 }
 ```
 
-| Frosted | Solid |
-|---|---|
-| <img src="doc/images/case_tier_frosted.png" width="260" alt="Frosted tier"> | <img src="doc/images/case_tier_solid.png" width="260" alt="Solid tier"> |
+| Liquid | Frosted | Solid |
+|---|---|---|
+| <img src="doc/images/case_tier_liquid.png" width="260" alt="Liquid tier"> | <img src="doc/images/case_tier_frosted.png" width="260" alt="Frosted tier"> | <img src="doc/images/case_tier_solid.png" width="260" alt="Solid tier"> |
 
-No liquid renderer ships yet; forcing `liquid` draws frosted. See
-[doc/tiers.md](doc/tiers.md).
+Forcing `liquid` without Impeller (Android 9 and lower, the web) draws
+frosted. See [doc/tiers.md](doc/tiers.md).
 
 ### Form factors
 
@@ -969,16 +986,19 @@ layout, insets and sidebar state with `LiquidShellScope.of(context)`.
 
 ## Accessibility and fallbacks
 
-Glass turns solid when any of these is on. A signal that cannot be read
+Glass is liquid unless one of these is on. A signal that cannot be read
 counts as off, so the shell never fails to draw.
 
-| Signal | iOS | Android |
-|---|---|---|
-| Reduce transparency | Reduce Transparency | Animator duration scale 0, or high contrast (API 34+ contrast, or high-text-contrast) |
-| High contrast | Increase Contrast | (reported through reduce transparency) |
-| Battery saver | not used | Battery Saver |
-| Window blurs disabled | not used | `isCrossWindowBlurEnabled` false (API 31+) |
-| Cannot blur | never | No Impeller (Skia, API 28 and lower) |
+| Signal | iOS | Android | Glass |
+|---|---|---|---|
+| Reduce transparency | Reduce Transparency | Animator duration scale 0, or high contrast (API 34+ contrast, or high-text-contrast) | solid |
+| High contrast | Increase Contrast | (reported through reduce transparency) | solid |
+| Window blurs disabled | not used | `isCrossWindowBlurEnabled` false (API 31+), without battery saver | solid |
+| Power saving | Low Power Mode | Battery Saver | frosted |
+| Low-end device | not used | `isLowRamDevice`, or less than 3 GiB of memory | frosted |
+| GLES only | not used | Android 10+ without Vulkan 1.1 | frosted |
+| Slow frames | raster p90 over 1.25 × the frame budget for three 60-frame windows (profile and release) | same | frosted |
+| No Impeller | never | Skia, API 28 and lower | frosted |
 
 Cells and rows are buttons with labels, badge text and selected state. From
 1.6× text size the bar is icon-only and a long press shows the label large.
@@ -1027,8 +1047,9 @@ content viewer (see [Custom chrome](#custom-chrome)).
   shell nested in another shell's body (sub-tabs) takes it from the outer
   one, which then shows no navigation; give a nested shell
   `nativeChrome: LiquidNativeChrome.off`.
-- **No liquid tier yet.** Forcing `LiquidGlassTier.liquid` draws frosted.
-  The liquid tier comes in P4.
+- **Liquid glass inside another BackdropFilter draws frosted.** Flutter
+  3.44 gives a nested filter coordinates relative to its parent's region,
+  so the lens cannot be placed there.
 - **Android signals are best effort.** Each one that cannot be read
   counts as off.
 
@@ -1036,6 +1057,8 @@ content viewer (see [Custom chrome](#custom-chrome)).
 
 - [doc/theming.md](doc/theming.md): `LiquidGlassTheme` fields and defaults
 - [doc/tiers.md](doc/tiers.md): tiers, the policy, signals, writing a renderer
+- [doc/liquid.md](doc/liquid.md): the liquid lens, its theme fields,
+  fallbacks and cost
 - [doc/native_chrome.md](doc/native_chrome.md): native iOS chrome, its
   install rules, behaviour and limits
 - [doc/router_integration.md](doc/router_integration.md): `IndexedStack`,
@@ -1044,9 +1067,9 @@ content viewer (see [Custom chrome](#custom-chrome)).
 
 ## Roadmap
 
-- **P2 (this release):** native iOS 26 chrome and window controls.
+- **P2:** native iOS 26 chrome and window controls.
 - **P3:** a glass back button and title bar, a search field and a search tab.
-- **P4:** the liquid tier on Android, as a `LiquidGlassRenderer` adapter.
+- **P4 (this release):** the liquid tier in the core package.
 - **P5:** a go_router adapter (`StatefulShellRoute` builder, route-driven
   hide chrome).
 - **P6:** final docs pass and 0.1.0 on pub.dev.

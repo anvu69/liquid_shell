@@ -49,8 +49,9 @@ only when every fact below holds. The first one that fails is the reason
 
 Once installed, a shell uses it on every frame where all of these hold:
 `nativeChrome` is `auto`; the shell is the newest one on screen that asked
-for it; there is no `chromeBuilder`; and every destination (and the
-trailing action) has an SF Symbol. Width does not matter: UIKit picks the
+for it; there is no `chromeBuilder`; no `LiquidGlassScope` above the
+shell forces a glass tier (a forced tier asks for Flutter glass); and
+every destination (and the trailing action) has an SF Symbol. Width does not matter: UIKit picks the
 compact bar or the top bar and sidebar from the window's size class, and
 the shell's `sizeClass` and `chromeKind` follow it (`bottomBar` when
 compact). An iPhone is always compact, also a Plus or Max iPhone in

@@ -56,6 +56,35 @@ List<int> picture(int width, int height, {int Function(int x, int y)? alpha}) {
 
 int colorTypeOf(Uint8List png) => png[25];
 
+/// A 16-bit RGBA PNG (as the iOS simulator writes screenshots) whose
+/// 8-bit [pixels] are widened to 16 bits (v · 257). Rows use the Sub
+/// filter, whose left neighbour is 8 bytes back at this depth.
+Uint8List rawPng16(int width, int height, List<int> pixels) {
+  final samples = [
+    for (final v in pixels) ...[v, v],
+  ]; // v · 257, big endian
+  final stride = width * 8;
+  final rows = BytesBuilder();
+  for (var y = 0; y < height; y++) {
+    rows.addByte(1);
+    for (var x = 0; x < stride; x++) {
+      final left = x >= 8 ? samples[y * stride + x - 8] : 0;
+      rows.addByte((samples[y * stride + x] - left) & 0xff);
+    }
+  }
+  final ihdr = ByteData(13)
+    ..setUint32(0, width)
+    ..setUint32(4, height)
+    ..setUint8(8, 16)
+    ..setUint8(9, 6);
+  return Uint8List.fromList([
+    ...pngSignature,
+    ...pngChunk('IHDR', ihdr.buffer.asUint8List()),
+    ...pngChunk('IDAT', ZLibEncoder(level: 1).convert(rows.takeBytes())),
+    ...pngChunk('IEND', []),
+  ]);
+}
+
 void main() {
   test('an opaque RGBA image becomes a smaller RGB one with the same '
       'pixels', () {
@@ -107,5 +136,17 @@ void main() {
     final input = rawPng(8, 8, 6, picture(8, 8));
     final paletted = Uint8List.fromList(input)..[25] = 3;
     expect(compressPng(paletted), isNull);
+  });
+
+  test('a 16-bit RGBA PNG decodes to its 8-bit pixels', () {
+    final pixels = picture(16, 12);
+    final png = decodePng(rawPng16(16, 12, pixels));
+    expect(png.width, 16);
+    expect(png.height, 12);
+    expect(png.rgba, pixels);
+  });
+
+  test('a 16-bit PNG is left alone: 8 bits would lose precision', () {
+    expect(compressPng(rawPng16(16, 12, picture(16, 12))), isNull);
   });
 }

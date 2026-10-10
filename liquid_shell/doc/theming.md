@@ -13,11 +13,15 @@ All glass reads one `ThemeExtension`, `LiquidGlassTheme`. Without one,
 | `solid` | `surface` | `surface` | solid fill |
 | `border` | `outline` @ 0.28 | `onSurface` @ 0.18 | 1px outline |
 | `borderWidth` | 1 | 1 | outline width |
-| `rimHighlight` | white @ 0.50 | white @ 0.18 | frosted top-edge highlight |
+| `rimHighlight` | white @ 0.50 | white @ 0.18 | frosted top-edge highlight; liquid specular rim |
 | `shadow` | `#24000000`, offset (0, 6), blur 20, spread −2 | same | drawn outside the shape only |
 | `blurSigma` | 10 | 10 | frosted blur |
 | `borderRadius` | pill (999) | pill | bars, circles |
 | `labelStyle` | 10/14, w600, letter spacing 0.4, theme font | same | compact tab labels |
+| `liquidTint` | `surface` @ 0.50 | `surface` @ 0.55 | colour over liquid glass, inside the lens shader |
+| `refraction` | 1 | 1 | liquid lens strength: 0 is flat glass, 2 doubles it |
+| `dispersion` | 0.3 | 0.3 | liquid colour fringe in the lens band, 0–1; 0 turns it off |
+| `liquidBlurSigma` | 6 | 6 | liquid blur under the lens; 0 for none |
 
 Tab colours come from the `ColorScheme`: the selected cell is `primary` on
 a `primaryContainer` chip, others `onSurfaceVariant`. The selected label

@@ -20,7 +20,7 @@ COVERAGE_MIN := 90
 .PHONY: help get format format-check analyze test coverage goldens \
         goldens-update provenance snippets verify pana publish-check \
         android-unit ios-unit integration-ios integration-ios-native integration-android pigeon pigeon-check \
-        test-impeller
+        test-impeller compare-images
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -62,13 +62,22 @@ coverage: ## Tests with coverage; fails below COVERAGE_MIN, with no tests, with 
 	  $(DART) run tool/check_coverage.dart $$p/coverage/lcov.info $(COVERAGE_MIN); \
 	done
 
-goldens: ## Golden tests (reference toolchain: macOS + Flutter 3.44.x)
+goldens: ## Golden tests (reference toolchain: macOS + Flutter 3.44.x); liquid ones under Impeller
 	@if [ -d $(EXAMPLE)/test/goldens ]; then \
-	  cd $(EXAMPLE) && $(FLUTTER) test --tags golden; \
+	  cd $(EXAMPLE) && $(FLUTTER) test --tags golden && \
+	  $(FLUTTER) test --enable-impeller --tags liquid_golden; \
 	else echo "▸ no goldens yet"; fi
 
 goldens-update: ## Regenerate every golden and doc image, then recompress them losslessly
 	FLUTTER="$(FLUTTER)" DART="$(DART)" tool/update_goldens.sh
+
+compare-images: ## Native vs Flutter liquid side by side (iOS sims you create, emulator in ANDROID_SERIAL); README subset to doc/images
+	FLUTTER="$(FLUTTER)" DART="$(DART)" tool/compare_ios.sh
+	FLUTTER="$(FLUTTER)" DART="$(DART)" tool/compare_android.sh
+	cp $(EXAMPLE)/build/compare/ios_iphone_basic.png liquid_shell/doc/images/compare_iphone_basic.png
+	cp $(EXAMPLE)/build/compare/ios_ipad_sidebar_slots_sidebar.png liquid_shell/doc/images/compare_ipad_sidebar_slots.png
+	cp $(EXAMPLE)/build/compare/android_basic.png liquid_shell/doc/images/compare_android_basic.png
+	$(DART) run tool/compress_pngs.dart liquid_shell/doc/images
 
 provenance: ## Fail on app names or banned dependencies outside docs/, or glass outside LiquidGlass
 	tool/check_provenance.sh

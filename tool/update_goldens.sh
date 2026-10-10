@@ -21,6 +21,8 @@ case "$version" in
 esac
 
 $FLUTTER test --tags golden --update-goldens
+# The liquid tier needs Impeller's shader filters (spec 2026-10-10 §10.3).
+$FLUTTER test --enable-impeller --tags liquid_golden --update-goldens
 # Lossless: the pixels stay identical, only the PNG encoding shrinks.
 $DART run ../../tool/compress_pngs.dart ../doc/images
 echo "✓ goldens and doc images updated in liquid_shell/doc/images (Flutter $version)"

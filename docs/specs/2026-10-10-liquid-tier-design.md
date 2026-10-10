@@ -360,7 +360,7 @@ JVM unit tests in `SignalReaderTest` cover each value, and the two `null` cases.
 - **Who holds it:** every attached `RenderLiquidBackdrop` holds a reference (acquired in `attach`, released in `detach`), so the guard only measures frames while liquid glass is actually on screen.
 - **Subscription:** while at least one is held, it subscribes with `SchedulerBinding.instance.addTimingsCallback`.
 - **Windows:** it groups `FrameTiming.rasterDuration` into windows of 60 frames.
-- **The rule:** a window is slow when its p90 is above `1.25 × budget`, where `budget = 1 s / refreshRate` (`PlatformDispatcher.views.first.display.refreshRate`, default 60). After **3 consecutive** slow windows, `slowFrames` becomes true for the rest of the process. It logs once in debug.
+- **The rule:** a window is slow when its p90 is above `1.25 × budget`, where `budget = max(1 s / refreshRate, 16.667 ms)` (`PlatformDispatcher.views.first.display.refreshRate`, default 60). The 60 Hz floor matters on 120 Hz ProMotion panels: an app capped at 60 Hz there still reports 120 Hz, and an 8.3 ms budget would demote it for frames that are on time. After **3 consecutive** slow windows, `slowFrames` becomes true for the rest of the process. It logs once in debug.
 - **Pure decision:** `bool liquidFramesTooSlow(List<Duration> windowP90s, Duration budget)` and `Duration p90(List<Duration>)` are pure and unit-tested.
 - **When it runs:** only in profile and release (`kProfileMode || kReleaseMode`), or when `@visibleForTesting debugLiquidFrameGuardEnabled = true`. A debug build's raster times would demote every developer's emulator.
 - **Why it never flips back:** demotion is sticky. Once on frosted, raster time drops, and switching back would oscillate.
@@ -414,7 +414,7 @@ It is documented in `doc/native_chrome.md` ("When the native chrome is used") an
   - forced liquid wins over `glesOnly`, `lowEnd` and `powerSave`;
   - a registered liquid renderer wins over the built-in one;
   - built-in unsupported → frosted.
-- **`frame_guard_test.dart`:** `p90`, `liquidFramesTooSlow` (2 slow windows → false, 3 → true, a fast window resets the run), the 120 Hz budget, and that it is off in debug unless the flag is set.
+- **`frame_guard_test.dart`:** `p90`, `liquidFramesTooSlow` (2 slow windows → false, 3 → true, a fast window resets the run), the 120 Hz display keeping the 16.667 ms floor, and that it is off in debug unless the flag is set.
 - **Platform interface:** `fromMap` with and without the new keys; `==` and `toString`.
 - **Kotlin `SignalReaderTest`:** `lowEnd` (low-RAM flag, 2.9 GiB, 3 GiB exactly → false, null), `glesOnly` (API 28 → false, API 29 without Vulkan → true, with Vulkan → false, null → false).
 
