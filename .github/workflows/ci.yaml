@@ -209,9 +209,11 @@ jobs:
     # one job per idiom, so a stalled simulator costs one leg, not both.
     name: integration-ios-native (${{ matrix.device }})
     runs-on: macos-latest
-    # The script stops a stalled drive after 20 min (IOS_DRIVE_TIMEOUT 1200 s)
-    # and retries it once: 40 min, plus the build.
-    timeout-minutes: 60
+    # Two drives per leg (NATIVE_TARGETS: native_shell_test.dart and
+    # native_dialogs_test.dart; about 15 min each, build included). The
+    # script stops a stalled drive after 20 min (IOS_DRIVE_TIMEOUT 1200 s)
+    # and retries it once, per target: up to 80 min, plus the setup.
+    timeout-minutes: 100
     strategy:
       fail-fast: false
       matrix:

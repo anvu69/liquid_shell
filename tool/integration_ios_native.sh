@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Native iOS 26 shell on simulators (spec P2 §9.4).
+# Native iOS 26 shell and native dialogs on simulators (specs P2 §9.4,
+# P3a §9.4).
 #
 #   tool/integration_ios_native.sh
 #
@@ -14,13 +15,15 @@
 # FLUTTER         flutter command (default: flutter).
 # IOS_DRIVE_TIMEOUT  seconds one `flutter drive` may run (default 1200).
 #
-# Stall guard, as in tool/integration_ios.sh: a drive that outlives
-# IOS_DRIVE_TIMEOUT is stopped (tool/with_timeout.sh), the simulator is
-# restarted and the drive is retried once. A test failure is never retried.
+# Stall guard, as in tool/integration_ios.sh: a drive (one target on one
+# device) that outlives IOS_DRIVE_TIMEOUT is stopped (tool/with_timeout.sh),
+# the simulator is restarted and that drive is retried once. A test failure
+# is never retried.
 #
-# Screenshots land in liquid_shell/example/build/integration_screenshots/
-# (native_<run>_home.png, native_<run>_sidebar.png): the doc images of the
-# native chrome, which goldens cannot draw (spec P2 §9.5).
+# Screenshots land in liquid_shell/example/build/integration_screenshots/:
+# native_<run>_*.png (home, sidebar, guard, cases) and dialogs_<run>_*.png
+# (alert, sheet, alert_flutter). They are the doc images of the native chrome
+# and dialogs, which goldens cannot draw (spec P2 §9.5).
 set -euo pipefail
 tool_dir=$(cd "$(dirname "$0")" && pwd)
 cd "$tool_dir/../liquid_shell/example"
@@ -44,11 +47,11 @@ boot() {
 }
 
 drive() {
-  local udid=$1 expect=$2 run=$3
+  local udid=$1 expect=$2 run=$3 target=$4
   # shellcheck disable=SC2086 # FLUTTER may be "fvm flutter"
   "$tool_dir/with_timeout.sh" "$IOS_DRIVE_TIMEOUT" $FLUTTER drive \
     --driver=test_driver/integration_test.dart \
-    --target=integration_test/$4 \
+    --target="integration_test/$target" \
     -d "$udid" \
     --dart-define=EXPECT_NATIVE="$expect" \
     --dart-define=RUN_NAME="$run"
