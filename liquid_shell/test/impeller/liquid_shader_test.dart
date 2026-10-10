@@ -115,9 +115,9 @@ void main() {
   testWidgets('the bezel samples from further in (lensing)', (tester) async {
     final program = await _program(tester);
     // Stripes: red on [16k, 16k + 8), blue on [16k + 8, 16k + 16).
-    // About 1 pt inside the left edge (bezel x ~ 0.1) the sample comes from
-    // about 7.8 pt further in: 101 + 7.8 = 108.8 is blue [104, 112), while
-    // the unbent backdrop at 101 is red [96, 104).
+    // At 101 (bezel x ~ 0.1) the shift is ~7.8 pt: 108.8 is blue [104, 112)
+    // and unbent 101 is red [96, 104), but an outward 93.2 is blue too
+    // [88, 96), so this probe proves bending, not its direction.
     const glass = Rect.fromLTWH(100, 100, 200, 100);
     final data = await _render(
       tester,
@@ -133,6 +133,15 @@ void main() {
     );
     final edge = _pixel(data, const Offset(100.75, 150));
     expect(edge[2], greaterThan(edge[0]), reason: 'blue sampled: $edge');
+    // Direction: at 103.75 (bezel x ~ 0.31) the shift is ~3.2 pt. Inward
+    // 106.95 is blue [104, 112); outward 100.55 and unbent 103.75 are red
+    // [96, 104).
+    final inward = _pixel(data, const Offset(103.5, 150));
+    expect(
+      inward[2],
+      greaterThan(inward[0]),
+      reason: 'inward (blue) sampled: $inward',
+    );
     // The body is not bent: 204 lies in blue [200, 208).
     final centre = _pixel(data, const Offset(204, 150));
     expect(centre[2], greaterThan(200), reason: 'centre is the backdrop');
