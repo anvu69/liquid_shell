@@ -2,4 +2,4 @@
 library;
 
 export 'src/native_shell_api.g.dart' show NativeTapTarget;
-export 'src/platform.dart' show LiquidShellIOS;
+export 'src/platform.dart' show LiquidShellIOS, NativeDialogDebugSnapshot;
