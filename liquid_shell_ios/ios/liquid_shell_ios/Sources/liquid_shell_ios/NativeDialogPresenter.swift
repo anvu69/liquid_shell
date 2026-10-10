@@ -12,10 +12,13 @@ final class NativeDialogPresenter: NSObject, NativeDialogHostApi {
   private let flutterViewController: () -> UIViewController?
   private let osAtLeast26: () -> Bool
   private let disabledByEnvironment: () -> Bool
-  /// The dialog this presenter shows (debug hooks, detach).
+  /// The newest dialog this presenter shows (debug hooks).
   private weak var current: UIAlertController?
   private var currentCompletion: DialogCompletion?
   private var currentKind: NativeDialogKind = .alert
+  /// Every request not yet answered, oldest first: detach answers them all
+  /// (two calls in a row stack one alert on another).
+  private var pending: [PendingDialog] = []
 
   init(
     flutterViewController: @escaping () -> UIViewController?,
@@ -57,6 +60,8 @@ final class NativeDialogPresenter: NSObject, NativeDialogHostApi {
       return
     }
     let alert = build(request, sourceView: flutter.view, done: done)
+    pending.removeAll { $0.done.isFinished }
+    pending.append(PendingDialog(alert: alert, done: done))
     show(alert, kind: request.kind, in: window, done: done, waits: 3)
   }
 
@@ -97,10 +102,17 @@ final class NativeDialogPresenter: NSObject, NativeDialogHostApi {
     #endif
   }
 
-  /// Engine detach: nobody will receive an answer. Closes what is shown.
+  /// Engine detach: nobody will receive an answer. Closes what is shown
+  /// and answers every pending request, each once, including one still
+  /// waiting for a transition (it is then never shown).
   func dismissAll() {
-    current?.dismiss(animated: false)
-    currentCompletion?.finish(.dismissed())
+    let all = pending
+    pending = []
+    // Dismissing the oldest from its presenter closes those stacked on it.
+    for entry in all where !entry.done.isFinished {
+      entry.alert?.presentingViewController?.dismiss(animated: false)
+    }
+    for entry in all { entry.done.finish(.dismissed()) }
     current = nil
     currentCompletion = nil
   }
@@ -161,6 +173,8 @@ final class NativeDialogPresenter: NSObject, NativeDialogHostApi {
     _ alert: UIAlertController, kind: NativeDialogKind, in window: UIWindow,
     done: DialogCompletion, waits: Int
   ) {
+    // Answered while waiting for a transition (detach): never shown.
+    guard !done.isFinished else { return }
     guard let top = Self.topmost(from: window.rootViewController) else {
       done.finish(.unavailable(.noWindow))
       return
@@ -196,6 +210,12 @@ final class NativeDialogPresenter: NSObject, NativeDialogHostApi {
     case .destructive: return .destructive
     }
   }
+}
+
+/// A request [NativeDialogPresenter] has not answered yet.
+private struct PendingDialog {
+  weak var alert: UIAlertController?
+  let done: DialogCompletion
 }
 
 /// Attached to the alert (spec §5.4). It answers `dismissed` when a popover

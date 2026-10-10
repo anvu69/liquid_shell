@@ -1427,6 +1427,40 @@ final class NativeDialogPresenterTests: XCTestCase {
     XCTAssertNil(root.presentedViewController)
   }
 
+  /// Two dialogs pending at once (two calls in a row stack the second on
+  /// the first): the engine's detach answers both, once each.
+  func testDismissAllAnswersEveryPendingDialogOnce() throws {
+    let dialogs = presenter()
+    let first = present(dialogs, request())
+    settle()
+    let second = present(dialogs, request())
+    settle()
+    XCTAssertNotNil(
+      root.presentedViewController?.presentedViewController as? UIAlertController,
+      "the second alert stacks on the first")
+    dialogs.dismissAll()
+    settle()
+    XCTAssertEqual(first.all, [.dismissed()])
+    XCTAssertEqual(second.all, [.dismissed()])
+    XCTAssertNil(root.presentedViewController)
+  }
+
+  /// A request still waiting for a transition when the engine detaches is
+  /// answered then, and never shown.
+  func testDismissAllAnswersARequestWaitingForATransition() throws {
+    let dialogs = presenter()
+    _ = present(dialogs, request())
+    settle()
+    let first = try XCTUnwrap(root.presentedViewController as? UIAlertController)
+    first.dismiss(animated: true)
+    let waiting = present(dialogs, request(kind: .actionSheet))
+    dialogs.dismissAll()
+    XCTAssertEqual(waiting.all, [.dismissed()])
+    settle(1.5)
+    XCTAssertEqual(waiting.all, [.dismissed()])
+    XCTAssertNil(root.presentedViewController)
+  }
+
   /// The scene closes while an alert is up: its window lets go of the
   /// Flutter view controller, and UIKit of the alert, unanswered. Dart's
   /// future still ends, once.
