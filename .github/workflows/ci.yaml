@@ -259,7 +259,11 @@ jobs:
           cache: true
       - run: make get
       - run: make goldens
-      - run: make test-impeller
+      # The shader probes (lens placement and direction) are the early
+      # warning for an engine change; on the informational stable leg they
+      # must run even when its goldens drift.
+      - if: ${{ success() || (always() && matrix.experimental) }}
+        run: make test-impeller
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
