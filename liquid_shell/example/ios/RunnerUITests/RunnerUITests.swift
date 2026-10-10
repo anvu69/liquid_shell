@@ -54,8 +54,8 @@ final class NativeDialogUITests: XCTestCase {
   func testTappingOutsideAnActionSheetAnswersTheCancelValue() {
     let app = launch("sheet")
     XCTAssertTrue(app.buttons["Delete photo"].waitForExistence(timeout: timeout))
-    // Near the bottom-trailing corner: outside the iPad popover, which
-    // points at a row near the top, and on the iPhone's dimming view.
+    // Near the top-trailing corner: beside the iPad popover, which sits
+    // over the rows near the top, and on the iPhone's dimming view.
     app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.15)).tap()
     expectResult(app, "Result: cancel")
   }

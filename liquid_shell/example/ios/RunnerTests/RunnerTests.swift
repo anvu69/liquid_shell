@@ -4,6 +4,17 @@ import XCTest
 
 @testable import liquid_shell_ios
 
+/// A key, visible window in the test host's scene, showing [root].
+func makeSceneWindow(root: UIViewController) throws -> UIWindow {
+  let scene = try XCTUnwrap(
+    UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+  let window = UIWindow(windowScene: scene)
+  window.frame = scene.coordinateSpace.bounds
+  window.rootViewController = root
+  window.makeKeyAndVisible()
+  return window
+}
+
 /// Unit tests of liquid_shell_ios's native shell: the pure arithmetic, the
 /// install rule, the pass-through hit test (spec P2 §9.3), and the UIKit
 /// shell in a window of the test host. They live in
@@ -1061,11 +1072,7 @@ final class InstallerEngineTests: XCTestCase {
   }
 
   private func window(root: UIViewController) throws -> UIWindow {
-    let scene = try XCTUnwrap(
-      UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
-    let window = UIWindow(windowScene: scene)
-    window.rootViewController = root
-    window.isHidden = false
+    let window = try makeSceneWindow(root: root)
     windows.append(window)
     return window
   }
@@ -1234,12 +1241,7 @@ final class NativeDialogPresenterTests: XCTestCase {
   }
 
   private func window(root: UIViewController = UIViewController()) throws -> UIWindow {
-    let scene = try XCTUnwrap(
-      UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
-    let window = UIWindow(windowScene: scene)
-    window.frame = scene.coordinateSpace.bounds
-    window.rootViewController = root
-    window.makeKeyAndVisible()
+    let window = try makeSceneWindow(root: root)
     windows.append(window)
     return window
   }
@@ -1510,30 +1512,20 @@ final class NativeDialogPresenterTests: XCTestCase {
 /// presents from the registrar's Flutter view controller, and
 /// `detachFromEngine` (the engine going away) answers what is still shown.
 final class PluginDialogWiringTests: XCTestCase {
-  private var window: UIWindow?
-
-  override func tearDown() {
-    window?.isHidden = true
-    window?.rootViewController = nil
-    window = nil
-    super.tearDown()
-  }
-
   func testDetachingFromTheEngineAnswersAnOpenAlertDismissed() throws {
     let engine = FlutterEngine(name: "dialogs", project: nil, allowHeadlessExecution: true)
     XCTAssertTrue(engine.run())
+    addTeardownBlock { engine.destroyContext() }
     let registrar = try XCTUnwrap(engine.registrar(forPlugin: LiquidShellPlugin.registrarKey))
     LiquidShellPlugin.register(with: registrar)
     let plugin = try XCTUnwrap(
       engine.valuePublished(byPlugin: LiquidShellPlugin.registrarKey) as? LiquidShellPlugin)
     let flutter = FlutterViewController(engine: engine, nibName: nil, bundle: nil)
-    let scene = try XCTUnwrap(
-      UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
-    let window = UIWindow(windowScene: scene)
-    window.frame = scene.coordinateSpace.bounds
-    window.rootViewController = flutter
-    window.makeKeyAndVisible()
-    self.window = window
+    let window = try makeSceneWindow(root: flutter)
+    addTeardownBlock {
+      window.isHidden = true
+      window.rootViewController = nil
+    }
 
     var answers: [NativeDialogResult] = []
     try XCTUnwrap(plugin.dialogs).present(
@@ -1545,14 +1537,19 @@ final class PluginDialogWiringTests: XCTestCase {
     ) { result in
       if case .success(let value) = result { answers.append(value) }
     }
-    RunLoop.current.run(until: Date().addingTimeInterval(0.8))
-    XCTAssertNotNil(flutter.presentedViewController as? UIAlertController)
+    waitUntil("the alert is shown") { flutter.presentedViewController is UIAlertController }
     XCTAssertTrue(answers.isEmpty)
 
     plugin.detachFromEngine(for: registrar)
-    RunLoop.current.run(until: Date().addingTimeInterval(0.8))
+    waitUntil("the alert is gone") { flutter.presentedViewController == nil }
     XCTAssertEqual(answers, [.dismissed()])
-    XCTAssertNil(flutter.presentedViewController)
-    engine.destroyContext()
+  }
+
+  /// Polls [condition] instead of waiting a fixed time: slow CI runners.
+  private func waitUntil(_ what: String, _ condition: @escaping () -> Bool) {
+    let met = XCTNSPredicateExpectation(
+      predicate: NSPredicate { _, _ in condition() }, object: nil)
+    met.expectationDescription = what
+    wait(for: [met], timeout: 10)
   }
 }
