@@ -330,7 +330,10 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   /// search or the trailing tab (their selection is a search state). UIKit
   /// would otherwise pick a tab itself. Dart keeps its own selection and
   /// tells the app it is hidden; nothing is proposed. Leaving an active
-  /// search dismisses it and keeps its text (Q2).
+  /// search dismisses it and keeps its text (Q2). Whether the search tab
+  /// is already selected is `isSearchSelected`: after a rebuild iOS 26.5
+  /// keeps a stale `selectedTab`, and every later config would dismiss an
+  /// active search.
   private func select(_ index: Int) {
     guard destinationTabs.indices.contains(index) else { return }
     let wanted = destinationTabs[index]
@@ -338,7 +341,7 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     guard
       let tab = shown
         ? wanted : tabs.first(where: { $0 !== trailingTab && $0 !== searchTab }),
-      selectedTab !== tab
+      tab === searchTab ? !isSearchSelected : selectedTab !== tab
     else { return }
     if isSearchSelected { searchBridge.dismissKeepingText() }
     applyingFromDart = true

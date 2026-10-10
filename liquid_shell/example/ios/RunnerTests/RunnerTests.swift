@@ -1669,6 +1669,21 @@ extension NativeTabsTests {
     XCTAssertEqual(events.sent.last, "searchText phốc", "still reporting")
   }
 
+  /// After a rebuild that keeps the search tab selected, iOS 26.5 keeps
+  /// reporting a stale `selectedTab`: a later config with the same
+  /// selection must not dismiss an active search.
+  func testAConfigAfterARebuildKeepsAnActiveSearch() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    tabs.apply(searchConfig(selected: 3, reports: true))
+    settle()
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    events.sent.removeAll()
+    tabs.apply(searchConfig(selected: 3, placeholder: "Songs", reports: true))
+    settle()
+    XCTAssertTrue(tabs.searchBridge.controller.isActive, "\(events.sent)")
+    XCTAssertFalse(events.sent.contains("searchActive false"), "\(events.sent)")
+  }
+
   /// Spec §7.4: Dart's text sent before the search tab is selected waits
   /// for the selection.
   func testDartsTextBeforeSelectionWaitsForTheSearchTab() throws {
