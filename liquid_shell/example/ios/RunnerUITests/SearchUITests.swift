@@ -118,6 +118,21 @@ final class SearchUITests: XCTestCase {
     XCTAssertTrue(flutterRow(app, "Hồ Hoàn Kiếm").waitForExistence(timeout: 10), "the results")
   }
 
+  /// Apple Music's large title shares the bar row, right under the status
+  /// bar (UIKit's `.inline`), not a row below it (Task 12 side by side).
+  func testTheSearchRootsLargeTitleSitsOnTheBarRow() throws {
+    try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .phone, "iPhone only")
+    let app = launch()
+    let tab = searchTabButton(app)
+    XCTAssertTrue(tab.waitForExistence(timeout: timeout))
+    tab.tap()
+    let bar = app.navigationBars["Search"]
+    let title = bar.staticTexts["Search"]
+    XCTAssertTrue(title.waitForExistence(timeout: 10), "the native large title")
+    XCTAssertEqual(bar.frame.height, 54, accuracy: 1, "no title row under the bar row")
+    XCTAssertLessThanOrEqual(title.frame.maxY, bar.frame.maxY + 0.5, "on the bar row")
+  }
+
   func testTheCollapsedCircleReturnsToThePreviousTab() throws {
     try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .phone, "iPhone only")
     let app = launch()

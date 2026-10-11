@@ -450,8 +450,10 @@ The tab's `UISearchTab` provider returns the `ShellNavController`, built once pe
 | `prominentTabIdentifier` | — (API is 27+) | `UISearchTab.identifier` (Q10) | — | nil (Q1: the system look) |
 | `preferredSearchBarPlacement` | `.automatic` (tab-hosted at the bottom) | `.automatic` | `.stacked` | `.stacked` |
 | `hidesSearchBarWhenScrolling` | default | default | false | false |
-| Root `largeTitleDisplayMode` | `.always` (unless `pages[0].largeTitle == false`) | `.always` | `.never` (unless `pages[0].largeTitle == true`) | `.never` |
+| Root `largeTitleDisplayMode` | `.inline` (unless `pages[0].largeTitle == false`) | `.inline` | `.never` (unless `pages[0].largeTitle == true`) | `.never` |
 | `obscuresBackgroundDuringPresentation` | false | false | false | false |
+
+`.inline` (iOS 17+), not `.always`: Apple Music's large title sits on the bar row, right under the status bar and level with its trailing items. `.always` adds a 52pt row under the bar, which put our title about 60pt lower (Task 12 side by side). Under a back button UIKit turns `.inline` into `.always`. Pushed pages that ask for a large title keep `.always`.
 
 "iPad" means `userInterfaceIdiom == .pad`, so a narrow iPad window keeps the stacked top field (the video), and an iPhone in landscape keeps the bottom field. The search tab's `title` and `image` come from the destination (`label`, `sfSymbol` when set); otherwise UIKit's localised "Search" and magnifying glass stay. `searchBar.placeholder` is `config.search.placeholder` when set.
 
@@ -628,7 +630,7 @@ The fallback field is one persistent `TextField` (Material, no border, `textInpu
 
 `LiquidPage` without a native bar draws, over its child:
 - a 54pt row at `padding.top`: `LiquidBackButton` at start 16 when `Navigator.canPop`, then the inline title (17pt semibold, centred between the back button and an equal trailing reserve) when the page is not large-titled;
-- for a large-titled page, a large title row (34pt bold, start 16) below that row; it is hidden while `searchPhase == active` (UIKit hides it too);
+- for a large-titled root page (no back button), the large title (34pt bold, start 16) **on that row**, as UIKit's `.inline` mode and Apple Music draw it; for a large-titled pushed page, a large title row below the bar row (UIKit turns `.inline` into `.always` under a back button). Either way it is hidden while `searchPhase == active` (UIKit hides it too);
 - a scroll-edge fade under the bar (a `ShaderMask` gradient over the first 24pt below it), the iOS 26 look without a bar background;
 - the child gets the bar's height added to its `MediaQuery.padding.top`, so `contentPaddingOf` keeps working.
 

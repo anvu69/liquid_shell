@@ -215,6 +215,8 @@ final class PageHostController: UIViewController {
     navigationItem.preferredSearchBarPlacement =
       style.placement == .stacked ? .stacked : .automatic
     if let hides = style.hidesWhenScrolling { navigationItem.hidesSearchBarWhenScrolling = hides }
-    navigationItem.largeTitleDisplayMode = style.largeTitle ? .always : .never
+    // `.inline`: the large title on the bar row, right under the status
+    // bar, as Apple Music draws it; `.always` adds a 52pt row under the bar.
+    navigationItem.largeTitleDisplayMode = style.largeTitle ? .inline : .never
   }
 }

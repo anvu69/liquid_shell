@@ -1458,8 +1458,28 @@ extension NativeTabsTests {
       XCTAssertEqual(item.largeTitleDisplayMode, .never)
     } else {
       XCTAssertEqual(item.preferredSearchBarPlacement, .automatic)
-      XCTAssertEqual(item.largeTitleDisplayMode, .always)
+      XCTAssertEqual(item.largeTitleDisplayMode, .inline)
     }
+  }
+
+  /// Apple Music's large title shares the bar row with its trailing items,
+  /// right under the status bar: UIKit's `.inline` large title. `.always`
+  /// puts it on a 52pt row below the bar, about 60pt lower (Task 12).
+  func testTheSearchRootsLargeTitleSharesTheBarRow() throws {
+    try requirePhone()
+    let tabs = try installedSearchShell(selected: 2)
+    let nav = try XCTUnwrap(tabs.navControllers[2])
+    let item = nav.rootHost.navigationItem
+    XCTAssertEqual(item.largeTitleDisplayMode, .inline)
+    let height = nav.navigationBar.frame.height
+    XCTAssertEqual(
+      tabs.flutter.view.safeAreaInsets.top, nav.navigationBar.frame.maxY, accuracy: 0.5,
+      "Flutter's content starts right under the bar")
+    item.largeTitleDisplayMode = .never
+    settle()
+    XCTAssertEqual(
+      nav.navigationBar.frame.height, height, accuracy: 0.5,
+      "as tall as a bar with no large title: no title row under the bar row")
   }
 
   func testOnlyAnIPhoneOnIOS27MakesTheSearchTabProminent() throws {

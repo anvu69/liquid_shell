@@ -237,6 +237,61 @@ void main() {
     expect(find.text('Search'), findsOneWidget);
   });
 
+  testWidgets("a root page's large title sits on the bar row, as UIKit's "
+      'inline large title (Apple Music): content starts under that row', (
+    tester,
+  ) async {
+    EdgeInsets? padding;
+    await _pump(
+      tester,
+      home: LiquidPage(
+        title: 'Search',
+        child: Builder(
+          builder: (context) {
+            padding = MediaQuery.paddingOf(context);
+            return const SizedBox.expand();
+          },
+        ),
+      ),
+    );
+    final title = tester.getRect(
+      find.descendant(
+        of: find.byType(FlutterPageBar),
+        matching: find.text('Search'),
+      ),
+    );
+    expect(title.top, greaterThanOrEqualTo(0));
+    expect(title.bottom, lessThanOrEqualTo(kPageBarExtent));
+    expect(title.left, 16, reason: 'leading, like UIKit');
+    expect(padding!.top, kPageBarExtent);
+  });
+
+  testWidgets('a pushed page with a large title keeps it under the bar row '
+      '(UIKit: inline turns into always under a back button)', (tester) async {
+    await _pump(tester);
+    tester
+        .state<NavigatorState>(find.byType(Navigator))
+        .push(
+          MaterialPageRoute<void>(
+            builder: (_) => const LiquidPage(
+              title: 'Detail',
+              largeTitle: true,
+              child: SizedBox.expand(),
+            ),
+          ),
+        )
+        .ignore();
+    await tester.pumpAndSettle();
+    final title = tester.getRect(
+      find.descendant(
+        of: find.byType(FlutterPageBar),
+        matching: find.text('Detail'),
+      ),
+    );
+    expect(title.top, greaterThanOrEqualTo(kPageBarExtent));
+    expect(find.byType(LiquidBackButton), findsOneWidget);
+  });
+
   testWidgets('the bar titles carry a text style without a Material above', (
     tester,
   ) async {
@@ -428,7 +483,7 @@ void main() {
     expect(find.bySemanticsLabel('A'), findsNothing);
   });
 
-  testWidgets('content scrolled up fades out above the large title row', (
+  testWidgets('content scrolled up fades out under the bar row', (
     tester,
   ) async {
     const red = Color(0xFFFF0000);
@@ -459,10 +514,10 @@ void main() {
     int green(int x, int y) => bytes.getUint8((y * image.width + x) * 4 + 1);
 
     final x = image.width - 8;
-    // The bar row (0–54) and the large title row (54–106) show no content.
+    // The bar row (0–54), which holds the large title, shows no content.
     expect(green(x, 20), 255, reason: 'bar row');
-    expect(green(x, 60), 255, reason: 'top of the large title row');
     // Below the bar the content is opaque.
+    expect(green(x, 80), 0, reason: 'content right below the bar');
     expect(green(x, 200), 0, reason: 'content below the bar');
   });
 }
