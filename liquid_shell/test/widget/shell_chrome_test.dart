@@ -207,6 +207,7 @@ void main() {
       expect(home.width, closeTo(51.6, 0.01));
       expect(home.width, greaterThanOrEqualTo(44));
       for (final rect in rects) {
+        expect(rect.width, greaterThanOrEqualTo(44));
         expect(rect.height, greaterThanOrEqualTo(44));
       }
       // Neighbouring capsules overlap by 8, so the pill stays tiled.

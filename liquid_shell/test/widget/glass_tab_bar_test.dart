@@ -207,6 +207,18 @@ void main() {
     expect(tester.getSize(find.byType(LiquidBadgeView)).height, 21.33);
   });
 
+  testWidgets('RTL: the badge mirrors to the icon frame leading top, 4 in '
+      'and 4 up', (tester) async {
+    await _pump(tester, direction: TextDirection.rtl);
+    // Explore is the middle slot either way: pill-local 90, 94 wide.
+    final frame = tabIconFrame(const Rect.fromLTWH(90, 4, 94, 54));
+    expect(
+      tester.getTopRight(find.byType(LiquidBadgeView)),
+      Offset(64 + frame.left + 4, _top + frame.top - 4),
+    );
+    expect(tester.getSize(find.byType(LiquidBadgeView)).height, 21.33);
+  });
+
   testWidgets('the margins and the gaps pass touches to the body', (
     tester,
   ) async {
@@ -222,6 +234,22 @@ void main() {
     await tester.tapAt(const Offset(287, _top + 31));
     await tester.pumpAndSettle();
     expect(taps, [2]);
+  });
+
+  testWidgets('the 8 pt overlap of two slots is split at its midpoint: a '
+      'tap goes to the nearest slot', (tester) async {
+    for (final direction in TextDirection.values) {
+      final taps = <int>[];
+      await _pump(tester, onSelect: taps.add, direction: direction);
+      // Home 68–162 and Explore 154–248 overlap on 154–162; centre 158.
+      final home = _slot(tester, 'Home').center.dx;
+      final explore = _slot(tester, 'Explore').center.dx;
+      final mid = (home + explore) / 2;
+      final towardHome = home < explore ? -2.0 : 2.0;
+      await tester.tapAt(Offset(mid + towardHome, _top + 31));
+      await tester.tapAt(Offset(mid - towardHome, _top + 31));
+      expect(taps, [0, 1], reason: '$direction');
+    }
   });
 
   testWidgets('trailing: pill pinned start, 62 circle at the end', (

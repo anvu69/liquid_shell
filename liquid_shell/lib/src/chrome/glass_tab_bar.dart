@@ -365,7 +365,7 @@ class _GlassTabBarState extends State<GlassTabBar> {
               for (final (s, d) in shown.indexed)
                 Positioned.fromRect(
                   rect: slots[s],
-                  child: _slotNode(s, d, ax),
+                  child: _slotNode(s, d, ax, _hitRect(slots, s)),
                 ),
             ],
           ),
@@ -379,23 +379,50 @@ class _GlassTabBarState extends State<GlassTabBar> {
     return Stack(clipBehavior: Clip.none, children: children);
   }
 
-  Widget _slotNode(int slot, LiquidDestination d, bool ax) => Semantics(
-    container: true,
-    button: true,
-    selected: _shown[slot] == widget.selectedIndex,
-    label: badgeSemanticsLabel(d.label, d.badge, widget.strings),
-    onTap: () => _select(slot),
-    excludeSemantics: true,
-    child: LargeContentViewer(
-      icon: d.selectedIcon ?? d.icon,
-      label: d.label,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
+  /// The part of `slots[s]` that takes its touches, slot-local. Neighbouring
+  /// capsules overlap by 8; the overlap is split at its midpoint, so a tap
+  /// goes to the nearest slot, as on native. The semantics node keeps the
+  /// whole capsule.
+  static Rect _hitRect(List<Rect> slots, int s) {
+    final r = slots[s];
+    var left = r.left;
+    var right = r.right;
+    for (final (i, o) in slots.indexed) {
+      if (i == s) continue;
+      if (o.center.dx < r.center.dx && o.right > r.left) {
+        left = math.max(left, (o.right + r.left) / 2);
+      } else if (o.center.dx > r.center.dx && o.left < r.right) {
+        right = math.min(right, (o.left + r.right) / 2);
+      }
+    }
+    return Rect.fromLTRB(left, r.top, right, r.bottom).shift(-r.topLeft);
+  }
+
+  Widget _slotNode(int slot, LiquidDestination d, bool ax, Rect hit) =>
+      Semantics(
+        container: true,
+        button: true,
+        selected: _shown[slot] == widget.selectedIndex,
+        label: badgeSemanticsLabel(d.label, d.badge, widget.strings),
         onTap: () => _select(slot),
-        child: const SizedBox.expand(),
-      ),
-    ),
-  );
+        excludeSemantics: true,
+        child: Stack(
+          children: [
+            Positioned.fromRect(
+              rect: hit,
+              child: LargeContentViewer(
+                icon: d.selectedIcon ?? d.icon,
+                label: d.label,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _select(slot),
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
 
   Widget _collapsedNode(LiquidDestination d) {
     final expandable = widget.onCollapsedTap != null;
@@ -410,7 +437,9 @@ class _GlassTabBarState extends State<GlassTabBar> {
         hint: expandable && widget.announceExpand
             ? widget.strings.expandTabBarHint
             : null,
-        onTap: expandable ? _collapsedTap : null,
+        // Always tappable (P1): `_collapsedTap` does nothing without
+        // `onCollapsedTap`, and the hint and announcement stay gated.
+        onTap: _collapsedTap,
         excludeSemantics: true,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,

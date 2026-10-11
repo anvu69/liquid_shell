@@ -142,7 +142,7 @@ void main() {
     await tester.pumpWidget(_host(selectedIndex: 2));
     final foreground = LiquidGlassTheme.fromColorScheme(_scheme).tabForeground;
     for (final label in ['Home', 'Inbox', 'Settings']) {
-      expect(tester.widget<Text>(_label(label)).style!.color, foreground);
+      expect(visibleTabLabelColor(tester, label), foreground, reason: label);
     }
     // No lens: the tinted copy is clipped away entirely.
     final tinted = tester.widget<ClipPath>(find.byKey(kTabTintedKey));
@@ -336,8 +336,12 @@ void main() {
     );
     expect(
       tester.getSemantics(_cell('Inbox')),
-      // Inert without onExpand: no tap action either.
-      matchesSemantics(label: 'Inbox, 120 new', isButton: true),
+      // Inert without onExpand, but it keeps P1's tap action.
+      matchesSemantics(
+        label: 'Inbox, 120 new',
+        isButton: true,
+        hasTapAction: true,
+      ),
     );
     // matchesSemantics skips a null hint, so check it directly.
     expect(tester.getSemantics(_cell('Inbox')).hint, isEmpty);
@@ -465,6 +469,88 @@ void main() {
   });
 
   group('narrow labels fit (Q18)', _narrowLabelTests);
+
+  group('narrow (Q17)', () {
+    final search = LiquidTabAction(
+      icon: const Icon(Icons.search),
+      onPressed: () {},
+      semanticLabel: 'Search',
+    );
+
+    // Five tabs and a circle at text scale 1.3 (13pt labels).
+    Widget bar(double width, List<String> labels, {bool? narrow}) => _host(
+      width: width,
+      narrow: narrow,
+      textScale: 1.3,
+      trailing: search,
+      destinations: [
+        for (final label in labels)
+          LiquidDestination(icon: const Icon(Icons.circle), label: label),
+      ],
+    );
+
+    void expectEllipsized(
+      WidgetTester tester,
+      List<String> labels, {
+      required bool ellipsized,
+    }) {
+      for (final label in labels) {
+        expect(
+          _ellipsized(tester, _label(label)),
+          ellipsized,
+          reason: label,
+        );
+      }
+    }
+
+    test('the threshold is 340', () {
+      expect(kLiquidNarrowWidth, 340);
+    });
+
+    testWidgets('narrow: true fits the labels at any width, narrow: false '
+        'does not', (tester) async {
+      // Five letters: wider than the 61.4 label box at 13pt, not at 10pt.
+      const labels = ['Homes', 'Mails', 'Feeds', 'Chats', 'Helps'];
+      await tester.pumpWidget(bar(393, labels, narrow: true));
+      expectEllipsized(tester, labels, ellipsized: false);
+      await tester.pumpWidget(bar(393, labels, narrow: false));
+      expectEllipsized(tester, labels, ellipsized: true);
+    });
+
+    testWidgets('by default it follows the MediaQuery width: 339 narrow, '
+        '340 not', (tester) async {
+      // Four letters: wider than the ≈50.7 label box at 13pt, not at 10pt.
+      const labels = ['Home', 'Mail', 'Feed', 'Chat', 'Help'];
+      await tester.pumpWidget(bar(339, labels));
+      expectEllipsized(tester, labels, ellipsized: false);
+      await tester.pumpWidget(bar(340, labels));
+      expectEllipsized(tester, labels, ellipsized: true);
+    });
+
+    testWidgets('the top bar keeps its 4pt padding either way', (
+      tester,
+    ) async {
+      Future<double> padding({required double width, bool? narrow}) async {
+        await tester.pumpWidget(
+          _host(
+            width: width,
+            narrow: narrow,
+            position: LiquidTabBarPosition.top,
+          ),
+        );
+        await tester.pumpAndSettle();
+        final pill = tester.getRect(find.byType(LiquidGlass).first);
+        final home = tester.getRect(
+          find.ancestor(of: find.text('Home'), matching: find.byType(InkWell)),
+        );
+        return home.left - pill.left;
+      }
+
+      expect(await padding(width: 393), 4);
+      expect(await padding(width: 320), 4);
+      expect(await padding(width: 393, narrow: true), 4);
+    });
+  });
 }
 
 // The size a label is drawn at: its style's size after the text scaler,
@@ -571,10 +657,17 @@ void _narrowLabelTests() {
     for (final index in [0, 4]) {
       await tester.pumpWidget(narrowBar(selectedIndex: index));
       await tester.pumpAndSettle();
-      expect(
-        tester.widget<Text>(_tinted(short[index])).style!.color,
-        _scheme.primary,
-      );
+      // The lens covers the selected label only.
+      final foreground = LiquidGlassTheme.fromColorScheme(
+        _scheme,
+      ).tabForeground;
+      for (final (i, label) in short.indexed) {
+        expect(
+          visibleTabLabelColor(tester, label),
+          i == index ? _scheme.primary : foreground,
+          reason: label,
+        );
+      }
       expectFitted(tester, short[index]);
       expectFitted(tester, short[index], copy: _tinted);
     }

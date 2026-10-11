@@ -237,6 +237,23 @@ Finder tabSlot(String label) => find.descendant(
   ),
 );
 
+/// The colour the bottom bar's [label] is seen in: the tinted copy's where
+/// the lens clip covers the label's centre, otherwise the normal copy's
+/// (spec VK-503 §6.3).
+Color? visibleTabLabelColor(WidgetTester tester, String label) {
+  for (final copy in [kTabTintedKey, kTabNormalKey]) {
+    final clip = find.byKey(copy);
+    final text = find.descendant(of: clip, matching: find.text(label));
+    final path = tester
+        .widget<ClipPath>(clip)
+        .clipper!
+        .getClip(tester.getSize(clip));
+    final centre = tester.getCenter(text) - tester.getTopLeft(clip);
+    if (path.contains(centre)) return tester.widget<Text>(text).style!.color;
+  }
+  return null;
+}
+
 /// The scope data seen by the page of [label].
 LiquidShellScopeData scopeOf(WidgetTester tester, [String label = 'Home']) =>
     LiquidShellScope.of(tester.element(find.byKey(ValueKey('list-$label'))));

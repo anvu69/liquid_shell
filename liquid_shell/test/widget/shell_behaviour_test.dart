@@ -394,11 +394,7 @@ void main() {
         tester.element(find.byType(LiquidTabBar)),
       ).tabForeground;
       for (final label in ['Home', 'Inbox', 'Settings']) {
-        final text = find.descendant(
-          of: find.byKey(kTabNormalKey),
-          matching: find.text(label),
-        );
-        expect(tester.widget<Text>(text).style!.color, foreground);
+        expect(visibleTabLabelColor(tester, label), foreground, reason: label);
       }
       // No lens: the tinted copy is clipped away entirely.
       final tinted = find.byKey(kTabTintedKey);
