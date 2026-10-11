@@ -322,15 +322,28 @@ rest ──down──▶ pressed ──move>slop──▶ dragging
 
 These are the targets during a tap flight (`age` = time since the commit, `d` = slots travelled, `v` = lens x velocity):
 
-- width = `rest.w · clamp(0.9 + 0.00090·max(0, |v| − 700), 0.9, 1.35)`
+- width = `rest.w · clamp(0.9 + 0.005·max(0, |v| − 700), 0.9, 1.46)`
 - height = `rest.h · (1 + 0.55·g)` while `age < 0.25 s`, then rest, where `g = 1` for `d = 1` and `g = 0.45` for `d ≥ 2`
 
 This reproduces the measured peaks:
 
 - one slot: the width falls to ≈ 84 (×0.9) and the height rises to ×1.5–1.6 at 0.20–0.25 s;
-- two slots: the width reaches ≈ 125 (×1.33) at peak velocity and the height ≈ ×1.24. The `tap` spring's peak lens velocity is ≈ 592 pt/s over one slot (below the 700 knee, so the width stays at ×0.9) and ≈ 1183 pt/s over two (×1.335).
+- two slots: the width reaches ≈ 125 (×1.33) and the height ≈ ×1.24. The `tap` spring's peak lens velocity is ≈ 592 pt/s over one slot (below the 700 knee, so the width stays at ×0.9; the minimum is ×0.901) and ≈ 1184 pt/s over two.
 
-It is a model, not UIKit's soft body. It matches peaks and timing within ±10 %, not every intermediate frame (research §8). The three constants (`0.9`, `700`, `0.00090`) and `0.55 / 0.45` live in `TabSprings` and are the only tuning knobs.
+**Amended in Task 3: gain 0.00090 → 0.005, clamp 1.35 → 1.46.**
+
+*Why the first values were wrong.* The first draft took the width target at peak velocity (×1.335) as the peak width, but the width follows its target on `widthIn` (ζ 1.4, 0.19 s, overdamped), which lags. With gain 0.00090 the two-slot peak was only ×1.150. With the clamp at 1.35, no gain or knee gets past ×1.253 without also stretching the one-slot flight.
+
+*The new values.*
+- At gain 0.005 the target saturates by 790 pt/s, so the stretch is effectively a step at the knee, and the gain is no longer a meaningful knob.
+- With the clamp at 1.46, the simulated two-slot peak is ×1.331, and `lens_motion_test` pins it at ±0.005.
+- `widthIn` is unchanged: it is the measured press spring, and the press test pins its 110 pt.
+
+*Known residual.* The width peaks about 80 ms after the lens velocity (0.167 s against 0.083 s), while native peaks at peak velocity. If the frame comparison flags this, the fix is a dedicated flight width spring fitted from the native tap strips, not a guessed one.
+
+*Research §7.4* gives `0.9 + 0.00045·|v|` with no knee. This section supersedes it.
+
+It is a model, not UIKit's soft body. It matches peaks and timing within ±10 %, not every intermediate frame (research §8). The constants (`0.9`, `700`, `0.005`, the clamp `1.46`) and `0.55 / 0.45` live in `TabSprings` and are the only tuning knobs.
 
 ### 8.4 Effects per frame (`LensFrame`)
 
