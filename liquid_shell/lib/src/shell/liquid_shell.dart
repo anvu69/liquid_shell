@@ -13,6 +13,7 @@ import 'package:liquid_shell/src/chrome/tab_geometry.dart';
 import 'package:liquid_shell/src/destinations/destination.dart';
 import 'package:liquid_shell/src/destinations/tab_action.dart';
 import 'package:liquid_shell/src/glass/glass_scope.dart';
+import 'package:liquid_shell/src/glass/scroll_pocket.dart';
 import 'package:liquid_shell/src/native/native_chrome.dart';
 import 'package:liquid_shell/src/native/native_host.dart';
 import 'package:liquid_shell/src/native/native_layout.dart';
@@ -1126,6 +1127,20 @@ class _LiquidShellState extends State<LiquidShell>
         highlight: _searchTarget.hovered,
       ),
     );
+
+    // Spec VK-503 §15: the pocket under the default bottom bar.
+    if (kind == LiquidChromeKind.bottomBar && widget.chromeBuilder == null) {
+      children.add(
+        const Positioned(
+          key: kScrollPocketKey,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: kScrollPocketExtent,
+          child: ScrollEdgePocket(),
+        ),
+      );
+    }
 
     switch (kind) {
       case LiquidChromeKind.bottomBar:
