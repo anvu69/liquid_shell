@@ -18,7 +18,7 @@ void main() {
       expect(theme.border, light.outline.withValues(alpha: 0.28));
       expect(
         theme.rimHighlight,
-        const Color(0xFFFFFFFF).withValues(alpha: 0.5),
+        const Color(0xFFFFFFFF).withValues(alpha: 0.12),
       );
     });
 
@@ -29,7 +29,7 @@ void main() {
       expect(theme.border, dark.onSurface.withValues(alpha: 0.18));
       expect(
         theme.rimHighlight,
-        const Color(0xFFFFFFFF).withValues(alpha: 0.18),
+        const Color(0xFFFFFFFF).withValues(alpha: 0.22),
       );
     });
 
@@ -39,17 +39,17 @@ void main() {
         expect(
           theme.shadow,
           const BoxShadow(
-            color: Color(0x24000000),
-            offset: Offset(0, 6),
+            color: Color(0x12000000),
+            offset: Offset(0, 3),
             blurRadius: 20,
-            spreadRadius: -2,
           ),
         );
         expect(theme.labelStyle.fontSize, 10);
-        expect(theme.labelStyle.height, 1.4);
-        expect(theme.labelStyle.fontWeight, FontWeight.w600);
-        expect(theme.labelStyle.letterSpacing, 0.4);
+        expect(theme.labelStyle.height, 1.2);
+        expect(theme.labelStyle.fontWeight, FontWeight.w500);
+        expect(theme.labelStyle.letterSpacing, 0);
         expect(theme.labelStyle.fontFamily, isNull);
+        expect(theme.tabIconSize, 26);
         expect(theme.blurSigma, 10);
         expect(theme.borderWidth, 1);
         expect(
@@ -152,7 +152,7 @@ void main() {
       expect(light.liquidTint.a, closeTo(0.40, 1e-3));
       expect(dark.liquidTint.a, closeTo(0.45, 1e-3));
       expect(light.refraction, 1);
-      expect(light.dispersion, 0.3);
+      expect(light.dispersion, 0);
       expect(light.liquidBlurSigma, 2);
       expect(dark.liquidBlurSigma, 2);
     });
@@ -161,12 +161,12 @@ void main() {
       final changed = light.copyWith(
         liquidTint: const Color(0x11223344),
         refraction: 2,
-        dispersion: 0,
+        dispersion: 0.3,
         liquidBlurSigma: 0,
       );
       expect(changed.liquidTint, const Color(0x11223344));
       expect(changed.refraction, 2);
-      expect(changed.dispersion, 0);
+      expect(changed.dispersion, 0.3);
       expect(changed.liquidBlurSigma, 0);
       expect(changed, isNot(light));
       expect(light.copyWith(), light);
@@ -245,10 +245,65 @@ void main() {
           tint: light.liquidTint,
           rim: light.rimHighlight,
           refraction: 1,
-          dispersion: 0.3,
+          dispersion: 0,
           blurSigma: 2,
         ),
       );
+    });
+  });
+
+  group('tab tokens (spec VK-503 §6.4)', () {
+    test('light and dark defaults', () {
+      final l = LiquidGlassTheme.fromColorScheme(light);
+      final d = LiquidGlassTheme.fromColorScheme(dark);
+      expect(l.selectionFill, const Color(0x14000000));
+      expect(d.selectionFill, const Color(0x21FFFFFF));
+      expect(l.tabForeground, const Color(0xFF191919));
+      expect(d.tabForeground, const Color(0xFFF4F4F4));
+      expect(l.badgeColor, const Color(0xFFFF383C));
+      expect(d.badgeColor, const Color(0xFFFF4245));
+    });
+
+    test('constructor defaults', () {
+      const t = LiquidGlassTheme(
+        tint: Color(0x00000000),
+        solid: Color(0xFFFFFFFF),
+        border: Color(0x00000000),
+        rimHighlight: Color(0x00000000),
+        shadow: BoxShadow(),
+        labelStyle: TextStyle(),
+      );
+      expect(t.selectionFill, const Color(0x14000000));
+      expect(t.tabForeground, const Color(0xFF191919));
+      expect(t.badgeColor, const Color(0xFFFF383C));
+      expect(t.tabIconSize, 26);
+    });
+
+    test('copyWith, lerp, == and hashCode cover them', () {
+      final base = LiquidGlassTheme.fromColorScheme(light);
+      final other = base.copyWith(
+        selectionFill: const Color(0x28000000),
+        tabForeground: const Color(0xFF000000),
+        badgeColor: const Color(0xFFFF0000),
+        tabIconSize: 30,
+      );
+      expect(other.selectionFill, const Color(0x28000000));
+      expect(other.tabForeground, const Color(0xFF000000));
+      expect(other.badgeColor, const Color(0xFFFF0000));
+      expect(other.tabIconSize, 30);
+      expect(other, isNot(base));
+      expect(other.hashCode, isNot(base.hashCode));
+      final half = base.lerp(other, 0.5);
+      expect(half.tabIconSize, 28);
+      expect(
+        half.selectionFill,
+        Color.lerp(
+          base.selectionFill,
+          other.selectionFill,
+          0.5,
+        ),
+      );
+      expect(base.copyWith(), base);
     });
   });
 }

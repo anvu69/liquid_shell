@@ -44,6 +44,8 @@ class LiquidOpticsParams {
     required this.refraction,
     required this.dispersion,
     required this.blurSigma,
+    this.bezel,
+    this.rimWidth,
   });
 
   /// The liquid fields of [theme]; the rim uses `rimHighlight`.
@@ -71,6 +73,15 @@ class LiquidOpticsParams {
   /// Logical sigma of the blur chained before the shader.
   final double blurSigma;
 
+  /// Bezel width override in logical pixels; null uses
+  /// [LiquidOptics.bezel]. The tab lens curves its whole height (spec
+  /// VK-503 §7.2).
+  final double? bezel;
+
+  /// Rim width override in logical pixels; null uses
+  /// [LiquidOptics.rimWidth].
+  final double? rimWidth;
+
   @override
   bool operator ==(Object other) =>
       other is LiquidOpticsParams &&
@@ -78,10 +89,20 @@ class LiquidOpticsParams {
       other.rim == rim &&
       other.refraction == refraction &&
       other.dispersion == dispersion &&
-      other.blurSigma == blurSigma;
+      other.blurSigma == blurSigma &&
+      other.bezel == bezel &&
+      other.rimWidth == rimWidth;
 
   @override
-  int get hashCode => Object.hash(tint, rim, refraction, dispersion, blurSigma);
+  int get hashCode => Object.hash(
+    tint,
+    rim,
+    refraction,
+    dispersion,
+    blurSigma,
+    bezel,
+    rimWidth,
+  );
 }
 
 /// The floats for shader indices 2–25 (spec §4.2), in pass pixels.
@@ -103,7 +124,7 @@ Float32List liquidUniforms({
   final tr = corner(radii.topRight);
   final br = corner(radii.bottomRight);
   final bl = corner(radii.bottomLeft);
-  final bezel = (LiquidOptics.bezel * scale)
+  final bezel = ((params.bezel ?? LiquidOptics.bezel) * scale)
       .clamp(1.0, math.max(1.0, half))
       .toDouble();
 
@@ -141,7 +162,7 @@ Float32List liquidUniforms({
     params.rim.a,
     LiquidOptics.light.dx,
     LiquidOptics.light.dy,
-    LiquidOptics.rimWidth * scale,
+    (params.rimWidth ?? LiquidOptics.rimWidth) * scale,
     LiquidOptics.saturation,
   ]);
 }

@@ -210,6 +210,11 @@ class LiquidTabBar extends StatelessWidget {
 /// Side padding of a bottom cell.
 const double _cellSidePadding = 8;
 
+/// Space under a bottom label. The label line is 12 at text scale 1 (the
+/// `labelStyle` height 1.2), and the pill keeps its 62 extent: spec VK-503
+/// §5.1, `E = 62 + max(0, lineHeight − 12)`.
+const double _labelFootroom = 2;
+
 class _Cell extends StatelessWidget {
   const _Cell({
     required this.destination,
@@ -313,7 +318,11 @@ class _Cell extends StatelessWidget {
                   )
                 else
                   icon,
-                if (label != null) ...[const SizedBox(height: 4), label],
+                if (label != null) ...[
+                  const SizedBox(height: 4),
+                  label,
+                  const SizedBox(height: _labelFootroom),
+                ],
               ],
             ),
           );

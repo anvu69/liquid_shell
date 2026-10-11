@@ -161,6 +161,73 @@ void main() {
       ),
     );
   });
+
+  group('lens overrides (spec VK-503 §7.2)', () {
+    const rect = Rect.fromLTWH(300, 2300, 330, 210);
+
+    test('null overrides keep LiquidOptics.bezel and rimWidth', () {
+      // `_params` has no overrides; the float-by-float tests above pin the
+      // rest of its uniforms.
+      expect(_params.bezel, isNull);
+      expect(_params.rimWidth, isNull);
+      final u = _uniforms(rect);
+      expect(u[8], closeTo(LiquidOptics.bezel * 3, 1e-4));
+      expect(u[22], closeTo(LiquidOptics.rimWidth * 3, 1e-4));
+    });
+
+    test('bezel replaces float 8, rimWidth float 22, in pass pixels', () {
+      const lens = LiquidOpticsParams(
+        tint: Color(0x38FFFFFF),
+        rim: Color(0x80FFFFFF),
+        refraction: 1,
+        dispersion: 0.3,
+        blurSigma: 3,
+        bezel: 35,
+        rimWidth: 1,
+      );
+      final base = _uniforms(rect);
+      final over = _uniforms(rect, params: lens);
+      expect(over[8], closeTo(35 * 3, 1e-4));
+      expect(over[22], closeTo(3, 1e-4));
+      for (var i = 0; i < base.length; i++) {
+        if (i == 8 || i == 22) continue;
+        expect(over[i], base[i], reason: 'float $i');
+      }
+    });
+
+    test('a bezel override is still clamped to half the short side', () {
+      const lens = LiquidOpticsParams(
+        tint: Color(0x00000000),
+        rim: Color(0x00000000),
+        refraction: 1,
+        dispersion: 0,
+        blurSigma: 0,
+        bezel: 500,
+      );
+      expect(_uniforms(rect, params: lens)[8], closeTo(105, 1e-4));
+    });
+
+    test('== and hashCode include the overrides', () {
+      const a = LiquidOpticsParams(
+        tint: Color(0x00000000),
+        rim: Color(0x00000000),
+        refraction: 1,
+        dispersion: 0,
+        blurSigma: 0,
+        bezel: 10,
+      );
+      const b = LiquidOpticsParams(
+        tint: Color(0x00000000),
+        rim: Color(0x00000000),
+        refraction: 1,
+        dispersion: 0,
+        blurSigma: 0,
+        bezel: 11,
+      );
+      expect(a, isNot(b));
+      expect(a.hashCode, isNot(b.hashCode));
+    });
+  });
 }
 
 extension on LiquidOpticsParams {
