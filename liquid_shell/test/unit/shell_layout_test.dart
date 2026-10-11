@@ -45,7 +45,8 @@ void main() {
     test('toString names both thresholds', () {
       expect(
         '${const LiquidShellBreakpoints(regular: 600, tiledSidebar: 1200)}',
-        'LiquidShellBreakpoints(regular: 600.0, tiledSidebar: 1200.0)',
+        'LiquidShellBreakpoints(regular: 600.0, tiledSidebar: 1200.0, '
+            'compactHeight: 500.0)',
       );
     });
   });
@@ -56,7 +57,10 @@ void main() {
 
     test('reference devices (spec §5.1)', () {
       expect(of(393, 852), ShellPresentation.compact); // iPhone
-      expect(of(932, 430), ShellPresentation.overlay); // Pro Max landscape
+      expect(
+        of(932, 430),
+        ShellPresentation.compact,
+      ); // Pro Max landscape (VK-503 Q8)
       expect(of(834, 1194), ShellPresentation.overlay); // iPad 11" portrait
       expect(of(1194, 834), ShellPresentation.tiled); // iPad 11" landscape
       expect(of(412, 915), ShellPresentation.compact); // Android phone
@@ -74,11 +78,39 @@ void main() {
     });
 
     test('size class at 699 / 700', () {
-      expect(of(699, 400), ShellPresentation.compact);
-      expect(of(700, 400), ShellPresentation.overlay);
+      expect(of(699, 600), ShellPresentation.compact);
+      expect(of(700, 600), ShellPresentation.overlay);
       expect(sizeClassOf(ShellPresentation.compact), LiquidSizeClass.compact);
       expect(sizeClassOf(ShellPresentation.overlay), LiquidSizeClass.regular);
       expect(sizeClassOf(ShellPresentation.tiled), LiquidSizeClass.regular);
+    });
+
+    test('compactHeight (spec VK-503 §12.1)', () {
+      expect(of(874, 402), ShellPresentation.compact);
+      expect(of(1194, 834), ShellPresentation.tiled);
+      expect(of(834, 1194), ShellPresentation.overlay);
+      const p1 = LiquidShellBreakpoints(compactHeight: 0);
+      expect(
+        presentationFor(const Size(932, 430), p1),
+        ShellPresentation.overlay,
+      );
+    });
+
+    test('breakpoints: compactHeight in ==, hashCode, toString, asserts', () {
+      expect(const LiquidShellBreakpoints().compactHeight, 500);
+      expect(
+        const LiquidShellBreakpoints(),
+        isNot(const LiquidShellBreakpoints(compactHeight: 0)),
+      );
+      expect(
+        '${const LiquidShellBreakpoints()}',
+        'LiquidShellBreakpoints(regular: 700.0, tiledSidebar: 1024.0, '
+            'compactHeight: 500.0)',
+      );
+      expect(
+        () => LiquidShellBreakpoints(compactHeight: -1),
+        throwsAssertionError,
+      );
     });
   });
 
@@ -249,14 +281,23 @@ void main() {
       );
     });
 
-    test('topBar and sidebarOverlay: pad.top + 20 + pill, +72 before '
-        'measurement', () {
+    test('topBar and sidebarOverlay: pad.top + 5.5 + pill, +53.5 before '
+        'measurement (spec VK-503 §12.2)', () {
+      expect(kTopBarGap, 5.5);
+      expect(kTopPillExtent, 48);
       for (final kind in [
         LiquidChromeKind.topBar,
         LiquidChromeKind.sidebarOverlay,
       ]) {
-        expect(insets(kind), const EdgeInsets.only(top: 96));
-        expect(insets(kind, measured: 60), const EdgeInsets.only(top: 104));
+        expect(
+          insets(kind),
+          const EdgeInsets.only(top: 24 + kTopBarGap + kTopPillExtent),
+        );
+        expect(insets(kind), const EdgeInsets.only(top: 77.5));
+        expect(
+          insets(kind, measured: 60),
+          const EdgeInsets.only(top: 24 + kTopBarGap + 60),
+        );
       }
     });
 

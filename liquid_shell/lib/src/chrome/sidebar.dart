@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:liquid_shell/src/destinations/badge.dart';
 import 'package:liquid_shell/src/destinations/destination.dart';
 import 'package:liquid_shell/src/destinations/tab_action.dart';
+import 'package:liquid_shell/src/glass/glass_theme.dart';
 import 'package:liquid_shell/src/glass/liquid_glass.dart';
 import 'package:liquid_shell/src/native/window_controls.dart';
 import 'package:liquid_shell/src/shell/strings.dart';
@@ -192,7 +193,10 @@ class _SidebarRow extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final isSelected = selected ?? false;
-    final color = isSelected ? scheme.onPrimaryContainer : scheme.onSurface;
+    // Unselected rows share the tab bar's foreground (spec VK-503 §12.3).
+    final color = isSelected
+        ? scheme.onPrimaryContainer
+        : LiquidGlassTheme.of(context).tabForeground;
     final badge = this.badge;
     return Semantics(
       container: true,

@@ -384,4 +384,191 @@ void main() {
     await tester.tapAt(const Offset(200, _top + 31));
     expect(expanded, 1);
   });
+
+  testWidgets('top form: 48 pill, label-only 17 pt cells, icon-only search', (
+    tester,
+  ) async {
+    tester.view
+      ..devicePixelRatio = 2
+      ..physicalSize = const Size(834, 1210) * 2;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.topCenter,
+            child: LiquidTabBar(
+              position: LiquidTabBarPosition.top,
+              destinations: const [
+                ..._three,
+                LiquidDestination(
+                  icon: Icon(Icons.search),
+                  label: 'Search',
+                  role: LiquidDestinationRole.search,
+                ),
+              ],
+              selectedIndex: 0,
+              onDestinationSelected: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(tester.getSize(find.byKey(kTabPillKey)).height, 48);
+    expect(find.byIcon(Icons.home), findsNothing);
+    expect(find.byIcon(Icons.search), findsNWidgets(2));
+    final label = tester.widget<Text>(
+      find.descendant(
+        of: find.byKey(kTabTintedKey),
+        matching: find.text('Home'),
+      ),
+    );
+    expect(label.style!.fontSize, 17);
+    expect(label.style!.fontWeight, FontWeight.w600);
+  });
+
+  testWidgets('landscape form: 44 pill, icon beside a 12 pt label', (
+    tester,
+  ) async {
+    tester.view
+      ..devicePixelRatio = 3
+      ..physicalSize = const Size(874, 402) * 3;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Stack(
+            children: [
+              Positioned(
+                left: TabMetrics.landscapeMargin,
+                right: TabMetrics.landscapeMargin,
+                bottom: 20,
+                child: LiquidTabBar(
+                  destinations: _three,
+                  selectedIndex: 0,
+                  onDestinationSelected: (_) {},
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    expect(tester.getSize(find.byKey(kTabPillKey)).height, 44);
+    final icon = tester.getRect(
+      find
+          .descendant(
+            of: find.byKey(kTabNormalKey),
+            matching: find.byIcon(Icons.map),
+          )
+          .first,
+    );
+    final label = tester.getRect(
+      find.descendant(
+        of: find.byKey(kTabNormalKey),
+        matching: find.text('Explore'),
+      ),
+    );
+    expect(label.left, greaterThan(icon.right));
+    expect(
+      tester
+          .widget<Text>(
+            find.descendant(
+              of: find.byKey(kTabNormalKey),
+              matching: find.text('Explore'),
+            ),
+          )
+          .style!
+          .fontSize,
+      12,
+    );
+  });
+
+  testWidgets('landscape form, RTL: the icon at the slot start (right), the '
+      'label before it', (tester) async {
+    tester.view
+      ..devicePixelRatio = 3
+      ..physicalSize = const Size(874, 402) * 3;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Scaffold(
+            body: Stack(
+              children: [
+                Positioned(
+                  left: TabMetrics.landscapeMargin,
+                  right: TabMetrics.landscapeMargin,
+                  bottom: 20,
+                  child: LiquidTabBar(
+                    destinations: _three,
+                    selectedIndex: 0,
+                    onDestinationSelected: (_) {},
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    final icon = tester.getRect(
+      find
+          .descendant(
+            of: find.byKey(kTabNormalKey),
+            matching: find.byIcon(Icons.map),
+          )
+          .first,
+    );
+    final label = tester.getRect(
+      find.descendant(
+        of: find.byKey(kTabNormalKey),
+        matching: find.text('Explore'),
+      ),
+    );
+    expect(label.right, lessThan(icon.left));
+  });
+
+  testWidgets('top form: slots measure labels in the style the cells draw '
+      '(label + 31), not the ambient one', (tester) async {
+    tester.view
+      ..devicePixelRatio = 2
+      ..physicalSize = const Size(834, 1210) * 2;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DefaultTextStyle(
+            // An ambient style the bar's own Material replaces.
+            style: const TextStyle(wordSpacing: 100),
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: LiquidTabBar(
+                position: LiquidTabBarPosition.top,
+                destinations: const [
+                  LiquidDestination(icon: Icon(Icons.home), label: 'A B'),
+                  LiquidDestination(icon: Icon(Icons.map), label: 'C'),
+                ],
+                selectedIndex: 0,
+                onDestinationSelected: (_) {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    double drawn(String label) => tester
+        .getSize(
+          find.descendant(
+            of: find.byKey(kTabTintedKey),
+            matching: find.text(label),
+          ),
+        )
+        .width;
+    expect(
+      tester.getSize(find.byKey(kTabPillKey)).width,
+      moreOrLessEquals(8 + drawn('A B') + 31 + drawn('C') + 31),
+    );
+  });
 }

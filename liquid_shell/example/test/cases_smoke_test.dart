@@ -71,7 +71,7 @@ void main() {
 
   testWidgets('the guard asks before leaving dirty edits', (tester) async {
     await _openCase(tester, 'guard');
-    await tester.tap(find.text('Explore'));
+    await tester.tap(_slot('Explore', within: find.byType(LiquidTabBar)));
     await tester.pumpAndSettle();
     expect(find.text('Discard changes?'), findsOneWidget);
     await tester.tap(find.text('Keep editing'));
@@ -83,7 +83,7 @@ void main() {
     tester,
   ) async {
     await _openCase(tester, 'guard');
-    await tester.tap(find.text('Explore'));
+    await tester.tap(_slot('Explore', within: find.byType(LiquidTabBar)));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Discard'));
     await tester.pumpAndSettle();
@@ -94,7 +94,7 @@ void main() {
     // The edits are gone, so the next change does not ask again.
     final dirty = tester.widget<SwitchListTile>(find.byType(SwitchListTile));
     expect(dirty.value, isFalse);
-    await tester.tap(find.text('Home'));
+    await tester.tap(_slot('Home', within: find.byType(LiquidTabBar)));
     await tester.pumpAndSettle();
     expect(find.text('Discard changes?'), findsNothing);
     expect(find.text('Home item 1'), findsOneWidget);

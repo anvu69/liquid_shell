@@ -11,7 +11,9 @@ import 'package:liquid_shell/src/chrome/glass_tab_bar.dart';
 import 'package:liquid_shell/src/chrome/tab_geometry.dart';
 
 const _scale = 2.0;
-const _screen = Size(402, 300);
+// Portrait: a landscape screen lower than 500 gets the landscape bar
+// (spec VK-503 §12.1); this test is about the compact one.
+const _screen = Size(402, 420);
 
 /// A saturated page, so any lens pass that is not faded shows at once.
 const _page = Color(0xFF0030FF);

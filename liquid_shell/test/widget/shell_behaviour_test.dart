@@ -600,7 +600,7 @@ void main() {
         const Offset(0, -300),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Inbox'), findsOneWidget);
+      expect(tabSlot('Inbox'), findsOneWidget);
       // The scroll above left no minimised state behind for compact.
       await resize(tester, kPhone);
       expect(tabSlot('Inbox'), findsOneWidget);

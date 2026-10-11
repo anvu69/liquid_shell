@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/search/search_controller.dart';
 import 'package:liquid_shell/src/search/search_layout.dart';
+import 'package:liquid_shell/src/shell/shell_layout.dart' show kTopBarGap;
 
 class _Driver implements SearchDriver {
   final calls = <String>[];
@@ -414,7 +415,7 @@ void main() {
             barExtent: 52,
             tiled: false,
           ),
-          24 + 20 + 52 + 8,
+          24 + kTopBarGap + 52 + 8,
         );
         expect(
           regularSearchFieldTop(
@@ -423,7 +424,7 @@ void main() {
             barExtent: 52,
             tiled: false,
           ),
-          24 + 20,
+          24 + kTopBarGap,
         );
         expect(
           regularSearchFieldTop(

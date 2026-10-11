@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
+import 'package:liquid_shell/src/chrome/tab_geometry.dart';
 import 'package:liquid_shell/src/destinations/destination.dart';
 import 'package:liquid_shell/src/shell/breakpoints.dart';
 
@@ -37,19 +38,24 @@ enum ShellPresentation {
 /// Pill height of the bottom bar at text scale 1, used before measuring.
 const double kBottomPillExtent = 62;
 
-/// Gap between the safe area top and the top bar.
-const double kTopBarGap = 20;
+/// Gap between the safe area top and the top bar (spec VK-503 §5.3).
+const double kTopBarGap = TabMetrics.topRowGap;
 
-/// Pill height of the top bar at text scale 1, used before measuring.
-const double kTopPillExtent = 52;
+/// Pill height of the top bar at text scale 1, used before measuring (spec
+/// VK-503 §5.3).
+const double kTopPillExtent = TabMetrics.topExtent;
 
 /// The presentation for the shell's constraints [size]. "Landscape" means
-/// `width > height`.
+/// `width > height`. A landscape shell lower than
+/// `breakpoints.compactHeight` is compact (spec VK-503 §12.1).
 ShellPresentation presentationFor(
   Size size,
   LiquidShellBreakpoints breakpoints,
 ) {
-  if (breakpoints.sizeClassOf(size.width) == LiquidSizeClass.compact) {
+  final lowLandscape =
+      size.width > size.height && size.height < breakpoints.compactHeight;
+  if (breakpoints.sizeClassOf(size.width) == LiquidSizeClass.compact ||
+      lowLandscape) {
     return ShellPresentation.compact;
   }
   return size.width >= breakpoints.tiledSidebar && size.width > size.height

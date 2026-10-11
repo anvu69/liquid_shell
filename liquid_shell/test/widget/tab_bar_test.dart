@@ -179,12 +179,12 @@ void main() {
     expect(circle.left - pill.right, greaterThanOrEqualTo(8));
   });
 
-  testWidgets('top pill is 52 high with icons beside labels', (tester) async {
+  testWidgets('top pill is 48 high with label-only cells (spec VK-503 '
+      '§5.3)', (tester) async {
     await tester.pumpWidget(_host(position: LiquidTabBarPosition.top));
-    expect(tester.getRect(find.byType(LiquidGlass).first).height, 52);
-    final icon = tester.getRect(find.byIcon(Icons.home_outlined));
-    final label = tester.getRect(find.text('Home'));
-    expect(label.left, greaterThan(icon.right));
+    expect(tester.getRect(find.byType(LiquidGlass).first).height, 48);
+    expect(find.byIcon(Icons.home_outlined), findsNothing);
+    expect(find.text('Home'), findsWidgets);
   });
 
   testWidgets('trailing action: tap, tooltip and semantics', (tester) async {
@@ -608,9 +608,8 @@ void main() {
       expectEllipsized(tester, labels, ellipsized: true);
     });
 
-    testWidgets('the top bar keeps its 4pt padding either way', (
-      tester,
-    ) async {
+    testWidgets('the top bar keeps its 4pt inset and 15.5pt cell padding '
+        'either way', (tester) async {
       Future<double> padding({required double width, bool? narrow}) async {
         await tester.pumpWidget(
           _host(
@@ -621,15 +620,19 @@ void main() {
         );
         await tester.pumpAndSettle();
         final pill = tester.getRect(find.byType(LiquidGlass).first);
-        final home = tester.getRect(
-          find.ancestor(of: find.text('Home'), matching: find.byType(InkWell)),
-        );
+        final home = tester.getRect(find.text('Home').first);
         return home.left - pill.left;
       }
 
-      expect(await padding(width: 393), 4);
-      expect(await padding(width: 320), 4);
-      expect(await padding(width: 393, narrow: true), 4);
+      // The label is centred in a label + 31 slot, 4 inside the pill.
+      expect(await padding(width: 800), 4 + 15.5);
+      expect(await padding(width: 800, narrow: true), 4 + 15.5);
+      // Too narrow for the content, the slots squeeze (spec VK-503 §5.3)
+      // the same way whether or not the bar is narrow.
+      final squeezed = await padding(width: 320, narrow: false);
+      expect(squeezed, lessThan(4 + 15.5));
+      expect(await padding(width: 320), squeezed);
+      expect(await padding(width: 320, narrow: true), squeezed);
     });
   });
 }

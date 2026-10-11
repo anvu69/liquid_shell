@@ -59,6 +59,7 @@ class GlassTabBar extends StatefulWidget {
     required this.destinations,
     required this.selectedIndex,
     required this.onSelect,
+    this.form = TabBarForm.compact,
     this.trailing,
     this.minimized = false,
     this.onCollapsedTap,
@@ -85,6 +86,9 @@ class GlassTabBar extends StatefulWidget {
 
   /// Called on commit with an index into [destinations].
   final ValueChanged<int> onSelect;
+
+  /// Compact, landscape or top (spec §5).
+  final TabBarForm form;
 
   /// The trailing circle's action.
   final LiquidTabAction? trailing;
@@ -328,17 +332,85 @@ class _GlassTabBarState extends State<GlassTabBar>
     );
   }
 
+  TextStyle _labelStyle(LiquidGlassTheme theme, {required bool tinted}) =>
+      switch (widget.form) {
+        TabBarForm.compact => theme.labelStyle.copyWith(
+          fontWeight: tinted ? FontWeight.w600 : theme.labelStyle.fontWeight,
+        ),
+        TabBarForm.landscape => theme.labelStyle.copyWith(
+          fontSize: 12,
+          fontWeight: tinted ? FontWeight.w600 : FontWeight.w400,
+        ),
+        TabBarForm.top => theme.labelStyle.copyWith(
+          fontSize: 17,
+          fontWeight: tinted ? FontWeight.w600 : FontWeight.w500,
+        ),
+      };
+
+  /// Label widths in the tinted (widest) weight, so the slots never move
+  /// when the selection does. Measured as `Text` draws them: the ambient
+  /// style, the text scaler and Bold Text.
+  List<double> _labelWidths(BuildContext context, TextStyle style) {
+    var base = DefaultTextStyle.of(context).style.merge(style);
+    if (MediaQuery.boldTextOf(context)) {
+      base = base.merge(const TextStyle(fontWeight: FontWeight.bold));
+    }
+    final scaler = MediaQuery.textScalerOf(context);
+    final direction = Directionality.of(context);
+    return [
+      for (final i in _shown)
+        () {
+          final painter = TextPainter(
+            text: TextSpan(text: widget.destinations[i].label, style: base),
+            textDirection: direction,
+            textScaler: scaler,
+            maxLines: 1,
+          )..layout();
+          final width = painter.width;
+          painter.dispose();
+          return width;
+        }(),
+    ];
+  }
+
+  /// Whether [d] draws its icon alone in the top form (spec §5.3).
+  bool _topIconOnly(LiquidDestination d) =>
+      widget.form == TabBarForm.top && d.role == LiquidDestinationRole.search;
+
   TabBarGeometry _geometryFor(
+    BuildContext context,
     double maxWidth,
     TextDirection direction,
     double extent,
-  ) => compactTabGeometry(
-    count: _shown.length,
-    maxWidth: maxWidth,
-    trailing: widget.trailing != null || widget.reserveTrailing,
-    direction: direction,
-    extent: extent,
-  );
+  ) {
+    final theme = LiquidGlassTheme.of(context);
+    final trailing = widget.trailing != null || widget.reserveTrailing;
+    return switch (widget.form) {
+      TabBarForm.compact => compactTabGeometry(
+        count: _shown.length,
+        maxWidth: maxWidth,
+        trailing: trailing,
+        direction: direction,
+        extent: extent,
+      ),
+      TabBarForm.landscape => landscapeTabGeometry(
+        labelWidths: _labelWidths(context, _labelStyle(theme, tinted: true)),
+        maxWidth: maxWidth,
+        trailing: trailing,
+        direction: direction,
+      ),
+      TabBarForm.top => topTabGeometry(
+        labelWidths: _labelWidths(context, _labelStyle(theme, tinted: true)),
+        iconOnly: [
+          for (final i in _shown)
+            _topIconOnly(widget.destinations[i]) || isAxTextScale(context),
+        ],
+        maxWidth: maxWidth,
+        trailing: trailing,
+        direction: direction,
+      ),
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -353,38 +425,41 @@ class _GlassTabBarState extends State<GlassTabBar>
     final extent =
         TabMetrics.pillExtent +
         math.max(0.0, lineHeight - TabMetrics.labelHeight);
-    final bar = LayoutBuilder(
-      builder: (context, constraints) {
-        final g = _geometry = _geometryFor(
-          constraints.maxWidth,
-          direction,
-          extent,
-        );
-        final motion = _sync(g);
-        final override = debugTabLensOverride;
-        var shown = override == null ? motion.frame : override(motion.frame);
-        final press = debugTabLensPress;
-        if (press != null) {
-          shown = shown.copyWith(
-            engage: 1,
-            refraction: 1,
-            pillScale: TabSprings.pressScale,
-            highlight: TabSprings.highlightPress,
-            lens: Rect.fromCenter(
-              center: shown.lens.center.translate(press, 0),
-              width: shown.lens.width * TabSprings.pressWidthFactor,
-              height: shown.lens.height * TabSprings.pressHeightFactor,
-            ),
+    // The Material sits above the LayoutBuilder: the labels are measured
+    // in the same DefaultTextStyle the cells draw them in.
+    final bar = Material(
+      type: MaterialType.transparency,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final g = _geometry = _geometryFor(
+            context,
+            constraints.maxWidth,
+            direction,
+            extent,
           );
-        }
-        return Material(
-          type: MaterialType.transparency,
-          child: SizedBox.fromSize(
+          final motion = _sync(g);
+          final override = debugTabLensOverride;
+          var shown = override == null ? motion.frame : override(motion.frame);
+          final press = debugTabLensPress;
+          if (press != null) {
+            shown = shown.copyWith(
+              engage: 1,
+              refraction: 1,
+              pillScale: TabSprings.pressScale,
+              highlight: TabSprings.highlightPress,
+              lens: Rect.fromCenter(
+                center: shown.lens.center.translate(press, 0),
+                width: shown.lens.width * TabSprings.pressWidthFactor,
+                height: shown.lens.height * TabSprings.pressHeightFactor,
+              ),
+            );
+          }
+          return SizedBox.fromSize(
             size: g.size,
             child: _layers(context, g, shown, theme, lineHeight, ax),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
     // In the shell the bar uses the shell's group.
     return BackdropGroup.of(context) == null
@@ -430,10 +505,15 @@ class _GlassTabBarState extends State<GlassTabBar>
         : 0.0;
 
     Widget cells({required bool tinted}) => _Cells(
+      form: widget.form,
       destinations: shown,
+      iconOnly: [for (final d in shown) _topIconOnly(d)],
       slots: slots,
       color: tinted ? scheme.primary : theme.tabForeground,
-      weight: tinted ? FontWeight.w600 : theme.labelStyle.fontWeight,
+      style: _labelStyle(
+        theme,
+        tinted: tinted,
+      ).copyWith(color: tinted ? scheme.primary : theme.tabForeground),
       lineHeight: lineHeight,
       ax: ax,
       narrow: widget.narrow,
@@ -543,6 +623,14 @@ class _GlassTabBarState extends State<GlassTabBar>
                         width: g.pill.width,
                         direction: direction,
                         ax: ax,
+                        parts: (slot, d) => _cellParts(
+                          form: widget.form,
+                          slot: slot,
+                          iconOnly: _topIconOnly(d),
+                          ax: ax,
+                          lineHeight: lineHeight,
+                          direction: direction,
+                        ),
                       ),
                     ],
                   ),
@@ -555,7 +643,7 @@ class _GlassTabBarState extends State<GlassTabBar>
       if (morph > 0 && shown.isNotEmpty)
         Positioned.fromRect(
           rect: Rect.lerp(
-            tabIconFrame(g.slots[collapsedSlot]),
+            _collapsedFrom(g.slots[collapsedSlot], lineHeight, direction),
             Rect.fromCenter(
               center: g.minimized.center,
               width: TabMetrics.iconFrame.width,
@@ -630,6 +718,25 @@ class _GlassTabBarState extends State<GlassTabBar>
         ),
     ];
     return Stack(clipBehavior: Clip.none, children: children);
+  }
+
+  /// Where the collapsed icon starts: the slot's icon frame (compact), or
+  /// a frame of the same size around the slot's icon (landscape).
+  Rect _collapsedFrom(Rect slot, double lineHeight, TextDirection direction) {
+    if (widget.form == TabBarForm.compact) return tabIconFrame(slot);
+    final (icon, _) = _cellParts(
+      form: widget.form,
+      slot: slot,
+      iconOnly: false,
+      ax: false,
+      lineHeight: lineHeight,
+      direction: direction,
+    );
+    return Rect.fromCenter(
+      center: (icon ?? Offset.zero & slot.size).shift(slot.topLeft).center,
+      width: TabMetrics.iconFrame.width,
+      height: TabMetrics.iconFrame.height,
+    );
   }
 
   /// The part of `slots[s]` that takes its touches, slot-local.
@@ -739,13 +846,56 @@ class _GlassTabBarState extends State<GlassTabBar>
   }
 }
 
+/// Icon and label rects inside [slot], slot-local (spec §5.1–§5.3). At
+/// AX sizes and for an icon-only slot, the icon takes the whole slot.
+(Rect?, Rect?) _cellParts({
+  required TabBarForm form,
+  required Rect slot,
+  required bool iconOnly,
+  required bool ax,
+  required double lineHeight,
+  required TextDirection direction,
+}) {
+  final local = Offset.zero & slot.size;
+  if (ax || iconOnly) return (local, null);
+  Rect m(Rect r) => direction == TextDirection.rtl
+      ? Rect.fromLTRB(
+          slot.width - r.right,
+          r.top,
+          slot.width - r.left,
+          r.bottom,
+        )
+      : r;
+  return switch (form) {
+    TabBarForm.compact => (
+      tabIconFrame(slot).shift(-slot.topLeft),
+      tabLabelBox(slot, lineHeight).shift(-slot.topLeft),
+    ),
+    // Icon at x + 6, the label after it (spec §5.2).
+    TabBarForm.landscape => (
+      m(Rect.fromLTWH(6, (slot.height - 25) / 2, 25, 25)),
+      m(
+        Rect.fromLTWH(
+          37,
+          0,
+          math.max(0, slot.width - TabMetrics.landscapeItemPadding),
+          slot.height,
+        ),
+      ),
+    ),
+    TabBarForm.top => (null, local),
+  };
+}
+
 /// One copy of the row: icon and label per slot, pill-local.
 class _Cells extends StatelessWidget {
   const _Cells({
+    required this.form,
     required this.destinations,
+    required this.iconOnly,
     required this.slots,
     required this.color,
-    required this.weight,
+    required this.style,
     required this.lineHeight,
     required this.ax,
     required this.narrow,
@@ -753,10 +903,16 @@ class _Cells extends StatelessWidget {
     this.popScale = 1,
   });
 
+  final TabBarForm form;
   final List<LiquidDestination> destinations;
+
+  /// Per slot: the top form's search item draws its icon alone.
+  final List<bool> iconOnly;
   final List<Rect> slots;
   final Color color;
-  final FontWeight? weight;
+
+  /// The label style of this copy, colour included.
+  final TextStyle style;
   final double lineHeight;
   final bool ax;
   final bool narrow;
@@ -766,10 +922,9 @@ class _Cells extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = LiquidGlassTheme.of(context);
-    final iconSize = ax
-        ? axIconSize(context, theme.tabIconSize)
-        : theme.tabIconSize;
-    final style = theme.labelStyle.copyWith(color: color, fontWeight: weight);
+    final direction = Directionality.of(context);
+    final base = form == TabBarForm.compact ? theme.tabIconSize : 22.0;
+    final iconSize = ax ? axIconSize(context, base) : base;
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -778,40 +933,51 @@ class _Cells extends StatelessWidget {
             rect: slots[s],
             child: Transform.scale(
               scale: s == popSlot ? popScale : 1,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Positioned.fromRect(
-                    rect: (ax ? slots[s] : tabIconFrame(slots[s])).shift(
-                      -slots[s].topLeft,
-                    ),
-                    child: Center(
-                      child: IconTheme.merge(
-                        data: IconThemeData(size: iconSize, color: color),
-                        child: d.selectedIcon ?? d.icon,
+              child: () {
+                final (icon, label) = _cellParts(
+                  form: form,
+                  slot: slots[s],
+                  iconOnly: iconOnly[s],
+                  ax: ax,
+                  lineHeight: lineHeight,
+                  direction: direction,
+                );
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    if (icon != null)
+                      Positioned.fromRect(
+                        rect: icon,
+                        child: Center(
+                          child: IconTheme.merge(
+                            data: IconThemeData(size: iconSize, color: color),
+                            child: d.selectedIcon ?? d.icon,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                  if (!ax)
-                    Positioned.fromRect(
-                      rect: tabLabelBox(
-                        slots[s],
-                        lineHeight,
-                      ).shift(-slots[s].topLeft),
-                      child: Center(
-                        child: narrow
-                            ? FitLabel(d.label, style: style)
-                            : Text(
-                                d.label,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                textAlign: TextAlign.center,
-                                style: style,
-                              ),
+                    if (label != null)
+                      Positioned.fromRect(
+                        rect: label,
+                        child: Align(
+                          alignment: form == TabBarForm.landscape
+                              ? AlignmentDirectional.centerStart
+                              : Alignment.center,
+                          child: narrow && form == TabBarForm.compact
+                              ? FitLabel(d.label, style: style)
+                              : Text(
+                                  d.label,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: form == TabBarForm.landscape
+                                      ? TextAlign.start
+                                      : TextAlign.center,
+                                  style: style,
+                                ),
+                        ),
                       ),
-                    ),
-                ],
-              ),
+                  ],
+                );
+              }(),
             ),
           ),
       ],
@@ -827,6 +993,7 @@ class _Badges extends StatelessWidget {
     required this.width,
     required this.direction,
     required this.ax,
+    required this.parts,
   });
 
   final List<LiquidDestination> destinations;
@@ -835,6 +1002,18 @@ class _Badges extends StatelessWidget {
   final TextDirection direction;
   final bool ax;
 
+  /// Icon and label rects of a slot, slot-local ([_cellParts]).
+  final (Rect?, Rect?) Function(Rect slot, LiquidDestination d) parts;
+
+  /// The frame the badge sits on: the icon frame, or the label box
+  /// deflated to its text when there is no icon (top form), or the slot
+  /// deflated by 8 at AX sizes.
+  Rect _frame(Rect slot, LiquidDestination d) {
+    if (ax) return slot.deflate(8);
+    final (icon, label) = parts(slot, d);
+    return (icon ?? label!.deflate(8)).shift(slot.topLeft);
+  }
+
   @override
   Widget build(BuildContext context) => Stack(
     clipBehavior: Clip.none,
@@ -842,7 +1021,7 @@ class _Badges extends StatelessWidget {
       for (final (s, d) in destinations.indexed)
         if (badgeVisible(d.badge))
           () {
-            final frame = ax ? slots[s].deflate(8) : tabIconFrame(slots[s]);
+            final frame = _frame(slots[s], d);
             final rtl = direction == TextDirection.rtl;
             return Positioned(
               left: rtl ? null : frame.right - TabMetrics.badgeOutset,

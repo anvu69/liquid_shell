@@ -259,6 +259,111 @@ TabBarGeometry compactTabGeometry({
   );
 }
 
+/// Compact landscape geometry (spec §5.2): content-sized items of label
+/// width + 49, squeezed proportionally when the row is too narrow.
+TabBarGeometry landscapeTabGeometry({
+  required List<double> labelWidths,
+  required double maxWidth,
+  required bool trailing,
+  required TextDirection direction,
+}) {
+  const extent = TabMetrics.landscapeExtent;
+  const inset = TabMetrics.inset;
+  final items = [
+    for (final w in labelWidths) w + TabMetrics.landscapeItemPadding,
+  ];
+  final gaps = TabMetrics.landscapeGap * math.max(0, items.length - 1);
+  final sum = items.fold<double>(0, (a, b) => a + b);
+  final natural = 2 * inset + sum + gaps;
+  final reserve = trailing ? extent + TabMetrics.trailingGap : 0.0;
+  final width = maxWidth.isFinite ? maxWidth : natural + reserve;
+  final pillWidth = math.max(2 * inset, math.min(natural, width - reserve));
+  final squeeze = sum == 0
+      ? 1.0
+      : math.min<double>(1, (pillWidth - 2 * inset - gaps) / sum);
+  final left = trailing ? 0.0 : (width - pillWidth) / 2;
+  Rect m(Rect r) => _mirror(r, width, direction);
+  final slots = <Rect>[];
+  var x = left + inset;
+  for (final w in items) {
+    final ww = w * squeeze;
+    slots.add(
+      m(Rect.fromLTWH(x, inset, ww, TabMetrics.landscapeItemExtent)),
+    );
+    x += ww + TabMetrics.landscapeGap;
+  }
+  final trailingRect = trailing
+      ? m(Rect.fromLTWH(width - extent, 0, extent, extent))
+      : null;
+  return TabBarGeometry(
+    form: TabBarForm.landscape,
+    size: Size(width, extent),
+    pill: m(Rect.fromLTWH(left, 0, pillWidth, extent)),
+    slots: slots,
+    trailing: trailingRect,
+    // Not captured (spec §5.2): a pill-high circle at the row start.
+    minimized: m(const Rect.fromLTWH(0, 0, extent, extent)),
+    minimizedTrailing: trailingRect,
+  );
+}
+
+/// Regular top geometry (spec §5.3): label-only items of label + 31,
+/// icon-only items of 48.5, the pill and its trailing circle centred as a
+/// group.
+TabBarGeometry topTabGeometry({
+  required List<double> labelWidths,
+  required List<bool> iconOnly,
+  required double maxWidth,
+  required bool trailing,
+  required TextDirection direction,
+}) {
+  const extent = TabMetrics.topExtent;
+  const inset = TabMetrics.inset;
+  final items = [
+    for (final (i, w) in labelWidths.indexed)
+      iconOnly[i]
+          ? TabMetrics.topIconItemWidth
+          : w + 2 * TabMetrics.topItemPadding,
+  ];
+  final sum = items.fold<double>(0, (a, b) => a + b);
+  final natural = 2 * inset + sum;
+  final reserve = trailing ? extent + TabMetrics.trailingGap : 0.0;
+  final width = maxWidth.isFinite ? maxWidth : natural + reserve;
+  final pillWidth = math.max(2 * inset, math.min(natural, width - reserve));
+  final squeeze = sum == 0
+      ? 1.0
+      : math.min<double>(1, (pillWidth - 2 * inset) / sum);
+  final left = (width - pillWidth - reserve) / 2;
+  Rect m(Rect r) => _mirror(r, width, direction);
+  final slots = <Rect>[];
+  var x = left + inset;
+  for (final w in items) {
+    final ww = w * squeeze;
+    slots.add(m(Rect.fromLTWH(x, inset, ww, TabMetrics.topItemExtent)));
+    x += ww;
+  }
+  final pill = m(Rect.fromLTWH(left, 0, pillWidth, extent));
+  final trailingRect = trailing
+      ? m(
+          Rect.fromLTWH(
+            left + pillWidth + TabMetrics.trailingGap,
+            0,
+            extent,
+            extent,
+          ),
+        )
+      : null;
+  return TabBarGeometry(
+    form: TabBarForm.top,
+    size: Size(width, extent),
+    pill: pill,
+    slots: slots,
+    trailing: trailingRect,
+    minimized: pill,
+    minimizedTrailing: trailingRect,
+  );
+}
+
 /// The 33 × 28 icon frame of a compact [slot], 10 below the pill top.
 Rect tabIconFrame(Rect slot) => Rect.fromLTWH(
   slot.center.dx - TabMetrics.iconFrame.width / 2,

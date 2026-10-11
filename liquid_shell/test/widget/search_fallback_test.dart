@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/chrome/glass_tab_bar.dart';
 import 'package:liquid_shell/src/search/search_chrome.dart';
+import 'package:liquid_shell/src/shell/shell_layout.dart'
+    show kTopBarGap, kTopPillExtent;
 
 import '../helpers/shell_harness.dart';
 
@@ -372,13 +374,13 @@ void main() {
         initialIndex: 2,
       );
       final selectedTop = _rect(tester, kSearchFieldKey).top;
-      expect(selectedTop, 59 + 20 + 52 + 8);
+      expect(selectedTop, 59 + kTopBarGap + kTopPillExtent + 8);
       expect(_rect(tester, kSearchFieldKey).height, 44);
       expect(scopeOf(tester, 'Search').chromeInsets.top, selectedTop + 44 + 8);
       await tester.tap(find.byType(TextField));
       await tester.pumpAndSettle();
       expect(controller.isActive, isTrue);
-      expect(_rect(tester, kSearchFieldKey).top, 59 + 20);
+      expect(_rect(tester, kSearchFieldKey).top, 59 + kTopBarGap);
       final barOpacity = tester
           .widgetList<AnimatedOpacity>(
             find.ancestor(

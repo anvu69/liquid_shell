@@ -48,6 +48,7 @@ class TestShell extends StatefulWidget {
     this.nativeChrome = LiquidNativeChrome.auto,
     this.nativeSidebarFooter,
     this.search,
+    this.breakpoints = const LiquidShellBreakpoints(),
     super.key,
   });
 
@@ -74,6 +75,7 @@ class TestShell extends StatefulWidget {
   final LiquidNativeChrome nativeChrome;
   final LiquidNativeSidebarFooter? nativeSidebarFooter;
   final LiquidSearch? search;
+  final LiquidShellBreakpoints breakpoints;
 
   @override
   State<TestShell> createState() => TestShellState();
@@ -103,6 +105,7 @@ class TestShellState extends State<TestShell> {
     nativeChrome: widget.nativeChrome,
     nativeSidebarFooter: widget.nativeSidebarFooter,
     search: widget.search,
+    breakpoints: widget.breakpoints,
     body: widget.offstageBranches
         ? Stack(
             fit: StackFit.expand,

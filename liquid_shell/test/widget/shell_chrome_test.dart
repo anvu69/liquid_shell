@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 
+import 'package:liquid_shell/src/chrome/glass_tab_bar.dart';
 import 'package:liquid_shell/src/chrome/sidebar_toggle.dart';
+import 'package:liquid_shell/src/shell/shell_layout.dart'
+    show kTopBarGap, kTopPillExtent;
 import 'package:liquid_shell/src/shell/shell_scope.dart';
 
 import '../helpers/shell_harness.dart';
@@ -32,19 +35,21 @@ void main() {
       expect(pill.height, 62);
     });
 
-    testWidgets('932×430 landscape phone → top bar, sidebar overlays', (
-      tester,
-    ) async {
+    testWidgets('932×430 landscape phone with compactHeight 0 (P1) → top '
+        'bar, sidebar overlays', (tester) async {
       await pumpShell(
         tester,
-        const TestShell(),
+        const TestShell(breakpoints: LiquidShellBreakpoints(compactHeight: 0)),
         size: kPhoneLandscape,
         padding: const EdgeInsets.only(left: 59, right: 59, bottom: 21),
       );
       final scope = scopeOf(tester);
       expect(scope.sizeClass, LiquidSizeClass.regular);
       expect(scope.chromeKind, LiquidChromeKind.topBar);
-      expect(scope.chromeInsets, const EdgeInsets.only(top: 72));
+      expect(
+        scope.chromeInsets,
+        const EdgeInsets.only(top: kTopBarGap + kTopPillExtent),
+      );
       expect(find.byTooltip('Show sidebar'), findsOneWidget);
 
       await tester.tap(find.byTooltip('Show sidebar'));
@@ -52,6 +57,31 @@ void main() {
       expect(scopeOf(tester).chromeKind, LiquidChromeKind.sidebarOverlay);
       expect(find.byType(LiquidSidebar), findsOneWidget);
       expect(find.byType(ModalBarrier), findsWidgets);
+    });
+
+    testWidgets('landscape phone: the 44 pt bottom bar at margin 38 (VK-503 '
+        'Q8)', (tester) async {
+      await pumpShell(tester, const TestShell(), size: kPhoneLandscape);
+      expect(scopeOf(tester).sizeClass, LiquidSizeClass.compact);
+      final pill = tester.getRect(find.byKey(kTabPillKey));
+      expect(pill.height, 44);
+      expect(pill.left, greaterThanOrEqualTo(38));
+    });
+
+    testWidgets('the shell breakpoints pick the landscape form, not the '
+        'window (compactHeight 600 at 1000×550)', (tester) async {
+      await pumpShell(
+        tester,
+        const TestShell(
+          breakpoints: LiquidShellBreakpoints(compactHeight: 600),
+        ),
+        size: const Size(1000, 550),
+      );
+      expect(scopeOf(tester).chromeKind, LiquidChromeKind.bottomBar);
+      expect(find.byType(LiquidTabBar), findsOneWidget);
+      final pill = tester.getRect(find.byKey(kTabPillKey));
+      expect(pill.height, 44);
+      expect(pill.left, greaterThanOrEqualTo(38));
     });
 
     testWidgets('iPad portrait 834×1194 → top bar; body never resized', (
@@ -64,11 +94,15 @@ void main() {
         padding: _tablet,
       );
       expect(scopeOf(tester).chromeKind, LiquidChromeKind.topBar);
-      expect(scopeOf(tester).chromeInsets, const EdgeInsets.only(top: 96));
-      // The pill is centred; the toggle is a 48pt circle at (20, pad.top+20).
+      expect(
+        scopeOf(tester).chromeInsets,
+        const EdgeInsets.only(top: 24 + kTopBarGap + kTopPillExtent),
+      );
+      // The pill is centred; the toggle is a 48pt circle at
+      // (20, pad.top + 5.5), centred on the 48pt row (spec VK-503 §12.2).
       expect(
         tester.getRect(find.byType(SidebarToggle)),
-        const Rect.fromLTWH(20, 44, 48, 48),
+        const Rect.fromLTWH(20, 24 + kTopBarGap, 48, 48),
       );
       await tester.tap(find.byTooltip('Show sidebar'));
       await tester.pumpAndSettle();
@@ -528,7 +562,7 @@ void main() {
       );
       expect(
         tester.getRect(find.byType(SidebarToggle)),
-        const Rect.fromLTWH(834 - 20 - 48, 44, 48, 48),
+        const Rect.fromLTWH(834 - 20 - 48, 24 + kTopBarGap, 48, 48),
       );
     });
   });

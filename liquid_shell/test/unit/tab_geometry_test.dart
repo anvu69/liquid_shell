@@ -178,4 +178,86 @@ void main() {
       );
     });
   });
+
+  group('landscape (research §1.2)', () {
+    // Home 83.7, Explore 90, Settings 94.7, Inbox 81 = label + 49.
+    const labels = <double>[34.7, 41, 45.7, 32];
+
+    test('44 pill, 36 items, 4 gaps, content-sized', () {
+      final g = landscapeTabGeometry(
+        labelWidths: labels,
+        maxWidth: 874 - 2 * TabMetrics.landscapeMargin,
+        trailing: true,
+        direction: TextDirection.ltr,
+      );
+      expect(g.form, TabBarForm.landscape);
+      expect(g.size.height, 44);
+      expect(g.pill.left, 0);
+      expect(
+        [for (final s in g.slots) s.width],
+        [for (final w in labels) closeTo(w + 49, 1e-9)],
+      );
+      for (final s in g.slots) {
+        expect(s.height, 36);
+        expect(s.top, 4);
+      }
+      expect(g.slots[1].left - g.slots[0].right, closeTo(4, 1e-9));
+      expect(g.pill.width, closeTo(8 + 349.4 + 12, 1e-9));
+      expect(g.trailing!.size, const Size(44, 44));
+    });
+
+    test('squeezed proportionally when the row is too narrow', () {
+      final g = landscapeTabGeometry(
+        labelWidths: labels,
+        maxWidth: 300,
+        trailing: false,
+        direction: TextDirection.ltr,
+      );
+      expect(g.pill.width, 300);
+      expect(g.slots.last.right, closeTo(296, 1e-9));
+    });
+  });
+
+  group('regular top (research §1.3)', () {
+    test('3 tabs: 274 wide, 48 tall, label + 31 items', () {
+      final g = topTabGeometry(
+        labelWidths: const [47.5, 59.5, 66],
+        iconOnly: const [false, false, false],
+        maxWidth: 800,
+        trailing: false,
+        direction: TextDirection.ltr,
+      );
+      expect(g.form, TabBarForm.top);
+      expect(g.pill.size, const Size(274, 48));
+      expect(g.pill.left, (800 - 274) / 2);
+      expect([for (final s in g.slots) s.width], [78.5, 90.5, 97]);
+      for (final s in g.slots) {
+        expect(s.height, 40);
+      }
+    });
+
+    test('4 tabs + search item: 397.5 wide, search 48.5', () {
+      final g = topTabGeometry(
+        labelWidths: const [47.5, 59.5, 66, 44, 0],
+        iconOnly: const [false, false, false, false, true],
+        maxWidth: 800,
+        trailing: false,
+        direction: TextDirection.ltr,
+      );
+      expect(g.pill.width, 397.5);
+      expect(g.slots.last.width, 48.5);
+    });
+
+    test('trailing circle 48, gap 8, the group centred', () {
+      final g = topTabGeometry(
+        labelWidths: const [47.5, 59.5, 66],
+        iconOnly: const [false, false, false],
+        maxWidth: 800,
+        trailing: true,
+        direction: TextDirection.ltr,
+      );
+      expect(g.pill.left, (800 - 274 - 56) / 2);
+      expect(g.trailing, Rect.fromLTWH(g.pill.right + 8, 0, 48, 48));
+    });
+  });
 }
