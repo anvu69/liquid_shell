@@ -54,11 +54,18 @@ final class ShellSearch implements SearchDriver {
   /// A build without it (pending, standby, Flutter chrome) makes the next
   /// native entry send the text again, empty included: native never got
   /// what the app set meanwhile, a cleared query too.
+  ///
+  /// Leaving native chrome (a lost install, native chrome off, a forced
+  /// tier) writes the controller's text into the Flutter field, which
+  /// heard nothing while native drove the search. The write follows
+  /// [_writeField]'s rule: held while the field is composing.
   bool get native => _native;
   set native(bool value) {
     if (!value) {
       _sentShown = false;
       _replay = true;
+      final controller = _controller;
+      if (_native && controller != null) _writeField(controller.text);
     }
     _native = value;
   }

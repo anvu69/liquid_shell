@@ -79,6 +79,19 @@ Future<(FakeNativePlatform, LiquidSearchController, List<String>)> _pump(
   return (fake, controller, changes);
 }
 
+/// A shell on [_page] driving [controller], native chrome per [nativeChrome].
+Widget _searchShell(
+  LiquidSearchController controller, {
+  int initialIndex = 2,
+  LiquidNativeChrome nativeChrome = LiquidNativeChrome.auto,
+}) => TestShell(
+  destinations: _destinations,
+  initialIndex: initialIndex,
+  pageBuilder: _page,
+  nativeChrome: nativeChrome,
+  search: LiquidSearch(controller: controller),
+);
+
 LiquidShellScopeData _scope(WidgetTester tester, [String label = 'Search']) =>
     scopeOf(tester, label);
 
@@ -954,18 +967,6 @@ void main() {
     });
   });
   group('review fixes', () {
-    Widget searchShell(
-      LiquidSearchController controller, {
-      int initialIndex = 2,
-      LiquidNativeChrome nativeChrome = LiquidNativeChrome.auto,
-    }) => TestShell(
-      destinations: _destinations,
-      initialIndex: initialIndex,
-      pageBuilder: _page,
-      nativeChrome: nativeChrome,
-      search: LiquidSearch(controller: controller),
-    );
-
     testWidgets('I-1: the text reaches native once it engages (cold start)', (
       tester,
     ) async {
@@ -975,7 +976,7 @@ void main() {
       addTearDown(controller.dispose);
       await pumpShell(
         tester,
-        searchShell(controller),
+        _searchShell(controller),
         padding: _compactPadding,
         settle: false,
       );
@@ -996,7 +997,7 @@ void main() {
       addTearDown(controller.dispose);
       await pumpShell(
         tester,
-        searchShell(controller),
+        _searchShell(controller),
         padding: _compactPadding,
         settle: false,
       );
@@ -1015,7 +1016,7 @@ void main() {
       addTearDown(controller.dispose);
       await pumpShell(
         tester,
-        searchShell(controller),
+        _searchShell(controller),
         padding: _compactPadding,
       );
       expect(fake.searchTexts, ['']);
@@ -1034,7 +1035,7 @@ void main() {
       addTearDown(controller.dispose);
       await pumpShell(
         tester,
-        searchShell(controller),
+        _searchShell(controller),
         padding: _compactPadding,
       );
       fake.emitNative(
@@ -1043,13 +1044,13 @@ void main() {
       await tester.pump();
       await pumpShell(
         tester,
-        searchShell(controller, nativeChrome: LiquidNativeChrome.off),
+        _searchShell(controller, nativeChrome: LiquidNativeChrome.off),
         padding: _compactPadding,
       );
       fake.searchTexts.clear();
       await pumpShell(
         tester,
-        searchShell(controller),
+        _searchShell(controller),
         padding: _compactPadding,
       );
       expect(fake.searchTexts, ['hà']);
@@ -1062,7 +1063,7 @@ void main() {
       addTearDown(controller.dispose);
       await pumpShell(
         tester,
-        searchShell(controller, nativeChrome: LiquidNativeChrome.off),
+        _searchShell(controller, nativeChrome: LiquidNativeChrome.off),
         padding: _compactPadding,
       );
       await tester.tap(find.byType(TextField));
@@ -1084,7 +1085,7 @@ void main() {
 
       await pumpShell(
         tester,
-        searchShell(controller),
+        _searchShell(controller),
         padding: _compactPadding,
       );
       expect(find.byType(TextField), findsNothing, reason: 'native now');
@@ -1475,6 +1476,57 @@ void main() {
       root.pop();
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('list-Detail')), findsOneWidget);
+    });
+  });
+
+  group('final-review fixes', () {
+    /// The Flutter field's text (the shell's fallback field).
+    String fieldText(WidgetTester tester) =>
+        tester.widget<TextField>(find.byType(TextField)).controller!.text;
+
+    testWidgets('I-1: a lost install shows the native query in the Flutter '
+        'field', (tester) async {
+      final (fake, controller, _) = await _pump(tester);
+      fake.emitNative(
+        const LiquidNativeSearchTextChanged('Diễm xưa', composing: false),
+      );
+      await tester.pump();
+      fake.pushState(const LiquidNativeShellState(installed: false));
+      await tester.pumpAndSettle();
+      expect(controller.text, 'Diễm xưa');
+      expect(fieldText(tester), 'Diễm xưa');
+    });
+
+    testWidgets('I-1: native chrome turned off shows the native query in the '
+        'Flutter field', (tester) async {
+      final fake = installFakeNative(state: _compact);
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      await pumpShell(
+        tester,
+        _searchShell(controller),
+        padding: _compactPadding,
+      );
+      fake.emitNative(
+        const LiquidNativeSearchTextChanged('Diễm xưa', composing: false),
+      );
+      await tester.pump();
+      await pumpShell(
+        tester,
+        _searchShell(controller, nativeChrome: LiquidNativeChrome.off),
+        padding: _compactPadding,
+      );
+      expect(fieldText(tester), 'Diễm xưa');
+    });
+
+    testWidgets('I-1: an app write while native also reaches the Flutter '
+        'field after the switch', (tester) async {
+      final (fake, controller, _) = await _pump(tester);
+      controller.text = 'phố cổ';
+      await tester.pump();
+      fake.pushState(const LiquidNativeShellState(installed: false));
+      await tester.pumpAndSettle();
+      expect(fieldText(tester), 'phố cổ');
     });
   });
 }
