@@ -9,7 +9,7 @@
   `doc/tab_bar.md`.
 - **Behaviour changes.**
   - A tab is selected on release, not on touch. A drag selects the tab
-    under the finger when it lifts.
+    nearest the lens when it lifts, a flick the tab under the finger.
   - Every tab slot draws `selectedIcon ?? icon`, selected or not, as iOS
     draws a filled symbol in every slot. Give each destination a filled
     `selectedIcon`. The sidebar still switches `icon` / `selectedIcon` by

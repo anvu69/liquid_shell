@@ -33,7 +33,8 @@ the capsule turns into a clear glass lens:
 - it bends the page behind it, with a rainbow fringe at its edge;
 - it follows your finger;
 - it magnifies and tints the icons under it;
-- it snaps to the nearest tab when you lift your finger.
+- it snaps to the nearest tab when you lift your finger, or, after a
+  flick, to the tab under your finger.
 
 The tab is selected when you lift your finger, as on iOS. A tap slides the
 lens across with the springs measured from iOS 26.5. The whole bar swells
@@ -85,8 +86,8 @@ badges are `badgeColor` (#FF383C, #FF4245 in dark). See
 ## Minimize on scroll
 
 Scrolling down shrinks the bar to a 48 pt circle with the current tab's
-icon. Tap it to bring the bar back. Scrolling up does not, as on iOS 26.
-A selection change brings it back too. A `chromeBuilder` reads the same
+icon. Tap it to bring the bar back. Scrolling back toward the top does
+not, as on iOS 26. A selection change brings it back too. A `chromeBuilder` reads the same
 state in `LiquidChromeDetails.minimized` and expands with
 `details.expand`.
 
@@ -117,7 +118,9 @@ drag. Plain taps are silent.
 ## What is not identical to iOS
 
 - The glass material is matched by measurement, not by Apple's private
-  filter, and it does not re-tint by the brightness behind it.
+  filter. It does not re-tint by the brightness behind it, and there is
+  no device-motion light: the rim highlight stays put when the device
+  tilts.
 - Corners are plain circular arcs, not Apple's continuous corners. On a
   capsule the difference is under 1 pt.
 - Icons are your icon font, not SF Symbols. On iOS 15–25 the package does

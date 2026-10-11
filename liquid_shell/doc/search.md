@@ -14,7 +14,12 @@ everywhere else the shell draws the same states in glass.
 ```dart
 LiquidShell(
   destinations: const [
-    LiquidDestination(icon: Icon(Icons.home), label: 'Home', sfSymbol: 'house'),
+    LiquidDestination(
+      icon: Icon(Icons.home_outlined),
+      selectedIcon: Icon(Icons.home),
+      label: 'Home',
+      sfSymbol: 'house',
+    ),
     LiquidDestination(
       icon: Icon(Icons.search),
       label: 'Search',

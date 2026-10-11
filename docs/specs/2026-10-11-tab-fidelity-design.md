@@ -234,6 +234,16 @@ These existing defaults change in `fromColorScheme`, for every glass surface (Q5
 
 `liquidTint` keeps the tuned 0.40 / 0.45 from the liquid tier §3.6.1. The research shows the native fill as *milky over white*, which is what a light tint over a white page also gives. The side-by-side capture in §17 decides whether a final tint round is needed. A tuning round is part of Task 16, and it changes defaults only.
 
+*Amended in Task 16 (the tint round).* Native glass is a near-opaque **neutral** fill: it takes no app hue (Q14: "màu phủ cố định theo theme sáng/tối"). The scheme's `surface` tint gave a lavender capsule (#E0DDE4 against #ECECEC), a light pill about 10 luma darker than native over the example's pages, and a dark pill of 9 over black against native's #191919. Fitted to native pixels by `test/impeller/tab_material_test.dart`:
+
+| Field | Was | Becomes |
+|---|---|---|
+| `liquidTint` light | `surface` @ 0.40 | white @ **0.55** (the brief's cap) |
+| `liquidTint` dark | `surface` @ 0.45 | #1C1C1C @ **0.90**: #191919 over black needs tint × alpha = 25, which `surface` (≈ 20) cannot reach at any alpha; 0.90 also gives native's 27 over the example's dark page |
+| `rimHighlight` dark | white @ 0.22 | white @ **0.12**: the top rim reads 55 → 48 → 39, native 54 → 47 → 39 (0.22 drew 80) |
+
+The shadow already matches §5 analytically; `selectionFill` is unchanged (dark capsule 55 against 58, inside ±4).
+
 ## 7. The selected lens (F3)
 
 ### 7.1 Two modes, one scalar
@@ -328,8 +338,8 @@ rest ──down──▶ pressed ──move>slop──▶ dragging
 |---|---|---|---|---|---|
 | **down** at x | `clampCentre(x)` on `dragFollow` | ×1.17 w, ×1.30 h | 1.052 | 1 / 1 / 0.845 | on at the finger, 0.28, 93 → 98 pt |
 | **move** | `clampCentre(x)` on `dragFollow` | as pressed | 1.052 | as pressed | follows the finger |
-| **up after a drag** | the nearest slot to the *lens* centre, on `snap` from the current velocity. After a flick (finger speed ≥ **600 pt/s** at release, **(assumption)** between research §4.2's 90 pt/s slow drag, which snapped to the lens's slot, and its 1500 pt/s flick, which shot to the finger's slot) the slot under the *finger* | rest, release springs | 1 | 0 / 0 / 0 (out springs) | ripple: ×4 and fade over 0.5 s |
-| **up after a tap** (travel ≤ `kTouchSlop`) | the slot under the *finger*, on `tap` after a 25 ms delay | flight envelope (§8.3) | 1.022 for 0.12 s, then 1 | engage held at 1 until 0.35 s, then out; refraction out after 0.25 s; highlight impulse 0.7, then out | ripple |
+| **up after a drag** | the nearest slot to the *lens* centre, on `snap` from the current velocity. After a flick (finger speed ≥ **600 pt/s** at release, read as UIKit does: Flutter's `IOSScrollViewFlingVelocityTracker`, a weighted mean of the last three steps, *Task 16*, **(assumption)** between research §4.2's 90 pt/s slow drag, which snapped to the lens's slot, and its 1500 pt/s flick, which shot to the finger's slot) the slot under the *finger* | rest, release springs | 1 | 0 / 0 / 0 (out springs) | ripple: ×4 and fade over 0.5 s |
+| **up after a tap** (travel ≤ `kTouchSlop`) | the slot under the *finger*, on `tap` after a 25 ms delay (*Task 16:* the lens holds where it is during the delay, though the press had aimed it at the finger; the delay ends inside a frame, not at its start) | flight envelope (§8.3) | 1.022 for 0.12 s, then 1 | engage held at 1 until 0.35 s, then out; refraction out after 0.25 s; highlight impulse 0.7, then out | ripple |
 | **cancel** | the committed slot, on `snap` | rest | 1 | out | fade |
 | **semantics tap / programmatic** | §8.7 | | | | none |
 
@@ -360,6 +370,10 @@ This reproduces the measured peaks:
 
 *Research §7.4* gives `0.9 + 0.00045·|v|` with no knee. This section supersedes it.
 
+*Task 16: no change, on purpose.* The example's frame strips (`tab-strips/idb`) show the Flutter lens 8–10 pt past the pill top and bottom in flight and white until about 400 ms, where native seems to stay inside the pill and turn gray by about 250 ms. Neither is a geometry or timing gap:
+- **Height.** Over the example's plain page the clear native lens is invisible outside the pill; the Flutter lens is opaque (the 0.90 veil, Task 16 part B). Over the research's striped backdrop (`native265_tap.png`, t = 0.15 s) the native lens is ≈ 79 pt tall on the 61 pt pill, ×1.47, poking out about 8 pt each side: the ×1.55 model holds.
+- **Timing.** In the example, a native tab tap is a *propose*: `shouldSelectTab` returns false and Dart selects the tab programmatically (`NativeTabsController.swift`), so the strip shows UIKit's reaction to a refused tap followed by a programmatic selection, not the plain tap the research measured on a pure `UITabBarController` (clear until ≈ 0.35 s, gray by ≈ 0.45 s, which the model follows). The research trace is the better reference for the tap. The two-frame early start in the traces was real and is fixed (§8.2, 25 ms hold).
+
 It is a model, not UIKit's soft body. It matches peaks and timing within ±10 %, not every intermediate frame (research §8). The constants (`0.9`, `700`, `0.005`, the clamp `1.46`) and `0.55 / 0.45` live in `TabSprings` and are the only tuning knobs.
 
 ### 8.4 Effects per frame (`LensFrame`)
@@ -373,6 +387,7 @@ It is a model, not UIKit's soft body. It matches peaks and timing within ±10 %,
 | `highlight` | white overlay on the pill. Light: `0.85·highlight`. Dark: `0.25·highlight` **(assumption: not captured)** |
 | `glowCenter`, `glowDiameter`, `glowOpacity` | radial gradient (white at the centre → transparent at the edge), drawn above the pill and under the tinted copy |
 | `magnify` | `1 + 0.16·engage` on the tinted copy |
+| `glowCenter` … ripple | *Task 16:* the release ripple starts from the full 0.28 glow, so a tap whose down and up land in one frame still ripples |
 | `popSlot`, `popScale` | the target slot's tinted content: on a tap the target is 1.16, and from `age` 0.22 s it is 1, on `tap`, which peaks at ≈ ×1.16 near 0.25 s and is back within 0.5 s (research §3) |
 | `ghost`, `ghostOpacity` | reduce motion only (§13.2) |
 
@@ -387,6 +402,7 @@ During a drag, whenever `slotNearest(lens.centre.x)` changes, `LensMotion` queue
 - **Default.** It accepts on pointer down (`resolve(accepted)`). The pill is chrome: there is no scroll under it to yield to, and the lens must engage from touch-down (research §4.2).
 - **At AX text sizes.** It accepts on the first move beyond `kTouchSlop` (a drag) or on pointer up (a tap). Until then the `LargeContentViewer` long press can win the arena, so the P1 large content card still works.
 - **Events.** It reports `onDown(Offset)`, `onMove(Offset)`, `onUp()` and `onCancel()` in bar-local coordinates. It tracks one pointer: a second finger is ignored.
+- **Release velocity** *(amended in Task 16)*. `IOSScrollViewFlingVelocityTracker`, not the least-squares `VelocityTracker`. An idb flick on the simulator eased out over its last step (1057 → 524 pt/s) and lifted 10 ms later; least squares read −281 pt/s, under the 600 pt/s flick, and the lens's lagging slot won where native lands on the finger's. The iOS tracker reads about −817 pt/s.
 - **The trailing circle.** It keeps its own tap. A drag that starts on the pill and ends over the circle releases onto the circle (§8.8).
 
 ### 8.7 Commit, guard and programmatic changes
@@ -670,12 +686,14 @@ The packages are at `0.1.0-dev.5`. This item ships as `0.1.0-dev.6`, and the CHA
 |---|---|---|
 | Rest geometry: pill, slots, trailing, minimized, icon frame top, label top, badge origin | §5 | **±1 pt** |
 | Spring settle (0.5 pt) for tap, drag follow, snap, press, release, collapse, expand | the §8.1 reference spring over the same distance | **±10 %** |
-| Tap delay | 25 ms | ±1 frame (16.7 ms) |
+| Tap delay | 25 ms | ±1 frame (16.7 ms). *Task 16:* `tab_trace_compare` fits it (least squares over the first 0.3 s) |
 | Press lens size, pill scale | 110 × 70, 1.052 | ±2 pt, ±0.005 |
 | Flight peaks (one slot height, two slot width) | ×1.55, ×1.33 | ±10 % |
 | Icon pop, magnify | ×1.16 | ±0.02 |
 | Glow | 93 pt, 0.28, ×4 over 0.5 s | ±2 pt, ±0.03, ±10 % |
 | Rest colours (lens fill, labels) | #ECECEC / #3A3A3A / #191919 / #F4F4F4 | ±4 / 255 per channel at the sampled pixel, over a white or black page |
+
+*Amended in Task 16.* The drag-lag row compares against the fit's analytic ramp lag (7.09 pt), not the research's "about 9 pt": the 9 pt is one hand reading of the trace the fit used, and the frame strips cannot decide it (`native_reference.json` → `dragLag`). The comparison also checks the tap delay, the three slot rects, the tap glow (93 pt, 0.28, ×4, 0.5 s), that a fast flick lands on the finger's slot, the expand settle, and the rest colours (sampled by the integration test over white and black pages). The snap settle is not checked: the slow drag ends on its target, so it has no snap to measure.
 
 **Flutter traces.** `integration_test/tab_fidelity_test.dart` runs on the iOS 26.5 iPhone 17 Pro simulator, with Flutter liquid forced. It drives the scripted sequences of the research:
 
