@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
+import 'package:liquid_shell/src/chrome/glass_tab_bar.dart';
 import 'package:liquid_shell/src/search/search_chrome.dart';
 
 import '../helpers/shell_harness.dart';
@@ -50,17 +51,6 @@ Future<(LiquidSearchController, List<int>, List<String>)> _pump(
 }
 
 Rect _rect(WidgetTester tester, Key key) => tester.getRect(find.byKey(key));
-
-double _opacity(WidgetTester tester, Key key) => tester
-    .widget<AnimatedOpacity>(
-      find
-          .descendant(
-            of: find.byKey(key),
-            matching: find.byType(AnimatedOpacity),
-          )
-          .first,
-    )
-    .opacity;
 
 /// Focuses the field and composes "hoo"; the app writes "phố" (held, a
 /// composition is in progress); the user goes on composing "hoon".
@@ -162,19 +152,30 @@ const _five = [
   ),
 ];
 
-LiquidTabBar _pill(WidgetTester tester) =>
-    tester.widget<LiquidTabBar>(find.byType(LiquidTabBar));
+GlassTabBar _pill(WidgetTester tester) =>
+    tester.widget<GlassTabBar>(find.byType(GlassTabBar));
+
+/// The search row's bar fade (the nearest `AnimatedOpacity` above it).
+double _pillOpacity(WidgetTester tester) => tester
+    .widgetList<AnimatedOpacity>(
+      find.ancestor(
+        of: find.byType(GlassTabBar),
+        matching: find.byType(AnimatedOpacity),
+      ),
+    )
+    .first
+    .opacity;
 
 void main() {
   testWidgets('idle: the pill without Search, and a separate ⌕ circle', (
     tester,
   ) async {
     await _pump(tester);
-    final bar = tester.widget<LiquidTabBar>(find.byType(LiquidTabBar));
+    final bar = _pill(tester);
     expect(bar.destinations.map((d) => d.label), ['Home', 'Library']);
     expect(
       _rect(tester, kSearchFieldKey),
-      const Rect.fromLTWH(393 - 16 - 62, _rowBottom - 62, 62, 62),
+      const Rect.fromLTWH(393 - 21 - 62, _rowBottom - 62, 62, 62),
     );
     expect(find.bySemanticsLabel('Search'), findsOneWidget);
     expect(scopeOf(tester).searchPhase, LiquidSearchPhase.idle);
@@ -195,7 +196,10 @@ void main() {
       _rect(tester, kSearchCollapsedKey),
       const Rect.fromLTWH(28, _rowBottom - 55, 48, 48),
     );
-    expect(_opacity(tester, kSearchCollapsedKey), 1);
+    // The circle is the tab bar itself, collapsed (spec VK-503 §11).
+    expect(_pill(tester).minimized, isTrue);
+    expect(_rect(tester, kTabPillKey), _rect(tester, kSearchCollapsedKey));
+    expect(_pillOpacity(tester), 1);
     expect(
       find.descendant(
         of: find.byKey(kSearchCollapsedKey),
@@ -226,7 +230,7 @@ void main() {
       _rect(tester, kSearchCancelKey),
       const Rect.fromLTWH(393 - 56, bottom - 48, 48, 48),
     );
-    expect(_opacity(tester, kSearchCollapsedKey), 0);
+    expect(_pillOpacity(tester), 0, reason: 'the collapsed bar fades out');
     expect(
       scopeOf(tester, 'Search').chromeInsets.bottom,
       852 - (bottom - 48) + 8,
@@ -475,12 +479,13 @@ void main() {
       await show(four, 3);
       await show(after, index);
       expect(tester.takeException(), isNull);
+      await tester.pumpAndSettle();
       expect(
-        tester
-            .widget<CompactSearchChrome>(find.byType(CompactSearchChrome))
-            .previous
-            .label,
-        'Home',
+        find.descendant(
+          of: find.byKey(kSearchCollapsedKey),
+          matching: find.bySemanticsLabel('Home'),
+        ),
+        findsOneWidget,
       );
     });
   }
@@ -580,10 +585,10 @@ void main() {
   ) async {
     await _pump(tester, destinations: _five, direction: TextDirection.rtl);
     final circle = _rect(tester, kSearchFieldKey);
-    expect(circle.left, 16);
-    final pill = tester.getRect(find.byType(LiquidTabBar));
+    expect(circle.left, 21);
+    final pill = tester.getRect(find.byKey(kTabPillKey));
     expect(pill.left, greaterThanOrEqualTo(circle.right + 8));
-    expect(pill.right, lessThanOrEqualTo(393 - 16));
+    expect(pill.right, lessThanOrEqualTo(393 - 21));
   });
 
   group('minimize on scroll', () {
@@ -611,13 +616,17 @@ void main() {
       final (_, selections, _) = await _pump(tester, initialIndex: 1);
       await tester.tap(find.bySemanticsLabel('Search'));
       await tester.pumpAndSettle();
-      expect(_pill(tester).minimized, isFalse);
+      // Collapsed into the previous tab's circle (spec VK-503 §11), not
+      // by a scroll.
+      expect(_pill(tester).minimized, isTrue);
+      final circle = _rect(tester, kSearchCollapsedKey);
       await tester.drag(
         find.byKey(const ValueKey('list-Search')),
         const Offset(0, -300),
       );
       await tester.pumpAndSettle();
-      expect(_pill(tester).minimized, isFalse);
+      expect(_pill(tester).minimized, isTrue);
+      expect(_rect(tester, kSearchCollapsedKey), circle);
       await tester.tap(find.byKey(kSearchCollapsedKey));
       await tester.pumpAndSettle();
       expect(selections, [2, 1]);

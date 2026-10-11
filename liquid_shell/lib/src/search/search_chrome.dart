@@ -1,6 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:liquid_shell/src/destinations/destination.dart';
+import 'package:liquid_shell/src/chrome/glass_tab_bar.dart';
 import 'package:liquid_shell/src/glass/liquid_glass.dart';
 import 'package:liquid_shell/src/search/search_controller.dart';
 import 'package:liquid_shell/src/search/search_layout.dart';
@@ -9,7 +10,8 @@ import 'package:liquid_shell/src/shell/strings.dart';
 /// The fallback field (or the idle ⌕ circle).
 const kSearchFieldKey = ValueKey<String>('liquid-search-field');
 
-/// The fallback collapsed circle (previous tab).
+/// The fallback collapsed circle (previous tab): the tab bar's own
+/// minimized circle while the search tab is selected (spec VK-503 §11).
 const kSearchCollapsedKey = ValueKey<String>('liquid-search-collapsed');
 
 /// The fallback × circle.
@@ -34,6 +36,7 @@ class SearchFieldGlass extends StatelessWidget {
     required this.onDeactivate,
     required this.cancelLabel,
     this.inlineCancel,
+    this.highlight = const _Off(),
     super.key,
   });
 
@@ -69,6 +72,9 @@ class SearchFieldGlass extends StatelessWidget {
 
   /// The inline ×'s tooltip and semantics (`LiquidShellStrings.cancelSearch`).
   final String cancelLabel;
+
+  /// Lens drag over the idle ⌕ (spec VK-503 §8.8).
+  final ValueListenable<bool> highlight;
 
   @override
   Widget build(BuildContext context) {
@@ -137,22 +143,25 @@ class SearchFieldGlass extends StatelessWidget {
             ),
             if (idle)
               Positioned.fill(
-                child: Semantics(
-                  container: true,
-                  button: true,
-                  label: searchLabel,
-                  onTap: onOpen,
-                  excludeSemantics: true,
-                  child: InkWell(
-                    customBorder: const StadiumBorder(),
+                child: TabHoverHighlight(
+                  hovered: highlight,
+                  child: Semantics(
+                    container: true,
+                    button: true,
+                    label: searchLabel,
                     onTap: onOpen,
-                    child: Center(
-                      child: IconTheme.merge(
-                        data: IconThemeData(
-                          size: 26,
-                          color: scheme.onSurfaceVariant,
+                    excludeSemantics: true,
+                    child: InkWell(
+                      customBorder: const StadiumBorder(),
+                      onTap: onOpen,
+                      child: Center(
+                        child: IconTheme.merge(
+                          data: IconThemeData(
+                            size: 26,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                          child: searchIcon,
                         ),
-                        child: searchIcon,
                       ),
                     ),
                   ),
@@ -165,17 +174,16 @@ class SearchFieldGlass extends StatelessWidget {
   }
 }
 
-/// The compact search row (spec P3b §9.2): the pill (built by the shell),
-/// the collapsed circle, the field and ×, each animating between the
-/// phase's rects. Empty areas pass touches to the body.
+/// The compact search row (spec P3b §9.2): the pill (built by the shell,
+/// which also collapses into the previous tab's circle, spec VK-503 §11),
+/// the field and ×, each animating between the phase's rects. Empty areas
+/// pass touches to the body.
 class CompactSearchChrome extends StatelessWidget {
   /// Creates the row.
   const CompactSearchChrome({
     required this.phase,
     required this.rects,
     required this.pill,
-    required this.previous,
-    required this.onPrevious,
     required this.field,
     required this.onCancel,
     required this.strings,
@@ -190,12 +198,6 @@ class CompactSearchChrome extends StatelessWidget {
 
   /// The pill of the other destinations: a `Positioned`, faded by the shell.
   final Widget pill;
-
-  /// The destination the collapsed circle returns to.
-  final LiquidDestination previous;
-
-  /// Selects [previous] through the guard.
-  final VoidCallback onPrevious;
 
   /// The field (a `SearchFieldGlass`, possibly wrapped by a chrome builder).
   final Widget field;
@@ -270,16 +272,6 @@ class CompactSearchChrome extends StatelessWidget {
       child: Stack(
         children: [
           pill,
-          part(
-            kSearchCollapsedKey,
-            rects.circle,
-            shown: phase == LiquidSearchPhase.selected,
-            child: circle(
-              label: previous.label,
-              onTap: onPrevious,
-              icon: previous.selectedIcon ?? previous.icon,
-            ),
-          ),
           AnimatedPositioned.fromRect(
             key: kSearchFieldKey,
             rect: rects.field,
@@ -301,4 +293,18 @@ class CompactSearchChrome extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The default [SearchFieldGlass.highlight]: never on.
+class _Off implements ValueListenable<bool> {
+  const _Off();
+
+  @override
+  bool get value => false;
+
+  @override
+  void addListener(VoidCallback listener) {}
+
+  @override
+  void removeListener(VoidCallback listener) {}
 }

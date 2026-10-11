@@ -5,9 +5,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:liquid_shell/src/chrome/glass_tab_bar.dart';
 import 'package:liquid_shell/src/chrome/sidebar.dart';
 import 'package:liquid_shell/src/chrome/sidebar_toggle.dart';
 import 'package:liquid_shell/src/chrome/tab_bar.dart';
+import 'package:liquid_shell/src/chrome/tab_geometry.dart';
 import 'package:liquid_shell/src/destinations/destination.dart';
 import 'package:liquid_shell/src/destinations/tab_action.dart';
 import 'package:liquid_shell/src/glass/glass_scope.dart';
@@ -32,8 +34,11 @@ import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.
 /// Decides whether a user selection may proceed. Return `false` to cancel.
 typedef LiquidBeforeDestinationChange = Future<bool> Function(int index);
 
-/// Horizontal margin of the tab bar rows.
+/// Horizontal margin of the top tab bar row.
 const double _kBarMargin = 16;
+
+/// Horizontal margin of the bottom tab bar row (spec VK-503 §5).
+const double _kBottomBarMargin = TabMetrics.margin;
 
 /// Horizontal margin of the bottom row below [kLiquidNarrowWidth] (Q17).
 const double _kNarrowBarMargin = 8;
@@ -239,6 +244,13 @@ class _LiquidShellState extends State<LiquidShell>
   bool _scrollScheduled = false;
   // The destination the fallback's collapsed circle returns to.
   int _previousIndex = 0;
+  // The idle ⌕, bar-local: a lens drag released over it selects search
+  // (spec VK-503 §8.8).
+  Rect _searchTargetRect = Rect.zero;
+  late final TabDragTarget _searchTarget = TabDragTarget(
+    rect: () => _searchTargetRect,
+    onRelease: _selectSearch,
+  );
 
   @override
   void initState() {
@@ -258,6 +270,9 @@ class _LiquidShellState extends State<LiquidShell>
     // A selection change expands the minimized bar (spec VK-503 §10, Q7).
     if (oldWidget.selectedIndex != widget.selectedIndex) {
       _minimized.value = false;
+      // The bar stops feeding the ⌕ target once search is selected: a
+      // hover it had would outlive the drag.
+      _searchTarget.hovered.value = false;
     }
     _configureSearch();
   }
@@ -341,6 +356,7 @@ class _LiquidShellState extends State<LiquidShell>
     _windowControls.value.removeListener(_rebuild);
     _windowControls.release();
     _minimized.dispose();
+    _searchTarget.dispose();
     _search.dispose();
     super.dispose();
   }
@@ -927,7 +943,7 @@ class _LiquidShellState extends State<LiquidShell>
     final tiled = kind == LiquidChromeKind.sidebarTiled;
     // Q17: narrow shells trade margin for 44pt-wide cells.
     final narrow = size.width < kLiquidNarrowWidth;
-    final barMargin = narrow ? _kNarrowBarMargin : _kBarMargin;
+    final barMargin = narrow ? _kNarrowBarMargin : _kBottomBarMargin;
     final compactRects = phase != null && kind == LiquidChromeKind.bottomBar
         ? compactSearchRects(
             phase: phase,
@@ -1077,6 +1093,7 @@ class _LiquidShellState extends State<LiquidShell>
         onDeactivate: _search.deactivate,
         cancelLabel: widget.strings.cancelSearch,
         inlineCancel: inlineCancel,
+        highlight: _searchTarget.hovered,
       ),
     );
 
@@ -1088,18 +1105,22 @@ class _LiquidShellState extends State<LiquidShell>
           // destinations, then the ⌕ circle that becomes the field.
           final rowExtent = _measured[barKey] ?? kBottomPillExtent;
           final idle = phase == LiquidSearchPhase.idle;
+          // The ⌕ in the bar's own coordinates: its top-left is the row's.
+          _searchTargetRect = compactRects.field.shift(
+            Offset(-margin, -(size.height - bottomGap - rowExtent)),
+          );
           children.add(
             CompactSearchChrome(
               phase: phase,
               rects: compactRects,
-              pill: PositionedDirectional(
-                start: margin,
-                end: margin + rowExtent + kLiquidTabBarTrailingGap,
+              pill: Positioned(
+                left: margin,
+                right: margin,
                 bottom: bottomGap,
                 child: IgnorePointer(
-                  ignoring: !idle,
+                  ignoring: phase == LiquidSearchPhase.active,
                   child: AnimatedOpacity(
-                    opacity: idle ? 1 : 0,
+                    opacity: phase == LiquidSearchPhase.active ? 0 : 1,
                     duration: morph,
                     curve: kSearchMorphCurve,
                     child: Align(
@@ -1108,25 +1129,34 @@ class _LiquidShellState extends State<LiquidShell>
                       child: ValueListenableBuilder<bool>(
                         valueListenable: _minimized,
                         builder: (context, minimized, _) {
-                          // Minimizes in idle only: suspended while the
-                          // search tab is selected (spec P3b §9.2).
-                          final isMinimized =
+                          // Scroll minimizes in idle only (spec P3b §9.2);
+                          // selected, the bar collapses into the previous
+                          // tab's circle (spec VK-503 §11).
+                          final scrolled =
                               widget.minimizeOnScroll && minimized && idle;
+                          final collapsed = scrolled || !idle;
                           return measured(
                             slot(
                               details(
                                 LiquidChromeSlot.tabBar,
-                                minimized: isMinimized,
+                                minimized: collapsed,
                               ),
-                              LiquidTabBar(
+                              GlassTabBar(
                                 destinations: widget.destinations.sublist(
                                   0,
                                   searchIndex,
                                 ),
                                 selectedIndex: idle ? selected : _previousIndex,
-                                onDestinationSelected: _onSelect,
-                                minimized: isMinimized,
-                                onExpand: _expand,
+                                onSelect: _onSelect,
+                                minimized: collapsed,
+                                collapseDelay: idle,
+                                onCollapsedTap: idle
+                                    ? _expand
+                                    : () => _onSelect(_previousIndex),
+                                announceExpand: idle,
+                                collapsedKey: idle ? null : kSearchCollapsedKey,
+                                reserveTrailing: true,
+                                externalTarget: idle ? _searchTarget : null,
                                 strings: widget.strings,
                                 narrow: narrow,
                               ),
@@ -1138,8 +1168,6 @@ class _LiquidShellState extends State<LiquidShell>
                   ),
                 ),
               ),
-              previous: widget.destinations[_previousIndex],
-              onPrevious: () => _onSelect(_previousIndex),
               field: searchField(),
               onCancel: _search.cancel,
               strings: widget.strings,

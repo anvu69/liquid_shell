@@ -222,15 +222,15 @@ void main() {
       expect(selections, [0, 1, 2, 3, 4]);
     });
 
-    testWidgets('375: the regular margin 16 is kept; native slots', (
+    testWidgets('375: the regular margin 21 is kept; native slots', (
       tester,
     ) async {
       final rects = await cells(tester, 5, trailing: add, width: 375);
-      expect(row(tester).left, 16);
-      expect(row(tester).right, 375 - 16);
-      expect(circle(tester).right, 375 - 16);
-      // (375 − 32 − 70 − 16) / 5 + 8 (spec VK-503 §5.1).
-      expect(rects.first.width, closeTo(59.4, 0.01));
+      expect(row(tester).left, 21);
+      expect(row(tester).right, 375 - 21);
+      expect(circle(tester).right, 375 - 21);
+      // (375 − 42 − 70 − 16) / 5 + 8 (spec VK-503 §5.1).
+      expect(rects.first.width, closeTo(57.4, 0.01));
       for (final rect in rects) {
         expect(rect.width, greaterThanOrEqualTo(44));
       }
@@ -249,10 +249,10 @@ void main() {
       }
 
       rects = await cells(tester, 5, trailing: add, width: 340);
-      expect(row(tester).left, 16);
-      expect(row(tester).right, 340 - 16);
-      // (340 − 32 − 70 − 16) / 5 + 8.
-      expect(rects.first.width, closeTo(52.4, 0.01));
+      expect(row(tester).left, 21);
+      expect(row(tester).right, 340 - 21);
+      // (340 − 42 − 70 − 16) / 5 + 8.
+      expect(rects.first.width, closeTo(50.4, 0.01));
       for (final rect in rects) {
         expect(rect.width, greaterThanOrEqualTo(44));
       }

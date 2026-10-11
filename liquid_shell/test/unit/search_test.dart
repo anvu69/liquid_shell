@@ -353,7 +353,7 @@ void main() {
       size: size,
       rowBottom: rowBottom,
       rowExtent: 62,
-      margin: 16,
+      margin: 21,
       keyboard: keyboard,
       direction: direction,
     );
@@ -361,7 +361,7 @@ void main() {
     test('idle: the ⌕ circle at the trailing end of the row', () {
       expect(
         rects(LiquidSearchPhase.idle).field,
-        const Rect.fromLTWH(393 - 16 - 62, rowBottom - 62, 62, 62),
+        const Rect.fromLTWH(393 - 21 - 62, rowBottom - 62, 62, 62),
       );
     });
 
