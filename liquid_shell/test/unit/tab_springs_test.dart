@@ -45,7 +45,7 @@ void main() {
   test('retarget keeps position and velocity (a moving target)', () {
     final value = SpringValue(0, TabSprings.dragFollow)
       ..target = 100
-      ..advance(0.1);
+      ..advance(SpringValue.maxAdvance);
     final x = value.value;
     final v = value.velocity;
     value.retarget(50);
@@ -77,5 +77,31 @@ void main() {
     expect(value.value, 3);
     expect(value.target, 3);
     expect(value.velocity, 0);
+  });
+
+  test('splitting dt gives the same trajectory', () {
+    final whole = SpringValue(0, TabSprings.tap)..target = 86;
+    final split = SpringValue(0, TabSprings.tap)..target = 86;
+    for (var f = 1; f <= 60; f++) {
+      whole.advance(1 / 60);
+      split
+        ..advance(1 / 180)
+        ..advance(1 / 180)
+        ..advance(1 / 180);
+      expect(split.value, closeTo(whole.value, 1e-6), reason: 'frame $f');
+      expect(split.velocity, closeTo(whole.velocity, 1e-4), reason: 'frame $f');
+    }
+  });
+
+  test('a long frame drop advances at most maxAdvance (0.1 s)', () {
+    expect(SpringValue.maxAdvance, 0.1);
+    final dropped = SpringValue(0, TabSprings.tap)
+      ..target = 86
+      ..advance(30);
+    final capped = SpringValue(0, TabSprings.tap)
+      ..target = 86
+      ..advance(SpringValue.maxAdvance);
+    expect(dropped.value, capped.value);
+    expect(dropped.velocity, capped.velocity);
   });
 }

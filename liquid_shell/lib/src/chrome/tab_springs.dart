@@ -191,9 +191,13 @@ class SpringValue {
   /// Integration step.
   static const double step = 0.001;
 
-  /// Moves [dt] seconds forward.
+  /// The most one [advance] call integrates: a long frame drop costs at
+  /// most 100 steps instead of spinning thousands.
+  static const double maxAdvance = 0.1;
+
+  /// Moves [dt] seconds forward, at most [maxAdvance].
   void advance(double dt) {
-    var left = dt;
+    var left = math.min(dt, maxAdvance);
     while (left > 1e-9) {
       final h = math.min(left, step);
       _rk4(h);
