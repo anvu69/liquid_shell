@@ -16,7 +16,9 @@ is this package's own fragment shader; no other package is involved.
 - **Specular rim.** A thin highlight, strongest on the top-left edge and
   fainter on the opposite one, plus a soft glow across the band.
 - **Dispersion.** Red and blue bend slightly differently in the band, a
-  faint colour fringe. `dispersion: 0` turns it off.
+  faint colour fringe. It is off by default (`dispersion: 0`), as iOS 26.5
+  shows a fringe only on a touched lens; raise it for a fringe on every
+  surface.
 - **Blur and tint.** A light blur (σ 2) and the `liquidTint` colour,
   so what lies behind the glass stays recognisable.
 
@@ -29,7 +31,7 @@ lens and no rim.
 |---|---|---|
 | `liquidTint` | surface @ 40 % (light), 45 % (dark) | Colour over the glass; raise its alpha for more legibility |
 | `refraction` | 1 | Lens strength; 0 is flat glass, 2 doubles it |
-| `dispersion` | 0.3 | Colour fringe, 0–1 |
+| `dispersion` | 0 | Colour fringe, 0–1 |
 | `liquidBlurSigma` | 2 | Blur under the lens; 0 for none |
 
 The same screen with one field changed at a time:
@@ -38,9 +40,9 @@ The same screen with one field changed at a time:
 |---|---|---|
 | <img src="images/liquid_refraction_0.png" width="240" alt="refraction 0: flat glass"> | <img src="images/liquid_default.png" width="240" alt="default liquid glass"> | <img src="images/liquid_refraction_2.png" width="240" alt="refraction 2: twice the lens"> |
 
-| `dispersion: 0` | default (`dispersion: 0.3`) | default, dark |
+| `dispersion: 0.3` | default (`dispersion: 0`) | default, dark |
 |---|---|---|
-| <img src="images/liquid_dispersion_0.png" width="240" alt="dispersion 0: no colour fringe"> | <img src="images/liquid_default.png" width="240" alt="default liquid glass"> | <img src="images/liquid_default_dark.png" width="240" alt="default liquid glass, dark"> |
+| <img src="images/liquid_dispersion_03.png" width="240" alt="dispersion 0.3: a faint colour fringe"> | <img src="images/liquid_default.png" width="240" alt="default liquid glass"> | <img src="images/liquid_default_dark.png" width="240" alt="default liquid glass, dark"> |
 
 ## When it is not drawn
 

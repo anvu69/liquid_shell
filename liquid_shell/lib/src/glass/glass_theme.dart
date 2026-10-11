@@ -21,7 +21,8 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
     this.blurSigma = 10,
     this.borderRadius = const BorderRadius.all(Radius.circular(999)),
     this.refraction = 1,
-    this.dispersion = 0.3,
+    // Native shows a fringe only on the touched lens (research §5).
+    this.dispersion = 0,
     this.liquidBlurSigma = 2,
     this.selectionFill = const Color(0x14000000),
     this.tabForeground = const Color(0xFF191919),
@@ -55,8 +56,6 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
         fontWeight: FontWeight.w500,
         letterSpacing: 0,
       ),
-      // Native shows a fringe only on the active lens (research §5).
-      dispersion: 0,
       selectionFill: light ? const Color(0x14000000) : const Color(0x21FFFFFF),
       tabForeground: light ? const Color(0xFF191919) : const Color(0xFFF4F4F4),
       badgeColor: light ? const Color(0xFFFF383C) : const Color(0xFFFF4245),

@@ -279,6 +279,19 @@ void main() {
       expect(t.tabIconSize, 26);
     });
 
+    test('a directly built theme has no dispersion (Q5)', () {
+      const t = LiquidGlassTheme(
+        tint: Color(0x00000000),
+        solid: Color(0xFFFFFFFF),
+        border: Color(0x00000000),
+        rimHighlight: Color(0x00000000),
+        shadow: BoxShadow(),
+        labelStyle: TextStyle(),
+      );
+      // Native shows a fringe only on the touched lens, which sets its own.
+      expect(t.dispersion, 0);
+    });
+
     test('copyWith, lerp, == and hashCode cover them', () {
       final base = LiquidGlassTheme.fromColorScheme(light);
       final other = base.copyWith(

@@ -1,3 +1,10 @@
+## Unreleased
+
+- **Behaviour change:** `LiquidGlassTheme.dispersion` now defaults to 0, both
+  in the constructor and in `fromColorScheme`, so no glass surface draws a
+  colour fringe unless asked (iOS 26.5 shows one only on a touched lens).
+  Pass `dispersion: 0.3` for the previous look.
+
 ## 0.1.0-dev.5
 
 - **Search tab.** `LiquidDestinationRole.search` on `LiquidDestination` (at

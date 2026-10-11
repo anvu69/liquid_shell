@@ -225,7 +225,11 @@ void main() {
     ('liquid_default_dark', (t) => t, Brightness.dark),
     ('liquid_refraction_0', (t) => t.copyWith(refraction: 0), Brightness.light),
     ('liquid_refraction_2', (t) => t.copyWith(refraction: 2), Brightness.light),
-    ('liquid_dispersion_0', (t) => t.copyWith(dispersion: 0), Brightness.light),
+    (
+      'liquid_dispersion_03',
+      (t) => t.copyWith(dispersion: 0.3),
+      Brightness.light,
+    ),
   ]) {
     testWidgets(name, (tester) async {
       await liquid(

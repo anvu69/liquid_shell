@@ -220,7 +220,7 @@ While the lens straddles two slots, each icon is half tinted and half plain (res
 |---|---|---|---|---|
 | `selectionFill` | `Color` | `0x14000000` | `0x21FFFFFF` | The lens at rest (§6.2) |
 | `tabForeground` | `Color` | `0xFF191919` | `0xFFF4F4F4` | Unselected icons and labels in the bar |
-| `badgeColor` | `Color` | `0xFFFF383C` | `0xFFFF4245` (assumption: iOS dark systemRed) | Badge capsule in the bar |
+| `badgeColor` | `Color` | `0xFFFF383C` | `0xFFFF4245` (iOS dark systemRed; the owner accepted it as the dark reading of Q4, whose #FF383C is the light value) | Badge capsule in the bar |
 | `tabIconSize` | `double` | 26 | 26 | Bar icon size at text scale 1 |
 
 These existing defaults change in `fromColorScheme`, for every glass surface (Q5):
