@@ -9,6 +9,10 @@
 - Frosted instead of liquid without Impeller, on Android without Vulkan 1.1
   or under 3 GiB of memory, in battery saver and iOS Low Power Mode, after
   sustained slow frames, and inside another `BackdropFilter`.
+- The Flutter glass alert and action sheet (`showLiquidAlert` /
+  `showLiquidActionSheet` off the native path) draw the liquid tier too:
+  they are `LiquidGlass`. Doc images `case_alert` and `case_action_sheet`
+  are now the liquid tier.
 - A `forcedTier` keeps shells under it on Flutter chrome.
 - `LiquidGlassSignals` gains `lowEnd`, `glesOnly`, `slowFrames` and
   `prefersFrosted`.

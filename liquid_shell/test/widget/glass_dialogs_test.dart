@@ -1,9 +1,12 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/dialogs/dialog_metrics.dart';
 import 'package:liquid_shell/src/dialogs/glass_dialogs.dart';
+import 'package:liquid_shell/src/glass/liquid_backdrop.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
 const _cancel = LiquidNativeDialogAction(
@@ -369,5 +372,38 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await _open(tester, request(LiquidNativeDialogKind.actionSheet));
     expect(tester.takeException(), isNull);
+  });
+
+  // Owner decision L3: the Flutter dialogs are LiquidGlass, so they take the
+  // liquid tier wherever the shell's own glass does.
+  testWidgets('alert and action sheet draw the liquid tier where it exists', (
+    tester,
+  ) async {
+    debugLiquidGlassCanRefractOverride = true;
+    // `ImageFilter.shader` throws without Impeller: a blur stands in.
+    debugLiquidFilterFactory = (shader, sigma) =>
+        ImageFilter.blur(sigmaX: sigma, sigmaY: sigma);
+    addTearDown(() => debugLiquidFilterFactory = null);
+    await tester.runAsync(LiquidGlass.precache);
+
+    await _open(tester, _request());
+    expect(_in(GlassAlert, find.byType(LiquidBackdrop)), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    await _open(
+      tester,
+      _request(
+        kind: LiquidNativeDialogKind.actionSheet,
+        actions: const [_share, _cancel],
+      ),
+    );
+    final sheetGlass = tester.widgetList(
+      _in(GlassActionSheet, find.byType(LiquidGlass)),
+    );
+    expect(sheetGlass, isNotEmpty);
+    expect(
+      _in(GlassActionSheet, find.byType(LiquidBackdrop)),
+      findsNWidgets(sheetGlass.length),
+    );
   });
 }

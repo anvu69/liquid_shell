@@ -9,6 +9,7 @@ import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell_example/cases/basic_tabs.dart';
 import 'package:liquid_shell_example/cases/custom_theme.dart';
 import 'package:liquid_shell_example/cases/forced_tier.dart';
+import 'package:liquid_shell_example/cases/native_alerts.dart';
 import 'package:liquid_shell_example/cases/sidebar_slots.dart';
 
 import '../support/golden_harness.dart';
@@ -97,9 +98,14 @@ void main() {
     Widget child, {
     GoldenDevice device = iphone,
     Brightness brightness = Brightness.light,
+    Future<void> Function()? interact,
   }) async {
     await tester.runAsync(LiquidGlass.precache);
     await pumpGolden(tester, child, device: device, brightness: brightness);
+    if (interact != null) {
+      await interact();
+      await tester.pumpAndSettle();
+    }
     await expectDocImage(tester, name);
   }
 
@@ -123,6 +129,27 @@ void main() {
       tester,
       'case_tier_liquid',
       const ForcedTierCase(initialTier: LiquidGlassTier.liquid),
+    );
+  });
+
+  // The Flutter glass dialogs are LiquidGlass (owner decision L3): on the
+  // default tier they are liquid, like the shell.
+  testWidgets('case_alert', (tester) async {
+    await liquid(
+      tester,
+      'case_alert',
+      const NativeAlertsCase(),
+      interact: () => tester.tap(find.text('Alert')),
+    );
+  });
+
+  testWidgets('case_action_sheet', (tester) async {
+    await liquid(
+      tester,
+      'case_action_sheet',
+      const NativeAlertsCase(),
+      device: ipadPortrait,
+      interact: () => tester.tap(find.text('Action sheet')),
     );
   });
 

@@ -4,7 +4,8 @@
 complete with the value of the action they picked. On iOS 26 and later the
 system draws the dialog: a `UIAlertController`, with Liquid Glass, above
 the native tab bar and sidebar. Everywhere else Flutter draws a glass
-dialog with `LiquidGlass`, the same glass as the shell. The call and the
+dialog with `LiquidGlass`, the same glass as the shell: liquid where the
+shell is liquid, frosted or solid where it falls back. The call and the
 answer are the same on every path.
 
 ## When the system draws the dialog
