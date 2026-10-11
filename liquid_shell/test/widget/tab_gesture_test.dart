@@ -200,6 +200,48 @@ void main() {
     expect(_lens(tester).center.dx, closeTo(_home.dx, 0.5));
   });
 
+  testWidgets('a fast flick that eases out before lifting commits the slot '
+      'under the finger, as native (VK-503 Task 16)', (tester) async {
+    // The events Flutter got from an idb swipe Settings → Home in 0.12 s
+    // on the iOS 26.5 simulator (x in screen points, t in µs). The finger
+    // slows over its last step (1057 → 524 pt/s) and lifts 10 ms later
+    // in place. Native lands on Home; the least-squares tracker read
+    // −281 pt/s here, below the 600 pt/s flick, so the lagging lens's slot
+    // (Explore) won.
+    const samples = [
+      (0, 287.0),
+      (16847, 266.7),
+      (35915, 246.7),
+      (55038, 226.3),
+      (74120, 206.0),
+      (96677, 175.7),
+      (117624, 145.3),
+      (136871, 125.0),
+      (155958, 115.0),
+    ];
+    final log = <int>[];
+    final key = await _pump(tester, log);
+    key.currentState!.select(2);
+    await tester.pump();
+    final g = await tester.createGesture();
+    var last = 0;
+    for (final (i, (t, x)) in samples.indexed) {
+      final at = Duration(microseconds: t);
+      if (i == 0) {
+        await g.down(Offset(x, _y), timeStamp: at);
+      } else {
+        await tester.pump(Duration(microseconds: t - last));
+        await g.moveTo(Offset(x, _y), timeStamp: at);
+      }
+      last = t;
+    }
+    await tester.pump(const Duration(microseconds: 9656));
+    await g.up(timeStamp: const Duration(microseconds: 165614));
+    await tester.pumpAndSettle();
+    expect(log, [0]);
+    expect(_lens(tester).center.dx, closeTo(_home.dx, 0.5));
+  });
+
   testWidgets('a rejected commit snaps back after the motion settles', (
     tester,
   ) async {

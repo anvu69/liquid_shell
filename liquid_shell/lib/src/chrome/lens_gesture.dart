@@ -42,7 +42,13 @@ class LensGestureRecognizer extends OneSequenceGestureRecognizer {
     _pointer = event.pointer;
     _downGlobal = event.position;
     _accepted = false;
-    _tracker = VelocityTracker.withKind(event.kind)
+    // UIKit's release velocity, as Flutter's iOS scroll views read it: a
+    // weighted mean of the last three steps. The least-squares fit reads
+    // the slope at the last sample, so a flick that eases out just before
+    // the finger lifts reads far below its speed (−281 against ≈ 800 pt/s
+    // for an idb swipe) and lands on the lagging lens's slot, where native
+    // lands on the finger's (VK-503 Task 16).
+    _tracker = IOSScrollViewFlingVelocityTracker(event.kind)
       ..addPosition(event.timeStamp, event.localPosition);
     if (eager) resolve(GestureDisposition.accepted);
     invokeCallback<void>('onDown', () => onDown?.call(event.localPosition));

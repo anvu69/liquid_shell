@@ -72,21 +72,24 @@ void main() {
     }
 
     /// Drags from [from] to [to] at [speed] pt/s of wall-clock time: frames
-    /// are live, so the finger's speed is real time, not pump time.
+    /// are live, so the finger's speed is real time, not pump time. Every
+    /// event carries its wall-clock time stamp: without one the velocity
+    /// tracker reads 0 and a flick never counts as a flick.
     Future<void> drag(double from, double to, double speed) async {
       finger = from;
-      final g = await tester.startGesture(Offset(from, _y));
       final clock = Stopwatch()..start();
+      final g = await tester.createGesture();
+      await g.down(Offset(from, _y), timeStamp: clock.elapsed);
       final span = (to - from).abs();
       final sign = (to - from).sign;
       var travelled = 0.0;
       while (travelled < span) {
         travelled = math.min(span, speed * clock.elapsedMicroseconds / 1e6);
         finger = from + sign * travelled;
-        await g.moveTo(Offset(finger, _y));
+        await g.moveTo(Offset(finger, _y), timeStamp: clock.elapsed);
         await tester.pump(const Duration(milliseconds: 4));
       }
-      await g.up();
+      await g.up(timeStamp: clock.elapsed);
     }
 
     // tool/tab_frames.sh cuts the recording here.
