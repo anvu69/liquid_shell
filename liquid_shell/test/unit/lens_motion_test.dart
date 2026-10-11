@@ -16,16 +16,19 @@ final TabBarGeometry g3 = compactTabGeometry(
   direction: TextDirection.ltr,
 );
 
-/// Advances [m] for [seconds], calling [each] after every frame with the
-/// elapsed time; returns the frames.
+/// Advances [m] for [seconds]; returns the frames. Like production, where
+/// pointer events reach the model between vsyncs, [input] runs before each
+/// frame's advance (with that frame's end time); [each] runs after it.
 List<LensFrame> run(
   LensMotion m,
   double seconds, {
+  void Function(double t)? input,
   void Function(double t)? each,
 }) {
   final frames = <LensFrame>[];
   final n = (seconds / dt).round();
   for (var f = 1; f <= n; f++) {
+    input?.call(f * dt);
     m.advance(dt);
     frames.add(m.frame);
     each?.call(f * dt);
@@ -106,6 +109,56 @@ void main() {
       expect(widest / 94, closeTo(1.33, 0.133));
     });
 
+    test('two slots: the peak is the native ×1.331 (stretchMax 1.46)', () {
+      final m = LensMotion(geometry: g3, selected: 0)..tapSlot(2);
+      var widest = 0.0;
+      run(
+        m,
+        0.6,
+        each: (_) {
+          if (m.frame.lens.width > widest) widest = m.frame.lens.width;
+        },
+      );
+      expect(TabSprings.stretchMax, 1.46);
+      expect(widest / 94, closeTo(1.331, 0.005));
+    });
+
+    test('top bar: inflates ×1.34 by ×1.375, no lift, no stretch', () {
+      const top = TabBarGeometry(
+        form: TabBarForm.top,
+        size: Size(200, 48),
+        pill: Rect.fromLTWH(0, 0, 200, 48),
+        slots: [Rect.fromLTWH(4, 4, 80, 40), Rect.fromLTWH(84, 4, 100, 40)],
+        trailing: null,
+        minimized: Rect.fromLTWH(0, 0, 200, 48),
+        minimizedTrailing: null,
+      );
+      final m = LensMotion(geometry: top, selected: 0)..tapSlot(1);
+      var widest = 0.0;
+      var narrowest = double.infinity;
+      var tallest = 0.0;
+      run(
+        m,
+        0.6,
+        each: (_) {
+          final lens = m.frame.lens;
+          if (lens.width > widest) widest = lens.width;
+          if (lens.width < narrowest) narrowest = lens.width;
+          if (lens.height > tallest) tallest = lens.height;
+        },
+      );
+      // The width target is rest × 1.34 (rest grows 80 → 100 in flight).
+      expect(widest, greaterThan(80 * 1.2));
+      expect(widest, lessThanOrEqualTo(100 * TabSprings.topTapWidth));
+      expect(narrowest, greaterThanOrEqualTo(80 - 0.5));
+      // heightIn (ζ 0.72) overshoots its ×1.375 target a little; the compact
+      // lift (×1.55) would not fit here.
+      expect(tallest / 40, closeTo(TabSprings.topTapHeight, 0.05));
+      run(m, 1.5);
+      expect(m.phase, LensPhase.rest);
+      expect(m.frame.lens.size, const Size(100, 40));
+    });
+
     test('engage holds 0.35 s, the target pops ×1.16, the pill bulges', () {
       final m = LensMotion(geometry: g3, selected: 0)..tapSlot(1);
       var popPeak = 1.0;
@@ -130,6 +183,15 @@ void main() {
   });
 
   group('press and hold (research §4.1)', () {
+    test('a press during a tap flight drops the pop back to ×1', () {
+      final m = LensMotion(geometry: g3, selected: 0)..tapSlot(1);
+      run(m, 0.1);
+      expect(m.frame.popScale, greaterThan(1.05));
+      m.down(const Offset(180, 31));
+      run(m, 0.5);
+      expect(m.frame.popScale, closeTo(1, 0.002));
+    });
+
     test('lens 110 × 70, pill ×1.052, highlight 0.845, glow 0.28', () {
       final m = LensMotion(geometry: g3, selected: 0)
         ..down(const Offset(94, 31));
@@ -164,18 +226,19 @@ void main() {
       run(
         m,
         1,
-        each: (t) {
+        input: (t) {
           finger = 94 + 90 * t;
           m.move(Offset(finger, 31));
         },
       );
       final s = TabSprings.dragFollow;
       final rampLag = 90 * s.damping / s.stiffness; // v·2ζ/ω
-      // move() lands after advance(), so the spring chases a staircase that
-      // trails the finger by half a frame on average.
+      // A harness sampling artifact, not frame timing: the target is held
+      // at the frame's end value, so it leads the continuous finger ramp by
+      // half a frame on average and the measured lag is rampLag − hold.
       const hold = 90 * dt / 2;
       expect(
-        finger - hold - m.frame.lens.center.dx,
+        finger + hold - m.frame.lens.center.dx,
         closeTo(rampLag, within(rampLag, 0.10)),
       );
       expect(rampLag, closeTo(7.1, 0.1));
@@ -200,12 +263,27 @@ void main() {
       run(
         m,
         3,
-        each: (t) {
-          m.move(Offset(94 + 60 * t, 31));
-          crossings.addAll(m.takeCrossings());
-        },
+        input: (t) => m.move(Offset(94 + 60 * t, 31)),
+        each: (_) => crossings.addAll(m.takeCrossings()),
       );
       expect(crossings, [1, 2]);
+    });
+
+    test('travel during the press is not a crossing (Q6)', () {
+      // The lens follows the finger to slot 2 while still pressed; the drag
+      // that follows crosses 1 and 0 only.
+      final m = LensMotion(geometry: g3, selected: 0)
+        ..down(const Offset(266, 31));
+      run(m, 0.5);
+      expect(m.phase, LensPhase.pressed);
+      final crossings = <int>[];
+      run(
+        m,
+        3,
+        input: (t) => m.move(Offset(266 - 60 * t, 31)),
+        each: (_) => crossings.addAll(m.takeCrossings()),
+      );
+      expect(crossings, [1, 0]);
     });
 
     test('no crossing on a tap, even when the lens moves', () {
@@ -347,6 +425,22 @@ void main() {
       expect(m.frame.ghost, isNull);
       expect(m.frame.restOpacity, 1);
       expect(m.frame.popScale, 1);
+    });
+
+    test('pointer tap: no slide while pressed, a dissolve in place', () {
+      final m = LensMotion(geometry: g3, selected: 0, reduceMotion: true)
+        ..down(const Offset(266, 31));
+      run(m, 0.1);
+      expect(m.frame.lens.center.dx, closeTo(94, 0.5));
+      expect(m.up(const Offset(266, 31)), 2);
+      expect(m.frame.lens, g3.slots[2]);
+      expect(m.frame.ghost, g3.slots[0]);
+      expect(m.frame.ghostOpacity, 1);
+      expect(m.frame.restOpacity, 0);
+      final xs = [for (final f in run(m, 0.2)) f.lens.center.dx];
+      expect(xs, everyElement(266));
+      expect(m.frame.ghost, isNull);
+      expect(m.frame.restOpacity, 1);
     });
 
     test('drag: the rest-size capsule follows the finger', () {

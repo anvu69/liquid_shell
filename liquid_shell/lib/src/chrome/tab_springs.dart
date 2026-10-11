@@ -131,13 +131,15 @@ abstract final class TabSprings {
   /// Lens speed above which the flight width stretches.
   static const double stretchKnee = 700;
 
-  /// Width gain per pt/s above the knee. Tuned from the spec's 0.00090
-  /// (§8.3): the lagging `widthIn` spring kept a two-slot peak at ×1.15.
-  /// The target now reaches [stretchMax] by 790 pt/s, for a ×1.25 peak.
+  /// Width gain per pt/s above the knee. At 0.005 the target saturates at
+  /// [stretchMax] by 790 pt/s, so the stretch is effectively a step at the
+  /// knee (spec §8.3).
   static const double stretchGain = 0.005;
 
-  /// Flight width ceiling.
-  static const double stretchMax = 1.35;
+  /// Flight width ceiling. Above the native ×1.33 peak because the
+  /// `widthIn` spring lags the target: 1.46 gives a ×1.331 two-slot peak
+  /// (spec §8.3).
+  static const double stretchMax = 1.46;
 
   /// Flight height gain.
   static const double liftGain = 0.55;

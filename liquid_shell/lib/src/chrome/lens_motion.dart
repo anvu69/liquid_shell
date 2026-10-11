@@ -257,11 +257,14 @@ class LensMotion {
     _travel = 0;
     _lastSlot = _geometry.slotNearest(_x.value);
     _crossings.clear();
-    _x.retarget(
-      _geometry.clampCentre(local.dx),
-      reduceMotion ? TabSprings.reduced : TabSprings.dragFollow,
-    );
-    if (!reduceMotion) {
+    // A new press ends any tap pop still running (fast tab hopping).
+    _pop.target = 1;
+    if (reduceMotion) {
+      // No slide toward the finger: a tap dissolves in place (§13.2). The
+      // capsule follows only once the press turns into a drag.
+      _x.spring = TabSprings.reduced;
+    } else {
+      _x.retarget(_geometry.clampCentre(local.dx), TabSprings.dragFollow);
       _glowCenter = local;
       _rippleAge = null;
       _glowDiameter.jump(TabSprings.glowDiameter);
@@ -273,8 +276,9 @@ class LensMotion {
     if (!interacting) return;
     _travel = math.max(_travel, (local.dx - _downX).abs());
     if (_travel > kTouchSlop) _phase = LensPhase.dragging;
-    _x.target = _geometry.clampCentre(local.dx);
     if (!reduceMotion) _glowCenter = local;
+    if (reduceMotion && _phase == LensPhase.pressed) return;
+    _x.target = _geometry.clampCentre(local.dx);
   }
 
   /// Finger up at [local] with horizontal [velocity]; returns the committed
@@ -462,7 +466,15 @@ class LensMotion {
     }
     _advanceRipple(dt);
     _advanceGhost(dt);
-    if (_phase == LensPhase.dragging) _queueCrossing();
+    switch (_phase) {
+      // Travel during the press is not a crossing (Q6): track it silently.
+      case LensPhase.pressed:
+        _lastSlot = _geometry.slotNearest(_x.value);
+      case LensPhase.dragging:
+        _queueCrossing();
+      case LensPhase.flying || LensPhase.settling || LensPhase.rest:
+        break;
+    }
     final moving = _isMoving();
     if (!moving && _phase == LensPhase.settling) {
       for (final s in _springs) {
