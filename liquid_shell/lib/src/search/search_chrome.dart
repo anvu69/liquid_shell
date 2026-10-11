@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:liquid_shell/src/chrome/glass_tab_bar.dart';
+import 'package:liquid_shell/src/chrome/tab_springs.dart';
 import 'package:liquid_shell/src/glass/liquid_glass.dart';
 import 'package:liquid_shell/src/search/search_controller.dart';
 import 'package:liquid_shell/src/search/search_layout.dart';
@@ -18,6 +19,12 @@ const kSearchCollapsedKey = ValueKey<String>('liquid-search-collapsed');
 const kSearchCancelKey = ValueKey<String>('liquid-search-cancel');
 
 const _capsule = BorderRadius.all(Radius.circular(999));
+
+/// The field morphs on the bar's clock (VK-503 Task 16): it shrinks into
+/// the ⌕ as the bar expands, and grows out of it as the bar collapses into
+/// the previous tab's circle, as native does in step.
+final SpringCurve _toIdle = SpringCurve(TabSprings.expand);
+final SpringCurve _toSelected = SpringCurve(TabSprings.collapse);
 
 /// The fallback search field on glass (spec P3b §9.4). The `TextField` is
 /// the first child of the same chain in every phase, so a phase change
@@ -275,8 +282,20 @@ class CompactSearchChrome extends StatelessWidget {
           AnimatedPositioned.fromRect(
             key: kSearchFieldKey,
             rect: rects.field,
-            duration: duration,
-            curve: kSearchMorphCurve,
+            // To and from idle the bar morphs too: the field takes its
+            // spring. Selected ↔ active (the keyboard) keeps the P3b ease.
+            duration: duration == Duration.zero
+                ? duration
+                : switch (phase) {
+                    LiquidSearchPhase.idle => _toIdle.duration,
+                    LiquidSearchPhase.selected => _toSelected.duration,
+                    LiquidSearchPhase.active => duration,
+                  },
+            curve: switch (phase) {
+              LiquidSearchPhase.idle => _toIdle,
+              LiquidSearchPhase.selected => _toSelected,
+              LiquidSearchPhase.active => kSearchMorphCurve,
+            },
             child: field,
           ),
           part(

@@ -227,4 +227,52 @@ void main() {
       Theme.of(tester.element(find.byType(GlassTabBar))).colorScheme.primary,
     );
   });
+
+  // VK-503 Task 16: native shrinks the field into the ⌕ in step with the
+  // pill growing back (search_close strip: both 0.55 → 0.69 → 0.86 → 0.99
+  // of the way, row by row). The field ran on its own 350 ms ease and the
+  // bar on the expand spring, so the ⌕ led early and then trailed as an
+  // elongated capsule for 4 to 6 frames.
+  for (final (name, closing) in [('close', true), ('open', false)]) {
+    testWidgets('search $name: the field and the bar move on one clock', (
+      tester,
+    ) async {
+      await _pump(tester);
+      final idlePill = tester.getRect(find.byKey(kTabPillKey));
+      final idleField = tester.getRect(find.byKey(kSearchFieldKey));
+      await tester.tap(find.bySemanticsLabel('Search'));
+      await tester.pumpAndSettle();
+      final circle = tester.getRect(find.byKey(kTabPillKey));
+      final selectedField = tester.getRect(find.byKey(kSearchFieldKey));
+      if (closing) {
+        await tester.tap(find.byKey(kSearchCollapsedKey));
+      } else {
+        // Back to idle first, then open again from there.
+        await tester.tap(find.byKey(kSearchCollapsedKey));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(kSearchFieldKey));
+      }
+      final (fieldFrom, fieldTo) = closing
+          ? (selectedField, idleField)
+          : (idleField, selectedField);
+      final (barFrom, barTo) = closing
+          ? (circle, idlePill)
+          : (idlePill, circle);
+      for (var f = 0; f < 30; f++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        final bar = tester.getRect(find.byKey(kTabPillKey));
+        final field = tester.getRect(find.byKey(kSearchFieldKey));
+        final barDone =
+            (bar.width - barFrom.width) / (barTo.width - barFrom.width);
+        final fieldDone =
+            (field.width - fieldFrom.width) / (fieldTo.width - fieldFrom.width);
+        // 0.06: the bar's ×0.96 dip (spec §10) scales its glass too.
+        expect(
+          fieldDone,
+          closeTo(barDone, 0.06),
+          reason: 'frame $f: bar $barDone, field $fieldDone',
+        );
+      }
+    });
+  }
 }

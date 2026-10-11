@@ -104,4 +104,29 @@ void main() {
     expect(dropped.value, capped.value);
     expect(dropped.velocity, capped.velocity);
   });
+
+  group('SpringCurve (VK-503 Task 16: the search field on the bar clock)', () {
+    final curve = SpringCurve(TabSprings.expand);
+
+    test('ends at 0 and 1, and its duration is the settle time', () {
+      expect(curve.transform(0), 0);
+      expect(curve.transform(1), 1);
+      final sim = SpringSimulation(TabSprings.expand, 0, 1, 0);
+      final settle = curve.duration.inMicroseconds / 1e6;
+      expect((sim.x(settle) - 1).abs(), lessThanOrEqualTo(0.002));
+      expect((sim.x(settle - 0.001) - 1).abs(), greaterThan(0.002));
+    });
+
+    test('follows the spring step response, overshoot included', () {
+      final sim = SpringSimulation(TabSprings.expand, 0, 1, 0);
+      final seconds = curve.duration.inMicroseconds / 1e6;
+      var peak = 0.0;
+      for (var i = 1; i < 100; i++) {
+        final t = i / 100;
+        expect(curve.transform(t), closeTo(sim.x(t * seconds), 1e-9));
+        peak = math.max(peak, curve.transform(t));
+      }
+      expect(peak, greaterThan(1));
+    });
+  });
 }

@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/animation.dart' show Curve;
 import 'package:flutter/physics.dart';
 
 /// A spring from a least-squares fit: damping ratio [ratio] and undamped
@@ -246,4 +247,38 @@ class SpringValue {
   /// second.
   bool settled(double tolerance) =>
       (_value - target).abs() <= tolerance && _velocity.abs() <= tolerance * 4;
+}
+
+/// A spring's step response from 0 to 1 as a [Curve] that lasts
+/// [duration]: the time after which it stays within 0.002 of 1 (the last
+/// step to exactly 1 is under half a point on the search field). An
+/// implicit animation (`AnimatedPositioned`) with it moves on the same
+/// clock as a [SpringValue] on [spring] that starts at rest: the compact
+/// search field and the tab bar's minimize morph (VK-503 Task 16).
+class SpringCurve extends Curve {
+  /// The step response of [spring].
+  SpringCurve(this.spring)
+    : _simulation = SpringSimulation(spring, 0, 1, 0),
+      duration = _settle(spring);
+
+  /// The spring.
+  final SpringDescription spring;
+
+  /// How long the curve lasts.
+  final Duration duration;
+
+  final SpringSimulation _simulation;
+
+  static Duration _settle(SpringDescription spring) {
+    final simulation = SpringSimulation(spring, 0, 1, 0);
+    var last = 0;
+    for (var ms = 0; ms <= 2000; ms++) {
+      if ((simulation.x(ms / 1000) - 1).abs() > 0.002) last = ms;
+    }
+    return Duration(milliseconds: last + 1);
+  }
+
+  @override
+  double transformInternal(double t) =>
+      _simulation.x(t * duration.inMicroseconds / 1e6);
 }
