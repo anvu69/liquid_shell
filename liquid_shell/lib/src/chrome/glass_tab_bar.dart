@@ -31,6 +31,9 @@ const kTabTrailingKey = ValueKey<String>('liquid-tab-trailing');
 
 const _capsule = BorderRadius.all(Radius.circular(999));
 
+/// The smallest tap area a tab keeps (P1 Q17, Apple's 44 pt target).
+const double _minTapWidth = 44;
+
 /// Rewrites every frame before it is painted: goldens of the engaged lens
 /// (spec VK-503 §17.3). Reset it to null after use.
 @visibleForTesting
@@ -379,23 +382,49 @@ class _GlassTabBarState extends State<GlassTabBar> {
     return Stack(clipBehavior: Clip.none, children: children);
   }
 
-  /// The part of `slots[s]` that takes its touches, slot-local. Neighbouring
-  /// capsules overlap by 8; the overlap is split at its midpoint, so a tap
-  /// goes to the nearest slot, as on native. The semantics node keeps the
-  /// whole capsule.
+  /// The part of `slots[s]` that takes its touches, slot-local.
+  ///
+  /// Neighbouring capsules overlap by 8. Each overlap is split at its
+  /// midpoint, so a tap goes to the nearest slot, as on native. When that
+  /// leaves a slot narrower than [_minTapWidth] (P1 Q17: 5 tabs and a circle
+  /// at 320, pitch 43.6), the narrow slots get [_minTapWidth] and the others
+  /// share the rest of the row evenly: the end slots give up some of their
+  /// outer room, and every area stays inside its own capsule. The semantics
+  /// node keeps the whole capsule.
   static Rect _hitRect(List<Rect> slots, int s) {
-    final r = slots[s];
-    var left = r.left;
-    var right = r.right;
-    for (final (i, o) in slots.indexed) {
-      if (i == s) continue;
-      if (o.center.dx < r.center.dx && o.right > r.left) {
-        left = math.max(left, (o.right + r.left) / 2);
-      } else if (o.center.dx > r.center.dx && o.left < r.right) {
-        right = math.min(right, (o.left + r.right) / 2);
+    final order = [for (var i = 0; i < slots.length; i++) i]
+      ..sort((a, b) => slots[a].center.dx.compareTo(slots[b].center.dx));
+    final n = order.length;
+    final first = slots[order.first];
+    final last = slots[order.last];
+    // Edges between visual neighbours, at the overlap midpoints.
+    final edges = [
+      first.left,
+      for (var k = 0; k + 1 < n; k++)
+        (slots[order[k]].right + slots[order[k + 1]].left) / 2,
+      last.right,
+    ];
+    final widths = [for (var k = 0; k < n; k++) edges[k + 1] - edges[k]];
+    final span = last.right - first.left;
+    final floor = math.min(_minTapWidth, span / n);
+    final narrow = widths.where((w) => w < floor).length;
+    if (narrow > 0) {
+      final rest = (span - narrow * floor) / (n - narrow);
+      for (var k = 0; k < n; k++) {
+        widths[k] = widths[k] < floor ? floor : rest;
+      }
+      for (var k = 0; k < n; k++) {
+        edges[k + 1] = edges[k] + widths[k];
       }
     }
-    return Rect.fromLTRB(left, r.top, right, r.bottom).shift(-r.topLeft);
+    final k = order.indexOf(s);
+    final r = slots[s];
+    return Rect.fromLTRB(
+      math.max(edges[k], r.left),
+      r.top,
+      math.min(edges[k + 1], r.right),
+      r.bottom,
+    ).shift(-r.topLeft);
   }
 
   Widget _slotNode(int slot, LiquidDestination d, bool ax, Rect hit) =>

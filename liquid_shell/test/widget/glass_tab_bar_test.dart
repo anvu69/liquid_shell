@@ -39,10 +39,12 @@ Future<void> _pump(
   TextDirection direction = TextDirection.ltr,
   List<LiquidDestination> destinations = _three,
   VoidCallback? onBody,
+  Size screen = _screen,
+  double margin = TabMetrics.margin,
 }) async {
   tester.view
     ..devicePixelRatio = 3
-    ..physicalSize = _screen * 3;
+    ..physicalSize = screen * 3;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(
     MaterialApp(
@@ -59,8 +61,8 @@ Future<void> _pump(
                 ),
               ),
               Positioned(
-                left: TabMetrics.margin,
-                right: TabMetrics.margin,
+                left: margin,
+                right: margin,
                 bottom: 21,
                 child: LiquidTabBar(
                   destinations: destinations,
@@ -249,6 +251,88 @@ void main() {
       await tester.tapAt(Offset(mid + towardHome, _top + 31));
       await tester.tapAt(Offset(mid - towardHome, _top + 31));
       expect(taps, [0, 1], reason: '$direction');
+    }
+  });
+
+  testWidgets('at 320 (margin 8, 5 tabs + circle) every tab keeps a tap '
+      'area of at least 44, inside its semantics capsule (P1 Q17)', (
+    tester,
+  ) async {
+    for (final direction in TextDirection.values) {
+      final taps = <int>[];
+      await _pump(
+        tester,
+        screen: const Size(320, 568),
+        margin: TabMetrics.narrowMargin,
+        direction: direction,
+        onSelect: taps.add,
+        trailing: LiquidTabAction(
+          icon: const Icon(Icons.edit),
+          semanticLabel: 'Compose',
+          onPressed: () {},
+        ),
+        destinations: [
+          for (final label in ['One', 'Two', 'Three', 'Four', 'Five'])
+            LiquidDestination(icon: const Icon(Icons.circle), label: label),
+        ],
+      );
+      const labels = ['One', 'Two', 'Three', 'Four', 'Five'];
+      const y = 568 - 21 - 31.0;
+      Future<int?> hit(double x) async {
+        taps.clear();
+        await tester.tapAt(Offset(x, y));
+        return taps.isEmpty ? null : taps.single;
+      }
+
+      // The edge between [a] (hit at x = a) and [b] (hit at x = b), to 0.001.
+      Future<double> edge(double a, double b) async {
+        final left = await hit(a);
+        var lo = a;
+        var hi = b;
+        for (var i = 0; i < 20; i++) {
+          final m = (lo + hi) / 2;
+          if (await hit(m) == left) {
+            lo = m;
+          } else {
+            hi = m;
+          }
+        }
+        return (lo + hi) / 2;
+      }
+
+      final pill = tester.getRect(find.byKey(kTabPillKey));
+      final nodes = [for (final label in labels) _slot(tester, label)];
+      final order = [0, 1, 2, 3, 4]
+        ..sort((a, b) => nodes[a].center.dx.compareTo(nodes[b].center.dx));
+      final edges = [
+        await edge(pill.left - 1, nodes[order.first].center.dx),
+        for (var k = 0; k + 1 < order.length; k++)
+          await edge(
+            nodes[order[k]].center.dx,
+            nodes[order[k + 1]].center.dx,
+          ),
+        await edge(nodes[order.last].center.dx, pill.right + 1),
+      ];
+      for (final (k, i) in order.indexed) {
+        final reason = '$direction ${labels[i]}';
+        expect(await hit(nodes[i].center.dx), i, reason: reason);
+        // Bisection finds each edge to about 1e-4.
+        expect(
+          edges[k + 1] - edges[k],
+          greaterThanOrEqualTo(44 - 1e-3),
+          reason: reason,
+        );
+        expect(
+          edges[k],
+          greaterThanOrEqualTo(nodes[i].left - 0.01),
+          reason: reason,
+        );
+        expect(
+          edges[k + 1],
+          lessThanOrEqualTo(nodes[i].right + 0.01),
+          reason: reason,
+        );
+      }
     }
   });
 
