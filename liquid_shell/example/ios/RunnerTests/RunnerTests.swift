@@ -1778,6 +1778,25 @@ extension NativeTabsTests {
     XCTAssertEqual(events.sent.last, "searchText phốc", "\(events.sent)")
   }
 
+  /// The same, when the user's tap presents the search: UIKit presents it
+  /// without Dart's `activate()`, and the bridge must not stay mute
+  /// (final review Minor 1).
+  func testAUserPresentationResetsADismissalThatNeverEnded() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let bridge = tabs.searchBridge
+    tabs.setSearchText("phố")
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    bridge.controller.delegate = nil  // no `didDismiss`
+    tabs.setSearchActive(false)
+    RunLoop.current.run(until: Date().addingTimeInterval(1.5))
+    bridge.controller.delegate = bridge
+    // The user's tap: UIKit presents the search itself.
+    settle(sending: "searchActive true") { bridge.controller.isActive = true }
+    XCTAssertEqual(bridge.text, "phố")
+    userTypes("phốc", into: bridge)
+    XCTAssertEqual(events.sent.last, "searchText phốc", "\(events.sent)")
+  }
+
   /// IMEs with marked text: the user's committed input wins over Dart text
   /// held for the composition; the commit is reported once.
   func testAnIMECommitWinsOverDartsPendingText() throws {

@@ -23,7 +23,7 @@ final class SearchBridge: NSObject, UISearchResultsUpdating, UISearchControllerD
   /// The system placeholder, put back when Dart sends none.
   private(set) var defaultPlaceholder: String?
   /// The text to keep through a dismissal Dart asked for (UIKit empties
-  /// the field). Reset when that dismissal ends, or by the next activation.
+  /// the field). Reset when that dismissal ends, or by the next presentation.
   private var keepOnDismiss: String?
   /// Dart asked for activation while a dismissal was still running, which
   /// UIKit ignores: activate once it ends.
@@ -146,6 +146,14 @@ final class SearchBridge: NSObject, UISearchResultsUpdating, UISearchControllerD
   }
 
   // MARK: UISearchControllerDelegate
+
+  /// Any presentation, the user's tap included (it never runs `activate`),
+  /// ends a dismissal Dart asked for: one whose end UIKit never reported
+  /// would otherwise keep the bridge from reporting the user's edits.
+  func willPresentSearchController(_ searchController: UISearchController) {
+    activateAfterDismiss = false
+    restoreKept()
+  }
 
   func didPresentSearchController(_ searchController: UISearchController) {
     if canReport() { onActive(true) }
