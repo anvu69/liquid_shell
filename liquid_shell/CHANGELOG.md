@@ -1,3 +1,38 @@
+## 0.1.0-dev.5
+
+- **Search tab.** `LiquidDestinationRole.search` on `LiquidDestination` (at
+  most one, the last destination, placed everywhere) with
+  `LiquidShell.search` (`LiquidSearch`: controller, placeholder,
+  `onChanged`, `onSubmitted`). `LiquidSearchController`,
+  `LiquidSearchValue` and `LiquidSearchPhase` (idle, selected, active);
+  `LiquidSearchScopeBar`, a glass segmented control for search scopes. On
+  iOS 26 with native chrome the field is UIKit's own `UISearchTab`: on
+  iPhone the ⌕ becomes the field and the tabs collapse to one circle; on
+  iPad the field sits under the title row and rises into it when active.
+  Everywhere else the shell draws the same states in glass. The query is
+  kept across tab switches; × clears it.
+- **Pages and the glass back button.** `LiquidPage` (title, large title,
+  the back button when its navigator can pop) and `LiquidBackButton`. In
+  the native search tab, UIKit draws the title and its glass back circle;
+  every back, the long-press back menu included, is a proposal that goes
+  through `Navigator.maybePop`, so `PopScope` runs.
+- A root `LiquidPage`'s large title now sits on the bar row, as Apple
+  Music's does: in the Flutter bar on every platform, and natively on
+  iPhone (on iPad the native search root shows a small title, or its own
+  large-title row with `largeTitle: true`). A pushed page's large title
+  keeps a row of its own in the Flutter bar; under the native search tab,
+  UIKit draws it small and centred (see `LiquidPage.largeTitle`).
+- `LiquidShellScopeData.searchPhase` and `nativePageBar`; `chromeInsets`
+  covers the search field in every phase, so
+  `LiquidShellScope.contentPaddingOf` keeps working (never add
+  `viewInsets` on top).
+- `LiquidShellStrings.searchPlaceholder`, `cancelSearch` and `back`.
+- `LiquidChromeSlot.searchField` and
+  `LiquidChromeDetails.search` (`LiquidSearchChromeDetails`) for a
+  `chromeBuilder`.
+- Example: a real "Search" case (songs and places, Vietnamese without
+  accents matches); the trailing action case is now "Compose".
+
 ## 0.1.0-dev.3
 
 - `showLiquidAlert` / `showLiquidActionSheet`: native `UIAlertController` on

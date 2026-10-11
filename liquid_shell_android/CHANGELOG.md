@@ -1,3 +1,7 @@
+## 0.1.0-dev.5
+
+- Version aligned with the other packages; no Android change.
+
 ## 0.1.0-dev.3
 
 - Version bump only (Android draws the Flutter glass dialog).

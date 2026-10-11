@@ -19,7 +19,7 @@ class NativeChromeCase extends StatefulWidget {
 class _NativeChromeCaseState extends State<NativeChromeCase> {
   // #docregion readme
   int _index = 0;
-  int _searches = 0;
+  int _drafts = 0;
 
   static const _destinations = [
     LiquidDestination(
@@ -57,10 +57,10 @@ class _NativeChromeCaseState extends State<NativeChromeCase> {
         _index = i;
       }),
       tabBarTrailing: LiquidTabAction(
-        icon: const Icon(Icons.search),
-        semanticLabel: 'Search',
-        sfSymbol: 'magnifyingglass',
-        onPressed: () => setState(() => _searches++),
+        icon: const Icon(Icons.edit_outlined),
+        semanticLabel: 'Compose',
+        sfSymbol: 'square.and.pencil',
+        onPressed: () => setState(() => _drafts++),
       ),
       nativeSidebarFooter: LiquidNativeSidebarFooter(
         title: 'Ann Lee',
@@ -72,7 +72,7 @@ class _NativeChromeCaseState extends State<NativeChromeCase> {
       body: DemoPage(
         title: _destinations[_index].label,
         children: [
-          Text('Searches: $_searches'),
+          Text('Drafts: $_drafts'),
           SwitchListTile(
             title: const Text('Unsaved changes'),
             value: _dirty,

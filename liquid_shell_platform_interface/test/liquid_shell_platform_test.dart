@@ -53,4 +53,13 @@ void main() {
       throwsA(isA<AssertionError>()),
     );
   });
+
+  test('the P3b members default to nothing and touch no channel', () async {
+    final platform = _ExtendsFake();
+    await platform.setNativeSearchText('x');
+    await platform.setNativeSearchActive(active: true);
+    await platform.setNativePageScroll(tab: 0, offset: 12);
+    // No binding, no channel: reaching here without a MissingPluginException
+    // is the assertion.
+  });
 }

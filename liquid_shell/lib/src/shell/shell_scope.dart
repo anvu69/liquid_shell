@@ -2,8 +2,11 @@ import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 import 'package:liquid_shell/src/native/window_controls.dart';
+import 'package:liquid_shell/src/pages/page_registry.dart';
+import 'package:liquid_shell/src/search/search_controller.dart';
 import 'package:liquid_shell/src/shell/breakpoints.dart';
 import 'package:liquid_shell/src/shell/shell_layout.dart';
+import 'package:liquid_shell/src/shell/strings.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
 /// What the nearest `LiquidShell` tells its body.
@@ -18,6 +21,8 @@ class LiquidShellScopeData {
     required this.setSidebarVisible,
     this.nativeChrome = false,
     this.windowControls = LiquidWindowControls.zero,
+    this.searchPhase,
+    this.nativePageBar = false,
   });
 
   /// No shell: compact, hidden chrome, zero insets, no sidebar. Window
@@ -69,6 +74,13 @@ class LiquidShellScopeData {
   /// `LiquidWindowControlsClearance`.
   final LiquidWindowControls windowControls;
 
+  /// The search tab's phase; null when the shell has no search tab.
+  final LiquidSearchPhase? searchPhase;
+
+  /// The selected tab has a native navigation bar (iOS 26 native chrome):
+  /// `LiquidPage` draws no Flutter bar, and [windowControls] is zero.
+  final bool nativePageBar;
+
   /// Field by field, except [setSidebarVisible] (spec §4.4). The setter is an
   /// action, not state: pages depend on what the shell shows, so equality
   /// covers the values only. Two scopes that show the same thing are
@@ -82,7 +94,9 @@ class LiquidShellScopeData {
       other.chromeInsets == chromeInsets &&
       other.sidebarVisible == sidebarVisible &&
       other.nativeChrome == nativeChrome &&
-      other.windowControls == windowControls;
+      other.windowControls == windowControls &&
+      other.searchPhase == searchPhase &&
+      other.nativePageBar == nativePageBar;
 
   @override
   int get hashCode => Object.hash(
@@ -92,6 +106,8 @@ class LiquidShellScopeData {
     sidebarVisible,
     nativeChrome,
     windowControls,
+    searchPhase,
+    nativePageBar,
   );
 }
 
@@ -111,6 +127,8 @@ class ShellScopeMarker extends InheritedWidget {
     required this.data,
     required this.registry,
     required super.child,
+    this.pages,
+    this.strings = const LiquidShellStrings(),
     super.key,
   });
 
@@ -120,9 +138,18 @@ class ShellScopeMarker extends InheritedWidget {
   /// Where [LiquidHideChrome] registers; null above or outside a shell.
   final HideChromeRegistry? registry;
 
+  /// Where `LiquidPage`s register; null outside a shell.
+  final PageRegistry? pages;
+
+  /// The shell's strings (the back button's label).
+  final LiquidShellStrings strings;
+
   @override
   bool updateShouldNotify(ShellScopeMarker oldWidget) =>
-      data != oldWidget.data || registry != oldWidget.registry;
+      data != oldWidget.data ||
+      registry != oldWidget.registry ||
+      pages != oldWidget.pages ||
+      strings != oldWidget.strings;
 }
 
 /// Reads the nearest `LiquidShell`.
@@ -142,6 +169,11 @@ abstract final class LiquidShellScope {
   /// The nearest shell's data, or null outside any shell.
   static LiquidShellScopeData? maybeOf(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<ShellScopeMarker>()?.data;
+
+  /// The nearest shell's search phase (spec P3b §3.1): idle, selected or
+  /// active. Null outside a shell and in a shell without a search tab.
+  static LiquidSearchPhase? searchPhaseOf(BuildContext context) =>
+      maybeOf(context)?.searchPhase;
 
   /// Padding that keeps content clear of both chrome and system UI: per
   /// side, the larger of the chrome insets and `MediaQuery.paddingOf`.

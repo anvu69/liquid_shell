@@ -1,6 +1,6 @@
 name: liquid_shell_platform_interface
 description: A common platform interface for the liquid_shell plugin. Glass fallback signals, the native iOS 26 chrome contract and the iPadOS window controls.
-version: 0.1.0-dev.3
+version: 0.1.0-dev.5
 homepage: https://github.com/anvu69/liquid_shell/tree/main/liquid_shell_platform_interface
 repository: https://github.com/anvu69/liquid_shell/tree/main/liquid_shell_platform_interface
 issue_tracker: https://github.com/anvu69/liquid_shell/issues

@@ -1,3 +1,16 @@
+## 0.1.0-dev.5
+
+- Native search: `LiquidNativeSearchConfig` on
+  `LiquidNativeChromeConfig.search`, and `LiquidNativeTab.search`.
+- Page stacks: `LiquidNativePage` and `LiquidNativeTab.pages`.
+- Six events: `LiquidNativeSearchTextChanged`,
+  `LiquidNativeSearchActiveChanged`, `LiquidNativeSearchSubmitted`,
+  `LiquidNativeSearchFieldChanged`, `LiquidNativeBackTapped` and
+  `LiquidNativePopToPage`. `LiquidNativeEvent` is sealed: an exhaustive
+  `switch` over it needs the new cases.
+- Three methods, with defaults that do nothing: `setNativeSearchText`,
+  `setNativeSearchActive` and `setNativePageScroll`.
+
 ## 0.1.0-dev.3
 
 - `supportsNativeDialogs`, `presentNativeDialog` and the native dialog

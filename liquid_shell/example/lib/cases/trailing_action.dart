@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell_example/support/demo_page.dart';
 
-/// A search circle at the end of the tab bar, opening a page above the shell.
+/// A compose circle at the end of the tab bar, opening a page above the
+/// shell. (Search is a tab: see SearchCase.)
 class TrailingActionCase extends StatefulWidget {
   /// Creates the case.
   const TrailingActionCase({super.key});
@@ -22,11 +23,11 @@ class _TrailingActionCaseState extends State<TrailingActionCase> {
       selectedIndex: _index,
       onDestinationSelected: (i) => setState(() => _index = i),
       tabBarTrailing: LiquidTabAction(
-        icon: const Icon(Icons.search),
-        semanticLabel: 'Search',
-        sfSymbol: 'magnifyingglass',
+        icon: const Icon(Icons.edit_outlined),
+        semanticLabel: 'Compose',
+        sfSymbol: 'square.and.pencil',
         onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(builder: _searchPage),
+          MaterialPageRoute<void>(builder: _composePage),
         ),
       ),
       body: DemoPage(title: kDemoDestinations[_index].label),
@@ -35,11 +36,11 @@ class _TrailingActionCaseState extends State<TrailingActionCase> {
 
   // #docregion no-chrome
   // Pushed above the shell (on the app's navigator): no chrome covers it.
-  Widget _searchPage(BuildContext context) => const LiquidNoChrome(
+  Widget _composePage(BuildContext context) => const LiquidNoChrome(
     child: Scaffold(
       body: DemoPage(
-        title: 'Search',
-        children: [TextField(decoration: InputDecoration(hintText: 'Find'))],
+        title: 'New message',
+        children: [TextField(decoration: InputDecoration(hintText: 'Message'))],
       ),
     ),
   );

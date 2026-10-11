@@ -1,3 +1,5 @@
+import 'dart:ui' show Rect;
+
 import 'package:flutter/foundation.dart';
 import 'package:liquid_shell_platform_interface/src/window_controls.dart';
 
@@ -106,6 +108,8 @@ class LiquidNativeTab {
     required this.sfSymbol,
     this.badge,
     this.sidebarOnly = false,
+    this.search = false,
+    this.pages = const [],
   });
 
   /// Visible title and accessibility label.
@@ -120,21 +124,36 @@ class LiquidNativeTab {
   /// Shown in the sidebar only, never in the tab bar.
   final bool sidebarOnly;
 
+  /// The search tab: UIKit's search tab, hosting the search field.
+  final bool search;
+
+  /// The tab's page stack, root first. Empty: the root shows [title].
+  final List<LiquidNativePage> pages;
+
   @override
   bool operator ==(Object other) =>
       other is LiquidNativeTab &&
       other.title == title &&
       other.sfSymbol == sfSymbol &&
       other.badge == badge &&
-      other.sidebarOnly == sidebarOnly;
+      other.sidebarOnly == sidebarOnly &&
+      other.search == search &&
+      listEquals(other.pages, pages);
 
   @override
-  int get hashCode => Object.hash(title, sfSymbol, badge, sidebarOnly);
+  int get hashCode => Object.hash(
+    title,
+    sfSymbol,
+    badge,
+    sidebarOnly,
+    search,
+    Object.hashAll(pages),
+  );
 
   @override
   String toString() =>
       'LiquidNativeTab(title: $title, sfSymbol: $sfSymbol, badge: $badge, '
-      'sidebarOnly: $sidebarOnly)';
+      'sidebarOnly: $sidebarOnly, search: $search, pages: $pages)';
 }
 
 /// A native action item: the trailing tab bar action.
@@ -202,6 +221,54 @@ class LiquidNativeFooter {
       'sfSymbol: $sfSymbol, semanticLabel: $semanticLabel)';
 }
 
+/// One page of a tab's navigation stack (root first): its title for the
+/// native navigation bar.
+@immutable
+class LiquidNativePage {
+  /// Creates a page.
+  const LiquidNativePage({required this.title, this.largeTitle});
+
+  /// Navigation bar title.
+  final String title;
+
+  /// Large title; null leaves it to the platform (large on a phone's root
+  /// page, inline elsewhere).
+  final bool? largeTitle;
+
+  @override
+  bool operator ==(Object other) =>
+      other is LiquidNativePage &&
+      other.title == title &&
+      other.largeTitle == largeTitle;
+
+  @override
+  int get hashCode => Object.hash(title, largeTitle);
+
+  @override
+  String toString() =>
+      'LiquidNativePage(title: $title, largeTitle: $largeTitle)';
+}
+
+/// The native search field of the search tab.
+@immutable
+class LiquidNativeSearchConfig {
+  /// Creates the config.
+  const LiquidNativeSearchConfig({this.placeholder});
+
+  /// Placeholder of the empty field; null keeps the system's.
+  final String? placeholder;
+
+  @override
+  bool operator ==(Object other) =>
+      other is LiquidNativeSearchConfig && other.placeholder == placeholder;
+
+  @override
+  int get hashCode => placeholder.hashCode;
+
+  @override
+  String toString() => 'LiquidNativeSearchConfig(placeholder: $placeholder)';
+}
+
 /// Everything the native chrome shows, sent whole on every change.
 ///
 /// The platform applies it in a fixed order: tabs, then the selection,
@@ -216,6 +283,7 @@ class LiquidNativeChromeConfig {
     this.selectedIndex = 0,
     this.trailing,
     this.footer,
+    this.search,
     this.tintArgb = 0xFF007AFF,
     this.dark = false,
     this.rtl = false,
@@ -240,6 +308,9 @@ class LiquidNativeChromeConfig {
 
   /// The sidebar footer, or null.
   final LiquidNativeFooter? footer;
+
+  /// The search tab's field, when a tab has `search: true`.
+  final LiquidNativeSearchConfig? search;
 
   /// Tint as `Color.toARGB32()`.
   final int tintArgb;
@@ -270,6 +341,7 @@ class LiquidNativeChromeConfig {
       other.selectedIndex == selectedIndex &&
       other.trailing == trailing &&
       other.footer == footer &&
+      other.search == search &&
       other.tintArgb == tintArgb &&
       other.dark == dark &&
       other.rtl == rtl &&
@@ -283,6 +355,7 @@ class LiquidNativeChromeConfig {
     selectedIndex,
     trailing,
     footer,
+    search,
     tintArgb,
     dark,
     rtl,
@@ -294,6 +367,7 @@ class LiquidNativeChromeConfig {
   String toString() =>
       'LiquidNativeChromeConfig(engaged: $engaged, tabs: $tabs, '
       'selectedIndex: $selectedIndex, trailing: $trailing, footer: $footer, '
+      'search: $search, '
       'tintArgb: 0x${tintArgb.toRadixString(16).padLeft(8, '0')}, '
       'dark: $dark, rtl: $rtl, hidden: $hidden, interactive: $interactive)';
 }
@@ -392,4 +466,139 @@ final class LiquidWindowControlsChanged extends LiquidNativeEvent {
 
   @override
   String toString() => 'LiquidWindowControlsChanged($controls)';
+}
+
+/// The user changed the native search field's text. [composing]: an IME
+/// composition (Telex, kana) is in progress.
+final class LiquidNativeSearchTextChanged extends LiquidNativeEvent {
+  /// Creates the event.
+  const LiquidNativeSearchTextChanged(this.text, {required this.composing});
+
+  /// The field's text, composition included.
+  final String text;
+
+  /// Whether an IME composition is in progress.
+  final bool composing;
+
+  @override
+  bool operator ==(Object other) =>
+      other is LiquidNativeSearchTextChanged &&
+      other.text == text &&
+      other.composing == composing;
+
+  @override
+  int get hashCode => Object.hash(text, composing);
+
+  @override
+  String toString() =>
+      'LiquidNativeSearchTextChanged($text, composing: $composing)';
+}
+
+/// The native search field gained or lost focus (presented or dismissed).
+final class LiquidNativeSearchActiveChanged extends LiquidNativeEvent {
+  /// Creates the event.
+  // A single positional value, like every other event of this hierarchy.
+  // ignore: avoid_positional_boolean_parameters
+  const LiquidNativeSearchActiveChanged(this.active);
+
+  /// Whether the search is active.
+  final bool active;
+
+  @override
+  bool operator ==(Object other) =>
+      other is LiquidNativeSearchActiveChanged && other.active == active;
+
+  @override
+  int get hashCode => active.hashCode;
+
+  @override
+  String toString() => 'LiquidNativeSearchActiveChanged($active)';
+}
+
+/// The user pressed the keyboard's Search key in the native field.
+final class LiquidNativeSearchSubmitted extends LiquidNativeEvent {
+  /// Creates the event.
+  const LiquidNativeSearchSubmitted(this.text);
+
+  /// The submitted text.
+  final String text;
+
+  @override
+  bool operator ==(Object other) =>
+      other is LiquidNativeSearchSubmitted && other.text == text;
+
+  @override
+  int get hashCode => text.hashCode;
+
+  @override
+  String toString() => 'LiquidNativeSearchSubmitted($text)';
+}
+
+/// Where the native search field is, in the Flutter view's coordinates;
+/// [Rect.zero] when it is not on screen.
+final class LiquidNativeSearchFieldChanged extends LiquidNativeEvent {
+  /// Creates the event.
+  const LiquidNativeSearchFieldChanged(this.frame);
+
+  /// The field's frame.
+  final Rect frame;
+
+  @override
+  bool operator ==(Object other) =>
+      other is LiquidNativeSearchFieldChanged && other.frame == frame;
+
+  @override
+  int get hashCode => frame.hashCode;
+
+  @override
+  String toString() => 'LiquidNativeSearchFieldChanged($frame)';
+}
+
+/// The user tapped the native back button of tab [tab]: a proposal; the
+/// shell pops the Flutter page, and the native stack follows.
+final class LiquidNativeBackTapped extends LiquidNativeEvent {
+  /// Creates the event.
+  const LiquidNativeBackTapped(this.tab);
+
+  /// Index of the destination whose page should pop.
+  final int tab;
+
+  @override
+  bool operator ==(Object other) =>
+      other is LiquidNativeBackTapped && other.tab == tab;
+
+  @override
+  int get hashCode => tab.hashCode;
+
+  @override
+  String toString() => 'LiquidNativeBackTapped($tab)';
+}
+
+/// UIKit asked to pop tab [tab]'s native stack down to the page at [index]
+/// (0 is the root) by a path other than the back tap: the back button's
+/// long-press menu, an accessibility escape, a pop-to-root. Native did not
+/// pop: like a back tap, this is a proposal. The shell pops the Flutter
+/// pages above [index], each through its `PopScope`, and the native stack
+/// follows.
+final class LiquidNativePopToPage extends LiquidNativeEvent {
+  /// Creates the event.
+  const LiquidNativePopToPage(this.tab, {required this.index});
+
+  /// Index of the destination whose pages should pop.
+  final int tab;
+
+  /// The page that should end on top, counted from the tab's root (0).
+  final int index;
+
+  @override
+  bool operator ==(Object other) =>
+      other is LiquidNativePopToPage &&
+      other.tab == tab &&
+      other.index == index;
+
+  @override
+  int get hashCode => Object.hash(tab, index);
+
+  @override
+  String toString() => 'LiquidNativePopToPage($tab, index: $index)';
 }

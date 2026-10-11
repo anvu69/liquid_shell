@@ -50,6 +50,8 @@ class NativeTab {
     required this.title,
     required this.sfSymbol,
     required this.sidebarOnly,
+    required this.search,
+    required this.pages,
     this.badge,
   });
 
@@ -57,6 +59,8 @@ class NativeTab {
   String sfSymbol;
   String? badge;
   bool sidebarOnly;
+  bool search;
+  List<NativePage> pages;
 }
 
 class NativeAction {
@@ -80,6 +84,62 @@ class NativeFooter {
   String semanticLabel;
 }
 
+/// One page of a tab's navigation stack (root first).
+class NativePage {
+  NativePage({required this.title, this.largeTitle});
+
+  String title;
+  bool? largeTitle;
+}
+
+/// The search tab's field.
+class NativeSearchConfig {
+  NativeSearchConfig({this.placeholder});
+
+  String? placeholder;
+}
+
+/// A rectangle in the Flutter view's coordinates (points).
+class NativeRect {
+  NativeRect({
+    required this.x,
+    required this.y,
+    required this.width,
+    required this.height,
+  });
+
+  double x;
+  double y;
+  double width;
+  double height;
+}
+
+/// Debug builds: the native search and page state, for integration tests.
+class NativeDebugSnapshot {
+  NativeDebugSnapshot({
+    required this.selectedTab,
+    required this.searchActive,
+    required this.searchText,
+    required this.placement,
+    required this.pageTitles,
+    required this.fieldFrame,
+    required this.firstResponderIsSearch,
+  });
+
+  /// The selected `UITab`'s identifier ("destination<i>", or "" when none).
+  String selectedTab;
+  bool searchActive;
+  String searchText;
+
+  /// The realised `searchBarPlacement`: "integrated", "stacked", … or "".
+  String placement;
+
+  /// The search tab's navigation titles, root first.
+  List<String> pageTitles;
+  NativeRect fieldFrame;
+  bool firstResponderIsSearch;
+}
+
 /// The whole chrome. Applied in order: tabs, selection, footer, tint,
 /// appearance, direction, visibility.
 class NativeChromeConfig {
@@ -94,6 +154,7 @@ class NativeChromeConfig {
     required this.interactive,
     this.trailing,
     this.footer,
+    this.search,
   });
 
   bool engaged;
@@ -101,6 +162,7 @@ class NativeChromeConfig {
   int selectedIndex;
   NativeAction? trailing;
   NativeFooter? footer;
+  NativeSearchConfig? search;
   int tintArgb;
   bool dark;
   bool rtl;
@@ -116,7 +178,14 @@ class NativeWindowControls {
 }
 
 /// Test-only: what `debugTap` taps.
-enum NativeTapTarget { destination, trailing, footer }
+enum NativeTapTarget {
+  destination,
+  trailing,
+  footer,
+  searchField,
+  searchCancel,
+  back,
+}
 
 /// Dart → native.
 @HostApi()
@@ -132,6 +201,18 @@ abstract class NativeShellHostApi {
   /// Debug builds only: runs the same code path as a user tap on [target].
   /// Release builds ignore it.
   void debugTap(NativeTapTarget target, int index);
+
+  /// Sets the search field's text once no IME composition is in progress.
+  void setSearchText(String text);
+
+  /// Presents or dismisses the search; dismissing keeps the text.
+  void setSearchActive(bool active);
+
+  /// The top page's scroll offset of tab [tab] (proxy scroll view).
+  void setPageScroll(int tab, double offset);
+
+  /// Debug builds: the native search and page state. Release: empty.
+  NativeDebugSnapshot debugSnapshot();
 }
 
 /// Native → Dart.
@@ -146,6 +227,20 @@ abstract class NativeShellFlutterApi {
   void onStateChanged(NativeShellState state);
 
   void onWindowControlsChanged(NativeWindowControls controls);
+
+  void onSearchTextChanged(String text, bool composing);
+
+  void onSearchActiveChanged(bool active);
+
+  void onSearchSubmitted(String text);
+
+  void onSearchFieldChanged(NativeRect frame);
+
+  void onBackTapped(int tab);
+
+  /// UIKit asked to pop tab [tab] to the page at [index] (the back menu, a
+  /// pop-to-root); native did not pop.
+  void onPopToPage(int tab, int index);
 }
 
 // --- Native dialogs (spec P3a §6) ------------------------------------------
@@ -177,21 +272,6 @@ class NativeDialogAction {
   String label;
   NativeDialogActionStyle style;
   bool enabled;
-}
-
-/// A rect in the Flutter view's points.
-class NativeRect {
-  NativeRect({
-    required this.x,
-    required this.y,
-    required this.width,
-    required this.height,
-  });
-
-  double x;
-  double y;
-  double width;
-  double height;
 }
 
 class NativeDialogRequest {

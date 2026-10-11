@@ -210,6 +210,9 @@ enum NativeTapTarget: Int, CaseIterable {
   case destination = 0
   case trailing = 1
   case footer = 2
+  case searchField = 3
+  case searchCancel = 4
+  case back = 5
 }
 
 /// What a native dialog is.
@@ -298,6 +301,8 @@ struct NativeTab: Hashable, CustomStringConvertible {
   var sfSymbol: String
   var badge: String? = nil
   var sidebarOnly: Bool
+  var search: Bool
+  var pages: [NativePage]
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -306,12 +311,16 @@ struct NativeTab: Hashable, CustomStringConvertible {
     let sfSymbol = pigeonVar_list[1] as! String
     let badge: String? = nilOrValue(pigeonVar_list[2])
     let sidebarOnly = pigeonVar_list[3] as! Bool
+    let search = pigeonVar_list[4] as! Bool
+    let pages = pigeonVar_list[5] as! [NativePage]
 
     return NativeTab(
       title: title,
       sfSymbol: sfSymbol,
       badge: badge,
-      sidebarOnly: sidebarOnly
+      sidebarOnly: sidebarOnly,
+      search: search,
+      pages: pages
     )
   }
   func toList() -> [Any?] {
@@ -320,13 +329,15 @@ struct NativeTab: Hashable, CustomStringConvertible {
       sfSymbol,
       badge,
       sidebarOnly,
+      search,
+      pages,
     ]
   }
   static func == (lhs: NativeTab, rhs: NativeTab) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return NativeShellApiPigeonInternal.deepEquals(lhs.title, rhs.title) && NativeShellApiPigeonInternal.deepEquals(lhs.sfSymbol, rhs.sfSymbol) && NativeShellApiPigeonInternal.deepEquals(lhs.badge, rhs.badge) && NativeShellApiPigeonInternal.deepEquals(lhs.sidebarOnly, rhs.sidebarOnly)
+    return NativeShellApiPigeonInternal.deepEquals(lhs.title, rhs.title) && NativeShellApiPigeonInternal.deepEquals(lhs.sfSymbol, rhs.sfSymbol) && NativeShellApiPigeonInternal.deepEquals(lhs.badge, rhs.badge) && NativeShellApiPigeonInternal.deepEquals(lhs.sidebarOnly, rhs.sidebarOnly) && NativeShellApiPigeonInternal.deepEquals(lhs.search, rhs.search) && NativeShellApiPigeonInternal.deepEquals(lhs.pages, rhs.pages)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -335,10 +346,12 @@ struct NativeTab: Hashable, CustomStringConvertible {
     NativeShellApiPigeonInternal.deepHash(value: sfSymbol, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: badge, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: sidebarOnly, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: search, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: pages, hasher: &hasher)
   }
 
   public var description: String {
-    return "NativeTab(title: \(String(describing: title)), sfSymbol: \(String(describing: sfSymbol)), badge: \(String(describing: badge)), sidebarOnly: \(String(describing: sidebarOnly)))"
+    return "NativeTab(title: \(String(describing: title)), sfSymbol: \(String(describing: sfSymbol)), badge: \(String(describing: badge)), sidebarOnly: \(String(describing: sidebarOnly)), search: \(String(describing: search)), pages: \(String(describing: pages)))"
   }
 }
 
@@ -432,6 +445,207 @@ struct NativeFooter: Hashable, CustomStringConvertible {
   }
 }
 
+/// One page of a tab's navigation stack (root first).
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct NativePage: Hashable, CustomStringConvertible {
+  var title: String
+  var largeTitle: Bool? = nil
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> NativePage? {
+    let title = pigeonVar_list[0] as! String
+    let largeTitle: Bool? = nilOrValue(pigeonVar_list[1])
+
+    return NativePage(
+      title: title,
+      largeTitle: largeTitle
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      title,
+      largeTitle,
+    ]
+  }
+  static func == (lhs: NativePage, rhs: NativePage) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return NativeShellApiPigeonInternal.deepEquals(lhs.title, rhs.title) && NativeShellApiPigeonInternal.deepEquals(lhs.largeTitle, rhs.largeTitle)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("NativePage")
+    NativeShellApiPigeonInternal.deepHash(value: title, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: largeTitle, hasher: &hasher)
+  }
+
+  public var description: String {
+    return "NativePage(title: \(String(describing: title)), largeTitle: \(String(describing: largeTitle)))"
+  }
+}
+
+/// The search tab's field.
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct NativeSearchConfig: Hashable, CustomStringConvertible {
+  var placeholder: String? = nil
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> NativeSearchConfig? {
+    let placeholder: String? = nilOrValue(pigeonVar_list[0])
+
+    return NativeSearchConfig(
+      placeholder: placeholder
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      placeholder
+    ]
+  }
+  static func == (lhs: NativeSearchConfig, rhs: NativeSearchConfig) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return NativeShellApiPigeonInternal.deepEquals(lhs.placeholder, rhs.placeholder)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("NativeSearchConfig")
+    NativeShellApiPigeonInternal.deepHash(value: placeholder, hasher: &hasher)
+  }
+
+  public var description: String {
+    return "NativeSearchConfig(placeholder: \(String(describing: placeholder)))"
+  }
+}
+
+/// A rectangle in the Flutter view's coordinates (points).
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct NativeRect: Hashable, CustomStringConvertible {
+  var x: Double
+  var y: Double
+  var width: Double
+  var height: Double
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> NativeRect? {
+    let x = pigeonVar_list[0] as! Double
+    let y = pigeonVar_list[1] as! Double
+    let width = pigeonVar_list[2] as! Double
+    let height = pigeonVar_list[3] as! Double
+
+    return NativeRect(
+      x: x,
+      y: y,
+      width: width,
+      height: height
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      x,
+      y,
+      width,
+      height,
+    ]
+  }
+  static func == (lhs: NativeRect, rhs: NativeRect) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return NativeShellApiPigeonInternal.deepEquals(lhs.x, rhs.x) && NativeShellApiPigeonInternal.deepEquals(lhs.y, rhs.y) && NativeShellApiPigeonInternal.deepEquals(lhs.width, rhs.width) && NativeShellApiPigeonInternal.deepEquals(lhs.height, rhs.height)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("NativeRect")
+    NativeShellApiPigeonInternal.deepHash(value: x, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: y, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: width, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: height, hasher: &hasher)
+  }
+
+  public var description: String {
+    return "NativeRect(x: \(String(describing: x)), y: \(String(describing: y)), width: \(String(describing: width)), height: \(String(describing: height)))"
+  }
+}
+
+/// Debug builds: the native search and page state, for integration tests.
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct NativeDebugSnapshot: Hashable, CustomStringConvertible {
+  /// The selected `UITab`'s identifier ("destination<i>", or "" when none).
+  var selectedTab: String
+  var searchActive: Bool
+  var searchText: String
+  /// The realised `searchBarPlacement`: "integrated", "stacked", … or "".
+  var placement: String
+  /// The search tab's navigation titles, root first.
+  var pageTitles: [String]
+  var fieldFrame: NativeRect
+  var firstResponderIsSearch: Bool
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> NativeDebugSnapshot? {
+    let selectedTab = pigeonVar_list[0] as! String
+    let searchActive = pigeonVar_list[1] as! Bool
+    let searchText = pigeonVar_list[2] as! String
+    let placement = pigeonVar_list[3] as! String
+    let pageTitles = pigeonVar_list[4] as! [String]
+    let fieldFrame = pigeonVar_list[5] as! NativeRect
+    let firstResponderIsSearch = pigeonVar_list[6] as! Bool
+
+    return NativeDebugSnapshot(
+      selectedTab: selectedTab,
+      searchActive: searchActive,
+      searchText: searchText,
+      placement: placement,
+      pageTitles: pageTitles,
+      fieldFrame: fieldFrame,
+      firstResponderIsSearch: firstResponderIsSearch
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      selectedTab,
+      searchActive,
+      searchText,
+      placement,
+      pageTitles,
+      fieldFrame,
+      firstResponderIsSearch,
+    ]
+  }
+  static func == (lhs: NativeDebugSnapshot, rhs: NativeDebugSnapshot) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return NativeShellApiPigeonInternal.deepEquals(lhs.selectedTab, rhs.selectedTab) && NativeShellApiPigeonInternal.deepEquals(lhs.searchActive, rhs.searchActive) && NativeShellApiPigeonInternal.deepEquals(lhs.searchText, rhs.searchText) && NativeShellApiPigeonInternal.deepEquals(lhs.placement, rhs.placement) && NativeShellApiPigeonInternal.deepEquals(lhs.pageTitles, rhs.pageTitles) && NativeShellApiPigeonInternal.deepEquals(lhs.fieldFrame, rhs.fieldFrame) && NativeShellApiPigeonInternal.deepEquals(lhs.firstResponderIsSearch, rhs.firstResponderIsSearch)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("NativeDebugSnapshot")
+    NativeShellApiPigeonInternal.deepHash(value: selectedTab, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: searchActive, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: searchText, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: placement, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: pageTitles, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: fieldFrame, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: firstResponderIsSearch, hasher: &hasher)
+  }
+
+  public var description: String {
+    return "NativeDebugSnapshot(selectedTab: \(String(describing: selectedTab)), searchActive: \(String(describing: searchActive)), searchText: \(String(describing: searchText)), placement: \(String(describing: placement)), pageTitles: \(String(describing: pageTitles)), fieldFrame: \(String(describing: fieldFrame)), firstResponderIsSearch: \(String(describing: firstResponderIsSearch)))"
+  }
+}
+
 /// The whole chrome. Applied in order: tabs, selection, footer, tint,
 /// appearance, direction, visibility.
 ///
@@ -442,6 +656,7 @@ struct NativeChromeConfig: Hashable, CustomStringConvertible {
   var selectedIndex: Int64
   var trailing: NativeAction? = nil
   var footer: NativeFooter? = nil
+  var search: NativeSearchConfig? = nil
   var tintArgb: Int64
   var dark: Bool
   var rtl: Bool
@@ -456,11 +671,12 @@ struct NativeChromeConfig: Hashable, CustomStringConvertible {
     let selectedIndex = pigeonVar_list[2] as! Int64
     let trailing: NativeAction? = nilOrValue(pigeonVar_list[3])
     let footer: NativeFooter? = nilOrValue(pigeonVar_list[4])
-    let tintArgb = pigeonVar_list[5] as! Int64
-    let dark = pigeonVar_list[6] as! Bool
-    let rtl = pigeonVar_list[7] as! Bool
-    let hidden = pigeonVar_list[8] as! Bool
-    let interactive = pigeonVar_list[9] as! Bool
+    let search: NativeSearchConfig? = nilOrValue(pigeonVar_list[5])
+    let tintArgb = pigeonVar_list[6] as! Int64
+    let dark = pigeonVar_list[7] as! Bool
+    let rtl = pigeonVar_list[8] as! Bool
+    let hidden = pigeonVar_list[9] as! Bool
+    let interactive = pigeonVar_list[10] as! Bool
 
     return NativeChromeConfig(
       engaged: engaged,
@@ -468,6 +684,7 @@ struct NativeChromeConfig: Hashable, CustomStringConvertible {
       selectedIndex: selectedIndex,
       trailing: trailing,
       footer: footer,
+      search: search,
       tintArgb: tintArgb,
       dark: dark,
       rtl: rtl,
@@ -482,6 +699,7 @@ struct NativeChromeConfig: Hashable, CustomStringConvertible {
       selectedIndex,
       trailing,
       footer,
+      search,
       tintArgb,
       dark,
       rtl,
@@ -493,7 +711,7 @@ struct NativeChromeConfig: Hashable, CustomStringConvertible {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return NativeShellApiPigeonInternal.deepEquals(lhs.engaged, rhs.engaged) && NativeShellApiPigeonInternal.deepEquals(lhs.tabs, rhs.tabs) && NativeShellApiPigeonInternal.deepEquals(lhs.selectedIndex, rhs.selectedIndex) && NativeShellApiPigeonInternal.deepEquals(lhs.trailing, rhs.trailing) && NativeShellApiPigeonInternal.deepEquals(lhs.footer, rhs.footer) && NativeShellApiPigeonInternal.deepEquals(lhs.tintArgb, rhs.tintArgb) && NativeShellApiPigeonInternal.deepEquals(lhs.dark, rhs.dark) && NativeShellApiPigeonInternal.deepEquals(lhs.rtl, rhs.rtl) && NativeShellApiPigeonInternal.deepEquals(lhs.hidden, rhs.hidden) && NativeShellApiPigeonInternal.deepEquals(lhs.interactive, rhs.interactive)
+    return NativeShellApiPigeonInternal.deepEquals(lhs.engaged, rhs.engaged) && NativeShellApiPigeonInternal.deepEquals(lhs.tabs, rhs.tabs) && NativeShellApiPigeonInternal.deepEquals(lhs.selectedIndex, rhs.selectedIndex) && NativeShellApiPigeonInternal.deepEquals(lhs.trailing, rhs.trailing) && NativeShellApiPigeonInternal.deepEquals(lhs.footer, rhs.footer) && NativeShellApiPigeonInternal.deepEquals(lhs.search, rhs.search) && NativeShellApiPigeonInternal.deepEquals(lhs.tintArgb, rhs.tintArgb) && NativeShellApiPigeonInternal.deepEquals(lhs.dark, rhs.dark) && NativeShellApiPigeonInternal.deepEquals(lhs.rtl, rhs.rtl) && NativeShellApiPigeonInternal.deepEquals(lhs.hidden, rhs.hidden) && NativeShellApiPigeonInternal.deepEquals(lhs.interactive, rhs.interactive)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -503,6 +721,7 @@ struct NativeChromeConfig: Hashable, CustomStringConvertible {
     NativeShellApiPigeonInternal.deepHash(value: selectedIndex, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: trailing, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: footer, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: search, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: tintArgb, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: dark, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: rtl, hasher: &hasher)
@@ -511,7 +730,7 @@ struct NativeChromeConfig: Hashable, CustomStringConvertible {
   }
 
   public var description: String {
-    return "NativeChromeConfig(engaged: \(String(describing: engaged)), tabs: \(String(describing: tabs)), selectedIndex: \(String(describing: selectedIndex)), trailing: \(String(describing: trailing)), footer: \(String(describing: footer)), tintArgb: \(String(describing: tintArgb)), dark: \(String(describing: dark)), rtl: \(String(describing: rtl)), hidden: \(String(describing: hidden)), interactive: \(String(describing: interactive)))"
+    return "NativeChromeConfig(engaged: \(String(describing: engaged)), tabs: \(String(describing: tabs)), selectedIndex: \(String(describing: selectedIndex)), trailing: \(String(describing: trailing)), footer: \(String(describing: footer)), search: \(String(describing: search)), tintArgb: \(String(describing: tintArgb)), dark: \(String(describing: dark)), rtl: \(String(describing: rtl)), hidden: \(String(describing: hidden)), interactive: \(String(describing: interactive)))"
   }
 }
 
@@ -597,58 +816,6 @@ struct NativeDialogAction: Hashable, CustomStringConvertible {
 
   public var description: String {
     return "NativeDialogAction(label: \(String(describing: label)), style: \(String(describing: style)), enabled: \(String(describing: enabled)))"
-  }
-}
-
-/// A rect in the Flutter view's points.
-///
-/// Generated class from Pigeon that represents data sent in messages.
-struct NativeRect: Hashable, CustomStringConvertible {
-  var x: Double
-  var y: Double
-  var width: Double
-  var height: Double
-
-
-  // swift-format-ignore: AlwaysUseLowerCamelCase
-  static func fromList(_ pigeonVar_list: [Any?]) -> NativeRect? {
-    let x = pigeonVar_list[0] as! Double
-    let y = pigeonVar_list[1] as! Double
-    let width = pigeonVar_list[2] as! Double
-    let height = pigeonVar_list[3] as! Double
-
-    return NativeRect(
-      x: x,
-      y: y,
-      width: width,
-      height: height
-    )
-  }
-  func toList() -> [Any?] {
-    return [
-      x,
-      y,
-      width,
-      height,
-    ]
-  }
-  static func == (lhs: NativeRect, rhs: NativeRect) -> Bool {
-    if Swift.type(of: lhs) != Swift.type(of: rhs) {
-      return false
-    }
-    return NativeShellApiPigeonInternal.deepEquals(lhs.x, rhs.x) && NativeShellApiPigeonInternal.deepEquals(lhs.y, rhs.y) && NativeShellApiPigeonInternal.deepEquals(lhs.width, rhs.width) && NativeShellApiPigeonInternal.deepEquals(lhs.height, rhs.height)
-  }
-
-  func hash(into hasher: inout Hasher) {
-    hasher.combine("NativeRect")
-    NativeShellApiPigeonInternal.deepHash(value: x, hasher: &hasher)
-    NativeShellApiPigeonInternal.deepHash(value: y, hasher: &hasher)
-    NativeShellApiPigeonInternal.deepHash(value: width, hasher: &hasher)
-    NativeShellApiPigeonInternal.deepHash(value: height, hasher: &hasher)
-  }
-
-  public var description: String {
-    return "NativeRect(x: \(String(describing: x)), y: \(String(describing: y)), width: \(String(describing: width)), height: \(String(describing: height)))"
   }
 }
 
@@ -893,18 +1060,24 @@ private class NativeShellApiPigeonCodecReader: FlutterStandardReader {
     case 139:
       return NativeFooter.fromList(self.readValue() as! [Any?])
     case 140:
-      return NativeChromeConfig.fromList(self.readValue() as! [Any?])
+      return NativePage.fromList(self.readValue() as! [Any?])
     case 141:
-      return NativeWindowControls.fromList(self.readValue() as! [Any?])
+      return NativeSearchConfig.fromList(self.readValue() as! [Any?])
     case 142:
-      return NativeDialogAction.fromList(self.readValue() as! [Any?])
-    case 143:
       return NativeRect.fromList(self.readValue() as! [Any?])
+    case 143:
+      return NativeDebugSnapshot.fromList(self.readValue() as! [Any?])
     case 144:
-      return NativeDialogRequest.fromList(self.readValue() as! [Any?])
+      return NativeChromeConfig.fromList(self.readValue() as! [Any?])
     case 145:
-      return NativeDialogResult.fromList(self.readValue() as! [Any?])
+      return NativeWindowControls.fromList(self.readValue() as! [Any?])
     case 146:
+      return NativeDialogAction.fromList(self.readValue() as! [Any?])
+    case 147:
+      return NativeDialogRequest.fromList(self.readValue() as! [Any?])
+    case 148:
+      return NativeDialogResult.fromList(self.readValue() as! [Any?])
+    case 149:
       return NativeDialogSnapshot.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
@@ -947,26 +1120,35 @@ private class NativeShellApiPigeonCodecWriter: FlutterStandardWriter {
     } else if let value = value as? NativeFooter {
       super.writeByte(139)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeChromeConfig {
+    } else if let value = value as? NativePage {
       super.writeByte(140)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeWindowControls {
+    } else if let value = value as? NativeSearchConfig {
       super.writeByte(141)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeDialogAction {
+    } else if let value = value as? NativeRect {
       super.writeByte(142)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeRect {
+    } else if let value = value as? NativeDebugSnapshot {
       super.writeByte(143)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeDialogRequest {
+    } else if let value = value as? NativeChromeConfig {
       super.writeByte(144)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeDialogResult {
+    } else if let value = value as? NativeWindowControls {
       super.writeByte(145)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeDialogSnapshot {
+    } else if let value = value as? NativeDialogAction {
       super.writeByte(146)
+      super.writeValue(value.toList())
+    } else if let value = value as? NativeDialogRequest {
+      super.writeByte(147)
+      super.writeValue(value.toList())
+    } else if let value = value as? NativeDialogResult {
+      super.writeByte(148)
+      super.writeValue(value.toList())
+    } else if let value = value as? NativeDialogSnapshot {
+      super.writeByte(149)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)
@@ -1000,6 +1182,14 @@ protocol NativeShellHostApi {
   /// Debug builds only: runs the same code path as a user tap on [target].
   /// Release builds ignore it.
   func debugTap(target: NativeTapTarget, index: Int64) throws
+  /// Sets the search field's text once no IME composition is in progress.
+  func setSearchText(text: String) throws
+  /// Presents or dismisses the search; dismissing keeps the text.
+  func setSearchActive(active: Bool) throws
+  /// The top page's scroll offset of tab [tab] (proxy scroll view).
+  func setPageScroll(tab: Int64, offset: Double) throws
+  /// Debug builds: the native search and page state. Release: empty.
+  func debugSnapshot() throws -> NativeDebugSnapshot
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -1082,6 +1272,69 @@ class NativeShellHostApiSetup {
     } else {
       debugTapChannel.setMessageHandler(nil)
     }
+    /// Sets the search field's text once no IME composition is in progress.
+    let setSearchTextChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.liquid_shell_ios.NativeShellHostApi.setSearchText\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      setSearchTextChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let textArg = args[0] as! String
+        do {
+          try api.setSearchText(text: textArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      setSearchTextChannel.setMessageHandler(nil)
+    }
+    /// Presents or dismisses the search; dismissing keeps the text.
+    let setSearchActiveChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.liquid_shell_ios.NativeShellHostApi.setSearchActive\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      setSearchActiveChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let activeArg = args[0] as! Bool
+        do {
+          try api.setSearchActive(active: activeArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      setSearchActiveChannel.setMessageHandler(nil)
+    }
+    /// The top page's scroll offset of tab [tab] (proxy scroll view).
+    let setPageScrollChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.liquid_shell_ios.NativeShellHostApi.setPageScroll\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      setPageScrollChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let tabArg = args[0] as! Int64
+        let offsetArg = args[1] as! Double
+        do {
+          try api.setPageScroll(tab: tabArg, offset: offsetArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      setPageScrollChannel.setMessageHandler(nil)
+    }
+    /// Debug builds: the native search and page state. Release: empty.
+    let debugSnapshotChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.liquid_shell_ios.NativeShellHostApi.debugSnapshot\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      debugSnapshotChannel.setMessageHandler { _, reply in
+        do {
+          let result = try api.debugSnapshot()
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      debugSnapshotChannel.setMessageHandler(nil)
+    }
   }
 }
 
@@ -1094,6 +1347,14 @@ protocol NativeShellFlutterApiProtocol {
   func onFooterTapped(completion: @escaping (Result<Void, PigeonError>) -> Void)
   func onStateChanged(state stateArg: NativeShellState, completion: @escaping (Result<Void, PigeonError>) -> Void)
   func onWindowControlsChanged(controls controlsArg: NativeWindowControls, completion: @escaping (Result<Void, PigeonError>) -> Void)
+  func onSearchTextChanged(text textArg: String, composing composingArg: Bool, completion: @escaping (Result<Void, PigeonError>) -> Void)
+  func onSearchActiveChanged(active activeArg: Bool, completion: @escaping (Result<Void, PigeonError>) -> Void)
+  func onSearchSubmitted(text textArg: String, completion: @escaping (Result<Void, PigeonError>) -> Void)
+  func onSearchFieldChanged(frame frameArg: NativeRect, completion: @escaping (Result<Void, PigeonError>) -> Void)
+  func onBackTapped(tab tabArg: Int64, completion: @escaping (Result<Void, PigeonError>) -> Void)
+  /// UIKit asked to pop tab [tab] to the page at [index] (the back menu, a
+  /// pop-to-root); native did not pop.
+  func onPopToPage(tab tabArg: Int64, index indexArg: Int64, completion: @escaping (Result<Void, PigeonError>) -> Void)
 }
 class NativeShellFlutterApi: NativeShellFlutterApiProtocol {
   private let binaryMessenger: FlutterBinaryMessenger
@@ -1181,6 +1442,116 @@ class NativeShellFlutterApi: NativeShellFlutterApiProtocol {
     let channelName: String = "dev.flutter.pigeon.liquid_shell_ios.NativeShellFlutterApi.onWindowControlsChanged\(messageChannelSuffix)"
     let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
     channel.sendMessage([controlsArg] as [Any?]) { response in
+      guard let listResponse = response as? [Any?] else {
+        completion(.failure(createConnectionError(withChannelName: channelName)))
+        return
+      }
+      if listResponse.count > 1 {
+        let code: String = listResponse[0] as! String
+        let message: String? = nilOrValue(listResponse[1])
+        let details: String? = nilOrValue(listResponse[2])
+        completion(.failure(PigeonError(code: code, message: message, details: details)))
+      } else {
+        completion(.success(()))
+      }
+    }
+  }
+  func onSearchTextChanged(text textArg: String, composing composingArg: Bool, completion: @escaping (Result<Void, PigeonError>) -> Void) {
+    let channelName: String = "dev.flutter.pigeon.liquid_shell_ios.NativeShellFlutterApi.onSearchTextChanged\(messageChannelSuffix)"
+    let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
+    channel.sendMessage([textArg, composingArg] as [Any?]) { response in
+      guard let listResponse = response as? [Any?] else {
+        completion(.failure(createConnectionError(withChannelName: channelName)))
+        return
+      }
+      if listResponse.count > 1 {
+        let code: String = listResponse[0] as! String
+        let message: String? = nilOrValue(listResponse[1])
+        let details: String? = nilOrValue(listResponse[2])
+        completion(.failure(PigeonError(code: code, message: message, details: details)))
+      } else {
+        completion(.success(()))
+      }
+    }
+  }
+  func onSearchActiveChanged(active activeArg: Bool, completion: @escaping (Result<Void, PigeonError>) -> Void) {
+    let channelName: String = "dev.flutter.pigeon.liquid_shell_ios.NativeShellFlutterApi.onSearchActiveChanged\(messageChannelSuffix)"
+    let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
+    channel.sendMessage([activeArg] as [Any?]) { response in
+      guard let listResponse = response as? [Any?] else {
+        completion(.failure(createConnectionError(withChannelName: channelName)))
+        return
+      }
+      if listResponse.count > 1 {
+        let code: String = listResponse[0] as! String
+        let message: String? = nilOrValue(listResponse[1])
+        let details: String? = nilOrValue(listResponse[2])
+        completion(.failure(PigeonError(code: code, message: message, details: details)))
+      } else {
+        completion(.success(()))
+      }
+    }
+  }
+  func onSearchSubmitted(text textArg: String, completion: @escaping (Result<Void, PigeonError>) -> Void) {
+    let channelName: String = "dev.flutter.pigeon.liquid_shell_ios.NativeShellFlutterApi.onSearchSubmitted\(messageChannelSuffix)"
+    let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
+    channel.sendMessage([textArg] as [Any?]) { response in
+      guard let listResponse = response as? [Any?] else {
+        completion(.failure(createConnectionError(withChannelName: channelName)))
+        return
+      }
+      if listResponse.count > 1 {
+        let code: String = listResponse[0] as! String
+        let message: String? = nilOrValue(listResponse[1])
+        let details: String? = nilOrValue(listResponse[2])
+        completion(.failure(PigeonError(code: code, message: message, details: details)))
+      } else {
+        completion(.success(()))
+      }
+    }
+  }
+  func onSearchFieldChanged(frame frameArg: NativeRect, completion: @escaping (Result<Void, PigeonError>) -> Void) {
+    let channelName: String = "dev.flutter.pigeon.liquid_shell_ios.NativeShellFlutterApi.onSearchFieldChanged\(messageChannelSuffix)"
+    let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
+    channel.sendMessage([frameArg] as [Any?]) { response in
+      guard let listResponse = response as? [Any?] else {
+        completion(.failure(createConnectionError(withChannelName: channelName)))
+        return
+      }
+      if listResponse.count > 1 {
+        let code: String = listResponse[0] as! String
+        let message: String? = nilOrValue(listResponse[1])
+        let details: String? = nilOrValue(listResponse[2])
+        completion(.failure(PigeonError(code: code, message: message, details: details)))
+      } else {
+        completion(.success(()))
+      }
+    }
+  }
+  func onBackTapped(tab tabArg: Int64, completion: @escaping (Result<Void, PigeonError>) -> Void) {
+    let channelName: String = "dev.flutter.pigeon.liquid_shell_ios.NativeShellFlutterApi.onBackTapped\(messageChannelSuffix)"
+    let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
+    channel.sendMessage([tabArg] as [Any?]) { response in
+      guard let listResponse = response as? [Any?] else {
+        completion(.failure(createConnectionError(withChannelName: channelName)))
+        return
+      }
+      if listResponse.count > 1 {
+        let code: String = listResponse[0] as! String
+        let message: String? = nilOrValue(listResponse[1])
+        let details: String? = nilOrValue(listResponse[2])
+        completion(.failure(PigeonError(code: code, message: message, details: details)))
+      } else {
+        completion(.success(()))
+      }
+    }
+  }
+  /// UIKit asked to pop tab [tab] to the page at [index] (the back menu, a
+  /// pop-to-root); native did not pop.
+  func onPopToPage(tab tabArg: Int64, index indexArg: Int64, completion: @escaping (Result<Void, PigeonError>) -> Void) {
+    let channelName: String = "dev.flutter.pigeon.liquid_shell_ios.NativeShellFlutterApi.onPopToPage\(messageChannelSuffix)"
+    let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
+    channel.sendMessage([tabArg, indexArg] as [Any?]) { response in
       guard let listResponse = response as? [Any?] else {
         completion(.failure(createConnectionError(withChannelName: channelName)))
         return

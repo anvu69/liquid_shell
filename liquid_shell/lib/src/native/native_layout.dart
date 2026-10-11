@@ -3,6 +3,7 @@ import 'package:liquid_shell/src/destinations/badge.dart';
 import 'package:liquid_shell/src/destinations/destination.dart';
 import 'package:liquid_shell/src/destinations/tab_action.dart';
 import 'package:liquid_shell/src/native/native_chrome.dart';
+import 'package:liquid_shell/src/search/search_layout.dart';
 import 'package:liquid_shell/src/shell/shell_layout.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
@@ -43,14 +44,21 @@ bool nativeChromePossible({
   required bool describable,
 }) => mode == LiquidNativeChrome.auto && !hasChromeBuilder && describable;
 
-/// Whether every destination and the trailing action have an SF Symbol.
+/// Whether every destination and the trailing action have an SF Symbol. The
+/// search destination needs none: UIKit's search tab has its own image.
+/// Only the first one is the search tab (spec P3b §14); an extra one is
+/// standard and needs a symbol.
 bool nativeDescribable(
   List<LiquidDestination> destinations,
   LiquidTabAction? trailing,
-) =>
-    destinations.isNotEmpty &&
-    destinations.every((d) => d.sfSymbol != null) &&
-    (trailing == null || trailing.sfSymbol != null);
+) {
+  final searchIndex = searchIndexOf(destinations);
+  return destinations.isNotEmpty &&
+      destinations.indexed.every(
+        (e) => e.$2.sfSymbol != null || e.$1 == searchIndex,
+      ) &&
+      (trailing == null || trailing.sfSymbol != null);
+}
 
 /// The debug hint for a shell that could use native chrome but cannot
 /// describe itself (spec P2 §15, E2): one line naming every destination
@@ -60,9 +68,10 @@ String? nativeSymbolHint(
   List<LiquidDestination> destinations,
   LiquidTabAction? trailing,
 ) {
+  final searchIndex = searchIndexOf(destinations);
   final labels = [
-    for (final d in destinations)
-      if (d.sfSymbol == null) '"${d.label}"',
+    for (final (i, d) in destinations.indexed)
+      if (d.sfSymbol == null && i != searchIndex) '"${d.label}"',
   ];
   final missing = [
     if (labels.length == 1) 'destination ${labels.single}',
@@ -127,35 +136,54 @@ LiquidNativeChromeConfig nativeConfigFor({
   required bool rtl,
   required bool hidden,
   required bool interactive,
-}) => LiquidNativeChromeConfig(
-  engaged: engaged,
-  tabs: [
-    for (final d in destinations)
-      LiquidNativeTab(
-        title: d.label,
-        sfSymbol: d.sfSymbol ?? '',
-        badge: nativeBadgeText(d.badge),
-        sidebarOnly: d.placement == LiquidPlacement.sidebarOnly,
-      ),
-  ],
-  selectedIndex: selectedIndex,
-  trailing: trailing == null
-      ? null
-      : LiquidNativeAction(
-          title: trailing.semanticLabel,
-          sfSymbol: trailing.sfSymbol ?? '',
+  String? searchPlaceholder,
+  Map<int, List<LiquidNativePage>> pageStacks = const {},
+}) {
+  final searchIndex = searchIndexOf(destinations);
+  return LiquidNativeChromeConfig(
+    engaged: engaged,
+    tabs: [
+      for (final (i, d) in destinations.indexed)
+        LiquidNativeTab(
+          title: d.label,
+          sfSymbol: d.sfSymbol ?? '',
+          badge: nativeBadgeText(d.badge),
+          sidebarOnly: d.placement == LiquidPlacement.sidebarOnly,
+          search: i == searchIndex,
+          pages: pageStacks[i] ?? const [],
         ),
-  footer: footer == null
-      ? null
-      : LiquidNativeFooter(
-          title: footer.title,
-          subtitle: footer.subtitle,
-          sfSymbol: footer.sfSymbol,
-          semanticLabel: footer.semanticLabel,
-        ),
-  tintArgb: tint.toARGB32(),
-  dark: dark,
-  rtl: rtl,
-  hidden: hidden,
-  interactive: interactive,
-);
+    ],
+    selectedIndex: selectedIndex,
+    trailing: trailing == null
+        ? null
+        : LiquidNativeAction(
+            title: trailing.semanticLabel,
+            sfSymbol: trailing.sfSymbol ?? '',
+          ),
+    footer: footer == null
+        ? null
+        : LiquidNativeFooter(
+            title: footer.title,
+            subtitle: footer.subtitle,
+            sfSymbol: footer.sfSymbol,
+            semanticLabel: footer.semanticLabel,
+          ),
+    tintArgb: tint.toARGB32(),
+    dark: dark,
+    rtl: rtl,
+    hidden: hidden,
+    interactive: interactive,
+    search: searchIndex == null
+        ? null
+        : LiquidNativeSearchConfig(placeholder: searchPlaceholder),
+  );
+}
+
+/// Whether the selected tab has a native navigation bar (spec P3b §8.3).
+/// P3b-1: the search tab only, while native chrome is engaged. P3b-2 makes
+/// it every engaged tab.
+bool nativePageBarFor({
+  required bool engaged,
+  required int selected,
+  required int? searchIndex,
+}) => engaged && searchIndex != null && selected == searchIndex;

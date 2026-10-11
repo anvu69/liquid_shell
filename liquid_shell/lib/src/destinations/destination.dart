@@ -10,6 +10,18 @@ enum LiquidPlacement {
   sidebarOnly,
 }
 
+/// What a destination is.
+enum LiquidDestinationRole {
+  /// An ordinary destination.
+  standard,
+
+  /// The search tab: at most one per shell, the last destination, placed
+  /// everywhere, with `LiquidShell.search`. Its page is the app's search
+  /// page; selecting it never pushes a page. Natively it is UIKit's search
+  /// tab, and [LiquidDestination.sfSymbol] is optional.
+  search,
+}
+
 /// One navigation destination: a tab bar cell and a sidebar row.
 @immutable
 class LiquidDestination {
@@ -21,6 +33,7 @@ class LiquidDestination {
     this.badge,
     this.placement = LiquidPlacement.everywhere,
     this.sfSymbol,
+    this.role = LiquidDestinationRole.standard,
   });
 
   /// Icon when not selected. Sized and coloured by the shell.
@@ -45,6 +58,9 @@ class LiquidDestination {
   /// on iOS 26. In debug, such a shell logs one line naming what lacks one.
   final String? sfSymbol;
 
+  /// Standard, or the search tab.
+  final LiquidDestinationRole role;
+
   /// Field by field. Widgets ([icon], [selectedIcon]) compare by identity;
   /// use const or stable instances, or two equal-looking destinations are
   /// never `==`.
@@ -56,9 +72,10 @@ class LiquidDestination {
       other.label == label &&
       other.badge == badge &&
       other.placement == placement &&
-      other.sfSymbol == sfSymbol;
+      other.sfSymbol == sfSymbol &&
+      other.role == role;
 
   @override
   int get hashCode =>
-      Object.hash(icon, selectedIcon, label, badge, placement, sfSymbol);
+      Object.hash(icon, selectedIcon, label, badge, placement, sfSymbol, role);
 }

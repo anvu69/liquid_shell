@@ -181,7 +181,8 @@ jobs:
           make ios-unit IOS_UNIT_DEVICE="$udid"
 
   ios-ui:
-    # Real taps on native dialogs (XCUITest, spec P3a §9.4). Non-blocking:
+    # Real taps on native dialogs and the native search tab (XCUITest, specs
+    # P3a §9.4, P3b §12.6). Non-blocking:
     # simulator UI tests are slow and can flake on shared runners.
     name: ios-ui (${{ matrix.device }})
     runs-on: macos-latest
@@ -207,17 +208,23 @@ jobs:
   integration-ios-native:
     # Every iOS 26 iPhone and iPad installs the native chrome (owner D1):
     # one job per idiom, so a stalled simulator costs one leg, not both.
-    name: integration-ios-native (${{ matrix.device }})
+    # Each idiom runs on iOS 26, and again on iOS 27: that leg is an early
+    # warning and never blocks (the runner image may not have the runtime
+    # yet).
+    name: integration-ios-native (${{ matrix.device }}, ${{ matrix.runtime }})
     runs-on: macos-latest
-    # Two drives per leg (NATIVE_TARGETS: native_shell_test.dart and
-    # native_dialogs_test.dart; about 15 min each, build included). The
-    # script stops a stalled drive after 20 min (IOS_DRIVE_TIMEOUT 1200 s)
-    # and retries it once, per target: up to 80 min, plus the setup.
-    timeout-minutes: 100
+    continue-on-error: ${{ matrix.runtime == 'iOS 27' }}
+    # Three drives per leg (NATIVE_TARGETS: native_shell_test.dart,
+    # native_dialogs_test.dart, native_search_test.dart; about 15 min each,
+    # build included). The script stops a stalled drive after 20 min
+    # (IOS_DRIVE_TIMEOUT 1200 s) and retries it once, per target: up to
+    # 120 min, plus the setup.
+    timeout-minutes: 140
     strategy:
       fail-fast: false
       matrix:
         device: [iPad, iPhone]
+        runtime: ["iOS 26", "iOS 27"]
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -226,16 +233,21 @@ jobs:
           flutter-version: 3.44.x
           cache: true
       - run: make get
-      - name: Native shell on the newest ${{ matrix.device }} simulator (iOS 26+)
+      - name: Native shell, dialogs and search tab on the newest ${{ matrix.device }} simulator (${{ matrix.runtime }})
         run: |
-          udid=$(xcrun simctl list devices available | grep -F "    ${{ matrix.device }}" | tail -n1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          udid=$(xcrun simctl list devices available "$IOS_RUNTIME" | grep -F "    ${{ matrix.device }}" | tail -n1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          if [ -z "$udid" ]; then
+            echo "::error::no ${{ matrix.device }} simulator on $IOS_RUNTIME"
+            exit 1
+          fi
           NATIVE_DEVICES="$udid=true" tool/integration_ios_native.sh
         env:
-          IOS_RUNTIME: ""
+          IOS_RUNTIME: ${{ matrix.runtime }}
+          NATIVE_TARGETS: native_shell_test.dart native_dialogs_test.dart native_search_test.dart
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: native-shell-screenshots-${{ matrix.device }}
+          name: native-shell-screenshots-${{ matrix.device }}-${{ strategy.job-index }}
           path: liquid_shell/example/build/integration_screenshots/
 
   goldens:

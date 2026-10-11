@@ -9,33 +9,6 @@ import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.
 import '../helpers/fake_native_platform.dart';
 import '../helpers/shell_harness.dart';
 
-/// [kDestinations] with SF Symbols, so native chrome can describe them.
-const kNative = [
-  LiquidDestination(
-    icon: Icon(Icons.home_outlined),
-    label: 'Home',
-    sfSymbol: 'house',
-  ),
-  LiquidDestination(
-    icon: Icon(Icons.inbox_outlined),
-    label: 'Inbox',
-    badge: LiquidBadge.count(3),
-    sfSymbol: 'tray',
-  ),
-  LiquidDestination(
-    icon: Icon(Icons.bar_chart),
-    label: 'Reports',
-    placement: LiquidPlacement.sidebarOnly,
-    sfSymbol: 'chart.bar',
-  ),
-  LiquidDestination(
-    icon: Icon(Icons.settings_outlined),
-    label: 'Settings',
-    badge: LiquidBadge.dot(),
-    sfSymbol: 'gear',
-  ),
-];
-
 /// iPad landscape with the native tab bar's 72pt row copied into the top
 /// safe area (24 status bar + 72).
 const _nativePadding = EdgeInsets.only(top: 96, bottom: 20);

@@ -14,6 +14,12 @@ import 'package:liquid_shell/src/native/native_chrome.dart';
 import 'package:liquid_shell/src/native/native_host.dart';
 import 'package:liquid_shell/src/native/native_layout.dart';
 import 'package:liquid_shell/src/native/window_controls.dart';
+import 'package:liquid_shell/src/pages/page_registry.dart';
+import 'package:liquid_shell/src/search/search.dart';
+import 'package:liquid_shell/src/search/search_chrome.dart';
+import 'package:liquid_shell/src/search/search_controller.dart';
+import 'package:liquid_shell/src/search/search_layout.dart';
+import 'package:liquid_shell/src/search/shell_search.dart';
 import 'package:liquid_shell/src/shell/bar_measure.dart';
 import 'package:liquid_shell/src/shell/breakpoints.dart';
 import 'package:liquid_shell/src/shell/chrome_builder.dart';
@@ -84,6 +90,7 @@ class LiquidShell extends StatefulWidget {
     this.strings = const LiquidShellStrings(),
     this.nativeChrome = LiquidNativeChrome.auto,
     this.nativeSidebarFooter,
+    this.search,
     super.key,
   });
 
@@ -169,12 +176,17 @@ class LiquidShell extends StatefulWidget {
   /// The native sidebar's footer. The Flutter sidebar uses [sidebarFooter].
   final LiquidNativeSidebarFooter? nativeSidebarFooter;
 
+  /// The search tab's field. Required with a destination whose role is
+  /// [LiquidDestinationRole.search], and only then. Search is a tab: its
+  /// page is that destination's page, never a page pushed above the shell.
+  final LiquidSearch? search;
+
   @override
   State<LiquidShell> createState() => _LiquidShellState();
 }
 
 class _LiquidShellState extends State<LiquidShell>
-    implements HideChromeRegistry {
+    implements HideChromeRegistry, PageRegistry {
   final ValueNotifier<bool> _minimized = ValueNotifier(false);
   late final GlobalObjectKey _bodyKey = GlobalObjectKey(this);
 
@@ -205,6 +217,26 @@ class _LiquidShellState extends State<LiquidShell>
   double? _barBottom;
   Size? _barSize;
 
+  // --- search and pages (spec P3b §8) --------------------------------------
+  late final ShellSearch _search = ShellSearch(
+    claim: () => _claim,
+    onChange: _rebuild,
+  );
+  final List<_PageRecord> _pageRecords = [];
+  final Map<int, List<LiquidNativePage>> _pageStacks = {};
+  // The records behind each sent stack, kept while no page is on top.
+  final Map<int, List<_PageRecord>> _stackRecords = {};
+  bool _nativePageBar = false;
+  bool _searchDeactivatedForRoute = false;
+  // The scroll offset native has for the top page (spec P3b §7.7).
+  _PageRecord? _scrollRecord;
+  double _scrollSent = 0;
+  // The top page that had no offset at the last sync (N-4).
+  _PageRecord? _scrollWaited;
+  bool _scrollScheduled = false;
+  // The destination the fallback's collapsed circle returns to.
+  int _previousIndex = 0;
+
   @override
   void initState() {
     super.initState();
@@ -213,13 +245,35 @@ class _LiquidShellState extends State<LiquidShell>
     _host.addListener(_rebuild);
     _host.state.addListener(_rebuild);
     _syncClaim();
+    _configureSearch();
   }
 
   @override
   void didUpdateWidget(LiquidShell oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.nativeChrome != widget.nativeChrome) _syncClaim();
+    _configureSearch();
   }
+
+  // A new key builds the next shell before this one is disposed, and a
+  // GlobalKey move takes this one out and back: the controller takes one
+  // shell at a time.
+  @override
+  void deactivate() {
+    _search.detach();
+    super.deactivate();
+  }
+
+  @override
+  void activate() {
+    super.activate();
+    _configureSearch();
+  }
+
+  void _configureSearch() => _search.configure(
+    widget.search,
+    hasSearchDestination: searchIndexOf(widget.destinations) != null,
+  );
 
   @override
   void didChangeDependencies() {
@@ -280,6 +334,7 @@ class _LiquidShellState extends State<LiquidShell>
     _windowControls.value.removeListener(_rebuild);
     _windowControls.release();
     _minimized.dispose();
+    _search.dispose();
     super.dispose();
   }
 
@@ -296,7 +351,21 @@ class _LiquidShellState extends State<LiquidShell>
         widget.tabBarTrailing?.onPressed();
       case LiquidNativeFooterTapped():
         widget.nativeSidebarFooter?.onPressed();
-      case LiquidNativeStateChanged() || LiquidWindowControlsChanged():
+      case LiquidNativeSearchTextChanged() ||
+          LiquidNativeSearchActiveChanged() ||
+          LiquidNativeSearchSubmitted() ||
+          LiquidNativeSearchFieldChanged():
+        _search.onNativeEvent(event);
+      case LiquidNativeBackTapped(:final tab):
+        _onNativeBack(tab);
+      case LiquidNativePopToPage(:final tab, :final index):
+        unawaited(_onNativePopTo(tab, index));
+      case LiquidNativeStateChanged(:final state):
+        // After the host's forced resend. The same state as the last build
+        // saw is a reconnected scene, whose field lost the text.
+        _search.replay(reconnect: state == _nativeState);
+        _rebuild();
+      case LiquidWindowControlsChanged():
         break;
     }
   }
@@ -312,8 +381,173 @@ class _LiquidShellState extends State<LiquidShell>
       final latest = _nativeConfig;
       final force = _forceNativeSend;
       _forceNativeSend = false;
-      if (mounted && latest != null) _claim?.update(latest, force: force);
+      if (mounted && latest != null) {
+        _claim?.update(latest, force: force);
+        _search.afterConfigSent();
+      }
     });
+  }
+
+  // --- pages (PageRegistry) -----------------------------------------------
+  //
+  // Pages register, update and leave while the body builds: every change
+  // rebuilds the shell after the frame (`_rebuild`), and the next build
+  // computes the stack (spec P3b §8.4).
+
+  @override
+  PageHandle registerPage(PageEntry entry) {
+    final record = _PageRecord(this, entry);
+    _pageRecords.add(record);
+    _rebuild();
+    return record;
+  }
+
+  /// The page the user sees in the selected tab, if it is a LiquidPage.
+  _PageRecord? get _topRecord {
+    _PageRecord? top;
+    for (final record in _pageRecords) {
+      final entry = record.entry;
+      if (entry.isTop && (top == null || entry.sequence > top.entry.sequence)) {
+        top = record;
+      }
+    }
+    return top;
+  }
+
+  PageEntry? get _topPageEntry => _topRecord?.entry;
+
+  /// The selected tab's stack, root first. With no page on top (a page
+  /// above the shell, a sheet in the tab's navigator) the last stack stays,
+  /// less the pages that left: emptying it would pop native to the root,
+  /// and push everything again, animated, when the cover goes.
+  List<_PageRecord> _stackFor(int tab) {
+    final records = Map<PageEntry, _PageRecord>.identity();
+    for (final record in _pageRecords) {
+      records[record.entry] = record;
+    }
+    final stack = [
+      for (final entry in pageStackFor(records.keys, isTop: (e) => e.isTop))
+        records[entry]!,
+    ];
+    if (stack.isNotEmpty) return stack;
+    final kept = _stackRecords[tab] ?? const <_PageRecord>[];
+    // Only a cover keeps it (spec §8.4 rule 3 otherwise: no stack):
+    // - the shell's route is covered (a page or dialog above the shell);
+    // - the last top page is still current in its navigator, so only
+    //   something outside it hides it (also the frame where the shell is
+    //   uncovered before that page has heard of it);
+    // - a popup route (a sheet) is above it: it stays on screen.
+    // A page pushed in the tab without LiquidPage covers it opaquely and
+    // is none of these.
+    final top = kept.isEmpty ? null : kept.last;
+    final keep =
+        !_routeCurrent ||
+        _covered ||
+        (top != null &&
+            ((top.entry.route?.isCurrent ?? false) || top.entry.onScreen));
+    if (!keep) return const [];
+    return [
+      for (final record in kept)
+        if (_pageRecords.contains(record) &&
+            (record.entry.route?.isActive ?? false))
+          record,
+    ];
+  }
+
+  /// The native back button (spec P3b §7.6): a proposal for the selected
+  /// tab's top page. `maybePop` runs its PopScope. Under a sheet in the
+  /// tab's navigator the kept stack shows a live back button: it pops the
+  /// sheet, as the sheet's barrier does. Above the shell the chrome is not
+  /// interactive, and nothing pops.
+  void _onNativeBack(int tab) {
+    if (tab !=
+        resolveSelectedIndex(
+          widget.selectedIndex,
+          widget.destinations.length,
+        )) {
+      return;
+    }
+    final kept = _routeCurrent && !_covered
+        ? _stackRecords[tab]?.lastOrNull?.entry
+        : null;
+    unawaited((_topPageEntry ?? kept)?.navigator?.maybePop());
+  }
+
+  /// UIKit's other pops (spec P3b §7.6): the back button's long-press
+  /// menu, an accessibility escape, a pop-to-root. Native did not pop; the
+  /// pages above [index] pop here, top first, each through its PopScope.
+  /// A refused pop ends it, and the native stack follows what is left.
+  /// One page down is exactly a back tap.
+  Future<void> _onNativePopTo(int tab, int index) async {
+    final stack = _stackRecords[tab];
+    if (stack == null || index < 0 || index >= stack.length - 1) return;
+    if (index == stack.length - 2) return _onNativeBack(tab);
+    if (tab !=
+            resolveSelectedIndex(
+              widget.selectedIndex,
+              widget.destinations.length,
+            ) ||
+        !_routeCurrent ||
+        _covered) {
+      return;
+    }
+    for (final record in stack.sublist(index + 1).reversed) {
+      final route = record.entry.route;
+      final navigator = record.entry.navigator;
+      if (!mounted || route == null || navigator == null) return;
+      if (!route.isActive) continue;
+      // Only the top page pops: something else on top (a sheet) ends it.
+      if (!route.isCurrent) return;
+      await navigator.maybePop();
+      if (route.isActive) return;
+    }
+  }
+
+  /// Sends the top page's offset after the frame: one message per frame,
+  /// only for the top page of a tab with a native bar (spec P3b §7.7).
+  void _scheduleScrollSync() {
+    if (_scrollScheduled) return;
+    _scrollScheduled = true;
+    SchedulerBinding.instance
+      ..addPostFrameCallback((_) => _syncScroll())
+      ..ensureVisualUpdate();
+  }
+
+  void _syncScroll() {
+    _scrollScheduled = false;
+    if (!mounted) return;
+    final top = _nativePageBar ? _topRecord : null;
+    if (top == null) {
+      _scrollRecord = null;
+      return;
+    }
+    // Not laid out yet (a new page, or one moved with a GlobalKey): its
+    // scroll position reports its offset after its first layout, in that
+    // frame's post-frame callbacks. Still nothing a frame later: the page
+    // has no scroll view and sits at its top. Native may reuse a host for
+    // it whose proxy keeps the old offset, so 0 is sent.
+    var offset = top.offset;
+    if (offset == null) {
+      if (!identical(top, _scrollWaited)) {
+        _scrollWaited = top;
+        _scheduleScrollSync();
+        return;
+      }
+      offset = 0;
+    }
+    // A new top page is always sent, once per navigation: native may
+    // reuse a host for it (a same-count stack, pushReplacement) whose
+    // proxy keeps the old offset.
+    if (identical(top, _scrollRecord) && offset == _scrollSent) return;
+    _scrollRecord = top;
+    _scrollSent = offset;
+    _claim?.setPageScroll(
+      tab: resolveSelectedIndex(
+        widget.selectedIndex,
+        widget.destinations.length,
+      ),
+      offset: offset,
+    );
   }
 
   /// After every native destination tap, whatever came of it (accepted,
@@ -455,11 +689,20 @@ class _LiquidShellState extends State<LiquidShell>
 
   void _expand() => _minimized.value = false;
 
+  /// Selects the search tab through the guard. A tear-off, so search
+  /// chrome details compare equal across builds.
+  void _selectSearch() {
+    final index = searchIndexOf(widget.destinations);
+    if (index != null) _onSelect(index);
+  }
+
   bool _onScroll(UserScrollNotification notification, LiquidChromeKind kind) {
     // Only vertical scrolling reads as "moving through content"; a carousel
     // or PageView swipe leaves the bar alone.
+    // Suspended while the search tab is selected (spec P3b §9.2).
     if (!widget.minimizeOnScroll ||
         kind != LiquidChromeKind.bottomBar ||
+        _search.selected ||
         notification.metrics.axis != Axis.vertical) {
       return false;
     }
@@ -551,6 +794,38 @@ class _LiquidShellState extends State<LiquidShell>
           widget.sidebarWidth < widget.breakpoints.regular,
       'LiquidShell.sidebarWidth must be > 0 and < breakpoints.regular.',
     );
+    final searches = [
+      for (final (i, d) in destinations.indexed)
+        if (d.role == LiquidDestinationRole.search) i,
+    ];
+    assert(
+      searches.length <= 1,
+      'LiquidShell allows one search destination; got ${searches.length}.',
+    );
+    assert(
+      searches.isEmpty || searches.single == length - 1,
+      'The search destination must be the last destination.',
+    );
+    assert(
+      searches.every(
+        (i) => destinations[i].placement == LiquidPlacement.everywhere,
+      ),
+      'The search destination must be placed everywhere.',
+    );
+    assert(
+      searches.isEmpty || widget.search != null,
+      'A search destination needs LiquidShell.search.',
+    );
+    assert(
+      searches.isNotEmpty || widget.search == null,
+      'LiquidShell.search needs a destination with '
+      'LiquidDestinationRole.search.',
+    );
+    assert(
+      searches.isEmpty || widget.tabBarTrailing == null,
+      'A shell with a search destination has no tabBarTrailing: both are '
+      'the trailing ⌕.',
+    );
     return true;
   }
 
@@ -566,7 +841,15 @@ class _LiquidShellState extends State<LiquidShell>
     final size = constraints.biggest;
     final presentation = presentationFor(size, widget.breakpoints);
     final native = _resolveNative(context, presentation);
-    if (native != null) return native;
+    if (native != null) {
+      // Native chrome draws no Flutter field.
+      if (_search.focus.hasFocus) _search.releaseField();
+      return native;
+    }
+    final previousPresentation = _presentation;
+    final sizeClassChanged =
+        previousPresentation != null &&
+        sizeClassOf(previousPresentation) != sizeClassOf(presentation);
     _sidebarVisible = sidebarVisibleFor(
       previous: _presentation,
       current: presentation,
@@ -582,6 +865,25 @@ class _LiquidShellState extends State<LiquidShell>
       widget.destinations.length,
     );
     _reportHiddenSelection(presentation, selected);
+    final searchIndex = searchIndexOf(widget.destinations);
+    _search
+      ..native = false
+      ..selected = searchIndex != null && selected == searchIndex;
+    _nativePageBar = false;
+    if (searchIndex == null || selected != searchIndex) {
+      _previousIndex = selected;
+    } else if (_previousIndex >= searchIndex) {
+      // The app's list changed under the search tab: the one that was
+      // there is gone (search is last, so every other index is below it).
+      _previousIndex = 0;
+    }
+    final phase = searchIndex == null
+        ? null
+        : searchPhaseFor(
+            selected: selected,
+            searchIndex: searchIndex,
+            active: _search.controller?.isActive ?? false,
+          );
 
     final kind = chromeKindFor(
       presentation: presentation,
@@ -589,21 +891,70 @@ class _LiquidShellState extends State<LiquidShell>
       // Release fallback for an empty list (§7): body only, no chrome.
       hidden: _hideRequests > 0 || widget.destinations.isEmpty,
     );
+    // The Flutter field keeps focus only while it is shown and stays where
+    // it is (spec P3b §8.2, §9.4). Hidden chrome, another tab (a sidebar
+    // row, the app's selectedIndex) or the other size class (the compact
+    // row and the regular top field are different parents) let go of it
+    // first; ShellSearch then ends any composition.
+    final fieldShown =
+        phase != null &&
+        phase != LiquidSearchPhase.idle &&
+        kind != LiquidChromeKind.hidden;
+    if (_search.focus.hasFocus && (!fieldShown || sizeClassChanged)) {
+      _search.releaseField();
+    }
     final barKey = (sizeClass, media.textScaler.scale(14));
     final bottomGap = bottomGapFor(
       platform: Theme.of(context).platform,
       viewPaddingBottom: media.viewPadding.bottom,
       gestureInsetBottom: media.systemGestureInsets.bottom,
     );
-    final insets = chromeInsetsFor(
+    // The body: always the first child, always the same wrappers.
+    final tiled = kind == LiquidChromeKind.sidebarTiled;
+    // Q17: narrow shells trade margin for 44pt-wide cells.
+    final narrow = size.width < kLiquidNarrowWidth;
+    final barMargin = narrow ? _kNarrowBarMargin : _kBarMargin;
+    final compactRects = phase != null && kind == LiquidChromeKind.bottomBar
+        ? compactSearchRects(
+            phase: phase,
+            size: size,
+            rowBottom: size.height - bottomGap,
+            rowExtent: _measured[barKey] ?? kBottomPillExtent,
+            margin: barMargin,
+            keyboard: media.viewInsets.bottom,
+            direction: Directionality.of(context),
+          )
+        : null;
+    // The regular top field (spec P3b §9.3): selected and active only.
+    final regularFieldTop =
+        phase != null &&
+            phase != LiquidSearchPhase.idle &&
+            kind != LiquidChromeKind.bottomBar &&
+            kind != LiquidChromeKind.hidden
+        ? regularSearchFieldTop(
+            phase: phase,
+            paddingTop: media.padding.top,
+            barExtent: _measured[barKey] ?? kTopPillExtent,
+            tiled: tiled,
+          )
+        : null;
+    var insets = chromeInsetsFor(
       kind: kind,
       topPadding: media.padding.top,
       measuredBar: _measured[barKey],
       bottomGap: bottomGap,
     );
-
-    // The body: always the first child, always the same wrappers.
-    final tiled = kind == LiquidChromeKind.sidebarTiled;
+    // Content clears the field in every phase (spec P3b §4.6).
+    if (compactRects != null && phase == LiquidSearchPhase.active) {
+      insets = insets.copyWith(
+        bottom: size.height - compactRects.field.top + kSearchFieldGap,
+      );
+    }
+    if (regularFieldTop != null) {
+      insets = insets.copyWith(
+        top: regularFieldTop + kRegularSearchFieldExtent + kSearchFieldGap,
+      );
+    }
     final bodyStart = tiled ? widget.sidebarWidth : 0.0;
     var bodyMedia = media.copyWith(
       size: Size(size.width - bodyStart, size.height),
@@ -642,7 +993,14 @@ class _LiquidShellState extends State<LiquidShell>
       kind: kind,
       destinations: widget.destinations,
       visibleIndices: slot == LiquidChromeSlot.tabBar
-          ? tabBarIndices(widget.destinations)
+          ? [
+              for (final i in tabBarIndices(widget.destinations))
+                // The compact pill holds the other destinations (§9.2).
+                if (!(phase != null &&
+                    kind == LiquidChromeKind.bottomBar &&
+                    i == searchIndex))
+                  i,
+            ]
           : [for (var i = 0; i < widget.destinations.length; i++) i],
       selectedIndex: selected,
       select: _onSelect,
@@ -652,6 +1010,14 @@ class _LiquidShellState extends State<LiquidShell>
       sidebarVisible: sidebarShown,
       setSidebarVisible: _setSidebarVisible,
       strings: widget.strings,
+      search: phase == null
+          ? null
+          : LiquidSearchChromeDetails(
+              phase: phase,
+              controller: _search.controller!,
+              previousIndex: _previousIndex,
+              selectSearch: _selectSearch,
+            ),
     );
 
     Widget slot(LiquidChromeDetails details, Widget defaultChrome) {
@@ -674,11 +1040,99 @@ class _LiquidShellState extends State<LiquidShell>
       child: child,
     );
 
+    final searchDestination = searchIndex == null
+        ? null
+        : widget.destinations[searchIndex];
+    final morph = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : kSearchMorphDuration;
+    // One field for every phase and both layouts: ShellSearch owns its
+    // controller and focus node for the shell's lifetime (spec P3b §9.4).
+    Widget searchField({VoidCallback? inlineCancel}) => slot(
+      details(LiquidChromeSlot.searchField),
+      SearchFieldGlass(
+        phase: phase!,
+        editing: _search.editing,
+        focus: _search.focus,
+        placeholder:
+            widget.search?.placeholder ?? widget.strings.searchPlaceholder,
+        searchLabel: searchDestination!.label,
+        searchIcon: searchDestination.icon,
+        onOpen: () => _onSelect(searchIndex!),
+        onSubmitted: _search.submit,
+        onDeactivate: _search.deactivate,
+        cancelLabel: widget.strings.cancelSearch,
+        inlineCancel: inlineCancel,
+      ),
+    );
+
     switch (kind) {
       case LiquidChromeKind.bottomBar:
-        // Q17: narrow shells trade margin for 44pt-wide cells.
-        final narrow = size.width < kLiquidNarrowWidth;
-        final margin = narrow ? _kNarrowBarMargin : _kBarMargin;
+        final margin = barMargin;
+        if (phase != null && compactRects != null) {
+          // The search row (spec P3b §9.2): the pill of the other
+          // destinations, then the ⌕ circle that becomes the field.
+          final rowExtent = _measured[barKey] ?? kBottomPillExtent;
+          final idle = phase == LiquidSearchPhase.idle;
+          children.add(
+            CompactSearchChrome(
+              phase: phase,
+              rects: compactRects,
+              pill: PositionedDirectional(
+                start: margin,
+                end: margin + rowExtent + kLiquidTabBarTrailingGap,
+                bottom: bottomGap,
+                child: IgnorePointer(
+                  ignoring: !idle,
+                  child: AnimatedOpacity(
+                    opacity: idle ? 1 : 0,
+                    duration: morph,
+                    curve: kSearchMorphCurve,
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      heightFactor: 1,
+                      child: ValueListenableBuilder<bool>(
+                        valueListenable: _minimized,
+                        builder: (context, minimized, _) {
+                          // Minimizes in idle only: suspended while the
+                          // search tab is selected (spec P3b §9.2).
+                          final isMinimized =
+                              widget.minimizeOnScroll && minimized && idle;
+                          return measured(
+                            slot(
+                              details(
+                                LiquidChromeSlot.tabBar,
+                                minimized: isMinimized,
+                              ),
+                              LiquidTabBar(
+                                destinations: widget.destinations.sublist(
+                                  0,
+                                  searchIndex,
+                                ),
+                                selectedIndex: idle ? selected : _previousIndex,
+                                onDestinationSelected: _onSelect,
+                                minimized: isMinimized,
+                                onExpand: _expand,
+                                strings: widget.strings,
+                                narrow: narrow,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              previous: widget.destinations[_previousIndex],
+              onPrevious: () => _onSelect(_previousIndex),
+              field: searchField(),
+              onCancel: _search.cancel,
+              strings: widget.strings,
+            ),
+          );
+          break;
+        }
         children.add(
           Positioned(
             left: margin,
@@ -720,52 +1174,84 @@ class _LiquidShellState extends State<LiquidShell>
         final indent = _windowControls.value.value.indentFor(
           rowTop: kTopBarGap,
         );
+        final bar = measured(
+          slot(
+            details(LiquidChromeSlot.tabBar),
+            Stack(
+              children: [
+                Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal:
+                        _kBarMargin + (toggle ? _kToggleReserve : 0) + indent,
+                  ),
+                  child: Center(
+                    heightFactor: 1,
+                    child: LiquidTabBar(
+                      destinations: widget.destinations,
+                      selectedIndex: selected,
+                      onDestinationSelected: _onSelect,
+                      position: LiquidTabBarPosition.top,
+                      trailing: widget.tabBarTrailing,
+                      strings: widget.strings,
+                    ),
+                  ),
+                ),
+                if (toggle)
+                  PositionedDirectional(
+                    start: kSidebarToggleInset + indent,
+                    top: 0,
+                    child: SidebarToggle(
+                      onPressed: () => _setSidebarVisible(true),
+                      tooltip: widget.strings.showSidebar,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+        // Active, the field takes the bar row (spec P3b §9.3). Shells
+        // without search keep P1's tree.
+        final active = phase == LiquidSearchPhase.active;
         children.add(
           Positioned(
             left: 0,
             right: 0,
             top: media.padding.top + kTopBarGap,
-            child: measured(
-              slot(
-                details(LiquidChromeSlot.tabBar),
-                Stack(
-                  children: [
-                    Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal:
-                            _kBarMargin +
-                            (toggle ? _kToggleReserve : 0) +
-                            indent,
-                      ),
-                      child: Center(
-                        heightFactor: 1,
-                        child: LiquidTabBar(
-                          destinations: widget.destinations,
-                          selectedIndex: selected,
-                          onDestinationSelected: _onSelect,
-                          position: LiquidTabBarPosition.top,
-                          trailing: widget.tabBarTrailing,
-                          strings: widget.strings,
-                        ),
-                      ),
+            child: phase == null
+                ? bar
+                : IgnorePointer(
+                    ignoring: active,
+                    child: AnimatedOpacity(
+                      opacity: active ? 0 : 1,
+                      duration: MediaQuery.disableAnimationsOf(context)
+                          ? Duration.zero
+                          : const Duration(milliseconds: 200),
+                      child: bar,
                     ),
-                    if (toggle)
-                      PositionedDirectional(
-                        start: kSidebarToggleInset + indent,
-                        top: 0,
-                        child: SidebarToggle(
-                          onPressed: () => _setSidebarVisible(true),
-                          tooltip: widget.strings.showSidebar,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
+                  ),
           ),
         );
       case LiquidChromeKind.sidebarTiled || LiquidChromeKind.hidden:
         break;
+    }
+
+    if (regularFieldTop != null) {
+      final indent = _windowControls.value.value.indentFor(
+        rowTop: regularFieldTop - media.padding.top,
+      );
+      final start = bodyStart + kRegularSearchMargin + indent;
+      children.add(
+        AnimatedPositioned(
+          key: kSearchFieldKey,
+          duration: morph,
+          curve: kSearchMorphCurve,
+          left: rtl ? kRegularSearchMargin : start,
+          right: rtl ? start : kRegularSearchMargin,
+          top: regularFieldTop,
+          height: kRegularSearchFieldExtent,
+          child: searchField(inlineCancel: _search.cancel),
+        ),
+      );
     }
 
     if (kind == LiquidChromeKind.sidebarOverlay) {
@@ -811,11 +1297,16 @@ class _LiquidShellState extends State<LiquidShell>
     // The route calls every PopScope on it, so a back blocked by another one
     // (an exit wrapper, an unsaved form) lands here too: act only while the
     // overlay is what blocks it.
+    // Then an active search field (spec P3b §9.4): back deactivates it.
+    final searchActive = phase == LiquidSearchPhase.active;
     return PopScope(
-      canPop: kind != LiquidChromeKind.sidebarOverlay,
+      canPop: kind != LiquidChromeKind.sidebarOverlay && !searchActive,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && kind == LiquidChromeKind.sidebarOverlay) {
+        if (didPop) return;
+        if (kind == LiquidChromeKind.sidebarOverlay) {
           _setSidebarVisible(false);
+        } else if (searchActive) {
+          _search.deactivate();
         }
       },
       child: ShellScopeMarker(
@@ -826,8 +1317,11 @@ class _LiquidShellState extends State<LiquidShell>
           sidebarVisible: sidebarShown,
           setSidebarVisible: _setSidebarVisible,
           windowControls: _windowControls.value.value,
+          searchPhase: phase,
         ),
         registry: this,
+        pages: this,
+        strings: widget.strings,
         // One backdrop read for all chrome glass (budget rule, §5.8).
         child: BackdropGroup(child: Stack(children: children)),
       ),
@@ -891,6 +1385,38 @@ class _LiquidShellState extends State<LiquidShell>
       widget.selectedIndex,
       widget.destinations.length,
     );
+    final searchIndex = searchIndexOf(widget.destinations);
+    _search
+      ..native = engaged
+      ..selected = searchIndex != null && selected == searchIndex;
+    _nativePageBar = nativePageBarFor(
+      engaged: engaged,
+      selected: selected,
+      searchIndex: searchIndex,
+    );
+    if (_nativePageBar) {
+      final stack = _stackFor(selected);
+      _stackRecords[selected] = stack;
+      _pageStacks[selected] = [
+        for (final record in stack)
+          LiquidNativePage(
+            title: record.entry.title,
+            largeTitle: record.entry.largeTitle,
+          ),
+      ];
+    }
+    if (_nativePageBar || _scrollRecord != null) _scheduleScrollSync();
+    final searchActive = _search.controller?.isActive ?? false;
+    // A dialog or sheet above an active search: the keyboard and the field
+    // would sit above its barrier (spec §7.10). Once per covering.
+    if (_routeCurrent) {
+      _searchDeactivatedForRoute = false;
+    } else if (engaged && searchActive && !_searchDeactivatedForRoute) {
+      _searchDeactivatedForRoute = true;
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _search.deactivate();
+      });
+    }
     if (owner) {
       final theme = Theme.of(context);
       _scheduleNativeSend(
@@ -912,6 +1438,8 @@ class _LiquidShellState extends State<LiquidShell>
               _covered ||
               ((state?.compact ?? false) && !_routeCurrent),
           interactive: _routeCurrent && !_guardPending,
+          searchPlaceholder: widget.search?.placeholder,
+          pageStacks: _pageStacks,
         ),
       );
     }
@@ -936,7 +1464,22 @@ class _LiquidShellState extends State<LiquidShell>
         ? nativeChromeKind(state: state!, hidden: _hideRequests > 0)
         : LiquidChromeKind.hidden;
     media = _holdBarInset(media, barShown: kind == LiquidChromeKind.bottomBar);
-    final insets = nativeChromeInsets(kind: kind, padding: media.padding);
+    var insets = nativeChromeInsets(kind: kind, padding: media.padding);
+    if (_search.selected) {
+      // The iPhone field above the keyboard is not in the safe area.
+      insets = insets.copyWith(
+        bottom: math.max(
+          insets.bottom,
+          nativeSearchBottomInset(
+            field: _search.field,
+            size: media.size,
+            padding: media.padding,
+            viewInsets: media.viewInsets,
+            active: searchActive,
+          ),
+        ),
+      );
+    }
     // UIKit's size class decides the bar once it has answered; before
     // that, the shell's own width.
     final sizeClass = engaged
@@ -978,14 +1521,27 @@ class _LiquidShellState extends State<LiquidShell>
           sidebarVisible: state?.sidebarVisible ?? false,
           setSidebarVisible: _setSidebarVisible,
           nativeChrome: engaged,
-          // UIKit's top bar and sidebar make room for the cluster; the
-          // body starts below or beside them (spec P2 §8.3). The compact
-          // bar is at the bottom: the top is the body's to clear.
-          windowControls: engaged && sizeClass == LiquidSizeClass.regular
+          searchPhase: searchIndex == null
+              ? null
+              : searchPhaseFor(
+                  selected: selected,
+                  searchIndex: searchIndex,
+                  active: searchActive,
+                ),
+          nativePageBar: _nativePageBar,
+          // UIKit's top bar, sidebar and navigation bars make room for the
+          // cluster; the body starts below or beside them (spec P2 §8.3,
+          // P3b §7.9). The compact bar is at the bottom: the top is the
+          // body's to clear.
+          windowControls:
+              (engaged && sizeClass == LiquidSizeClass.regular) ||
+                  _nativePageBar
               ? LiquidWindowControls.zero
               : _windowControls.value.value,
         ),
         registry: this,
+        pages: this,
+        strings: widget.strings,
         // The same chain as the Flutter layout (BackdropGroup → Stack →
         // body first), so switching between native and Flutter chrome
         // never moves the body (§5.6).
@@ -1013,5 +1569,37 @@ class _LiquidShellState extends State<LiquidShell>
         ),
       ),
     );
+  }
+}
+
+/// One `LiquidPage` registered with a shell.
+final class _PageRecord implements PageHandle {
+  _PageRecord(this._shell, this.entry);
+
+  final _LiquidShellState _shell;
+  PageEntry entry;
+
+  /// The page's last scroll offset (spec P3b §7.7); null until its scroll
+  /// view reports one.
+  double? offset;
+
+  @override
+  void update(PageEntry next) {
+    if (next.sameAs(entry)) return;
+    entry = next;
+    _shell._rebuild();
+  }
+
+  @override
+  void scrolled(double offset) {
+    if (offset == this.offset) return;
+    this.offset = offset;
+    if (_shell.mounted) _shell._scheduleScrollSync();
+  }
+
+  @override
+  void unregister() {
+    _shell._pageRecords.remove(this);
+    if (_shell.mounted) _shell._rebuild();
   }
 }

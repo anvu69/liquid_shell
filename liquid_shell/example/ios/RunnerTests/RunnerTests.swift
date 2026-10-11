@@ -121,6 +121,58 @@ final class ShellMathTests: XCTestCase {
   }
 }
 
+@available(iOS 17.0, *)
+final class SearchMathTests: XCTestCase {
+  func testAnIPhoneKeepsUIKitsTabHostedFieldAndALargeTitle() {
+    XCTAssertEqual(
+      SearchMath.style(isPad: false, osMajor: 26, rootLargeTitle: nil),
+      SearchTabStyle(
+        placement: .automatic, hidesWhenScrolling: nil, titleMode: .inline, titleItem: false,
+        prominent: false))
+  }
+
+  func testAnIPhoneOnIOS27MakesTheSearchTabProminent() {
+    XCTAssertTrue(SearchMath.style(isPad: false, osMajor: 27, rootLargeTitle: nil).prominent)
+  }
+
+  /// UIKit draws no title for a `UISearchTab`'s root on an iPad, whatever
+  /// the small-title mode (Task 12): the small title "Search" next to the
+  /// window controls (Apple Music) is a leading title item.
+  func testAnIPadIsStackedUnderATitleItemAndNeverProminent() {
+    for os in [26, 27] {
+      XCTAssertEqual(
+        SearchMath.style(isPad: true, osMajor: os, rootLargeTitle: nil),
+        SearchTabStyle(
+          placement: .stacked, hidesWhenScrolling: false, titleMode: .never, titleItem: true,
+          prominent: false))
+    }
+  }
+
+  /// A large title on an iPad is `.always`: UIKit drops a `UISearchTab`
+  /// root's `.inline` title there too.
+  func testTheAppsLargeTitleChoiceWins() {
+    let phone = SearchMath.style(isPad: false, osMajor: 26, rootLargeTitle: false)
+    XCTAssertEqual(phone.titleMode, .never)
+    XCTAssertFalse(phone.titleItem)
+    let pad = SearchMath.style(isPad: true, osMajor: 27, rootLargeTitle: true)
+    XCTAssertEqual(pad.titleMode, .always)
+    XCTAssertFalse(pad.titleItem)
+  }
+
+  func testTheTopIsHeldOnlyWhileTheProxyIsScrolled() {
+    XCTAssertEqual(SearchMath.heldTop(current: 116, resting: 168.7, scrolled: true), 168.7)
+    XCTAssertEqual(SearchMath.heldTop(current: 116, resting: 168.7, scrolled: false), 116)
+    XCTAssertEqual(SearchMath.heldTop(current: 172, resting: 168.7, scrolled: true), 172)
+  }
+
+  func testAFieldFrameChangeNeedsHalfAPoint() {
+    let a = NativeRect(x: 8, y: 490, width: 330, height: 48)
+    XCTAssertTrue(SearchMath.frameChanged(nil, a))
+    XCTAssertFalse(SearchMath.frameChanged(a, NativeRect(x: 8.2, y: 490.4, width: 330, height: 48)))
+    XCTAssertTrue(SearchMath.frameChanged(a, NativeRect(x: 8, y: 489, width: 330, height: 48)))
+  }
+}
+
 final class ArgbColorTests: XCTestCase {
   func testArgbIsDartsToArgb32() {
     var red: CGFloat = 0
@@ -193,13 +245,33 @@ final class PassThroughTests: XCTestCase {
     transition.addSubview(host)
     tabsView.addSubview(chrome)
 
-    XCTAssertTrue(PassThroughView.isBackground(nil, selected: host, tabsView: tabsView))
-    XCTAssertTrue(PassThroughView.isBackground(tabsView, selected: host, tabsView: tabsView))
-    XCTAssertTrue(PassThroughView.isBackground(host, selected: host, tabsView: tabsView))
-    XCTAssertTrue(PassThroughView.isBackground(transition, selected: host, tabsView: tabsView))
-    XCTAssertFalse(PassThroughView.isBackground(chrome, selected: host, tabsView: tabsView))
+    XCTAssertTrue(PassThroughView.isBackground(nil, chainFrom: host, tabsView: tabsView))
+    XCTAssertTrue(PassThroughView.isBackground(tabsView, chainFrom: host, tabsView: tabsView))
+    XCTAssertTrue(PassThroughView.isBackground(host, chainFrom: host, tabsView: tabsView))
+    XCTAssertTrue(PassThroughView.isBackground(transition, chainFrom: host, tabsView: tabsView))
+    XCTAssertFalse(PassThroughView.isBackground(chrome, chainFrom: host, tabsView: tabsView))
     // No selected host yet: only nil and the tabs view are background.
-    XCTAssertFalse(PassThroughView.isBackground(transition, selected: nil, tabsView: tabsView))
+    XCTAssertFalse(PassThroughView.isBackground(transition, chainFrom: nil, tabsView: tabsView))
+  }
+
+  func testTheChainStartsAtANavigationControllersTopPage() {
+    let tabsView = UIView()
+    let navView = UIView()
+    let transition = UIView()
+    let wrapper = UIView()
+    let top = UIView()
+    let bar = UIView()
+    tabsView.addSubview(navView)
+    navView.addSubview(transition)
+    transition.addSubview(wrapper)
+    wrapper.addSubview(top)
+    navView.addSubview(bar)
+    for view in [top, wrapper, transition, navView, tabsView] {
+      XCTAssertTrue(PassThroughView.isBackground(view, chainFrom: top, tabsView: tabsView))
+    }
+    XCTAssertFalse(
+      PassThroughView.isBackground(bar, chainFrom: top, tabsView: tabsView),
+      "the navigation bar stays with UIKit")
   }
 }
 
@@ -240,6 +312,53 @@ final class RecordingEvents: NativeShellFlutterApiProtocol {
     controls.append(controlsArg)
     completion(.success(()))
   }
+
+  var searchTexts: [(String, Bool)] = []
+  var fieldFrames: [NativeRect] = []
+
+  func onSearchTextChanged(
+    text textArg: String, composing composingArg: Bool,
+    completion: @escaping (Result<Void, PigeonError>) -> Void
+  ) {
+    sent.append("searchText \(textArg)")
+    searchTexts.append((textArg, composingArg))
+    completion(.success(()))
+  }
+
+  func onSearchActiveChanged(
+    active activeArg: Bool, completion: @escaping (Result<Void, PigeonError>) -> Void
+  ) {
+    sent.append("searchActive \(activeArg)")
+    completion(.success(()))
+  }
+
+  func onSearchSubmitted(
+    text textArg: String, completion: @escaping (Result<Void, PigeonError>) -> Void
+  ) {
+    sent.append("searchSubmitted \(textArg)")
+    completion(.success(()))
+  }
+
+  func onSearchFieldChanged(
+    frame frameArg: NativeRect, completion: @escaping (Result<Void, PigeonError>) -> Void
+  ) {
+    sent.append("field")
+    fieldFrames.append(frameArg)
+    completion(.success(()))
+  }
+
+  func onBackTapped(tab tabArg: Int64, completion: @escaping (Result<Void, PigeonError>) -> Void) {
+    sent.append("back \(tabArg)")
+    completion(.success(()))
+  }
+
+  func onPopToPage(
+    tab tabArg: Int64, index indexArg: Int64,
+    completion: @escaping (Result<Void, PigeonError>) -> Void
+  ) {
+    sent.append("popTo \(tabArg) \(indexArg)")
+    completion(.success(()))
+  }
 }
 
 /// The UIKit half of the shell (`NativeTabsController` inside the container)
@@ -268,9 +387,15 @@ final class NativeTabsTests: XCTestCase {
     NativeChromeConfig(
       engaged: engaged,
       tabs: [
-        NativeTab(title: "Home", sfSymbol: "house", sidebarOnly: false),
-        NativeTab(title: "Inbox", sfSymbol: "tray", sidebarOnly: false),
-      ] + (reports ? [NativeTab(title: "Reports", sfSymbol: "chart.bar", sidebarOnly: true)] : []),
+        NativeTab(title: "Home", sfSymbol: "house", sidebarOnly: false, search: false, pages: []),
+        NativeTab(title: "Inbox", sfSymbol: "tray", sidebarOnly: false, search: false, pages: []),
+      ]
+        + (reports
+          ? [
+            NativeTab(
+              title: "Reports", sfSymbol: "chart.bar", sidebarOnly: true, search: false, pages: [])
+          ]
+          : []),
       selectedIndex: selected,
       // Not UISearchTab's own "Search" and magnifyingglass: the app's
       // label must be seen to reach the tab.
@@ -1184,6 +1309,776 @@ final class InstallerEngineTests: XCTestCase {
 
     let empty = try self.window(root: UIViewController())
     XCTAssertFalse(NativeShellInstaller.isFlutterViewOnScreen(in: [empty]))
+  }
+}
+
+// MARK: - P3b-1: the search tab
+
+@available(iOS 26.0, *)
+extension NativeTabsTests {
+  /// Home · Library · [Reports, sidebar only] · Find (search, last).
+  fileprivate func searchConfig(
+    selected: Int64 = 0, pages: [NativePage] = [], placeholder: String? = nil,
+    reports: Bool = false, hidden: Bool = false, interactive: Bool = true
+  ) -> NativeChromeConfig {
+    var tabs = [
+      NativeTab(title: "Home", sfSymbol: "house", sidebarOnly: false, search: false, pages: []),
+      NativeTab(
+        title: "Library", sfSymbol: "books.vertical", sidebarOnly: false, search: false, pages: []),
+    ]
+    if reports {
+      tabs.append(
+        NativeTab(title: "Reports", sfSymbol: "chart.bar", sidebarOnly: true, search: false, pages: []))
+    }
+    tabs.append(NativeTab(title: "Find", sfSymbol: "", sidebarOnly: false, search: true, pages: pages))
+    return NativeChromeConfig(
+      engaged: true, tabs: tabs, selectedIndex: selected,
+      search: NativeSearchConfig(placeholder: placeholder), tintArgb: 0xFF00_7AFF, dark: false,
+      rtl: false, hidden: hidden, interactive: interactive)
+  }
+
+  fileprivate func installedSearchShell(
+    selected: Int64 = 0, pages: [NativePage] = [], placeholder: String? = nil,
+    reports: Bool = false, sizeClass: UIUserInterfaceSizeClass? = nil
+  ) throws -> NativeTabsController {
+    let flutter = UIViewController()
+    let tabs = NativeTabsController(flutter: flutter, events: events)
+    let window = try portraitWindow(root: UIViewController())
+    let container = ShellContainerController(tabs: tabs, flutter: flutter)
+    if let sizeClass { container.traitOverrides.horizontalSizeClass = sizeClass }
+    window.rootViewController = container
+    self.window = window
+    tabs.dartAttached = true
+    tabs.apply(
+      searchConfig(selected: selected, pages: pages, placeholder: placeholder, reports: reports))
+    settle()
+    return tabs
+  }
+
+  /// Runs [action] and waits until it has sent [message] once more: the
+  /// search controller's present and dismiss transitions outlast `settle`
+  /// while the keyboard moves (up to 0.7 s on iPhone 27.0).
+  fileprivate func settle(sending message: String, _ action: () -> Void) {
+    let count = { self.events.sent.filter { $0 == message }.count }
+    let before = count()
+    action()
+    let deadline = Date().addingTimeInterval(3)
+    while count() == before, Date() < deadline {
+      RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    }
+    if count() == before { XCTFail("no \(message) within 3 s: \(events.sent)") }
+    settle()
+  }
+
+  /// A user edit typed into the field.
+  fileprivate func userTypes(_ text: String, into bridge: SearchBridge) {
+    bridge.controller.searchBar.text = text
+    bridge.updateSearchResults(for: bridge.controller)
+  }
+
+  /// A scene reconnect whose first state report differs from the last one
+  /// (spec §7.10): to Dart that is a live size-class change, and it never
+  /// sends the user's own text back (the one-way rule). The installer
+  /// carries the old field's text to the reinstalled shell instead,
+  /// without reporting it as an edit.
+  func testASceneReconnectCarriesTheUsersSearchTextToTheNewShell() throws {
+    let (installer, window) = try installedByInstaller()
+    _ = try installer.attach()
+    try installer.update(config: searchConfig(selected: 2))
+    settle()
+    userTypes("hồ", into: try tabs(in: window).searchBridge)
+    let edits = events.searchTexts.count
+    // The scene goes away: its window and shell are released.
+    installer.sceneDisconnected()
+    window.rootViewController = UIViewController()
+    settle()
+
+    let scene = try XCTUnwrap(window.windowScene)
+    let next = UIWindow(windowScene: scene)
+    let flutter = UIViewController()
+    next.rootViewController = flutter
+    next.isHidden = false
+    extraWindows.append(next)
+    installer.install(flutter, in: next)
+    settle()
+
+    let shell = try tabs(in: next)
+    XCTAssertTrue(shell.selectedTab === shell.searchTab)
+    XCTAssertEqual(shell.searchBridge.text, "hồ")
+    XCTAssertEqual(events.searchTexts.count, edits, "not an edit")
+  }
+
+  /// Dart's newest text, held while another tab was selected, is the text
+  /// to carry: newer than the field's.
+  func testASceneReconnectCarriesDartsHeldTextOverTheField() throws {
+    let (installer, window) = try installedByInstaller()
+    _ = try installer.attach()
+    try installer.update(config: searchConfig(selected: 2))
+    settle()
+    userTypes("hồ", into: try tabs(in: window).searchBridge)
+    try installer.update(config: searchConfig(selected: 0))
+    settle()
+    try installer.setSearchText(text: "hà")
+    installer.sceneDisconnected()
+    window.rootViewController = UIViewController()
+    settle()
+
+    let scene = try XCTUnwrap(window.windowScene)
+    let next = UIWindow(windowScene: scene)
+    let flutter = UIViewController()
+    next.rootViewController = flutter
+    next.isHidden = false
+    extraWindows.append(next)
+    installer.install(flutter, in: next)
+    try installer.update(config: searchConfig(selected: 2))
+    settle()
+
+    XCTAssertEqual(try tabs(in: next).searchBridge.text, "hà")
+  }
+
+  /// A scene disconnect while a dismissal Dart asked for is running: UIKit
+  /// empties the field, and the text to carry is the one the dismissal
+  /// keeps, not "" (Task 11 review). Dart text held for a composition is
+  /// newer than the field's too.
+  func testTheCarriedTextIsDartsNewestDuringADismissalOrAComposition() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let bridge = tabs.searchBridge
+    tabs.setSearchText("phố")
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    settle(sending: "searchActive false") {
+      tabs.setSearchActive(false)
+      tabs.setSearchText("hồ")
+      XCTAssertEqual(tabs.carriedSearchText, "hồ", "the dismissal's kept text")
+    }
+    XCTAssertEqual(bridge.text, "hồ", "precondition: the dismissal put it back")
+
+    bridge.isComposing = { true }
+    tabs.setSearchText("hà")
+    XCTAssertEqual(tabs.carriedSearchText, "hà", "held for the composition")
+  }
+
+  func testTheSearchDestinationIsUIKitsSearchTabWithTheAppsTitle() throws {
+    let tabs = try installedSearchShell()
+    let search = try XCTUnwrap(tabs.searchTab)
+    XCTAssertTrue(tabs.tabs.contains { $0 === search })
+    XCTAssertEqual(tabs.searchIndex, 2)
+    XCTAssertEqual(search.title, "Find", "the app's label")
+    XCTAssertEqual(search.image, UIImage(systemName: "magnifyingglass"), "no symbol: the system's")
+    XCTAssertFalse(search.automaticallyActivatesSearch, "the video's state 2: not focused")
+  }
+
+  func testSelectingTheSearchTabOnlyProposesThenDartSelectsIt() throws {
+    let tabs = try installedSearchShell()
+    let search = try XCTUnwrap(tabs.searchTab)
+    XCTAssertFalse(tabs.tabBarController(tabs, shouldSelectTab: search))
+    XCTAssertEqual(events.sent.last, "destination 2")
+    XCTAssertFalse(tabs.selectedTab === search, "nothing selected before Dart answers")
+    tabs.apply(searchConfig(selected: 2))
+    settle()
+    XCTAssertTrue(tabs.selectedTab === search)
+    XCTAssertTrue(tabs.selectedViewController is ShellNavController)
+  }
+
+  func testTheSearchRootOwnsTheSearchControllerAndThePlaceholder() throws {
+    let tabs = try installedSearchShell(selected: 2, placeholder: "Songs, places")
+    let nav = try XCTUnwrap(tabs.navControllers[2])
+    XCTAssertTrue(nav.rootHost.navigationItem.searchController === tabs.searchBridge.controller)
+    XCTAssertEqual(tabs.searchBridge.controller.searchBar.placeholder, "Songs, places")
+    XCTAssertFalse(tabs.searchBridge.controller.obscuresBackgroundDuringPresentation)
+    tabs.apply(searchConfig(selected: 2))
+    XCTAssertEqual(
+      tabs.searchBridge.controller.searchBar.placeholder, tabs.searchBridge.defaultPlaceholder,
+      "no placeholder: the system's")
+  }
+
+  func testThePlacementFollowsTheIdiom() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let item = try XCTUnwrap(tabs.navControllers[2]).rootHost.navigationItem
+    if UIDevice.current.userInterfaceIdiom == .pad {
+      XCTAssertEqual(item.preferredSearchBarPlacement, .stacked)
+      XCTAssertFalse(item.hidesSearchBarWhenScrolling)
+      XCTAssertEqual(item.largeTitleDisplayMode, .never)
+    } else {
+      XCTAssertEqual(item.preferredSearchBarPlacement, .automatic)
+      XCTAssertEqual(item.largeTitleDisplayMode, .inline)
+    }
+  }
+
+  /// A narrow iPad window: the search root's small title is a leading item,
+  /// which UIKit puts right of the window controls, with the stacked field
+  /// on the row below (Apple Music). It follows the root's title, and a
+  /// regular width (the top tab bar names the tab) has none.
+  func testANarrowIPadShowsTheSearchRootsTitleAsALeadingItem() throws {
+    try requireIPad()
+    let flutter = UIViewController()
+    let tabs = NativeTabsController(flutter: flutter, events: events)
+    let window = try portraitWindow(root: UIViewController(), width: 375)
+    let container = ShellContainerController(tabs: tabs, flutter: flutter)
+    window.rootViewController = container
+    self.window = window
+    tabs.dartAttached = true
+    tabs.apply(searchConfig(selected: 2))
+    settle()
+    let root = try XCTUnwrap(tabs.navControllers[2]).rootHost
+    func titleItem() -> String? {
+      (root.navigationItem.leftBarButtonItem?.customView as? UILabel)?.text
+    }
+    XCTAssertEqual(titleItem(), "Find", "no pages: the destination's label")
+    tabs.apply(searchConfig(selected: 2, pages: [NativePage(title: "Search")]))
+    settle()
+    XCTAssertEqual(titleItem(), "Search")
+    XCTAssertEqual(root.navigationItem.largeTitleDisplayMode, .never)
+    window.frame.size.width = window.windowScene!.coordinateSpace.bounds.width
+    settle()
+    XCTAssertEqual(tabs.traitCollection.horizontalSizeClass, .regular, "precondition")
+    XCTAssertNil(root.navigationItem.leftBarButtonItem, "regular: no title item")
+  }
+
+  /// Apple Music's large title shares the bar row with its trailing items,
+  /// right under the status bar: UIKit's `.inline` large title. `.always`
+  /// puts it on a 52pt row below the bar, about 60pt lower (Task 12).
+  func testTheSearchRootsLargeTitleSharesTheBarRow() throws {
+    try requirePhone()
+    let tabs = try installedSearchShell(selected: 2)
+    let nav = try XCTUnwrap(tabs.navControllers[2])
+    let item = nav.rootHost.navigationItem
+    XCTAssertEqual(item.largeTitleDisplayMode, .inline)
+    let height = nav.navigationBar.frame.height
+    XCTAssertEqual(
+      tabs.flutter.view.safeAreaInsets.top, nav.navigationBar.frame.maxY, accuracy: 0.5,
+      "Flutter's content starts right under the bar")
+    item.largeTitleDisplayMode = .never
+    settle()
+    XCTAssertEqual(
+      nav.navigationBar.frame.height, height, accuracy: 0.5,
+      "as tall as a bar with no large title: no title row under the bar row")
+  }
+
+  func testOnlyAnIPhoneOnIOS27MakesTheSearchTabProminent() throws {
+    #if compiler(>=6.4)
+      guard #available(iOS 27.0, *) else { throw XCTSkip("prominentTabIdentifier is iOS 27 API") }
+      let tabs = try installedSearchShell()
+      let search = try XCTUnwrap(tabs.searchTab)
+      if UIDevice.current.userInterfaceIdiom == .phone {
+        XCTAssertEqual(tabs.prominentTabIdentifier, search.identifier)
+      } else {
+        XCTAssertNil(tabs.prominentTabIdentifier)
+      }
+    #else
+      throw XCTSkip("prominentTabIdentifier needs the iOS 27 SDK")
+    #endif
+  }
+
+  /// One rule after `setTabs` (probe; VK-426): the trailing action on any
+  /// idiom, the search destination on an iPhone only (Q1, Q10), else none.
+  /// Each change of shell re-applies it.
+  func testTheProminentTabIsOneRuleForTheTrailingActionAndTheSearchTab() throws {
+    #if compiler(>=6.4)
+      guard #available(iOS 27.0, *) else { throw XCTSkip("prominentTabIdentifier is iOS 27 API") }
+      let tabs = try installedSearchShell()
+      tabs.apply(config(trailing: true))
+      settle()
+      let trailing = try XCTUnwrap(tabs.tabs.first as? UISearchTab)
+      XCTAssertNil(tabs.searchTab, "precondition: no search destination")
+      XCTAssertEqual(tabs.prominentTabIdentifier, trailing.identifier, "trailing: any idiom")
+      tabs.apply(config())
+      settle()
+      XCTAssertNil(tabs.prominentTabIdentifier, "neither")
+      tabs.apply(searchConfig())
+      settle()
+      let search = try XCTUnwrap(tabs.searchTab)
+      XCTAssertEqual(
+        tabs.prominentTabIdentifier,
+        UIDevice.current.userInterfaceIdiom == .phone ? search.identifier : nil)
+    #else
+      throw XCTSkip("prominentTabIdentifier needs the iOS 27 SDK")
+    #endif
+  }
+
+  /// Q9: never both. Dart asserts; should both arrive, native keeps the
+  /// search destination and drops the trailing action (UIKit gives both
+  /// the same identifier).
+  func testASearchDestinationDropsATrailingAction() throws {
+    let tabs = try installedSearchShell()
+    var both = searchConfig()
+    both.trailing = NativeAction(title: "Compose", sfSymbol: "square.and.pencil")
+    tabs.apply(both)
+    settle()
+    let search = try XCTUnwrap(tabs.searchTab)
+    XCTAssertEqual(tabs.tabs.filter { $0 is UISearchTab }.count, 1)
+    XCTAssertTrue(tabs.tabs.contains { $0 === search })
+    XCTAssertFalse(tabs.tabBarController(tabs, shouldSelectTab: search))
+    XCTAssertEqual(events.sent.last, "destination 2")
+    XCTAssertFalse(events.sent.contains("trailing"))
+  }
+
+  /// Probe P2 (Q19): with UIKit's default, a page pushed in the search tab
+  /// already shows the full bar, without the bottom field.
+  func testAPageInTheSearchTabKeepsTheTabBar() {
+    XCTAssertFalse(ShellNavController.hidesBarWhenPushed)
+  }
+
+  func testDartsTextIsAppliedAndNeverEchoed() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let bridge = tabs.searchBridge
+    tabs.setSearchText("hồ")
+    XCTAssertEqual(bridge.text, "hồ")
+    bridge.updateSearchResults(for: bridge.controller)  // UIKit may call back (probe P8)
+    XCTAssertFalse(events.sent.contains("searchText hồ"), "Dart's own write is not an edit")
+    bridge.controller.searchBar.text = "hồ h"  // the user types
+    bridge.updateSearchResults(for: bridge.controller)
+    XCTAssertEqual(events.sent.last, "searchText hồ h")
+    XCTAssertEqual(events.searchTexts.last?.1, false, "no composition")
+  }
+
+  /// UIKit calls back again with the same text when the search presents
+  /// and when it dismisses: no change, so no user edit (probe note 2).
+  func testPresentingAndDismissingNeverEchoDartsText() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    tabs.setSearchText("phố")
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    settle(sending: "searchActive false") { tabs.setSearchActive(false) }
+    XCTAssertEqual(tabs.searchBridge.text, "phố")
+    XCTAssertFalse(events.sent.contains { $0.hasPrefix("searchText") }, "\(events.sent)")
+  }
+
+  func testDartsTextWaitsForTheIMECompositionToEnd() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let bridge = tabs.searchBridge
+    var composing = true
+    bridge.isComposing = { composing }
+    tabs.setSearchText("ho")
+    XCTAssertEqual(bridge.text, "", "never written into a composition")
+    XCTAssertEqual(bridge.pendingText, "ho")
+    composing = false
+    bridge.updateSearchResults(for: bridge.controller)
+    XCTAssertEqual(bridge.text, "ho")
+    XCTAssertNil(bridge.pendingText)
+  }
+
+  func testUserEditsAreReportedOnlyWhileTheSearchTabIsSelected() throws {
+    let tabs = try installedSearchShell(selected: 0)
+    let bridge = tabs.searchBridge
+    bridge.controller.searchBar.text = "x"
+    bridge.updateSearchResults(for: bridge.controller)
+    XCTAssertFalse(events.sent.contains("searchText x"))
+    tabs.apply(searchConfig(selected: 2))
+    settle()
+    bridge.controller.searchBar.text = "xy"
+    bridge.updateSearchResults(for: bridge.controller)
+    XCTAssertEqual(events.sent.last, "searchText xy")
+    bridge.searchBarSearchButtonClicked(bridge.controller.searchBar)
+    XCTAssertEqual(events.sent.last, "searchSubmitted xy")
+  }
+
+  func testActivationNeedsTheSearchTabAndADartDismissalKeepsTheText() throws {
+    let tabs = try installedSearchShell(selected: 0)
+    let bridge = tabs.searchBridge
+    tabs.setSearchActive(true)
+    settle()
+    XCTAssertFalse(bridge.controller.isActive, "not while another tab is selected")
+    tabs.apply(searchConfig(selected: 2))
+    settle()
+    XCTAssertFalse(bridge.controller.isActive, "nor once it is selected (Q13)")
+    tabs.setSearchText("hội")
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    XCTAssertTrue(bridge.controller.isActive)
+    XCTAssertTrue(events.sent.contains("searchActive true"))
+    settle(sending: "searchActive false") { tabs.setSearchActive(false) }
+    XCTAssertFalse(bridge.controller.isActive)
+    XCTAssertEqual(bridge.text, "hội", "kept (Q2: only × clears)")
+    XCTAssertFalse(events.sent.contains("searchText "), "not reported as a user clear")
+  }
+
+  func testLeavingTheSearchTabWhileActiveKeepsTheText() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let bridge = tabs.searchBridge
+    tabs.setSearchText("phố")
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    settle(sending: "searchActive false") { tabs.apply(searchConfig(selected: 0)) }
+    XCTAssertFalse(bridge.controller.isActive)
+    XCTAssertEqual(bridge.text, "phố")
+    XCTAssertFalse(events.sent.contains("searchText "))
+  }
+
+  /// Q2: the user's × clears the text and dismisses; Dart hears both.
+  func testTheCancelButtonClearsTheText() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let bridge = tabs.searchBridge
+    tabs.setSearchText("phố")
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    XCTAssertTrue(bridge.controller.isActive, "precondition")
+    settle(sending: "searchActive false") { bridge.debugCancel() }
+    XCTAssertFalse(bridge.controller.isActive)
+    XCTAssertEqual(bridge.text, "")
+    XCTAssertTrue(events.sent.contains("searchText "), "the user's clear is reported")
+    XCTAssertEqual(events.sent.filter { $0.hasPrefix("searchActive") }.last, "searchActive false")
+  }
+
+  /// Dart's newest text wins over the text a dismissal keeps.
+  func testDartsTextSentDuringADismissalIsTheTextKept() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let bridge = tabs.searchBridge
+    tabs.setSearchText("phố")
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    settle(sending: "searchActive false") {
+      tabs.setSearchActive(false)
+      tabs.setSearchText("hồ")
+    }
+    XCTAssertEqual(bridge.text, "hồ")
+    XCTAssertFalse(events.sent.contains { $0.hasPrefix("searchText") }, "Dart's writes only")
+  }
+
+  /// A structure change builds a new search root; the one search
+  /// controller moves there and leaves the old root.
+  func testARebuildMovesTheSearchControllerToTheNewRoot() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let old = try XCTUnwrap(tabs.navControllers[2]).rootHost
+    tabs.apply(searchConfig(selected: 3, reports: true))
+    settle()
+    let new = try XCTUnwrap(tabs.navControllers[3]).rootHost
+    XCTAssertFalse(new === old, "precondition: rebuilt")
+    XCTAssertNil(old.navigationItem.searchController)
+    XCTAssertTrue(new.navigationItem.searchController === tabs.searchBridge.controller)
+  }
+
+  /// A quick deactivate → activate (a dialog that opens and closes) does
+  /// not leave the bridge holding a dismissal: the text is kept, the search
+  /// stays active and the user's edits are reported again.
+  func testAQuickDeactivateThenActivateKeepsReportingEdits() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let bridge = tabs.searchBridge
+    tabs.setSearchText("phố")
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    tabs.setSearchActive(false)
+    tabs.setSearchActive(true)
+    RunLoop.current.run(until: Date().addingTimeInterval(1.5))
+    XCTAssertEqual(bridge.text, "phố")
+    XCTAssertTrue(bridge.controller.isActive)
+    XCTAssertEqual(events.sent.filter { $0.hasPrefix("searchActive") }.last, "searchActive true")
+    XCTAssertFalse(events.sent.contains("searchText "), "UIKit's clear is not the user's")
+    userTypes("phốc", into: bridge)
+    XCTAssertEqual(events.sent.last, "searchText phốc", "\(events.sent)")
+  }
+
+  /// A dismissal whose end UIKit never reports must not leave the bridge
+  /// mute: the next activation resets the kept text.
+  func testAnActivationResetsADismissalThatNeverEnded() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let bridge = tabs.searchBridge
+    tabs.setSearchText("phố")
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    bridge.controller.delegate = nil  // no `didDismiss`
+    tabs.setSearchActive(false)
+    RunLoop.current.run(until: Date().addingTimeInterval(1.5))
+    bridge.controller.delegate = bridge
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    XCTAssertEqual(bridge.text, "phố")
+    userTypes("phốc", into: bridge)
+    XCTAssertEqual(events.sent.last, "searchText phốc", "\(events.sent)")
+  }
+
+  /// IMEs with marked text: the user's committed input wins over Dart text
+  /// held for the composition; the commit is reported once.
+  func testAnIMECommitWinsOverDartsPendingText() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let bridge = tabs.searchBridge
+    var composing = true
+    bridge.isComposing = { composing }
+    userTypes("hô", into: bridge)
+    tabs.setSearchText("ho")
+    XCTAssertEqual(bridge.pendingText, "ho", "precondition: held for the composition")
+    composing = false
+    bridge.updateSearchResults(for: bridge.controller)
+    bridge.updateSearchResults(for: bridge.controller)
+    XCTAssertEqual(bridge.text, "hô", "the user's input wins")
+    XCTAssertNil(bridge.pendingText)
+    XCTAssertEqual(events.searchTexts.filter { $0.0 == "hô" && !$0.1 }.count, 1)
+    XCTAssertEqual(events.searchTexts.last?.0, "hô")
+  }
+
+  /// Dart text held for a composition is the text a dismissal keeps.
+  func testDartsTextHeldForACompositionIsKeptThroughADismissal() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let bridge = tabs.searchBridge
+    tabs.setSearchText("phố")
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    var composing = true
+    bridge.isComposing = { composing }
+    tabs.setSearchText("hồ")
+    settle(sending: "searchActive false") {
+      composing = false
+      tabs.setSearchActive(false)
+    }
+    XCTAssertEqual(bridge.text, "hồ")
+    XCTAssertNil(bridge.pendingText)
+    XCTAssertFalse(events.sent.contains { $0.hasPrefix("searchText") }, "\(events.sent)")
+  }
+
+  /// A structure change while the search is active dismisses it and keeps
+  /// the text, as leaving the tab does.
+  func testARebuildDuringAnActiveSearchKeepsTheText() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let bridge = tabs.searchBridge
+    tabs.setSearchText("phố")
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    settle(sending: "searchActive false") { tabs.apply(searchConfig(selected: 3, reports: true)) }
+    XCTAssertEqual(bridge.text, "phố")
+    XCTAssertFalse(events.sent.contains { $0.hasPrefix("searchText") }, "\(events.sent)")
+    userTypes("phốc", into: bridge)
+    XCTAssertEqual(events.sent.last, "searchText phốc", "still reporting")
+  }
+
+  /// After a rebuild that keeps the search tab selected, iOS 26.5 keeps
+  /// reporting a stale `selectedTab`: a later config with the same
+  /// selection must not dismiss an active search.
+  func testAConfigAfterARebuildKeepsAnActiveSearch() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    tabs.apply(searchConfig(selected: 3, reports: true))
+    settle()
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    events.sent.removeAll()
+    tabs.apply(searchConfig(selected: 3, placeholder: "Songs", reports: true))
+    settle()
+    XCTAssertTrue(tabs.searchBridge.controller.isActive, "\(events.sent)")
+    XCTAssertFalse(events.sent.contains("searchActive false"), "\(events.sent)")
+  }
+
+  /// Spec §7.4: Dart's text sent before the search tab is selected waits
+  /// for the selection.
+  func testDartsTextBeforeSelectionWaitsForTheSearchTab() throws {
+    let tabs = try installedSearchShell(selected: 0)
+    tabs.setSearchText("phố")
+    XCTAssertEqual(tabs.searchBridge.text, "", "held until the search tab is selected")
+    tabs.apply(searchConfig(selected: 2))
+    settle()
+    XCTAssertEqual(tabs.searchBridge.text, "phố")
+    XCTAssertFalse(events.sent.contains { $0.hasPrefix("searchText") }, "\(events.sent)")
+  }
+
+  func testAHiddenSelectionNeverSelectsTheSearchDestination() throws {
+    let tabs = try installedSearchShell(selected: 2, reports: true, sizeClass: .compact)
+    XCTAssertEqual(tabs.selectedTab?.identifier, "destination0", "Reports is left out; Home, not Find")
+    XCTAssertFalse(tabs.selectedTab === tabs.searchTab)
+  }
+
+  private func titles(_ nav: ShellNavController) -> [String] {
+    nav.viewControllers.map { $0.title ?? "" }
+  }
+
+  func testPagesArePushedAndPoppedWithTheirTitles() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let nav = try XCTUnwrap(tabs.navControllers[2])
+    XCTAssertEqual(titles(nav), ["Find"], "no pages: the destination's label")
+    tabs.apply(
+      searchConfig(
+        selected: 2,
+        pages: [NativePage(title: "Search", largeTitle: nil), NativePage(title: "Hồ Hoàn Kiếm")]))
+    settle()
+    XCTAssertEqual(titles(nav), ["Search", "Hồ Hoàn Kiếm"])
+    let top = try XCTUnwrap(nav.topViewController as? PageHostController)
+    XCTAssertNotNil(top.navigationItem.backAction, "the back tap is a proposal")
+    XCTAssertEqual(top.navigationItem.largeTitleDisplayMode, .never)
+    XCTAssertEqual(top.hidesBottomBarWhenPushed, ShellNavController.hidesBarWhenPushed)
+    tabs.apply(searchConfig(selected: 2, pages: [NativePage(title: "Search", largeTitle: nil)]))
+    settle()
+    XCTAssertEqual(titles(nav), ["Search"])
+  }
+
+  func testTheNativeBackButtonOnlyProposes() throws {
+    let tabs = try installedSearchShell(
+      selected: 2, pages: [NativePage(title: "Search"), NativePage(title: "Detail")])
+    let nav = try XCTUnwrap(tabs.navControllers[2])
+    let top = try XCTUnwrap(nav.topViewController as? PageHostController)
+    top.onBack?()
+    XCTAssertEqual(events.sent.last, "back 2")
+    XCTAssertEqual(nav.viewControllers.count, 2, "Dart pops; native follows")
+  }
+
+  /// Every pop UIKit starts by itself is a proposal, like the back tap:
+  /// the back button's long-press menu (UIKit calls `popToViewController`
+  /// from `_tryRequestPopToItem`), a pop (an accessibility escape, a
+  /// keyboard back), a pop-to-root (a tab reselect). Native keeps its
+  /// stack; Dart pops the Flutter pages and the next config pops here.
+  func testEveryUIKitPopIsAProposalForDart() throws {
+    let tabs = try installedSearchShell(
+      selected: 2,
+      pages: [NativePage(title: "Search"), NativePage(title: "A"), NativePage(title: "B")])
+    let nav = try XCTUnwrap(tabs.navControllers[2])
+    let lastPop = { self.events.sent.last { $0.hasPrefix("popTo") } }
+    XCTAssertEqual(nav.popToViewController(nav.viewControllers[0], animated: false) ?? [], [])
+    XCTAssertEqual(lastPop(), "popTo 2 0", "the back menu")
+    XCTAssertNil(nav.popViewController(animated: false))
+    XCTAssertEqual(lastPop(), "popTo 2 1", "a pop")
+    XCTAssertEqual(nav.popToRootViewController(animated: false) ?? [], [])
+    XCTAssertEqual(lastPop(), "popTo 2 0", "a pop-to-root")
+    settle()
+    XCTAssertEqual(titles(nav), ["Search", "A", "B"], "Dart pops; native follows")
+    // Q14: Flutter owns the swipe; UIKit's own swipes stay off.
+    XCTAssertEqual(nav.interactivePopGestureRecognizer?.isEnabled, false)
+    XCTAssertEqual(nav.interactiveContentPopGestureRecognizer?.isEnabled, false)
+    tabs.apply(searchConfig(selected: 2, pages: [NativePage(title: "Search")]))
+    settle()
+    XCTAssertEqual(titles(nav), ["Search"], "Dart's shorter stack pops natively")
+  }
+
+  func testFlutterKeepsTheTabsFrameAndGetsTheTopPagesInsets() throws {
+    let tabs = try installedSearchShell(
+      selected: 2, pages: [NativePage(title: "Search"), NativePage(title: "Detail")])
+    let root = try XCTUnwrap(tabs.parent?.view)
+    let nav = try XCTUnwrap(tabs.navControllers[2])
+    let top = try XCTUnwrap(nav.topViewController)
+    XCTAssertEqual(tabs.flutter.view.frame, nav.view.convert(nav.view.bounds, to: root))
+    XCTAssertEqual(
+      tabs.flutter.view.safeAreaInsets.top, top.view.safeAreaInsets.top, accuracy: 0.5,
+      "the native bar is Flutter's top padding")
+  }
+
+  /// An out-of-line large title (`.always`) collapses under the proxy while
+  /// Flutter's top is held. The iPhone search root's `.inline` title sits
+  /// on the bar row and moves nothing, and UIKit then shows a pushed page's
+  /// title small; an iPad search root that asks for a large title is
+  /// `.always`.
+  func testTheProxyCollapsesTheLargeTitleWhileFlutterKeepsItsTop() throws {
+    try requireIPad()
+    let tabs = try installedSearchShell(
+      selected: 2, pages: [NativePage(title: "Search", largeTitle: true)])
+    let host = try XCTUnwrap(tabs.topHost(ofTab: 2))
+    XCTAssertEqual(host.navigationItem.largeTitleDisplayMode, .always, "precondition")
+    let restingFlutterTop = tabs.flutter.view.safeAreaInsets.top
+    let restingHostTop = host.view.safeAreaInsets.top
+    tabs.setPageScroll(tab: 2, offset: 400)
+    settle()
+    XCTAssertLessThan(host.view.safeAreaInsets.top, restingHostTop - 20, "the title collapsed")
+    XCTAssertEqual(
+      tabs.flutter.view.safeAreaInsets.top, restingFlutterTop, accuracy: 0.5,
+      "held: Flutter's padding does not move under the finger")
+    tabs.setPageScroll(tab: 2, offset: 0)
+    settle()
+    XCTAssertEqual(host.view.safeAreaInsets.top, restingHostTop, accuracy: 0.5)
+  }
+
+  /// Spec §7.7: the proxy's base is the top at offset 0 with the search
+  /// inactive. A search on a scrolled page (it re-reads the held top on
+  /// purpose) must not leave the large title collapsed.
+  func testTheLargeTitleReturnsAfterASearchOnAScrolledPage() throws {
+    try requirePhone()
+    let tabs = try installedSearchShell(selected: 2)
+    let host = try XCTUnwrap(tabs.topHost(ofTab: 2))
+    let expanded = host.view.safeAreaInsets.top
+    tabs.setPageScroll(tab: 2, offset: 400)
+    settle()
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    settle(sending: "searchActive false") { tabs.setSearchActive(false) }
+    tabs.setPageScroll(tab: 2, offset: 0)
+    settle()
+    XCTAssertEqual(host.view.safeAreaInsets.top, expanded, accuracy: 0.5, "the large title is back")
+  }
+
+  /// The results scrolled while the search is active, then ×: back at 0 the
+  /// large title returns.
+  func testTheLargeTitleReturnsAfterScrollingTheResultsAndCancelling() throws {
+    try requirePhone()
+    let tabs = try installedSearchShell(selected: 2)
+    let host = try XCTUnwrap(tabs.topHost(ofTab: 2))
+    let expanded = host.view.safeAreaInsets.top
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    tabs.setPageScroll(tab: 2, offset: 400)
+    settle()
+    settle(sending: "searchActive false") { tabs.debugTap(.searchCancel, index: 2) }
+    tabs.setPageScroll(tab: 2, offset: 0)
+    settle()
+    XCTAssertEqual(host.view.safeAreaInsets.top, expanded, accuracy: 0.5, "the large title is back")
+  }
+
+  /// Spec §7.9: Flutter is synced once more when a push ends, whatever
+  /// changed during the animation.
+  func testThePushsCompletionSyncsFlutter() throws {
+    let tabs = try installedSearchShell(selected: 2, pages: [NativePage(title: "Search")])
+    let nav = try XCTUnwrap(tabs.navControllers[2])
+    tabs.apply(
+      searchConfig(selected: 2, pages: [NativePage(title: "Search"), NativePage(title: "Detail")]))
+    let coordinator = try XCTUnwrap(nav.transitionCoordinator, "an animated push")
+    var ended = false
+    coordinator.animate(
+      alongsideTransition: { _ in
+        tabs.flutter.additionalSafeAreaInsets = UIEdgeInsets(top: 300, left: 0, bottom: 0, right: 0)
+      }, completion: { _ in ended = true })
+    let deadline = Date().addingTimeInterval(3)
+    while !ended, Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.05)) }
+    XCTAssertTrue(ended, "the push ended")
+    let top = try XCTUnwrap(nav.topViewController)
+    XCTAssertEqual(
+      tabs.flutter.view.safeAreaInsets.top, top.view.safeAreaInsets.top, accuracy: 0.5,
+      "re-synced when the push ended")
+  }
+
+  func testTheFieldFrameIsPublishedInFlutterCoordinatesWhileSelected() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let frame = try XCTUnwrap(events.fieldFrames.last)
+    XCTAssertGreaterThan(frame.width, 100, "the field is on screen")
+    XCTAssertGreaterThan(frame.height, 30)
+    tabs.apply(searchConfig(selected: 0))
+    settle()
+    XCTAssertEqual(events.fieldFrames.last?.width, 0, "not selected: zero")
+  }
+
+  func testWindowControlsAreZeroUnderTheSearchNavigationBar() throws {
+    let tabs = try installedSearchShell(selected: 2, sizeClass: .compact)
+    let windowed = NativeWindowControls(leading: 66, top: 44)
+    tabs.readWindowControls = { _ in windowed }
+    XCTAssertEqual(tabs.windowControls(), NativeWindowControls(leading: 0, top: 0))
+    tabs.apply(searchConfig(selected: 0))
+    settle()
+    XCTAssertEqual(tabs.windowControls(), windowed, "Home has no native bar: the compact read")
+  }
+
+  func testInEveryPhaseTheFieldIsNativeAndTheBodyIsFlutters() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let root = try XCTUnwrap(tabs.parent?.view)
+    func fieldCentre() throws -> CGPoint {
+      let field = tabs.searchBridge.controller.searchBar.searchTextField
+      XCTAssertNotNil(field.window, "the field is on screen")
+      let frame = field.convert(field.bounds, to: root)
+      return CGPoint(x: frame.midX, y: frame.midY)
+    }
+    // Selected.
+    XCTAssertTrue(isNative(try hit(tabs, try fieldCentre()), tabs), "selected: the field")
+    XCTAssertTrue(
+      try hit(tabs, CGPoint(x: root.bounds.midX, y: root.bounds.midY)) === tabs.flutter.view,
+      "selected: the body")
+    // Active.
+    tabs.setSearchActive(true)
+    settle()
+    XCTAssertTrue(isNative(try hit(tabs, try fieldCentre()), tabs), "active: the field")
+    let body = CGPoint(x: root.bounds.midX, y: root.bounds.height * 0.35)
+    XCTAssertTrue(try hit(tabs, body) === tabs.flutter.view, "active: the body")
+    // Inert under a dialog.
+    tabs.apply(searchConfig(selected: 2, interactive: false))
+    XCTAssertTrue(try hit(tabs, try fieldCentre()) === tabs.flutter.view, "inert")
+  }
+
+  func testAPushedPagesBackButtonIsNative() throws {
+    let tabs = try installedSearchShell(
+      selected: 2, pages: [NativePage(title: "Search"), NativePage(title: "Detail")])
+    let root = try XCTUnwrap(tabs.parent?.view)
+    let bar = try XCTUnwrap(tabs.navControllers[2]).navigationBar
+    let frame = bar.convert(bar.bounds, to: root)
+    XCTAssertTrue(isNative(try hit(tabs, CGPoint(x: frame.minX + 38, y: frame.midY)), tabs))
+  }
+
+  func testTheDebugSnapshotDescribesTheSearchTab() throws {
+    let tabs = try installedSearchShell(
+      selected: 2, pages: [NativePage(title: "Search"), NativePage(title: "Detail")])
+    tabs.setSearchText("ho")
+    let snapshot = tabs.debugSnapshot()
+    XCTAssertEqual(snapshot.selectedTab, "destination2")
+    XCTAssertEqual(snapshot.searchText, "ho")
+    XCTAssertEqual(snapshot.pageTitles, ["Search", "Detail"])
+    if UIDevice.current.userInterfaceIdiom == .pad {
+      XCTAssertEqual(snapshot.placement, "stacked")
+    }
+    XCTAssertFalse(snapshot.searchActive)
   }
 }
 

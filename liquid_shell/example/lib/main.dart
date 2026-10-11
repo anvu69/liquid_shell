@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:liquid_shell_example/cases/cases.dart';
 import 'package:liquid_shell_example/cases/native_alerts.dart';
+import 'package:liquid_shell_example/cases/search.dart';
 import 'package:liquid_shell_example/support/drawn_by_flutter.dart';
 import 'package:liquid_shell_example/support/launch_demo.dart';
 
@@ -9,28 +11,53 @@ Future<void> main() async {
   runApp(ExampleApp(demo: await launchDemo()));
 }
 
+/// Kept for the app's life: XCUITest reads Flutter's rows through it.
+SemanticsHandle? _demoSemantics;
+
+/// Releases the demo's semantics handle; widget tests must end without one.
+@visibleForTesting
+void debugReleaseDemoSemantics() {
+  _demoSemantics?.dispose();
+  _demoSemantics = null;
+}
+
 /// The seed colour of the example theme.
 const kExampleSeed = Color(0xFF3D5AFE);
 
 /// The example app: a list of cases, each opening one screen.
 class ExampleApp extends StatelessWidget {
-  /// Creates the app. With [demo], it opens straight on the alerts case and
-  /// runs that demo (UI tests, spec P3a §9.4).
+  /// Creates the app. [demo] opens one case directly (UI tests): `search`
+  /// and `search-guarded` open the search case; `alert` and `sheet` open
+  /// the alerts case and run that demo (spec P3a §9.4).
   const ExampleApp({this.demo, super.key});
 
-  /// `alert` or `sheet`; null shows the case list.
+  /// The demo to open at launch, or null for the case list. Any other
+  /// value shows the case list too.
   final String? demo;
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-    title: 'liquid_shell',
-    theme: ThemeData(colorSchemeSeed: kExampleSeed),
-    darkTheme: ThemeData(
-      colorSchemeSeed: kExampleSeed,
-      brightness: Brightness.dark,
-    ),
-    home: demo == null ? const CaseList() : NativeAlertsCase(autorun: demo),
-  );
+  Widget build(BuildContext context) {
+    final home = switch (demo) {
+      'search' => const SearchCase(),
+      'search-guarded' => const SearchCase(guardDetails: true),
+      'alert' || 'sheet' => NativeAlertsCase(autorun: demo),
+      _ => const CaseList(),
+    };
+    // XCUITest reads the search case's Flutter rows through the
+    // accessibility tree (the alerts are native).
+    if (home is SearchCase) {
+      _demoSemantics ??= SemanticsBinding.instance.ensureSemantics();
+    }
+    return MaterialApp(
+      title: 'liquid_shell',
+      theme: ThemeData(colorSchemeSeed: kExampleSeed),
+      darkTheme: ThemeData(
+        colorSchemeSeed: kExampleSeed,
+        brightness: Brightness.dark,
+      ),
+      home: home,
+    );
+  }
 }
 
 /// The home screen: one row per case.
