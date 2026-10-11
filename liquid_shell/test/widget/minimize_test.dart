@@ -159,20 +159,42 @@ void main() {
     final g = await tester.startGesture(const Offset(115, _top + 31));
     await g.moveTo(const Offset(350, _top + 31));
     await tester.pump(const Duration(milliseconds: 100));
-    // The outer overlay is the drag target's; the circle's own press
-    // overlay sits inside it.
+    // One overlay on the circle: the drag hover lights it too.
     final highlight = tester.widget<TabHoverHighlight>(
-      find
-          .descendant(
-            of: find.byKey(kTabTrailingKey),
-            matching: find.byType(TabHoverHighlight),
-          )
-          .first,
+      find.descendant(
+        of: find.byKey(kTabTrailingKey),
+        matching: find.byType(TabHoverHighlight),
+      ),
     );
     expect(highlight.hovered.value, isTrue);
     await g.up();
     await tester.pumpAndSettle();
     expect(fired, 1);
+    expect(log, isEmpty);
+  });
+
+  testWidgets('a minimize mid-drag drops the hover and the drag', (
+    tester,
+  ) async {
+    var fired = 0;
+    final log = <int>[];
+    final toggle = await _pump(tester, onTrailing: () => fired++, log: log);
+    final g = await tester.startGesture(const Offset(115, _top + 31));
+    await g.moveTo(const Offset(350, _top + 31));
+    await tester.pump();
+    TabHoverHighlight highlight() => tester.widget<TabHoverHighlight>(
+      find.descendant(
+        of: find.byKey(kTabTrailingKey),
+        matching: find.byType(TabHoverHighlight),
+      ),
+    );
+    expect(highlight().hovered.value, isTrue);
+    toggle(() {});
+    await tester.pumpAndSettle();
+    expect(highlight().hovered.value, isFalse);
+    await g.up();
+    await tester.pumpAndSettle();
+    expect(fired, 0);
     expect(log, isEmpty);
   });
 

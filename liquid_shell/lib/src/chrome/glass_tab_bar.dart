@@ -70,7 +70,11 @@ class GlassTabBar extends StatefulWidget {
     this.reserveTrailing = false,
     this.collapseDelay = true,
     super.key,
-  });
+  }) : assert(
+         externalTarget == null || trailing == null,
+         'One drop target: the shell draws the ⌕ (externalTarget) or the '
+         'bar draws its trailing circle, not both.',
+       );
 
   /// All destinations; only `everywhere` ones get a slot.
   final List<LiquidDestination> destinations;
@@ -166,6 +170,8 @@ class _GlassTabBarState extends State<GlassTabBar>
     super.didUpdateWidget(oldWidget);
     _syncOwnTarget();
     if (oldWidget.minimized != widget.minimized) {
+      // A minimize takes the touch away: no stale hover, no late commit.
+      if (widget.minimized) _cancel();
       _minimize
         ..reduceMotion = MediaQuery.disableAnimationsOf(context)
         ..set(widget.minimized, delayed: widget.collapseDelay);
@@ -249,7 +255,10 @@ class _GlassTabBarState extends State<GlassTabBar>
   void _move(Offset p) {
     _motion?.move(p);
     final t = _target;
-    if (t != null) t.hovered.value = t.rect().inflate(4).contains(p);
+    if (t != null) {
+      t.hovered.value =
+          (_motion?.interacting ?? false) && t.rect().inflate(4).contains(p);
+    }
   }
 
   void _up(Offset p, double velocity) {
@@ -554,9 +563,9 @@ class _GlassTabBarState extends State<GlassTabBar>
         Positioned.fromRect(
           key: kTabTrailingKey,
           rect: Rect.lerp(g.trailing, g.minimizedTrailing, morph)!,
-          child: TabHoverHighlight(
-            hovered: _ownTarget!.hovered,
-            child: LiquidActionCircle(action: action),
+          child: LiquidActionCircle(
+            action: action,
+            highlight: _ownTarget!.hovered,
           ),
         ),
       // 5. Touches and semantics: one recognizer for the whole row (spec

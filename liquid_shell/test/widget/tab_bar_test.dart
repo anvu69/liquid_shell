@@ -1,11 +1,13 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/chrome/fit_label.dart';
 import 'package:liquid_shell/src/chrome/glass_tab_bar.dart';
 import 'package:liquid_shell/src/chrome/large_content_viewer.dart';
+import 'package:liquid_shell/src/chrome/tab_bar.dart' show LiquidActionCircle;
 
 import '../helpers/shell_harness.dart';
 
@@ -224,13 +226,13 @@ void main() {
       of: circle,
       matching: find.byType(TabHoverHighlight),
     );
-    bool pressed() =>
-        tester.widgetList<TabHoverHighlight>(press).any((h) => h.hovered.value);
+    // One overlay serves press, keyboard focus and the lens drag.
+    expect(press, findsOneWidget);
+    bool pressed() => tester.widget<TabHoverHighlight>(press).hovered.value;
     expect(pressed(), isFalse);
     final g = await tester.startGesture(tester.getCenter(circle));
-    // The tap recognizer shares the arena (tooltip), so it reports the
-    // down after the press timeout, as ink does.
-    await tester.pump(kPressTimeout);
+    // On touch-down, as native: no wait for the gesture arena.
+    await tester.pump();
     expect(pressed(), isTrue);
     await g.up();
     await tester.pump();
@@ -247,6 +249,41 @@ void main() {
     expect(icon.data.color, glass.tabForeground);
     expect(icon.data.size, glass.tabIconSize);
   });
+
+  for (final position in LiquidTabBarPosition.values) {
+    testWidgets('trailing circle (${position.name}): Tab focuses it with a '
+        'visible highlight; Enter and Space activate it', (tester) async {
+      var pressed = 0;
+      await tester.pumpWidget(
+        _host(
+          position: position,
+          trailing: LiquidTabAction(
+            icon: const Icon(Icons.search),
+            onPressed: () => pressed++,
+            semanticLabel: 'Search',
+          ),
+        ),
+      );
+      final overlay = find.descendant(
+        of: find.byType(LiquidActionCircle),
+        matching: find.byType(TabHoverHighlight),
+      );
+      bool lit() => tester.widget<TabHoverHighlight>(overlay).hovered.value;
+      expect(lit(), isFalse);
+      // The top bar's cells take focus first; the circle comes after them.
+      for (var i = 0; i < 6 && !lit(); i++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+      }
+      expect(lit(), isTrue, reason: 'focus shows the highlight');
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(pressed, 1);
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pump();
+      expect(pressed, 2);
+    });
+  }
 
   testWidgets('minimised: the selected icon only, in a 48 circle; trailing '
       'kept (spec VK-503 §10)', (tester) async {

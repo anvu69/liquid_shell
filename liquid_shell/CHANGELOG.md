@@ -4,6 +4,11 @@
   in the constructor and in `fromColorScheme`, so no glass surface draws a
   colour fringe unless asked (iOS 26.5 shows one only on a touched lens).
   Pass `dispersion: 0.3` for the previous look.
+- **Behaviour change:** with `minimizeOnScroll`, scrolling back up no longer
+  expands the minimized bottom bar, as on iOS 26; a tap on the minimized
+  circle or a selection change does. A `chromeBuilder` sees the same in
+  `LiquidChromeDetails.minimized`: it stays true until the chrome calls
+  `details.expand` or the selected destination changes.
 
 ## 0.1.0-dev.5
 

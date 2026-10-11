@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:liquid_shell/src/chrome/fit_label.dart';
@@ -422,26 +423,64 @@ class _BadgedIcon extends StatelessWidget {
 }
 
 /// A glass circle for a [LiquidTabAction]: square, as tall as its row. A
-/// press shows the white highlight (spec VK-503 §8.8), not ink.
+/// press shows the white highlight (spec VK-503 §8.8), not ink; so do
+/// keyboard focus, a pointer hovering it and [highlight].
+///
+/// It takes keyboard focus; Enter and Space activate it.
 class LiquidActionCircle extends StatefulWidget {
   /// Creates the circle.
-  const LiquidActionCircle({required this.action, super.key});
+  const LiquidActionCircle({required this.action, this.highlight, super.key});
 
   /// The action.
   final LiquidTabAction action;
+
+  /// Lights the circle from outside: the tab lens dragged over it.
+  final ValueListenable<bool>? highlight;
 
   @override
   State<LiquidActionCircle> createState() => _LiquidActionCircleState();
 }
 
 class _LiquidActionCircleState extends State<LiquidActionCircle> {
-  final ValueNotifier<bool> _pressed = ValueNotifier(false);
+  /// The one overlay: pressed, focused, hovered or the outside highlight.
+  final ValueNotifier<bool> _lit = ValueNotifier(false);
+  bool _pressed = false;
+  bool _focused = false;
+  bool _hovered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.highlight?.addListener(_update);
+    _update();
+  }
+
+  @override
+  void didUpdateWidget(LiquidActionCircle oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.highlight != widget.highlight) {
+      oldWidget.highlight?.removeListener(_update);
+      widget.highlight?.addListener(_update);
+      _update();
+    }
+  }
 
   @override
   void dispose() {
-    _pressed.dispose();
+    widget.highlight?.removeListener(_update);
+    _lit.dispose();
     super.dispose();
   }
+
+  void _update() => _lit.value =
+      _pressed || _focused || _hovered || (widget.highlight?.value ?? false);
+
+  void _press(bool down) {
+    _pressed = down;
+    _update();
+  }
+
+  void _activate() => widget.action.onPressed();
 
   @override
   Widget build(BuildContext context) {
@@ -456,24 +495,46 @@ class _LiquidActionCircleState extends State<LiquidActionCircle> {
       child: Tooltip(
         message: action.semanticLabel,
         excludeFromSemantics: true,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown: (_) => _pressed.value = true,
-          onTapUp: (_) => _pressed.value = false,
-          onTapCancel: () => _pressed.value = false,
-          onTap: action.onPressed,
-          child: AspectRatio(
-            aspectRatio: 1,
-            child: TabHoverHighlight(
-              hovered: _pressed,
-              child: LiquidGlass(
-                child: Center(
-                  child: IconTheme.merge(
-                    data: IconThemeData(
-                      size: theme.tabIconSize,
-                      color: theme.tabForeground,
+        child: FocusableActionDetector(
+          mouseCursor: SystemMouseCursors.click,
+          actions: <Type, Action<Intent>>{
+            ActivateIntent: CallbackAction<ActivateIntent>(
+              onInvoke: (_) => _activate(),
+            ),
+            ButtonActivateIntent: CallbackAction<ButtonActivateIntent>(
+              onInvoke: (_) => _activate(),
+            ),
+          },
+          onShowFocusHighlight: (on) {
+            _focused = on;
+            _update();
+          },
+          onShowHoverHighlight: (on) {
+            _hovered = on;
+            _update();
+          },
+          // On touch-down, as native: no wait for the gesture arena.
+          child: Listener(
+            onPointerDown: (_) => _press(true),
+            onPointerUp: (_) => _press(false),
+            onPointerCancel: (_) => _press(false),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: action.onPressed,
+              child: AspectRatio(
+                aspectRatio: 1,
+                child: TabHoverHighlight(
+                  hovered: _lit,
+                  child: LiquidGlass(
+                    child: Center(
+                      child: IconTheme.merge(
+                        data: IconThemeData(
+                          size: theme.tabIconSize,
+                          color: theme.tabForeground,
+                        ),
+                        child: action.icon,
+                      ),
                     ),
-                    child: action.icon,
                   ),
                 ),
               ),

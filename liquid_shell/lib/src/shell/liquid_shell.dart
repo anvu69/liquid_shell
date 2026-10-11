@@ -154,7 +154,9 @@ class LiquidShell extends StatefulWidget {
   final double sidebarWidth;
 
   /// Compact bottom bar only: shrink to the selected tab while content
-  /// scrolls down; expand on scroll up or tap.
+  /// scrolls down. As on iOS 26, scrolling back up does not expand it: a tap
+  /// on the minimized circle or a selection change (a tab change from the
+  /// app included) does.
   final bool minimizeOnScroll;
 
   /// Every user-visible string.
