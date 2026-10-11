@@ -255,18 +255,18 @@ Parameters, where `r` is the refraction spring value (§8.4) and `h` the lens he
 | bezel | **14 pt**: a refracting ring around a flat core. This is passed through the new `LiquidOpticsParams.bezel` override |
 | thickness | `48 · 1.6 · r` pt (native `inputAmount` peaks at −17.5, against the pill's equivalent ≈ −11) |
 | index | 1.5 (unchanged) |
-| dispersion | `0.3 · r`: a faint rainbow rim on the active lens only |
-| tint | white @ **0.85** (light). Dark: `colorScheme.surface` @ 0.85 *(assumption: the dark press was not captured)* |
+| dispersion | `0.6 · r`: the rainbow rim on the active lens only |
+| tint | white @ **0.90** (light). Dark: `colorScheme.surface` @ 0.90 *(assumption: the dark press was not captured; it reads as a near-black disc, to be checked on a device in Task 16)* |
 | rim | white @ **0.35**, rim width **1 pt** (new `LiquidOpticsParams.rimWidth` override) |
 | saturation | 1.1 (unchanged) |
 | blur before the shader | **σ 2 pt** |
 
 *Amended after the Task 8 review (`tab-task-8-review.md`, "Visual fidelity").* The first values (tint transparent, blur 0, bezel `h/2`, dispersion `0.6·r`) gave a clear lens with a rainbow all round. Native's pressed lens (`sbs_press.png` t = 1.00, `native265_rest_vs_pressed_zoom.png`) has a milky core:
 
-- **Tint.** On saturated stripes about 15 % of the backdrop passes (chroma 13 against 88), so the tint is 0.85. That equals the pressed-pill highlight 0.845 (research §4.1).
+- **Tint.** On saturated stripes about 15 % of the backdrop passes (chroma 13 against 88), which suggests 0.85, the pressed-pill highlight 0.845 (research §4.1). At 0.85 the page text behind the lens still showed (core luminance std 4.09 > 4), while native's core is flat and the text hidden. The controller set **0.90** (std 2.7).
 - **Bezel.** The measured refracting ring is 13–14 pt wide, then the core is flat. Hence 14 pt.
 - **Blur.** σ 2 pt is native's selection recipe `gaussianBlur r = 2` (research §2) and the pill's `liquidBlurSigma`. On the light page the interior is flat (L 241–248), with the text behind invisible.
-- **Dispersion.** `0.3·r` is the pill's former always-on value (research §5). Under the veil the fringe stays within native's 10–37 chroma at the top and bottom.
+- **Dispersion.** It was first `0.3·r`, the pill's former always-on value (research §5). Under the 0.90 veil the fringe nearly vanished: p99 chroma 4, against native's 62. Trials at 0.4, 0.5 and 0.6 gave p99 5, 6 and 6, with no pixel above chroma 20. `0.6·r` is the closest. A uniform veil cannot restore native's end rainbow; that needs a veil that thins in the ring, which is a shader change and goes to Task 16.
 
 **Acceptance** for the pressed band golden (Impeller, the same measures as the review):
 
@@ -577,7 +577,7 @@ Frosted and solid get no pocket. It adds three backdrop passes over 148 pt of he
 | `LiquidTabBar`: same constructor. Selection now commits on release with animation; all slots draw `selectedIcon ?? icon`; no ink | **behaviour change** |
 | Minimize no longer expands on forward scroll (§10) | **behaviour change** |
 | `kTopBarGap` 20 → 5.5 (internal), so regular `chromeInsets.top` shrinks by 14.5 | **behaviour change** |
-| `debugTabLensPress` (goldens) and `debugTabTrace` (acceptance traces): `@visibleForTesting` in `src/`, **not exported** (the public-API constraint). The example's goldens import them from `src/` under a scoped `// ignore: implementation_imports` | none |
+| `debugTabLensPress` (goldens) and `debugTabTrace` (acceptance traces): `@visibleForTesting` in `src/`, **not exported** (the public-API constraint). The example's goldens import them from `src/` (the lint does not fire there, so no ignore is needed) | none |
 
 The packages are at `0.1.0-dev.5`. This item ships as `0.1.0-dev.6`, and the CHANGELOG lists every behaviour change (Q22).
 
@@ -631,7 +631,7 @@ The packages are at `0.1.0-dev.5`. This item ships as `0.1.0-dev.6`, and the CHA
 - `lens_layer_test.dart`, with the liquid override on:
   - `LiquidLens` exists only while engaged;
   - it shares the shell's `BackdropGroup` key;
-  - its uniforms carry `bezel = 14 pt`, tint white 0.85, blur σ 2 and rim width 1 at the view scale;
+  - its uniforms carry `bezel = 14 pt`, tint white 0.90, dispersion 0.6·r, blur σ 2 and rim width 1 at the view scale;
   - frosted and solid lens variants appear per tier.
 - `minimize_test.dart`:
   - the collapse starts at 240 ms and ends at the 48 rect (±0.5);
