@@ -50,6 +50,11 @@ LensFrame Function(LensFrame frame)? debugTabLensOverride;
 @visibleForTesting
 double? debugTabLensPress;
 
+/// Acceptance traces (spec VK-503 §17.4): called once per bar tick with
+/// the global lens centre and the frame's scalars. Reset to null after use.
+@visibleForTesting
+void Function(Map<String, double> sample)? debugTabTrace;
+
 /// The Flutter tab bar of spec VK-503. Internal: `LiquidTabBar` and the
 /// shell build it. It fills the width it is given (the row between the
 /// margins) and places its pill per spec §5; gaps pass touches through.
@@ -254,6 +259,27 @@ class _GlassTabBarState extends State<GlassTabBar>
       }
     }
     if (!moving && !minimizing) _ticker?.stop();
+    final trace = debugTabTrace;
+    if (trace != null && m != null && mounted) {
+      final box = context.findRenderObject() as RenderBox?;
+      final f = m.frame;
+      final centre = box == null
+          ? f.lens.center
+          : box.localToGlobal(f.lens.center);
+      trace({
+        't': elapsed.inMicroseconds / 1e6,
+        'x': centre.dx,
+        'y': centre.dy,
+        'w': f.lens.width,
+        'h': f.lens.height,
+        'engage': f.engage,
+        'scale': f.pillScale,
+        'glow': f.glowOpacity,
+        'glowD': f.glowDiameter,
+        'pop': f.popScale,
+        'morph': _minimize.value,
+      });
+    }
     setState(() {});
   }
 
