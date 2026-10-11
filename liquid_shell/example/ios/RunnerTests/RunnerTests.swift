@@ -413,6 +413,25 @@ final class NativeTabsTests: XCTestCase {
     RunLoop.current.run(until: Date().addingTimeInterval(0.5))
   }
 
+  /// Polls until [sample] gives the same value twice in a row (0.1 s
+  /// apart) and [ready] holds for it, or [timeout] passes; returns the last
+  /// sample. UIKit lays out and animates on its own passes, which a slow
+  /// runner stretches past a fixed settle: a wait, not a retry, so a
+  /// layout that never gets there still fails the asserts that follow.
+  private func stable<T: Equatable>(
+    timeout: TimeInterval = 5, _ sample: () throws -> T, until ready: (T) -> Bool = { _ in true }
+  ) rethrows -> T {
+    let deadline = Date().addingTimeInterval(timeout)
+    var last = try sample()
+    while Date() < deadline {
+      RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+      let next = try sample()
+      if next == last, ready(next) { return next }
+      last = next
+    }
+    return last
+  }
+
   /// A shown window of the test host's scene, portrait whatever the
   /// simulator's orientation: in landscape UIKit tiles the sidebar, and the
   /// overlay tests need it over the content. A simulator keeps its last
@@ -863,15 +882,11 @@ final class NativeTabsTests: XCTestCase {
   /// search field. The circle is native; the gap before it is Flutter's.
   func testTheTrailingActionIsTheSeparateCircleAfterThePill() throws {
     let tabs = try installedShell(trailing: true, sizeClass: .compact)
-    // UIKit lays the bar out on its own passes: poll with a deadline, as
-    // `openSidebar` does. Without the circle (iOS 27 with ⌕ in the pill)
-    // the bar is stable and the asserts below fail after the deadline.
-    let deadline = Date().addingTimeInterval(3)
-    var bar = compactBar(tabs)
-    while bar.circle == nil || bar.find != nil, Date() < deadline {
-      RunLoop.current.run(until: Date().addingTimeInterval(0.1))
-      bar = compactBar(tabs)
-    }
+    // UIKit lays the bar out on its own passes: wait until it is drawn
+    // with the circle and holds still, so both hits land on the settled
+    // bar. Without the circle (iOS 27 with ⌕ in the pill) the asserts
+    // below fail after the deadline.
+    let bar = stable({ compactBar(tabs) }, until: { $0.circle != nil && $0.find == nil })
     XCTAssertNil(bar.find, "no Find item inside the pill; \(bar)")
     let inbox = try XCTUnwrap(bar.inbox, "the Inbox label; \(bar)")
     let pill = try XCTUnwrap(bar.pill, "the pill; \(bar)")
@@ -898,7 +913,7 @@ final class NativeTabsTests: XCTestCase {
   /// Drawn: shown, with something shown inside (UIKit keeps an empty
   /// circle container when the search tab sits in the pill). Its
   /// description goes into failure messages.
-  private struct CompactBar: CustomStringConvertible {
+  private struct CompactBar: CustomStringConvertible, Equatable {
     var drawn: [CGRect] = []
     var inbox: CGPoint?
     var pill: CGRect?
@@ -2061,7 +2076,10 @@ extension NativeTabsTests {
       let frame = field.convert(field.bounds, to: root)
       return CGPoint(x: frame.midX, y: frame.midY)
     }
-    // Selected.
+    // Selected: wait until the field is on screen and holds still (a slow
+    // runner is still laying the bar out after the install's settle).
+    let field = tabs.searchBridge.controller.searchBar.searchTextField
+    _ = stable({ field.convert(field.bounds, to: root) }, until: { _ in field.window != nil })
     XCTAssertTrue(isNative(try hit(tabs, try fieldCentre()), tabs), "selected: the field")
     XCTAssertTrue(
       try hit(tabs, CGPoint(x: root.bounds.midX, y: root.bounds.midY)) === tabs.flutter.view,
