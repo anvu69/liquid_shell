@@ -1648,6 +1648,48 @@ void main() {
       expect(_searchStacks(fake, from), isNotEmpty);
       expect(_searchStacks(fake, from), everyElement(['Search']));
     });
+
+    testWidgets('a pop while the search tab is away: the return sends the '
+        'shorter stack, never the kept one', (tester) async {
+      final (fake, _, _) = await _pump(tester, pageBuilder: _homeNavigatorPage);
+      await _pushDetail(tester);
+      fake.emitNative(const LiquidNativeDestinationTapped(0));
+      await tester.pumpAndSettle();
+      _searchNavigator.currentState!.pop();
+      await tester.pumpAndSettle();
+      final from = fake.configs.length;
+      fake.emitNative(const LiquidNativeDestinationTapped(2));
+      await tester.pumpAndSettle();
+      expect(fake.last.selectedIndex, 2);
+      expect(_searchStacks(fake, from), everyElement(['Search']));
+    });
+
+    testWidgets('a push while the search tab is away: the return sends the '
+        'longer stack', (tester) async {
+      final (fake, _, _) = await _pump(tester, pageBuilder: _homeNavigatorPage);
+      fake.emitNative(const LiquidNativeDestinationTapped(0));
+      await tester.pumpAndSettle();
+      _searchNavigator.currentState!
+          .push(
+            MaterialPageRoute<void>(
+              builder: (_) => const LiquidPage(
+                title: 'Hồ Hoàn Kiếm',
+                child: TestPage(label: 'Detail'),
+              ),
+            ),
+          )
+          .ignore();
+      await tester.pumpAndSettle();
+      final from = fake.configs.length;
+      fake.emitNative(const LiquidNativeDestinationTapped(2));
+      await tester.pumpAndSettle();
+      expect(fake.last.selectedIndex, 2);
+      expect(_searchStacks(fake, from), isNotEmpty);
+      expect(
+        _searchStacks(fake, from),
+        everyElement(['Search', 'Hồ Hoàn Kiếm']),
+      );
+    });
   });
 
   group('VK-502: a tab keeps its pages while offstage', () {

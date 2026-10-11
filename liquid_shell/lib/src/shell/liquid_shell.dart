@@ -1450,6 +1450,9 @@ class _LiquidShellState extends State<LiquidShell>
       final interactive = _routeCurrent && !_guardPending;
       final placeholder = widget.search?.placeholder;
       final pageBar = _nativePageBar;
+      // `hidden` and `interactive` are taken now; `_stackFor` reads
+      // `_routeCurrent` and `_covered` after the frame. Both are set before
+      // the frame ends, so they agree: do not "fix" one side.
       _scheduleNativeSend(() {
         if (pageBar) _updatePageStack(selected);
         return nativeConfigFor(
