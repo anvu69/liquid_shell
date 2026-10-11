@@ -4,6 +4,17 @@ import XCTest
 
 @testable import liquid_shell_ios
 
+/// A key, visible window in the test host's scene, showing [root].
+func makeSceneWindow(root: UIViewController) throws -> UIWindow {
+  let scene = try XCTUnwrap(
+    UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+  let window = UIWindow(windowScene: scene)
+  window.frame = scene.coordinateSpace.bounds
+  window.rootViewController = root
+  window.makeKeyAndVisible()
+  return window
+}
+
 /// Unit tests of liquid_shell_ios's native shell: the pure arithmetic, the
 /// install rule, the pass-through hit test (spec P2 §9.3), and the UIKit
 /// shell in a window of the test host. They live in
@@ -1236,11 +1247,7 @@ final class InstallerEngineTests: XCTestCase {
   }
 
   private func window(root: UIViewController) throws -> UIWindow {
-    let scene = try XCTUnwrap(
-      UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
-    let window = UIWindow(windowScene: scene)
-    window.rootViewController = root
-    window.isHidden = false
+    let window = try makeSceneWindow(root: root)
     windows.append(window)
     return window
   }
@@ -2072,5 +2079,463 @@ extension NativeTabsTests {
       XCTAssertEqual(snapshot.placement, "stacked")
     }
     XCTAssertFalse(snapshot.searchActive)
+  }
+}
+
+// MARK: - Native dialogs (spec P3a §9.3)
+
+final class DialogMathTests: XCTestCase {
+  func testReasonsInOrder() {
+    XCTAssertEqual(
+      DialogMath.unavailableReason(
+        disabledByEnvironment: true, requireGlass: true, osAtLeast26: false, hasWindow: false),
+      .disabledByEnvironment)
+    XCTAssertEqual(
+      DialogMath.unavailableReason(
+        disabledByEnvironment: false, requireGlass: true, osAtLeast26: false, hasWindow: false),
+      .osTooOld)
+    XCTAssertEqual(
+      DialogMath.unavailableReason(
+        disabledByEnvironment: false, requireGlass: false, osAtLeast26: false, hasWindow: false),
+      .noWindow)
+    XCTAssertNil(
+      DialogMath.unavailableReason(
+        disabledByEnvironment: false, requireGlass: false, osAtLeast26: false, hasWindow: true))
+    XCTAssertNil(
+      DialogMath.unavailableReason(
+        disabledByEnvironment: false, requireGlass: true, osAtLeast26: true, hasWindow: true))
+  }
+
+  func testSourceRectIsTheAnchorClippedToTheView() {
+    let bounds = CGRect(x: 0, y: 0, width: 400, height: 800)
+    XCTAssertEqual(
+      DialogMath.sourceRect(anchor: CGRect(x: 10, y: 20, width: 80, height: 44), in: bounds),
+      CGRect(x: 10, y: 20, width: 80, height: 44))
+    XCTAssertEqual(
+      DialogMath.sourceRect(anchor: CGRect(x: 380, y: 780, width: 80, height: 44), in: bounds),
+      CGRect(x: 380, y: 780, width: 20, height: 20))
+    // A point still points: at least 1×1.
+    XCTAssertEqual(
+      DialogMath.sourceRect(anchor: CGRect(x: 50, y: 60, width: 0, height: 0), in: bounds),
+      CGRect(x: 50, y: 60, width: 1, height: 1))
+  }
+
+  func testUnusableAnchorsAreNil() {
+    let bounds = CGRect(x: 0, y: 0, width: 400, height: 800)
+    XCTAssertNil(DialogMath.sourceRect(anchor: nil, in: bounds))
+    XCTAssertNil(
+      DialogMath.sourceRect(anchor: CGRect(x: 500, y: 900, width: 10, height: 10), in: bounds))
+    XCTAssertNil(
+      DialogMath.sourceRect(
+        anchor: CGRect(x: CGFloat.nan, y: 0, width: 10, height: 10), in: bounds))
+    XCTAssertNil(
+      DialogMath.sourceRect(
+        anchor: CGRect(x: 0, y: 0, width: CGFloat.infinity, height: 10), in: bounds))
+  }
+
+  func testPreferredIndexMustNameAnAction() {
+    XCTAssertEqual(DialogMath.preferredIndex(1, count: 2), 1)
+    XCTAssertNil(DialogMath.preferredIndex(2, count: 2))
+    XCTAssertNil(DialogMath.preferredIndex(-1, count: 2))
+    XCTAssertNil(DialogMath.preferredIndex(nil, count: 2))
+  }
+
+  func testACompletionAnswersOnce() {
+    var answers: [NativeDialogResult] = []
+    let done = DialogCompletion { answers.append($0) }
+    XCTAssertFalse(done.isFinished)
+    done.finish(.chose(1))
+    done.finish(.dismissed())
+    done.finish(.unavailable(.refused))
+    XCTAssertTrue(done.isFinished)
+    XCTAssertEqual(answers, [.chose(1)])
+  }
+}
+
+/// The presenter in a real window of the test host. A plain view controller
+/// stands in for the Flutter one: the presenter only reads its view and window.
+final class NativeDialogPresenterTests: XCTestCase {
+  private var windows: [UIWindow] = []
+  private var root: UIViewController!
+
+  final class Answers {
+    var all: [NativeDialogResult] = []
+  }
+
+  /// A root that never presents: UIKit's refusal, made deterministic.
+  final class RefusingController: UIViewController {
+    override func present(
+      _ viewControllerToPresent: UIViewController, animated flag: Bool,
+      completion: (() -> Void)? = nil
+    ) {}
+  }
+
+  override func setUpWithError() throws {
+    root = try window().rootViewController
+  }
+
+  override func tearDown() {
+    for window in windows {
+      window.rootViewController?.presentedViewController?.dismiss(animated: false)
+      window.isHidden = true
+      window.rootViewController = nil
+    }
+    windows = []
+    root = nil
+    super.tearDown()
+  }
+
+  private func window(root: UIViewController = UIViewController()) throws -> UIWindow {
+    let window = try makeSceneWindow(root: root)
+    windows.append(window)
+    return window
+  }
+
+  private func settle(_ seconds: TimeInterval = 0.8) {
+    RunLoop.current.run(until: Date().addingTimeInterval(seconds))
+  }
+
+  private func presenter(
+    os26: Bool = true, off: Bool = false, flutter: UIViewController? = nil
+  ) -> NativeDialogPresenter {
+    let fallback = root
+    return NativeDialogPresenter(
+      flutterViewController: { flutter ?? fallback }, osAtLeast26: { os26 },
+      disabledByEnvironment: { off })
+  }
+
+  private func request(
+    kind: NativeDialogKind = .alert, anchor: NativeRect? = nil, requireGlass: Bool = true,
+    rtl: Bool = false
+  ) -> NativeDialogRequest {
+    NativeDialogRequest(
+      kind: kind, title: "Discard changes?", message: "Your edits will be lost.",
+      actions: [
+        NativeDialogAction(label: "Keep editing", style: .cancel, enabled: true),
+        NativeDialogAction(label: "Discard", style: .destructive, enabled: true),
+        NativeDialogAction(label: "Later", style: .standard, enabled: false),
+      ],
+      preferredIndex: kind == .alert ? 1 : nil, anchor: anchor, tintArgb: 0xFF00_7AFF,
+      dark: true, rtl: rtl, requireGlass: requireGlass)
+  }
+
+  private func present(
+    _ presenter: NativeDialogPresenter, _ request: NativeDialogRequest
+  ) -> Answers {
+    let answers = Answers()
+    presenter.present(request: request) { result in
+      if case .success(let value) = result { answers.all.append(value) }
+    }
+    return answers
+  }
+
+  func testAnAlertCarriesEveryField() throws {
+    let answers = present(presenter(), request())
+    settle()
+    let alert = try XCTUnwrap(root.presentedViewController as? UIAlertController)
+    XCTAssertEqual(alert.preferredStyle, .alert)
+    XCTAssertEqual(alert.title, "Discard changes?")
+    XCTAssertEqual(alert.message, "Your edits will be lost.")
+    XCTAssertEqual(alert.actions.map(\.title), ["Keep editing", "Discard", "Later"])
+    XCTAssertEqual(alert.actions.map(\.style), [.cancel, .destructive, .default])
+    XCTAssertEqual(alert.actions.map(\.isEnabled), [true, true, false])
+    XCTAssertTrue(alert.preferredAction === alert.actions[1])
+    XCTAssertEqual(alert.overrideUserInterfaceStyle, .dark)
+    XCTAssertEqual(alert.view.tintColor, UIColor(argb: 0xFF00_7AFF))
+    XCTAssertTrue(answers.all.isEmpty)
+  }
+
+  func testAnActionSheetPointsAtItsAnchorInTheFlutterView() throws {
+    _ = present(
+      presenter(),
+      request(kind: .actionSheet, anchor: NativeRect(x: 100, y: 200, width: 80, height: 44)))
+    settle()
+    let alert = try XCTUnwrap(root.presentedViewController as? UIAlertController)
+    XCTAssertEqual(alert.preferredStyle, .actionSheet)
+    XCTAssertNil(alert.preferredAction)
+    let popover = try XCTUnwrap(alert.popoverPresentationController)
+    XCTAssertTrue(popover.sourceView === root.view)
+    XCTAssertEqual(popover.sourceRect, CGRect(x: 100, y: 200, width: 80, height: 44))
+  }
+
+  func testAnActionSheetWithoutAnAnchorUsesTheCentreWithoutAnArrow() throws {
+    _ = present(presenter(), request(kind: .actionSheet))
+    settle()
+    let alert = try XCTUnwrap(root.presentedViewController as? UIAlertController)
+    let popover = try XCTUnwrap(alert.popoverPresentationController)
+    XCTAssertEqual(popover.permittedArrowDirections, [])
+    XCTAssertEqual(popover.sourceRect.midX, root.view.bounds.midX, accuracy: 0.5)
+    XCTAssertEqual(popover.sourceRect.midY, root.view.bounds.midY, accuracy: 0.5)
+  }
+
+  func testUnavailableReasonsShowNothing() {
+    let off = present(presenter(off: true), request())
+    let old = present(presenter(os26: false), request())
+    let hidden = present(presenter(flutter: UIViewController()), request())
+    settle()
+    XCTAssertEqual(off.all, [.unavailable(.disabledByEnvironment)])
+    XCTAssertEqual(old.all, [.unavailable(.osTooOld)])
+    XCTAssertEqual(hidden.all, [.unavailable(.noWindow)])
+    XCTAssertNil(root.presentedViewController)
+  }
+
+  /// A Flutter view that is loaded but not in a window (add-to-app before
+  /// showing): answered at once, exactly once, so Dart falls back.
+  func testALoadedViewOutsideAWindowAnswersNoWindowOnce() {
+    let detached = UIViewController()
+    detached.loadViewIfNeeded()
+    let answers = present(presenter(flutter: detached), request())
+    XCTAssertEqual(answers.all, [.unavailable(.noWindow)])
+    settle()
+    XCTAssertEqual(answers.all, [.unavailable(.noWindow)])
+    XCTAssertNil(root.presentedViewController)
+  }
+
+  func testWithoutRequiringGlassAnOldOSPresents() throws {
+    let answers = present(presenter(os26: false), request(requireGlass: false))
+    settle()
+    XCTAssertNotNil(root.presentedViewController as? UIAlertController)
+    XCTAssertTrue(answers.all.isEmpty)
+  }
+
+  func testRespondAnswersOnceAndDismisses() throws {
+    let dialogs = presenter()
+    let answers = present(dialogs, request())
+    settle()
+    XCTAssertEqual(try dialogs.debugCurrent()?.labels, ["Keep editing", "Discard", "Later"])
+    try dialogs.debugRespond(actionIndex: 1)
+    settle()
+    try dialogs.debugRespond(actionIndex: 0)
+    settle()
+    XCTAssertEqual(answers.all, [.chose(1)])
+    XCTAssertNil(root.presentedViewController)
+    XCTAssertNil(try dialogs.debugCurrent())
+  }
+
+  func testRespondMinusOneIsDismissed() throws {
+    let dialogs = presenter()
+    let answers = present(dialogs, request())
+    settle()
+    try dialogs.debugRespond(actionIndex: -1)
+    settle()
+    XCTAssertEqual(answers.all, [.dismissed()])
+  }
+
+  func testADismissalBySomeoneElseAnswersDismissedOnce() {
+    // Present and dismiss each in its own pool and wait on the run loop,
+    // not in a main-queue block: as in an app, where each is its own
+    // run-loop turn. Otherwise iOS 27 keeps the alert alive (in the test's
+    // pool, or behind the blocked main queue) until the test returns.
+    let answers = autoreleasepool { present(presenter(), request()) }
+    settle()
+    autoreleasepool { root.dismiss(animated: false) }
+    // The alert is released once UIKit lets go of it.
+    settle()
+    XCTAssertEqual(answers.all, [.dismissed()])
+  }
+
+  func testASecondDialogWaitsForTheFirstToLeave() throws {
+    let dialogs = presenter()
+    _ = present(dialogs, request())
+    settle()
+    let first = try XCTUnwrap(root.presentedViewController as? UIAlertController)
+    // As when an app answers the first alert with a second one: UIKit is
+    // still dismissing the first when the second request arrives.
+    first.dismiss(animated: true)
+    let second = present(dialogs, request(kind: .actionSheet))
+    settle(1.5)
+    let shown = try XCTUnwrap(root.presentedViewController as? UIAlertController)
+    XCTAssertEqual(shown.preferredStyle, .actionSheet)
+    XCTAssertTrue(second.all.isEmpty)
+  }
+
+  /// UIKit may decline to queue the wait (`animate(alongsideTransition:
+  /// completion:)` returns false) and then never runs it. The presenter
+  /// still asks the user: it retries after the transition, and never
+  /// answers "dismissed" for a dialog nobody saw. Only the first wait is
+  /// declined; later ones are UIKit's, so the outcome does not depend on
+  /// the runner's speed.
+  func testAWaitUIKitDoesNotQueueRetriesAfterTheTransition() throws {
+    var declined = 0
+    let dialogs = NativeDialogPresenter(
+      flutterViewController: { [root] in root }, osAtLeast26: { true },
+      disabledByEnvironment: { false },
+      afterTransition: { coordinator, then in
+        guard declined > 0 else {
+          declined += 1
+          return false
+        }
+        return coordinator.animate(alongsideTransition: nil) { _ in then() }
+      })
+    _ = present(dialogs, request())
+    settle()
+    let first = try XCTUnwrap(root.presentedViewController as? UIAlertController)
+    first.dismiss(animated: true)
+    let second = autoreleasepool { present(dialogs, request(kind: .actionSheet)) }
+    settle(1.5)
+    XCTAssertEqual(declined, 1, "the second request met the first one's transition")
+    XCTAssertTrue(second.all.isEmpty, "answered \(second.all) without asking the user")
+    let shown = try XCTUnwrap(root.presentedViewController as? UIAlertController)
+    XCTAssertEqual(shown.preferredStyle, .actionSheet)
+  }
+
+  /// `rtl: true` lays the alert out right to left (iOS 17+: a trait
+  /// override; earlier: the view's semantic content attribute).
+  func testAnRtlRequestLaysTheAlertOutRightToLeft() throws {
+    _ = present(presenter(), request(rtl: true))
+    settle()
+    let alert = try XCTUnwrap(root.presentedViewController as? UIAlertController)
+    XCTAssertEqual(alert.traitCollection.layoutDirection, .rightToLeft)
+    XCTAssertEqual(root.traitCollection.layoutDirection, .leftToRight)
+  }
+
+  func testARefusedPresentationIsUnavailableSoDartFallsBack() throws {
+    let refusing = RefusingController()
+    _ = try window(root: refusing)
+    let answers = present(presenter(flutter: refusing), request())
+    settle()
+    XCTAssertEqual(answers.all, [.unavailable(.refused)])
+  }
+
+  func testEachEngineUsesItsOwnWindow() throws {
+    let other = try window().rootViewController!
+    _ = present(presenter(flutter: other), request())
+    settle()
+    XCTAssertNotNil(other.presentedViewController as? UIAlertController)
+    XCTAssertNil(root.presentedViewController)
+  }
+
+  func testDismissAllAnswersDismissed() {
+    let dialogs = presenter()
+    let answers = present(dialogs, request())
+    settle()
+    dialogs.dismissAll()
+    settle()
+    XCTAssertEqual(answers.all, [.dismissed()])
+    XCTAssertNil(root.presentedViewController)
+  }
+
+  /// Two dialogs pending at once (two calls in a row stack the second on
+  /// the first): the engine's detach answers both, once each.
+  func testDismissAllAnswersEveryPendingDialogOnce() throws {
+    let dialogs = presenter()
+    let first = present(dialogs, request())
+    settle()
+    let second = present(dialogs, request())
+    settle()
+    XCTAssertNotNil(
+      root.presentedViewController?.presentedViewController as? UIAlertController,
+      "the second alert stacks on the first")
+    dialogs.dismissAll()
+    settle()
+    XCTAssertEqual(first.all, [.dismissed()])
+    XCTAssertEqual(second.all, [.dismissed()])
+    XCTAssertNil(root.presentedViewController)
+  }
+
+  /// A request still waiting for a transition when the engine detaches is
+  /// answered then, and never shown.
+  func testDismissAllAnswersARequestWaitingForATransition() throws {
+    let dialogs = presenter()
+    _ = present(dialogs, request())
+    settle()
+    let first = try XCTUnwrap(root.presentedViewController as? UIAlertController)
+    first.dismiss(animated: true)
+    let waiting = present(dialogs, request(kind: .actionSheet))
+    dialogs.dismissAll()
+    XCTAssertEqual(waiting.all, [.dismissed()])
+    settle(1.5)
+    XCTAssertEqual(waiting.all, [.dismissed()])
+    XCTAssertNil(root.presentedViewController)
+  }
+
+  /// The scene closes while an alert is up: its window lets go of the
+  /// Flutter view controller, and UIKit of the alert, unanswered. Dart's
+  /// future still ends, once.
+  func testAnAlertWhoseSceneClosesAnswersDismissedOnce() throws {
+    var host: UIViewController? = UIViewController()
+    var answers = Answers()
+    try autoreleasepool {
+      let window = try self.window(root: host!)
+      let dialogs = NativeDialogPresenter(
+        flutterViewController: { [weak host] in host }, osAtLeast26: { true },
+        disabledByEnvironment: { false })
+      answers = present(dialogs, request())
+      settle()
+      XCTAssertNotNil(host?.presentedViewController as? UIAlertController)
+      XCTAssertTrue(answers.all.isEmpty)
+      window.isHidden = true
+      window.rootViewController = nil
+      windows.removeAll { $0 === window }
+      host = nil
+    }
+    settle()
+    XCTAssertEqual(answers.all, [.dismissed()])
+    settle()
+    XCTAssertEqual(answers.all, [.dismissed()])
+  }
+
+  /// UIKit tells the popover's delegate when a tap outside closes it.
+  func testAPopoverClosedByATapOutsideAnswersDismissedOnce() throws {
+    let answers = present(presenter(), request(kind: .actionSheet))
+    settle()
+    let alert = try XCTUnwrap(root.presentedViewController as? UIAlertController)
+    let popover = try XCTUnwrap(alert.popoverPresentationController)
+    let delegate = try XCTUnwrap(popover.delegate)
+    delegate.presentationControllerDidDismiss?(popover)
+    delegate.presentationControllerDidDismiss?(popover)
+    XCTAssertEqual(answers.all, [.dismissed()])
+  }
+
+  func testTopmostOfAControllerPresentingNothingIsItself() {
+    let base = UIViewController()
+    XCTAssertTrue(NativeDialogPresenter.topmost(from: base) === base)
+    XCTAssertNil(NativeDialogPresenter.topmost(from: nil))
+  }
+}
+
+/// The plugin's dialog wiring on a real engine (spec P3a §5.4): `register`
+/// presents from the registrar's Flutter view controller, and
+/// `detachFromEngine` (the engine going away) answers what is still shown.
+final class PluginDialogWiringTests: XCTestCase {
+  func testDetachingFromTheEngineAnswersAnOpenAlertDismissed() throws {
+    let engine = FlutterEngine(name: "dialogs", project: nil, allowHeadlessExecution: true)
+    XCTAssertTrue(engine.run())
+    addTeardownBlock { engine.destroyContext() }
+    let registrar = try XCTUnwrap(engine.registrar(forPlugin: LiquidShellPlugin.registrarKey))
+    LiquidShellPlugin.register(with: registrar)
+    let plugin = try XCTUnwrap(
+      engine.valuePublished(byPlugin: LiquidShellPlugin.registrarKey) as? LiquidShellPlugin)
+    let flutter = FlutterViewController(engine: engine, nibName: nil, bundle: nil)
+    let window = try makeSceneWindow(root: flutter)
+    addTeardownBlock {
+      window.isHidden = true
+      window.rootViewController = nil
+    }
+
+    var answers: [NativeDialogResult] = []
+    try XCTUnwrap(plugin.dialogs).present(
+      request: NativeDialogRequest(
+        kind: .alert, title: "Discard changes?", message: nil,
+        actions: [NativeDialogAction(label: "Discard", style: .destructive, enabled: true)],
+        preferredIndex: nil, anchor: nil, tintArgb: 0xFF00_7AFF, dark: false, rtl: false,
+        requireGlass: false)
+    ) { result in
+      if case .success(let value) = result { answers.append(value) }
+    }
+    waitUntil("the alert is shown") { flutter.presentedViewController is UIAlertController }
+    XCTAssertTrue(answers.isEmpty)
+
+    plugin.detachFromEngine(for: registrar)
+    waitUntil("the alert is gone") { flutter.presentedViewController == nil }
+    XCTAssertEqual(answers, [.dismissed()])
+  }
+
+  /// Polls [condition] instead of waiting a fixed time: slow CI runners.
+  private func waitUntil(_ what: String, _ condition: @escaping () -> Bool) {
+    let met = XCTNSPredicateExpectation(
+      predicate: NSPredicate { _, _ in condition() }, object: nil)
+    met.expectationDescription = what
+    wait(for: [met], timeout: 10)
   }
 }

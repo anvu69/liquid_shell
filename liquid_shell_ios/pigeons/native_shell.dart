@@ -242,3 +242,103 @@ abstract class NativeShellFlutterApi {
   /// pop-to-root); native did not pop.
   void onPopToPage(int tab, int index);
 }
+
+// --- Native dialogs (spec P3a §6) ------------------------------------------
+
+/// What a native dialog is.
+enum NativeDialogKind { alert, actionSheet }
+
+/// How an action looks (`UIAlertAction.Style`).
+enum NativeDialogActionStyle { standard, cancel, destructive }
+
+/// How a dialog ended.
+enum NativeDialogOutcome { chose, dismissed, unavailable }
+
+/// Why a dialog was not shown (spec P3a §5.2).
+enum NativeDialogUnavailableReason {
+  osTooOld,
+  noWindow,
+  refused,
+  disabledByEnvironment,
+}
+
+class NativeDialogAction {
+  NativeDialogAction({
+    required this.label,
+    required this.style,
+    required this.enabled,
+  });
+
+  String label;
+  NativeDialogActionStyle style;
+  bool enabled;
+}
+
+class NativeDialogRequest {
+  NativeDialogRequest({
+    required this.kind,
+    required this.actions,
+    required this.tintArgb,
+    required this.dark,
+    required this.rtl,
+    required this.requireGlass,
+    this.title,
+    this.message,
+    this.preferredIndex,
+    this.anchor,
+  });
+
+  NativeDialogKind kind;
+  String? title;
+  String? message;
+  List<NativeDialogAction> actions;
+  int? preferredIndex;
+  NativeRect? anchor;
+  int tintArgb;
+  bool dark;
+  bool rtl;
+  bool requireGlass;
+}
+
+class NativeDialogResult {
+  NativeDialogResult({required this.outcome, this.actionIndex, this.reason});
+
+  NativeDialogOutcome outcome;
+  int? actionIndex;
+  NativeDialogUnavailableReason? reason;
+}
+
+/// Test-only: the dialog on screen.
+class NativeDialogSnapshot {
+  NativeDialogSnapshot({
+    required this.kind,
+    required this.labels,
+    this.title,
+    this.message,
+    this.preferredIndex,
+    this.sourceRect,
+  });
+
+  NativeDialogKind kind;
+  String? title;
+  String? message;
+  List<String> labels;
+  int? preferredIndex;
+  NativeRect? sourceRect;
+}
+
+/// Dart → native dialogs.
+@HostApi()
+abstract class NativeDialogHostApi {
+  /// Presents [request]; answers when it closes, or at once when it
+  /// cannot be shown.
+  @async
+  NativeDialogResult present(NativeDialogRequest request);
+
+  /// Debug builds only: the dialog this engine shows, or null.
+  NativeDialogSnapshot? debugCurrent();
+
+  /// Debug builds only: closes the dialog this engine shows as if
+  /// [actionIndex] were tapped; -1 dismisses it without a choice.
+  void debugRespond(int actionIndex);
+}

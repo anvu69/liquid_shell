@@ -14,6 +14,11 @@
   its containers are background, so touches there reach Flutter.
 - A scene reconnect carries the search text to the new shell.
 
+## 0.1.0-dev.3
+
+- Native alerts and action sheets presented from the engine's own window
+  (`NativeDialogPresenter`), over the Pigeon channel.
+
 ## 0.1.0-dev.2
 
 - The native iOS 26 shell on iPhone and iPad: a `UITabBarController` in

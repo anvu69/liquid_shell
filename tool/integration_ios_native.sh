@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Native iOS 26 shell and search tab on simulators (spec P2 §9.4, P3b §12.5).
+# Native iOS 26 shell, native dialogs and the search tab on simulators
+# (specs P2 §9.4, P3a §9.4, P3b §12.5).
 #
 #   tool/integration_ios_native.sh
 #
@@ -9,19 +10,22 @@
 #                 false when it must not (default
 #                 "iPad Air 11-inch (M4)=true;iPhone 17 Pro=true").
 #                 A 36-character UDID works in place of a name.
-# NATIVE_TESTS    space-separated integration targets (default:
-#                 native_shell_test.dart and native_search_test.dart).
+# NATIVE_TARGETS  space-separated integration tests to drive on each device
+#                 (default "native_shell_test.dart native_dialogs_test.dart
+#                 native_search_test.dart").
 # FLUTTER         flutter command (default: flutter).
 # IOS_DRIVE_TIMEOUT  seconds one `flutter drive` may run (default 1200).
 #
-# Stall guard, as in tool/integration_ios.sh: a drive that outlives
-# IOS_DRIVE_TIMEOUT is stopped (tool/with_timeout.sh), the simulator is
-# restarted and the drive is retried once. A test failure is never retried.
+# Stall guard, as in tool/integration_ios.sh: a drive (one target on one
+# device) that outlives IOS_DRIVE_TIMEOUT is stopped (tool/with_timeout.sh),
+# the simulator is restarted and that drive is retried once. A test failure
+# is never retried.
 #
-# Screenshots land in liquid_shell/example/build/integration_screenshots/
-# (native_<run>_home.png, native_<run>_sidebar.png): the doc images of the
-# native chrome, which goldens cannot draw (spec P2 §9.5); and
-# search_<run>_<phase>.png, one per phase of the search tab (spec P3b §12.7).
+# Screenshots land in liquid_shell/example/build/integration_screenshots/:
+# native_<run>_*.png (home, sidebar, guard, cases), dialogs_<run>_*.png
+# (alert, sheet, alert_flutter) and search_<run>_*.png (one per phase of the
+# search tab). They are the doc images of the native chrome and dialogs,
+# which goldens cannot draw (spec P2 §9.5).
 set -euo pipefail
 tool_dir=$(cd "$(dirname "$0")" && pwd)
 cd "$tool_dir/../liquid_shell/example"
@@ -29,7 +33,7 @@ FLUTTER=${FLUTTER:-flutter}
 IOS_DRIVE_TIMEOUT=${IOS_DRIVE_TIMEOUT:-1200}
 IOS_RUNTIME=${IOS_RUNTIME-iOS 26.5}
 NATIVE_DEVICES=${NATIVE_DEVICES:-iPad Air 11-inch (M4)=true;iPhone 17 Pro=true}
-NATIVE_TESTS=${NATIVE_TESTS:-integration_test/native_shell_test.dart integration_test/native_search_test.dart}
+NATIVE_TARGETS=${NATIVE_TARGETS:-native_shell_test.dart native_dialogs_test.dart native_search_test.dart}
 
 udid_of() {
   local name=$1
@@ -49,7 +53,7 @@ drive() {
   # shellcheck disable=SC2086 # FLUTTER may be "fvm flutter"
   "$tool_dir/with_timeout.sh" "$IOS_DRIVE_TIMEOUT" $FLUTTER drive \
     --driver=test_driver/integration_test.dart \
-    --target="$target" \
+    --target="integration_test/$target" \
     -d "$udid" \
     --dart-define=EXPECT_NATIVE="$expect" \
     --dart-define=RUN_NAME="$run"
@@ -67,8 +71,8 @@ for pair in "${pairs[@]}"; do
   run=${name//[^A-Za-z0-9]/_}
   echo "▸ $name ($udid), native expected: $expect"
   boot "$udid"
-  for target in $NATIVE_TESTS; do
-    echo "  ▸ $target"
+  for target in $NATIVE_TARGETS; do
+    echo "▸ $name: $target"
     status=0
     drive "$udid" "$expect" "$run" "$target" || status=$?
     if [ "$status" -eq 124 ]; then

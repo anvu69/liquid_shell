@@ -1,4 +1,5 @@
 import 'package:liquid_shell_platform_interface/src/native_chrome.dart';
+import 'package:liquid_shell_platform_interface/src/native_dialog.dart';
 import 'package:liquid_shell_platform_interface/src/platform_signals.dart';
 import 'package:liquid_shell_platform_interface/src/window_controls.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
@@ -68,6 +69,19 @@ abstract class LiquidShellPlatform extends PlatformInterface {
   /// Native taps, native shell changes and window-control changes, as a
   /// broadcast stream. Default: no events.
   Stream<LiquidNativeEvent> get nativeEvents => const Stream.empty();
+
+  /// Whether this platform may present native dialogs. Read synchronously,
+  /// so a caller without them draws its own at once. Default: false.
+  bool get supportsNativeDialogs => false;
+
+  /// Presents [request] natively and completes when it closes, or at once
+  /// with [LiquidNativeDialogUnavailable]. Default: unavailable
+  /// ([LiquidNativeDialogUnavailableReason.unsupportedPlatform]).
+  Future<LiquidNativeDialogResult> presentNativeDialog(
+    LiquidNativeDialogRequest request,
+  ) async => const LiquidNativeDialogUnavailable(
+    LiquidNativeDialogUnavailableReason.unsupportedPlatform,
+  );
 }
 
 class _NoSignalLiquidShellPlatform extends LiquidShellPlatform {

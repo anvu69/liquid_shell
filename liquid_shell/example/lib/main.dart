@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:liquid_shell_example/cases/cases.dart';
+import 'package:liquid_shell_example/cases/native_alerts.dart';
 import 'package:liquid_shell_example/cases/search.dart';
 import 'package:liquid_shell_example/support/drawn_by_flutter.dart';
 import 'package:liquid_shell_example/support/launch_demo.dart';
@@ -25,11 +26,13 @@ const kExampleSeed = Color(0xFF3D5AFE);
 
 /// The example app: a list of cases, each opening one screen.
 class ExampleApp extends StatelessWidget {
-  /// Creates the app. [demo] opens one case directly (UI tests): `search`,
-  /// `search-guarded`.
+  /// Creates the app. [demo] opens one case directly (UI tests): `search`
+  /// and `search-guarded` open the search case; `alert` and `sheet` open
+  /// the alerts case and run that demo (spec P3a §9.4).
   const ExampleApp({this.demo, super.key});
 
-  /// The case to open at launch, or null for the case list.
+  /// The demo to open at launch, or null for the case list. Any other
+  /// value shows the case list too.
   final String? demo;
 
   @override
@@ -37,10 +40,12 @@ class ExampleApp extends StatelessWidget {
     final home = switch (demo) {
       'search' => const SearchCase(),
       'search-guarded' => const SearchCase(guardDetails: true),
+      'alert' || 'sheet' => NativeAlertsCase(autorun: demo),
       _ => const CaseList(),
     };
-    // XCUITest reads Flutter's rows through the accessibility tree.
-    if (demo != null) {
+    // XCUITest reads the search case's Flutter rows through the
+    // accessibility tree (the alerts are native).
+    if (home is SearchCase) {
       _demoSemantics ??= SemanticsBinding.instance.ensureSemantics();
     }
     return MaterialApp(

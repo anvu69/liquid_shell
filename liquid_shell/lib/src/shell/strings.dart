@@ -18,6 +18,7 @@ class LiquidShellStrings {
     this.searchPlaceholder = 'Search',
     this.cancelSearch = 'Cancel search',
     this.back = 'Back',
+    this.dismiss = 'Dismiss',
   });
 
   /// Tooltip and semantics of the show-sidebar toggle.
@@ -48,6 +49,10 @@ class LiquidShellStrings {
   /// Semantics and tooltip of `LiquidBackButton`.
   final String back;
 
+  /// The barrier label of a Flutter action sheet (spec P3a §4.3): screen
+  /// readers offer it to close the sheet.
+  final String dismiss;
+
   /// The default [badgeCount]: `'3 new'`.
   static String defaultBadgeCount(int count) => '$count new';
 
@@ -65,7 +70,8 @@ class LiquidShellStrings {
       other.badgeCount == badgeCount &&
       other.searchPlaceholder == searchPlaceholder &&
       other.cancelSearch == cancelSearch &&
-      other.back == back;
+      other.back == back &&
+      other.dismiss == dismiss;
 
   @override
   int get hashCode => Object.hash(
@@ -78,5 +84,6 @@ class LiquidShellStrings {
     searchPlaceholder,
     cancelSearch,
     back,
+    dismiss,
   );
 }

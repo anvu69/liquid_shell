@@ -215,6 +215,34 @@ enum NativeTapTarget: Int, CaseIterable {
   case back = 5
 }
 
+/// What a native dialog is.
+enum NativeDialogKind: Int, CaseIterable {
+  case alert = 0
+  case actionSheet = 1
+}
+
+/// How an action looks (`UIAlertAction.Style`).
+enum NativeDialogActionStyle: Int, CaseIterable {
+  case standard = 0
+  case cancel = 1
+  case destructive = 2
+}
+
+/// How a dialog ended.
+enum NativeDialogOutcome: Int, CaseIterable {
+  case chose = 0
+  case dismissed = 1
+  case unavailable = 2
+}
+
+/// Why a dialog was not shown (spec P3a §5.2).
+enum NativeDialogUnavailableReason: Int, CaseIterable {
+  case osTooOld = 0
+  case noWindow = 1
+  case refused = 2
+  case disabledByEnvironment = 3
+}
+
 /// What `attach()` returns and `onStateChanged` pushes.
 ///
 /// Generated class from Pigeon that represents data sent in messages.
@@ -746,6 +774,238 @@ struct NativeWindowControls: Hashable, CustomStringConvertible {
   }
 }
 
+/// Generated class from Pigeon that represents data sent in messages.
+struct NativeDialogAction: Hashable, CustomStringConvertible {
+  var label: String
+  var style: NativeDialogActionStyle
+  var enabled: Bool
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> NativeDialogAction? {
+    let label = pigeonVar_list[0] as! String
+    let style = pigeonVar_list[1] as! NativeDialogActionStyle
+    let enabled = pigeonVar_list[2] as! Bool
+
+    return NativeDialogAction(
+      label: label,
+      style: style,
+      enabled: enabled
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      label,
+      style,
+      enabled,
+    ]
+  }
+  static func == (lhs: NativeDialogAction, rhs: NativeDialogAction) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return NativeShellApiPigeonInternal.deepEquals(lhs.label, rhs.label) && NativeShellApiPigeonInternal.deepEquals(lhs.style, rhs.style) && NativeShellApiPigeonInternal.deepEquals(lhs.enabled, rhs.enabled)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("NativeDialogAction")
+    NativeShellApiPigeonInternal.deepHash(value: label, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: style, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: enabled, hasher: &hasher)
+  }
+
+  public var description: String {
+    return "NativeDialogAction(label: \(String(describing: label)), style: \(String(describing: style)), enabled: \(String(describing: enabled)))"
+  }
+}
+
+/// Generated class from Pigeon that represents data sent in messages.
+struct NativeDialogRequest: Hashable, CustomStringConvertible {
+  var kind: NativeDialogKind
+  var title: String? = nil
+  var message: String? = nil
+  var actions: [NativeDialogAction]
+  var preferredIndex: Int64? = nil
+  var anchor: NativeRect? = nil
+  var tintArgb: Int64
+  var dark: Bool
+  var rtl: Bool
+  var requireGlass: Bool
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> NativeDialogRequest? {
+    let kind = pigeonVar_list[0] as! NativeDialogKind
+    let title: String? = nilOrValue(pigeonVar_list[1])
+    let message: String? = nilOrValue(pigeonVar_list[2])
+    let actions = pigeonVar_list[3] as! [NativeDialogAction]
+    let preferredIndex: Int64? = nilOrValue(pigeonVar_list[4])
+    let anchor: NativeRect? = nilOrValue(pigeonVar_list[5])
+    let tintArgb = pigeonVar_list[6] as! Int64
+    let dark = pigeonVar_list[7] as! Bool
+    let rtl = pigeonVar_list[8] as! Bool
+    let requireGlass = pigeonVar_list[9] as! Bool
+
+    return NativeDialogRequest(
+      kind: kind,
+      title: title,
+      message: message,
+      actions: actions,
+      preferredIndex: preferredIndex,
+      anchor: anchor,
+      tintArgb: tintArgb,
+      dark: dark,
+      rtl: rtl,
+      requireGlass: requireGlass
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      kind,
+      title,
+      message,
+      actions,
+      preferredIndex,
+      anchor,
+      tintArgb,
+      dark,
+      rtl,
+      requireGlass,
+    ]
+  }
+  static func == (lhs: NativeDialogRequest, rhs: NativeDialogRequest) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return NativeShellApiPigeonInternal.deepEquals(lhs.kind, rhs.kind) && NativeShellApiPigeonInternal.deepEquals(lhs.title, rhs.title) && NativeShellApiPigeonInternal.deepEquals(lhs.message, rhs.message) && NativeShellApiPigeonInternal.deepEquals(lhs.actions, rhs.actions) && NativeShellApiPigeonInternal.deepEquals(lhs.preferredIndex, rhs.preferredIndex) && NativeShellApiPigeonInternal.deepEquals(lhs.anchor, rhs.anchor) && NativeShellApiPigeonInternal.deepEquals(lhs.tintArgb, rhs.tintArgb) && NativeShellApiPigeonInternal.deepEquals(lhs.dark, rhs.dark) && NativeShellApiPigeonInternal.deepEquals(lhs.rtl, rhs.rtl) && NativeShellApiPigeonInternal.deepEquals(lhs.requireGlass, rhs.requireGlass)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("NativeDialogRequest")
+    NativeShellApiPigeonInternal.deepHash(value: kind, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: title, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: message, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: actions, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: preferredIndex, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: anchor, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: tintArgb, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: dark, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: rtl, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: requireGlass, hasher: &hasher)
+  }
+
+  public var description: String {
+    return "NativeDialogRequest(kind: \(String(describing: kind)), title: \(String(describing: title)), message: \(String(describing: message)), actions: \(String(describing: actions)), preferredIndex: \(String(describing: preferredIndex)), anchor: \(String(describing: anchor)), tintArgb: \(String(describing: tintArgb)), dark: \(String(describing: dark)), rtl: \(String(describing: rtl)), requireGlass: \(String(describing: requireGlass)))"
+  }
+}
+
+/// Generated class from Pigeon that represents data sent in messages.
+struct NativeDialogResult: Hashable, CustomStringConvertible {
+  var outcome: NativeDialogOutcome
+  var actionIndex: Int64? = nil
+  var reason: NativeDialogUnavailableReason? = nil
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> NativeDialogResult? {
+    let outcome = pigeonVar_list[0] as! NativeDialogOutcome
+    let actionIndex: Int64? = nilOrValue(pigeonVar_list[1])
+    let reason: NativeDialogUnavailableReason? = nilOrValue(pigeonVar_list[2])
+
+    return NativeDialogResult(
+      outcome: outcome,
+      actionIndex: actionIndex,
+      reason: reason
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      outcome,
+      actionIndex,
+      reason,
+    ]
+  }
+  static func == (lhs: NativeDialogResult, rhs: NativeDialogResult) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return NativeShellApiPigeonInternal.deepEquals(lhs.outcome, rhs.outcome) && NativeShellApiPigeonInternal.deepEquals(lhs.actionIndex, rhs.actionIndex) && NativeShellApiPigeonInternal.deepEquals(lhs.reason, rhs.reason)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("NativeDialogResult")
+    NativeShellApiPigeonInternal.deepHash(value: outcome, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: actionIndex, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: reason, hasher: &hasher)
+  }
+
+  public var description: String {
+    return "NativeDialogResult(outcome: \(String(describing: outcome)), actionIndex: \(String(describing: actionIndex)), reason: \(String(describing: reason)))"
+  }
+}
+
+/// Test-only: the dialog on screen.
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct NativeDialogSnapshot: Hashable, CustomStringConvertible {
+  var kind: NativeDialogKind
+  var title: String? = nil
+  var message: String? = nil
+  var labels: [String]
+  var preferredIndex: Int64? = nil
+  var sourceRect: NativeRect? = nil
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> NativeDialogSnapshot? {
+    let kind = pigeonVar_list[0] as! NativeDialogKind
+    let title: String? = nilOrValue(pigeonVar_list[1])
+    let message: String? = nilOrValue(pigeonVar_list[2])
+    let labels = pigeonVar_list[3] as! [String]
+    let preferredIndex: Int64? = nilOrValue(pigeonVar_list[4])
+    let sourceRect: NativeRect? = nilOrValue(pigeonVar_list[5])
+
+    return NativeDialogSnapshot(
+      kind: kind,
+      title: title,
+      message: message,
+      labels: labels,
+      preferredIndex: preferredIndex,
+      sourceRect: sourceRect
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      kind,
+      title,
+      message,
+      labels,
+      preferredIndex,
+      sourceRect,
+    ]
+  }
+  static func == (lhs: NativeDialogSnapshot, rhs: NativeDialogSnapshot) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return NativeShellApiPigeonInternal.deepEquals(lhs.kind, rhs.kind) && NativeShellApiPigeonInternal.deepEquals(lhs.title, rhs.title) && NativeShellApiPigeonInternal.deepEquals(lhs.message, rhs.message) && NativeShellApiPigeonInternal.deepEquals(lhs.labels, rhs.labels) && NativeShellApiPigeonInternal.deepEquals(lhs.preferredIndex, rhs.preferredIndex) && NativeShellApiPigeonInternal.deepEquals(lhs.sourceRect, rhs.sourceRect)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("NativeDialogSnapshot")
+    NativeShellApiPigeonInternal.deepHash(value: kind, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: title, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: message, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: labels, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: preferredIndex, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: sourceRect, hasher: &hasher)
+  }
+
+  public var description: String {
+    return "NativeDialogSnapshot(kind: \(String(describing: kind)), title: \(String(describing: title)), message: \(String(describing: message)), labels: \(String(describing: labels)), preferredIndex: \(String(describing: preferredIndex)), sourceRect: \(String(describing: sourceRect)))"
+  }
+}
+
 private class NativeShellApiPigeonCodecReader: FlutterStandardReader {
   override func readValue(ofType type: UInt8) -> Any? {
     switch type {
@@ -768,25 +1028,57 @@ private class NativeShellApiPigeonCodecReader: FlutterStandardReader {
       }
       return nil
     case 132:
-      return NativeShellState.fromList(self.readValue() as! [Any?])
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return NativeDialogKind(rawValue: enumResultAsInt)
+      }
+      return nil
     case 133:
-      return NativeTab.fromList(self.readValue() as! [Any?])
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return NativeDialogActionStyle(rawValue: enumResultAsInt)
+      }
+      return nil
     case 134:
-      return NativeAction.fromList(self.readValue() as! [Any?])
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return NativeDialogOutcome(rawValue: enumResultAsInt)
+      }
+      return nil
     case 135:
-      return NativeFooter.fromList(self.readValue() as! [Any?])
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return NativeDialogUnavailableReason(rawValue: enumResultAsInt)
+      }
+      return nil
     case 136:
-      return NativePage.fromList(self.readValue() as! [Any?])
+      return NativeShellState.fromList(self.readValue() as! [Any?])
     case 137:
-      return NativeSearchConfig.fromList(self.readValue() as! [Any?])
+      return NativeTab.fromList(self.readValue() as! [Any?])
     case 138:
-      return NativeRect.fromList(self.readValue() as! [Any?])
+      return NativeAction.fromList(self.readValue() as! [Any?])
     case 139:
-      return NativeDebugSnapshot.fromList(self.readValue() as! [Any?])
+      return NativeFooter.fromList(self.readValue() as! [Any?])
     case 140:
-      return NativeChromeConfig.fromList(self.readValue() as! [Any?])
+      return NativePage.fromList(self.readValue() as! [Any?])
     case 141:
+      return NativeSearchConfig.fromList(self.readValue() as! [Any?])
+    case 142:
+      return NativeRect.fromList(self.readValue() as! [Any?])
+    case 143:
+      return NativeDebugSnapshot.fromList(self.readValue() as! [Any?])
+    case 144:
+      return NativeChromeConfig.fromList(self.readValue() as! [Any?])
+    case 145:
       return NativeWindowControls.fromList(self.readValue() as! [Any?])
+    case 146:
+      return NativeDialogAction.fromList(self.readValue() as! [Any?])
+    case 147:
+      return NativeDialogRequest.fromList(self.readValue() as! [Any?])
+    case 148:
+      return NativeDialogResult.fromList(self.readValue() as! [Any?])
+    case 149:
+      return NativeDialogSnapshot.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
     }
@@ -804,35 +1096,59 @@ private class NativeShellApiPigeonCodecWriter: FlutterStandardWriter {
     } else if let value = value as? NativeTapTarget {
       super.writeByte(131)
       super.writeValue(value.rawValue)
-    } else if let value = value as? NativeShellState {
+    } else if let value = value as? NativeDialogKind {
       super.writeByte(132)
-      super.writeValue(value.toList())
-    } else if let value = value as? NativeTab {
+      super.writeValue(value.rawValue)
+    } else if let value = value as? NativeDialogActionStyle {
       super.writeByte(133)
-      super.writeValue(value.toList())
-    } else if let value = value as? NativeAction {
+      super.writeValue(value.rawValue)
+    } else if let value = value as? NativeDialogOutcome {
       super.writeByte(134)
-      super.writeValue(value.toList())
-    } else if let value = value as? NativeFooter {
+      super.writeValue(value.rawValue)
+    } else if let value = value as? NativeDialogUnavailableReason {
       super.writeByte(135)
-      super.writeValue(value.toList())
-    } else if let value = value as? NativePage {
+      super.writeValue(value.rawValue)
+    } else if let value = value as? NativeShellState {
       super.writeByte(136)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeSearchConfig {
+    } else if let value = value as? NativeTab {
       super.writeByte(137)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeRect {
+    } else if let value = value as? NativeAction {
       super.writeByte(138)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeDebugSnapshot {
+    } else if let value = value as? NativeFooter {
       super.writeByte(139)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeChromeConfig {
+    } else if let value = value as? NativePage {
       super.writeByte(140)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeWindowControls {
+    } else if let value = value as? NativeSearchConfig {
       super.writeByte(141)
+      super.writeValue(value.toList())
+    } else if let value = value as? NativeRect {
+      super.writeByte(142)
+      super.writeValue(value.toList())
+    } else if let value = value as? NativeDebugSnapshot {
+      super.writeByte(143)
+      super.writeValue(value.toList())
+    } else if let value = value as? NativeChromeConfig {
+      super.writeByte(144)
+      super.writeValue(value.toList())
+    } else if let value = value as? NativeWindowControls {
+      super.writeByte(145)
+      super.writeValue(value.toList())
+    } else if let value = value as? NativeDialogAction {
+      super.writeByte(146)
+      super.writeValue(value.toList())
+    } else if let value = value as? NativeDialogRequest {
+      super.writeByte(147)
+      super.writeValue(value.toList())
+    } else if let value = value as? NativeDialogResult {
+      super.writeByte(148)
+      super.writeValue(value.toList())
+    } else if let value = value as? NativeDialogSnapshot {
+      super.writeByte(149)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)
@@ -853,6 +1169,7 @@ private class NativeShellApiPigeonCodecReaderWriter: FlutterStandardReaderWriter
 class NativeShellApiPigeonCodec: FlutterStandardMessageCodec, @unchecked Sendable {
   static let shared = NativeShellApiPigeonCodec(readerWriter: NativeShellApiPigeonCodecReaderWriter())
 }
+
 
 /// Dart → native.
 ///
@@ -1247,6 +1564,78 @@ class NativeShellFlutterApi: NativeShellFlutterApiProtocol {
       } else {
         completion(.success(()))
       }
+    }
+  }
+}
+/// Dart → native dialogs.
+///
+/// Generated protocol from Pigeon that represents a handler of messages from Flutter.
+protocol NativeDialogHostApi {
+  /// Presents [request]; answers when it closes, or at once when it
+  /// cannot be shown.
+  func present(request: NativeDialogRequest, completion: @escaping (Result<NativeDialogResult, Error>) -> Void)
+  /// Debug builds only: the dialog this engine shows, or null.
+  func debugCurrent() throws -> NativeDialogSnapshot?
+  /// Debug builds only: closes the dialog this engine shows as if
+  /// [actionIndex] were tapped; -1 dismisses it without a choice.
+  func debugRespond(actionIndex: Int64) throws
+}
+
+/// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
+class NativeDialogHostApiSetup {
+  static var codec: FlutterStandardMessageCodec { NativeShellApiPigeonCodec.shared }
+  /// Sets up an instance of `NativeDialogHostApi` to handle messages through the `binaryMessenger`.
+  static func setUp(binaryMessenger: FlutterBinaryMessenger, api: NativeDialogHostApi?, messageChannelSuffix: String = "") {
+    let channelSuffix = messageChannelSuffix.count > 0 ? ".\(messageChannelSuffix)" : ""
+    /// Presents [request]; answers when it closes, or at once when it
+    /// cannot be shown.
+    let presentChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.liquid_shell_ios.NativeDialogHostApi.present\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      presentChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let requestArg = args[0] as! NativeDialogRequest
+        api.present(request: requestArg) { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      presentChannel.setMessageHandler(nil)
+    }
+    /// Debug builds only: the dialog this engine shows, or null.
+    let debugCurrentChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.liquid_shell_ios.NativeDialogHostApi.debugCurrent\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      debugCurrentChannel.setMessageHandler { _, reply in
+        do {
+          let result = try api.debugCurrent()
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      debugCurrentChannel.setMessageHandler(nil)
+    }
+    /// Debug builds only: closes the dialog this engine shows as if
+    /// [actionIndex] were tapped; -1 dismisses it without a choice.
+    let debugRespondChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.liquid_shell_ios.NativeDialogHostApi.debugRespond\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      debugRespondChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let actionIndexArg = args[0] as! Int64
+        do {
+          try api.debugRespond(actionIndex: actionIndexArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      debugRespondChannel.setMessageHandler(nil)
     }
   }
 }

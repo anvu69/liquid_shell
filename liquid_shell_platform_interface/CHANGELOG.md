@@ -11,6 +11,11 @@
 - Three methods, with defaults that do nothing: `setNativeSearchText`,
   `setNativeSearchActive` and `setNativePageScroll`.
 
+## 0.1.0-dev.3
+
+- `supportsNativeDialogs`, `presentNativeDialog` and the native dialog
+  request/result types.
+
 ## 0.1.0-dev.2
 
 - Native chrome and window-control members on `LiquidShellPlatform`, all

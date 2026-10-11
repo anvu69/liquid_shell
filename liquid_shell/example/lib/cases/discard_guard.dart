@@ -18,21 +18,21 @@ class _DiscardGuardCaseState extends State<DiscardGuardCase> {
 
   Future<bool> _confirmLeave(int index) async {
     if (!_dirty || index == _index) return true;
-    final discard = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Discard changes?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Keep editing'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Discard'),
-          ),
-        ],
-      ),
+    final discard = await showLiquidAlert<bool>(
+      context,
+      title: 'Discard changes?',
+      actions: const [
+        LiquidAlertAction(
+          label: 'Keep editing',
+          value: false,
+          style: LiquidAlertActionStyle.cancel,
+        ),
+        LiquidAlertAction(
+          label: 'Discard',
+          value: true,
+          style: LiquidAlertActionStyle.destructive,
+        ),
+      ],
     );
     return discard ?? false;
   }

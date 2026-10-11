@@ -6,10 +6,23 @@ import 'package:liquid_shell_ios/src/mapping.dart';
 import 'package:liquid_shell_ios/src/native_shell_api.g.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
-/// A [LiquidShellIOS] that talks to [hostApi] instead of the real channel.
+/// A [LiquidShellIOS] that talks to [hostApi] (and [dialogs]) instead of
+/// the real channel.
 @visibleForTesting
-LiquidShellIOS liquidShellIOSWithHost(NativeShellHostApi hostApi) =>
-    LiquidShellIOS._(hostApi);
+LiquidShellIOS liquidShellIOSWithHost(
+  NativeShellHostApi hostApi, {
+  NativeDialogHostApi? dialogs,
+}) => LiquidShellIOS._(hostApi, dialogs ?? NativeDialogHostApi());
+
+/// The dialog a debug build of the plugin shows (spec P3a §5.5).
+typedef NativeDialogDebugSnapshot = ({
+  bool actionSheet,
+  String? title,
+  String? message,
+  List<String> labels,
+  int? preferredIndex,
+  Rect? sourceRect,
+});
 
 /// The iOS platform: the event-channel signal reader plus the native
 /// iOS 26 shell (iPhone and iPad) and the iPadOS window controls over the
@@ -22,9 +35,9 @@ class LiquidShellIOS extends EventChannelLiquidShellPlatform {
   /// Touches no channel: `registerWith` runs before `main`, when no
   /// binding exists yet. Native events are received from the first
   /// [attachNativeChrome], [readWindowControls] or [nativeEvents] listener.
-  LiquidShellIOS() : this._(NativeShellHostApi());
+  LiquidShellIOS() : this._(NativeShellHostApi(), NativeDialogHostApi());
 
-  LiquidShellIOS._(this._host);
+  LiquidShellIOS._(this._host, this._dialogs);
 
   /// Makes a [LiquidShellIOS] the active implementation.
   static void registerWith() {
@@ -32,6 +45,7 @@ class LiquidShellIOS extends EventChannelLiquidShellPlatform {
   }
 
   final NativeShellHostApi _host;
+  final NativeDialogHostApi _dialogs;
   late final StreamController<LiquidNativeEvent> _events =
       StreamController.broadcast(onListen: _receive);
   final Set<String> _loggedFailures = {};
@@ -110,6 +124,54 @@ class LiquidShellIOS extends EventChannelLiquidShellPlatform {
   /// release builds an empty snapshot. For integration tests.
   @visibleForTesting
   Future<NativeDebugSnapshot> debugSnapshot() => _host.debugSnapshot();
+
+  @override
+  bool get supportsNativeDialogs => true;
+
+  @override
+  Future<LiquidNativeDialogResult> presentNativeDialog(
+    LiquidNativeDialogRequest request,
+  ) async {
+    try {
+      return dialogResultFromNative(
+        await _dialogs.present(dialogRequestToNative(request)),
+        actionCount: request.actions.length,
+      );
+    } on PlatformException catch (error) {
+      _logOnce('presentDialog', error);
+      return const LiquidNativeDialogUnavailable(
+        LiquidNativeDialogUnavailableReason.channelError,
+      );
+    }
+  }
+
+  /// Debug builds of the plugin: the dialog this engine shows, or null.
+  /// For integration tests; a channel failure reads as null.
+  @visibleForTesting
+  Future<NativeDialogDebugSnapshot?> debugNativeDialog() async {
+    try {
+      final shot = await _dialogs.debugCurrent();
+      if (shot == null) return null;
+      final rect = shot.sourceRect;
+      return (
+        actionSheet: shot.kind == NativeDialogKind.actionSheet,
+        title: shot.title,
+        message: shot.message,
+        labels: shot.labels,
+        preferredIndex: shot.preferredIndex,
+        sourceRect: rect == null ? null : rectFromNative(rect),
+      );
+    } on PlatformException catch (error) {
+      _logOnce('debugDialog', error);
+      return null;
+    }
+  }
+
+  /// Debug builds of the plugin: closes the dialog as if [actionIndex] were
+  /// tapped; -1 dismisses it without a choice. For integration tests.
+  @visibleForTesting
+  Future<void> debugRespondToNativeDialog(int actionIndex) =>
+      _send('debugRespond', () => _dialogs.debugRespond(actionIndex));
 
   /// Debug builds of the plugin run the code path of a user tap on
   /// [target]; release builds ignore it. For integration tests. Like every
