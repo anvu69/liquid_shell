@@ -316,14 +316,16 @@ class _ResultTile extends StatelessWidget {
       ),
       onTap: () {
         onOpen?.call();
-        unawaited(
-          Navigator.of(context).push(
-            MaterialPageRoute<void>(builder: (_) => _DetailPage(item: item)),
-          ),
-        );
+        unawaited(_open(context));
       },
     ),
   );
+
+  Future<void> _open(BuildContext context) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => _DetailPage(item: item)),
+    );
+  }
 }
 
 class _DetailPage extends StatelessWidget {

@@ -188,6 +188,13 @@ class LiquidBackButton extends StatelessWidget {
   /// Semantics and tooltip. Null: the shell's `LiquidShellStrings.back`.
   final String? semanticLabel;
 
+  // A future of our own to hand to `unawaited`: newer SDKs mark `maybePop`
+  // `@awaitNotRequired` (unnecessary_unawaited) while 3.44 still asks for
+  // it (discarded_futures).
+  static Future<void> _maybePop(BuildContext context) async {
+    await Navigator.maybePop(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     final label =
@@ -199,9 +206,8 @@ class LiquidBackButton extends StatelessWidget {
             ?.strings
             .back ??
         const LiquidShellStrings().back;
-    void pressed() => onPressed != null
-        ? onPressed!()
-        : unawaited(Navigator.maybePop(context));
+    void pressed() =>
+        onPressed != null ? onPressed!() : unawaited(_maybePop(context));
     return Semantics(
       container: true,
       button: true,

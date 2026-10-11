@@ -471,7 +471,14 @@ class _LiquidShellState extends State<LiquidShell>
     final kept = _routeCurrent && !_covered
         ? _stackRecords[tab]?.lastOrNull?.entry
         : null;
-    unawaited((_topPageEntry ?? kept)?.navigator?.maybePop());
+    unawaited(_maybePop((_topPageEntry ?? kept)?.navigator));
+  }
+
+  // A future of our own to hand to `unawaited`: newer SDKs mark `maybePop`
+  // `@awaitNotRequired` (unnecessary_unawaited) while 3.44 still asks for
+  // it (discarded_futures).
+  static Future<void> _maybePop(NavigatorState? navigator) async {
+    await navigator?.maybePop();
   }
 
   /// UIKit's other pops (spec P3b §7.6): the back button's long-press

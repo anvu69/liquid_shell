@@ -321,14 +321,14 @@ void main() {
       ),
     );
     expectStyled('Large');
-    unawaited(
-      navigator.currentState!.push(
-        MaterialPageRoute<void>(
-          builder: (_) =>
-              const LiquidPage(title: 'Inline', child: SizedBox.expand()),
-        ),
-      ),
-    );
+    navigator.currentState!
+        .push(
+          MaterialPageRoute<void>(
+            builder: (_) =>
+                const LiquidPage(title: 'Inline', child: SizedBox.expand()),
+          ),
+        )
+        .ignore();
     await tester.pumpAndSettle();
     expectStyled('Inline');
   });
