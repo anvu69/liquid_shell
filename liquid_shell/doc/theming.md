@@ -13,12 +13,12 @@ All glass reads one `ThemeExtension`, `LiquidGlassTheme`. Without one,
 | `solid` | `surface` | `surface` | fill, solid tier only |
 | `border` | `outline` @ 0.28 | `onSurface` @ 0.18 | 1px outline, frosted and solid tiers |
 | `borderWidth` | 1 | 1 | outline width, frosted and solid tiers |
-| `rimHighlight` | white @ 0.12 | white @ 0.22 | frosted top-edge highlight; liquid specular rim |
+| `rimHighlight` | white @ 0.12 | white @ 0.12 | frosted top-edge highlight; liquid specular rim |
 | `shadow` | `#12000000` (7 %), offset (0, 3), blur 20 | same | drawn outside the shape only |
 | `blurSigma` | 10 | 10 | blur, frosted tier only |
 | `borderRadius` | pill (999) | pill | bars, circles |
 | `labelStyle` | 10/12, w500, no letter spacing, theme font | same | tab labels: the bottom bar as is, the landscape bar at 12pt w400, the top bar at 17pt; w600 on the selected tab |
-| `liquidTint` | `surface` @ 0.40 | `surface` @ 0.45 | colour over liquid glass, inside the lens shader, liquid tier only |
+| `liquidTint` | white @ 0.55 | #1C1C1C @ 0.90 | colour over liquid glass, inside the lens shader, liquid tier only |
 | `refraction` | 1 | 1 | liquid lens strength: 0 is flat glass, 2 doubles it |
 | `dispersion` | 0 | 0 | liquid colour fringe in the lens band, 0–1; 0 turns it off (the touched tab lens draws its own) |
 | `liquidBlurSigma` | 2 | 2 | liquid blur under the lens; 0 for none (and no scroll-edge pocket) |
@@ -79,8 +79,9 @@ MaterialApp(
 ```
 
 Built directly with `LiquidGlassTheme(...)`, a theme without `liquidTint`
-gets `solid` @ 0.40 (0.45 when `solid` is dark). For a stronger or flatter
-brand lens, set `refraction` (0 flat, 2 double).
+gets the same neutral tint: white @ 0.55, or #1C1C1C @ 0.90 when `solid`
+is dark. For a stronger or flatter brand lens, set `refraction` (0 flat, 2
+double).
 
 `LiquidGlassTheme` implements `lerp`, so theme animations interpolate the
 glass too.

@@ -3,6 +3,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/glass/liquid_optics.dart';
 
+/// The liquid tint defaults (VK-503 Task 16): neutral, near-opaque.
+final Color _tintLight = const Color(0xFFFFFFFF).withValues(alpha: 0.55);
+final Color _tintDark = const Color(0xFF1C1C1C).withValues(alpha: 0.90);
+
 void main() {
   final light = ColorScheme.fromSeed(seedColor: const Color(0xFF3366CC));
   final dark = ColorScheme.fromSeed(
@@ -29,7 +33,9 @@ void main() {
       expect(theme.border, dark.onSurface.withValues(alpha: 0.18));
       expect(
         theme.rimHighlight,
-        const Color(0xFFFFFFFF).withValues(alpha: 0.22),
+        // Native's dark top rim is 54 → 47 → 39 over the #191919 fill
+        // (research §5); 0.22 drew 80 (VK-503 Task 16).
+        const Color(0xFFFFFFFF).withValues(alpha: 0.12),
       );
     });
 
@@ -147,10 +153,11 @@ void main() {
     );
 
     test('defaults', () {
-      // Tuned against iOS 26 native (spec §3.6.1): light enough that the
-      // lens shows what it bends.
-      expect(light.liquidTint.a, closeTo(0.40, 1e-3));
-      expect(dark.liquidTint.a, closeTo(0.45, 1e-3));
+      // Native iOS 26.5 glass is a neutral, near-opaque milky fill, not the
+      // scheme's hue (VK-503 Task 16: white @ 0.55, #1C1C1C @ 0.90, fitted
+      // to the native pixels in test/impeller/tab_material_test.dart).
+      expect(light.liquidTint, _tintLight);
+      expect(dark.liquidTint, _tintDark);
       expect(light.refraction, 1);
       expect(light.dispersion, 0);
       expect(light.liquidBlurSigma, 2);
@@ -187,23 +194,23 @@ void main() {
         labelStyle: const TextStyle(),
       );
 
-      test('defaults to solid @ 0.40 over a light solid', () {
+      test('defaults to the light tint over a light solid', () {
         final scheme = ColorScheme.fromSeed(seedColor: const Color(0xFF3366CC));
         final theme = bare(scheme.surface);
-        expect(theme.liquidTint, scheme.surface.withValues(alpha: 0.40));
+        expect(theme.liquidTint, _tintLight);
         expect(
           theme.liquidTint,
           LiquidGlassTheme.fromColorScheme(scheme).liquidTint,
         );
       });
 
-      test('defaults to solid @ 0.45 over a dark solid', () {
+      test('defaults to the dark tint over a dark solid', () {
         final scheme = ColorScheme.fromSeed(
           seedColor: const Color(0xFF3366CC),
           brightness: Brightness.dark,
         );
         final theme = bare(scheme.surface);
-        expect(theme.liquidTint, scheme.surface.withValues(alpha: 0.45));
+        expect(theme.liquidTint, _tintDark);
         expect(
           theme.liquidTint,
           LiquidGlassTheme.fromColorScheme(scheme).liquidTint,
@@ -213,10 +220,7 @@ void main() {
       test('a derived default follows copyWith(solid:)', () {
         final theme = bare(const Color(0xFFFFFFFF));
         final moved = theme.copyWith(solid: const Color(0xFF000000));
-        expect(
-          moved.liquidTint,
-          const Color(0xFF000000).withValues(alpha: 0.45),
-        );
+        expect(moved.liquidTint, _tintDark);
       });
 
       test('an explicit liquidTint survives copyWith(solid:)', () {
@@ -231,7 +235,7 @@ void main() {
         const white = Color(0xFFFFFFFF);
         final derived = bare(white);
         final explicit = derived.copyWith(
-          liquidTint: white.withValues(alpha: 0.40),
+          liquidTint: _tintLight,
         );
         expect(derived, explicit);
         expect(derived.hashCode, explicit.hashCode);

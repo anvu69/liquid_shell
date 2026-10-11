@@ -29,7 +29,7 @@ lens and no rim.
 
 | Field | Default | Effect |
 |---|---|---|
-| `liquidTint` | surface @ 40 % (light), 45 % (dark) | Colour over the glass; raise its alpha for more legibility |
+| `liquidTint` | white @ 55 % (light), #1C1C1C @ 90 % (dark) | Colour over the glass: a neutral milky fill, as native; lower its alpha for clearer glass |
 | `refraction` | 1 | Lens strength; 0 is flat glass, 2 doubles it |
 | `dispersion` | 0 | Colour fringe, 0–1 |
 | `liquidBlurSigma` | 2 | Blur under the lens; 0 for none |
@@ -74,7 +74,8 @@ the iOS 26.5 material:
 
 | Field | Was | Becomes |
 |---|---|---|
-| `rimHighlight` | white @ 0.50 (light) / 0.18 (dark) | white @ 0.12 (light) / 0.22 (dark) |
+| `rimHighlight` | white @ 0.50 (light) / 0.18 (dark) | white @ 0.12 |
+| `liquidTint` | `surface` @ 0.40 (light) / 0.45 (dark) | white @ 0.55 (light) / #1C1C1C @ 0.90 (dark): neutral, not the scheme's hue |
 | `shadow` | `0x24000000`, (0, 6), blur 20, spread −2 | `0x12000000` (7 %), (0, 3), blur 20, spread 0 |
 | `dispersion` | 0.3 | 0 (the touched tab lens sets its own) |
 | `labelStyle` | 10 / 1.4 / w600 / 0.4 | 10 / 1.2 / w500 / 0 |

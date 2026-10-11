@@ -39,7 +39,9 @@
   faint dim, liquid tier only: frosted, solid and Reduce Transparency draw
   none).
 - **Defaults changed** for every glass surface (bars, circles, sidebar,
-  dialogs, the back button): `rimHighlight` 0.12 / 0.22, `shadow` 7 %
+  dialogs, the back button): `rimHighlight` 0.12, `liquidTint` a neutral
+  milky white @ 0.55 (light) / #1C1C1C @ 0.90 (dark) instead of the
+  scheme's `surface` @ 0.40 / 0.45 (native glass takes no app hue), `shadow` 7 %
   (0, 3) blur 20, `dispersion` 0 in the constructor and in
   `fromColorScheme` (the touched tab lens adds its own fringe; pass
   `dispersion: 0.3` for the previous look), `labelStyle` 10 / 1.2 / w500 /

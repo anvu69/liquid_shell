@@ -36,15 +36,12 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
     return LiquidGlassTheme(
       tint: scheme.surface.withValues(alpha: light ? 0.72 : 0.90),
       solid: scheme.surface,
-      liquidTint: scheme.surface.withValues(alpha: light ? 0.40 : 0.45),
       border: light
           ? scheme.outline.withValues(alpha: 0.28)
           : scheme.onSurface.withValues(alpha: 0.18),
-      // iOS 26.5: a barely visible top edge in light, ~1 pt in dark
-      // (spec VK-503 §6.4, research §5).
-      rimHighlight: const Color(
-        0xFFFFFFFF,
-      ).withValues(alpha: light ? 0.12 : 0.22),
+      // iOS 26.5: a barely visible top edge in light; in dark a ~1 pt rim
+      // of 54 → 39 over the #191919 fill (spec VK-503 §6.4, research §5).
+      rimHighlight: const Color(0xFFFFFFFF).withValues(alpha: 0.12),
       shadow: const BoxShadow(
         color: Color(0x12000000),
         offset: Offset(0, 3),
@@ -99,20 +96,35 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
   /// Compact tab labels.
   final TextStyle labelStyle;
 
-  /// Tint inside the liquid lens; lighter than [tint]. The liquid tier
-  /// reads this, not [tint].
+  /// Tint inside the liquid lens. The liquid tier reads this, not [tint].
   ///
-  /// When not given, it is [solid] at 0.40 alpha, or 0.45 when [solid] is
-  /// dark: the same as [LiquidGlassTheme.fromColorScheme], and it follows
-  /// `copyWith(solid: …)`.
+  /// When not given, it is a neutral milky fill picked by the brightness of
+  /// [solid]: white @ 0.55 over a light [solid], #1C1C1C @ 0.90 over a dark
+  /// one. That is native iOS 26.5 glass, which does not take the app's hue
+  /// (spec VK-503 §6.4, Q14). [LiquidGlassTheme.fromColorScheme] uses the
+  /// same default, and it follows `copyWith(solid: …)`.
   Color get liquidTint =>
       _liquidTint ??
-      solid.withValues(
-        alpha: ThemeData.estimateBrightnessForColor(solid) == Brightness.dark
-            ? 0.45
-            : 0.40,
-      );
+      (ThemeData.estimateBrightnessForColor(solid) == Brightness.dark
+          ? _liquidTintDark
+          : _liquidTintLight);
   final Color? _liquidTint;
+
+  // Fitted to native pixels (test/impeller/tab_material_test.dart): the
+  // pill reads #FEFEFE over white and #191919 over black, and as milky as
+  // native over the example's pages.
+  static const Color _liquidTintLight = Color.from(
+    alpha: 0.55,
+    red: 1,
+    green: 1,
+    blue: 1,
+  );
+  static const Color _liquidTintDark = Color.from(
+    alpha: 0.90,
+    red: 28 / 255,
+    green: 28 / 255,
+    blue: 28 / 255,
+  );
 
   /// Liquid lens thickness multiplier: 0 is flat glass, 1 the default.
   final double refraction;
