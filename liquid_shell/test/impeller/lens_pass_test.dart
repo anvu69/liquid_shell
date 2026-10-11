@@ -13,6 +13,9 @@ const _view = Size(400, 300);
 const _pill = Rect.fromLTWH(50, 100, 300, 62);
 const _lensRect = Rect.fromLTWH(100, 104, 94, 54);
 
+/// A pill pixel outside the lens, clear of the pill's corners.
+const _pillPoint = Offset(75, 131);
+
 ui.ImageFilter _filter(ui.FragmentProgram program, Rect r, Color tint) {
   final shader = program.fragmentShader();
   final floats = liquidUniforms(
@@ -59,7 +62,8 @@ Widget _pass(
   ),
 );
 
-Future<List<int>> _lensCentre(
+/// The RGB at the lens centre and at [_pillPoint].
+Future<({List<int> lens, List<int> pill})> _sample(
   WidgetTester tester, {
   required bool grouped,
 }) async {
@@ -90,25 +94,33 @@ Future<List<int>> _lensCentre(
   final layer = view.debugLayer! as OffsetLayer;
   final image = await tester.runAsync(() => layer.toImage(view.paintBounds));
   final data = (await tester.runAsync(() => image!.toByteData()))!;
-  final c = _lensRect.center;
-  final i =
-      ((c.dy * _scale).round() * (_view.width * _scale).round() +
-          (c.dx * _scale).round()) *
-      4;
-  return [data.getUint8(i), data.getUint8(i + 1), data.getUint8(i + 2)];
+  image!.dispose();
+  List<int> rgb(Offset p) {
+    final i =
+        ((p.dy * _scale).round() * (_view.width * _scale).round() +
+            (p.dx * _scale).round()) *
+        4;
+    return [data.getUint8(i), data.getUint8(i + 1), data.getUint8(i + 2)];
+  }
+
+  return (lens: rgb(_lensRect.center), pill: rgb(_pillPoint));
 }
 
 void main() {
   testWidgets('in one BackdropGroup the lens samples the page (spec R1)', (
     tester,
   ) async {
-    final rgb = await _lensCentre(tester, grouped: true);
-    expect(rgb[1], greaterThan(200), reason: 'green page, got $rgb');
-    expect(rgb[0], lessThan(60), reason: 'not the red pill, got $rgb');
+    final (:lens, :pill) = await _sample(tester, grouped: true);
+    // The grouped pill drew, so a green lens centre is not just the page
+    // showing through a missing pill.
+    expect(pill[0], greaterThan(200), reason: 'red pill, got $pill');
+    expect(lens[1], greaterThan(200), reason: 'green page, got $lens');
+    expect(lens[0], lessThan(60), reason: 'not the red pill, got $lens');
   });
 
   testWidgets('control: ungrouped, the lens samples the pill', (tester) async {
-    final rgb = await _lensCentre(tester, grouped: false);
-    expect(rgb[0], greaterThan(200), reason: 'red pill, got $rgb');
+    final (:lens, :pill) = await _sample(tester, grouped: false);
+    expect(pill[0], greaterThan(200), reason: 'red pill, got $pill');
+    expect(lens[0], greaterThan(200), reason: 'red pill, got $lens');
   });
 }

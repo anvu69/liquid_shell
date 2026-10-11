@@ -16,7 +16,7 @@ export 'src/dialogs/show_dialogs.dart'
     show showLiquidActionSheet, showLiquidAlert;
 export 'src/glass/glass_scope.dart';
 export 'src/glass/glass_theme.dart';
-export 'src/glass/liquid_glass.dart';
+export 'src/glass/liquid_glass.dart' show LiquidGlass;
 export 'src/glass/policy.dart' show LiquidGlassPolicy, LiquidGlassSignals;
 export 'src/glass/renderer.dart';
 export 'src/glass/signals_controller.dart'

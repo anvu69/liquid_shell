@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
@@ -45,6 +46,10 @@ class _LiquidLensState extends State<LiquidLens> {
   void initState() {
     super.initState();
     _signals.acquire();
+    // Idempotent: a lens mounted without its pill still turns liquid.
+    if (liquidGlassCanRefract()) {
+      unawaited(LiquidShaderProgram.instance.load());
+    }
   }
 
   @override

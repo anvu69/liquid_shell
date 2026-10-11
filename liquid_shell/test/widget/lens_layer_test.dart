@@ -6,6 +6,7 @@ import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/glass/liquid_backdrop.dart';
 import 'package:liquid_shell/src/glass/liquid_lens.dart';
 import 'package:liquid_shell/src/glass/outside_shadow.dart';
+import 'package:liquid_shell/src/glass/shader_program.dart';
 
 Future<void> _liquid(WidgetTester tester) async {
   debugLiquidGlassCanRefractOverride = true;
@@ -81,6 +82,25 @@ void main() {
     expect(u[9], closeTo(48 * 0.8 * 3, 1e-3));
     expect(u[11], closeTo(0.3, 1e-6));
     expect(u[19], closeTo(0.175, 1e-3));
+  });
+
+  testWidgets('a lone lens loads the shader itself, then turns liquid', (
+    tester,
+  ) async {
+    debugLiquidGlassCanRefractOverride = true;
+    debugLiquidFilterFactory = (shader, sigma) =>
+        ui.ImageFilter.blur(sigmaX: 1, sigmaY: 1);
+    addTearDown(() => debugLiquidFilterFactory = null);
+    // No precache and no LiquidGlass: only the lens can start the load.
+    await tester.pumpWidget(_lens());
+    expect(find.byType(LiquidBackdrop), findsNothing);
+    for (var i = 0; i < 40 && LiquidShaderProgram.instance.value == null; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+    }
+    await tester.pump();
+    expect(find.byType(LiquidBackdrop), findsOneWidget);
   });
 
   testWidgets('frosted: a grouped blur, no shader', (tester) async {
