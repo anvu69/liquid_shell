@@ -1,11 +1,15 @@
 @Tags(['liquid_golden'])
 library;
 
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
+// The goldens hook is test-only and stays out of the public API (spec §16).
+import 'package:liquid_shell/src/chrome/glass_tab_bar.dart'
+    show debugTabLensPress;
 import 'package:liquid_shell_example/cases/basic_tabs.dart';
 import 'package:liquid_shell_example/cases/custom_theme.dart';
 import 'package:liquid_shell_example/cases/forced_tier.dart';
@@ -86,6 +90,67 @@ Future<void> _expectBand(WidgetTester tester, String name) async {
   await expectLater(cropped, matchesGoldenFile('bands/$name.png'));
 }
 
+/// The pressed lens against native (spec §7.2 acceptance, from the Task 8
+/// review): `coreStd` is the luminance spread of the flat core beside the
+/// icon (inside the 14 pt ring, out of the icon column), `vivid` the share
+/// of lens pixels with chroma above 60 and `p99` the 99th-percentile
+/// chroma, the icon column excluded. Chroma is max − min of RGB; luminance
+/// is ITU-R 601.
+Future<({double coreStd, double vivid, int p99})> _lensMetrics(
+  WidgetTester tester,
+) async {
+  final lens = tester.getRect(
+    find.byWidgetPredicate((w) => w.runtimeType.toString() == 'LiquidLens'),
+  );
+  final data = (await tester.runAsync(() async {
+    final screen = await captureImage(tester.element(find.byType(MaterialApp)));
+    final bytes = await screen.toByteData();
+    screen.dispose();
+    return bytes;
+  }))!;
+  final width = tester.view.physicalSize.width.round();
+  const k = goldenPixelRatio;
+  // The icon and label column, and the 14 pt refracting ring.
+  const column = 22.0;
+  const ring = 14.0;
+  final r = lens.height / 2;
+  bool inCapsule(double x, double y) {
+    final c = x.clamp(lens.left + r, lens.right - r);
+    return (x - c) * (x - c) + (y - lens.center.dy) * (y - lens.center.dy) <=
+        r * r;
+  }
+
+  final chroma = <int>[];
+  final luma = <double>[];
+  for (var py = (lens.top * k).floor(); py < (lens.bottom * k).ceil(); py++) {
+    for (var px = (lens.left * k).floor(); px < (lens.right * k).ceil(); px++) {
+      final x = (px + 0.5) / k;
+      final y = (py + 0.5) / k;
+      if (!inCapsule(x, y) || (x - lens.center.dx).abs() < column) continue;
+      final i = (py * width + px) * 4;
+      final rgb = [
+        data.getUint8(i),
+        data.getUint8(i + 1),
+        data.getUint8(i + 2),
+      ];
+      chroma.add(rgb.reduce(math.max) - rgb.reduce(math.min));
+      if (lens.deflate(ring).contains(Offset(x, y))) {
+        luma.add(0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]);
+      }
+    }
+  }
+  chroma.sort();
+  final mean = luma.reduce((a, b) => a + b) / luma.length;
+  final variance =
+      luma.map((l) => (l - mean) * (l - mean)).reduce((a, b) => a + b) /
+      luma.length;
+  return (
+    coreStd: math.sqrt(variance),
+    vivid: chroma.where((c) => c > 60).length / chroma.length,
+    p99: chroma[(0.99 * (chroma.length - 1)).floor()],
+  );
+}
+
 void main() {
   setUp(() {
     // These goldens are the liquid tier; a run without Impeller is a
@@ -145,8 +210,38 @@ void main() {
       await tester.runAsync(LiquidGlass.precache);
       await pumpGolden(tester, const BasicTabsCase(), device: iphone);
       await _expectBand(tester, name);
+      if (shift != 0) return;
+      // A milky core with a faint fringe, as native (spec §7.2).
+      final m = await _lensMetrics(tester);
+      final seen = 'measured $m';
+      expect(m.coreStd, lessThanOrEqualTo(4), reason: seen);
+      expect(m.vivid, lessThanOrEqualTo(0.03), reason: seen);
+      expect(m.p99, lessThanOrEqualTo(80), reason: seen);
     });
   }
+
+  // The finger glow on release: 98 pt under the held finger, then ×4 and
+  // fading (research §4.1); 128 ms after the release it spills past the
+  // lens onto the pill. Dark, where a white glow reads.
+  testWidgets('tab_glow_release_dark', (tester) async {
+    await tester.runAsync(LiquidGlass.precache);
+    await pumpGolden(
+      tester,
+      const BasicTabsCase(),
+      device: iphone,
+      brightness: Brightness.dark,
+    );
+    final home = tester.getCenter(find.byIcon(Icons.home_outlined).first);
+    final finger = await tester.startGesture(home);
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await finger.up();
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await _expectBand(tester, 'tab_glow_release_dark');
+  });
 
   // The Flutter glass dialogs are LiquidGlass (owner decision L3): on the
   // default tier they are liquid, like the shell.

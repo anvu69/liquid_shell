@@ -23,10 +23,11 @@ void main() {
     );
   });
 
-  test('glass_tab_bar.dart exports only the goldens hook', () {
+  test('glass_tab_bar.dart is not exported (debugTabLensPress stays in '
+      'src/)', () {
     expect(
-      _exports().where((e) => e.contains("'src/chrome/glass_tab_bar.dart'")),
-      ["export 'src/chrome/glass_tab_bar.dart' show debugTabLensPress"],
+      _exports().where((e) => e.contains('glass_tab_bar.dart')),
+      isEmpty,
     );
   });
 

@@ -389,11 +389,12 @@ class _GlassTabBarState extends State<GlassTabBar>
                       if (frame.visible && frame.engage > 0.001)
                         Positioned.fromRect(
                           rect: lens,
-                          // No Opacity: the lens fades its rim, shadow and
-                          // fill by engage itself (spec §7.1, applied once).
-                          child: LiquidLens(
-                            engage: frame.engage,
-                            refraction: frame.refraction,
+                          // The one fade of the whole lens: the shader
+                          // writes alpha 1 and the lens is engage-agnostic
+                          // (spec §7.2).
+                          child: Opacity(
+                            opacity: frame.engage,
+                            child: LiquidLens(refraction: frame.refraction),
                           ),
                         ),
                       Positioned.fill(

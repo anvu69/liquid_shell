@@ -8,21 +8,27 @@ import 'package:liquid_shell/src/glass/liquid_lens.dart';
 import 'package:liquid_shell/src/glass/outside_shadow.dart';
 import 'package:liquid_shell/src/glass/shader_program.dart';
 
+/// The blur sigma the last liquid filter was built with.
+double? _sigma;
+
 Future<void> _liquid(WidgetTester tester) async {
   debugLiquidGlassCanRefractOverride = true;
-  debugLiquidFilterFactory = (shader, sigma) =>
-      ui.ImageFilter.blur(sigmaX: 1, sigmaY: 1);
+  debugLiquidFilterFactory = (shader, sigma) {
+    _sigma = sigma;
+    return ui.ImageFilter.blur(sigmaX: 1, sigmaY: 1);
+  };
   addTearDown(() => debugLiquidFilterFactory = null);
   await tester.runAsync(LiquidGlass.precache);
 }
 
 Widget _lens({
-  double engage = 1,
   double refraction = 1,
+  Brightness brightness = Brightness.light,
   LiquidGlassTier? forced,
   bool highContrast = false,
   ValueSetter<BackdropKey?>? onKey,
 }) => MaterialApp(
+  theme: ThemeData(brightness: brightness),
   home: MediaQuery(
     data: MediaQueryData(highContrast: highContrast),
     child: LiquidGlassScope(
@@ -35,7 +41,7 @@ Widget _lens({
               child: SizedBox(
                 width: 110,
                 height: 70,
-                child: LiquidLens(engage: engage, refraction: refraction),
+                child: LiquidLens(refraction: refraction),
               ),
             );
           },
@@ -46,7 +52,8 @@ Widget _lens({
 );
 
 void main() {
-  testWidgets('liquid: clear glass, bezel h/2, 1 pt rim, shared backdrop', (
+  testWidgets('liquid: milky glass, bezel 14 pt, σ 2, 1 pt rim, shared '
+      'backdrop (spec §7.2)', (
     tester,
   ) async {
     await _liquid(tester);
@@ -61,27 +68,43 @@ void main() {
     expect(render.backdropKey, isNotNull);
     expect(render.backdropKey, key);
     final u = render.debugUniforms!;
-    expect(u[8], closeTo(35 * 3, 1e-3)); // bezel = h/2
+    expect(u[8], closeTo(14 * 3, 1e-3)); // bezel 14 pt
     expect(u[9], closeTo(48 * 1.6 * 3, 1e-3)); // thickness
     expect(u[11], closeTo(0.6, 1e-6)); // dispersion
-    expect(u[15], 0); // tint alpha: clear glass
+    expect([u[12], u[13], u[14]], [1, 1, 1]); // tint: white…
+    expect(u[15], closeTo(0.90, 1e-6)); // …at 0.90
     expect(u[19], closeTo(0.35, 1e-3)); // rim alpha
     expect(u[22], closeTo(3, 1e-6)); // rim width 1 pt
+    expect(_sigma, 2); // blur σ 2 pt before the shader
   });
 
-  testWidgets('refraction 0.5 halves thickness and dispersion; engage the '
-      'rim', (tester) async {
+  testWidgets('dark: the veil is colorScheme.surface at 0.90', (tester) async {
+    await _liquid(tester);
+    await tester.pumpWidget(_lens(brightness: Brightness.dark));
+    await tester.pump();
+    final u = tester
+        .renderObject<RenderLiquidBackdrop>(find.byType(LiquidBackdrop))
+        .debugUniforms!;
+    final surface = ThemeData(brightness: Brightness.dark).colorScheme.surface;
+    expect(u[12], closeTo(surface.r, 1e-6));
+    expect(u[13], closeTo(surface.g, 1e-6));
+    expect(u[14], closeTo(surface.b, 1e-6));
+    expect(u[15], closeTo(0.90, 1e-6));
+  });
+
+  testWidgets('refraction 0.5 halves thickness and dispersion; the rim '
+      'stays', (tester) async {
     await _liquid(tester);
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(_lens(engage: 0.5, refraction: 0.5));
+    await tester.pumpWidget(_lens(refraction: 0.5));
     await tester.pump();
     final u = tester
         .renderObject<RenderLiquidBackdrop>(find.byType(LiquidBackdrop))
         .debugUniforms!;
     expect(u[9], closeTo(48 * 0.8 * 3, 1e-3));
     expect(u[11], closeTo(0.3, 1e-6));
-    expect(u[19], closeTo(0.175, 1e-3));
+    expect(u[19], closeTo(0.35, 1e-3));
   });
 
   testWidgets('a lone lens loads the shader itself, then turns liquid', (
@@ -128,10 +151,23 @@ void main() {
     expect(deco().border, isNotNull);
   });
 
-  testWidgets('the lens shadow fades with engage', (tester) async {
+  testWidgets('frosted: constant fill, rim and shadow (the bar fades the '
+      'lens once, spec §7.2)', (tester) async {
     debugLiquidGlassCanRefractOverride = false;
-    await tester.pumpWidget(_lens(engage: 0.5));
+    await tester.pumpWidget(_lens());
     final shadow = tester.widget<OutsideShadow>(find.byType(OutsideShadow));
-    expect(shadow.shadow.color.a, closeTo(kLensShadow.color.a * 0.5, 1e-3));
+    expect(shadow.shadow, kLensShadow);
+    final deco =
+        tester
+                .widget<DecoratedBox>(
+                  find.descendant(
+                    of: find.byType(BackdropFilter),
+                    matching: find.byType(DecoratedBox),
+                  ),
+                )
+                .decoration
+            as BoxDecoration;
+    expect(deco.color!.a, closeTo(0.10, 1e-3));
+    expect((deco.border! as Border).top.color.a, closeTo(0.35, 1e-3));
   });
 }

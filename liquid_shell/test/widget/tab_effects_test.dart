@@ -52,6 +52,23 @@ Future<void> _pump(WidgetTester tester, {bool grouped = true}) async {
   );
 }
 
+/// The opacity the lens's glass pass reaches the screen with: the product
+/// of every `Opacity` above its `LiquidBackdrop`. The shader writes alpha
+/// 1, so this is the only fade the pass gets (spec §7.2).
+double _lensPassOpacity(WidgetTester tester) {
+  final pass = find.descendant(
+    of: find.byType(LiquidLens),
+    matching: find.byType(LiquidBackdrop),
+  );
+  var opacity = 1.0;
+  for (final o in tester.widgetList<Opacity>(
+    find.ancestor(of: pass, matching: find.byType(Opacity)),
+  )) {
+    opacity *= o.opacity;
+  }
+  return opacity;
+}
+
 void main() {
   testWidgets('at rest: no lens pass, one backdrop (the pill)', (
     tester,
@@ -70,7 +87,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 16));
     }
     final lens = tester.widget<LiquidLens>(find.byType(LiquidLens));
-    expect(lens.engage, closeTo(1, 0.01));
+    expect(_lensPassOpacity(tester), closeTo(1, 0.01));
     expect(lens.refraction, closeTo(1, 0.01));
     expect(find.byType(LiquidBackdrop), findsNWidgets(2));
     final lensRect = tester.getRect(find.byType(LiquidLens));
@@ -121,34 +138,50 @@ void main() {
     expect(lens.width, closeTo(110 * 1.052, 1));
   });
 
-  testWidgets('mid-fade the lens shows at engage, not engage² (spec §7.1)', (
-    tester,
-  ) async {
+  testWidgets('mid-fade the whole lens pass is at engage, once: the rim '
+      'and shadow inside stay constant (spec §7.2)', (tester) async {
     debugTabLensOverride = (f) => f.copyWith(engage: 0.5, refraction: 0.5);
     addTearDown(() => debugTabLensOverride = null);
     await _pump(tester);
     await tester.pump();
+    expect(_lensPassOpacity(tester), closeTo(0.5, 1e-3));
     final lens = find.byType(LiquidLens);
-    // Whatever fades the lens on its way to the screen.
-    var faded = 1.0;
-    for (final o in tester.widgetList<Opacity>(
-      find.ancestor(of: lens, matching: find.byType(Opacity)),
-    )) {
-      faded *= o.opacity;
-    }
-    final shadow = tester.widget<OutsideShadow>(
-      find.descendant(of: lens, matching: find.byType(OutsideShadow)),
-    );
-    expect(
-      faded * shadow.shadow.color.a / kLensShadow.color.a,
-      closeTo(0.5, 1e-3),
-    );
     final rim = tester
         .renderObject<RenderLiquidBackdrop>(
           find.descendant(of: lens, matching: find.byType(LiquidBackdrop)),
         )
         .debugUniforms![19];
-    expect(faded * rim, closeTo(0.35 * 0.5, 1e-3));
+    expect(rim, closeTo(0.35, 1e-3));
+    final shadow = tester.widget<OutsideShadow>(
+      find.descendant(of: lens, matching: find.byType(OutsideShadow)),
+    );
+    expect(shadow.shadow, kLensShadow);
+  });
+
+  testWidgets('after a tap the lens pass fades out over frames, no snap', (
+    tester,
+  ) async {
+    await _pump(tester);
+    await tester.tapAt(const Offset(201, _y));
+    final seen = <double>[];
+    for (var i = 0; i < 90; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+      if (find.byType(LiquidLens).evaluate().isNotEmpty) {
+        seen.add(_lensPassOpacity(tester));
+      } else if (seen.isNotEmpty) {
+        break;
+      }
+    }
+    expect(find.byType(LiquidLens), findsNothing, reason: 'it ended');
+    final peak = seen.indexOf(seen.reduce((a, b) => a > b ? a : b));
+    final fade = seen.sublist(peak);
+    // Several frames between full and gone, each a small step down.
+    expect(fade.where((o) => o > 0.05 && o < 0.95).length, greaterThan(3));
+    for (var k = 1; k < fade.length; k++) {
+      expect(fade[k], lessThanOrEqualTo(fade[k - 1] + 1e-9));
+      expect(fade[k - 1] - fade[k], lessThan(0.35), reason: '$fade');
+    }
+    expect(fade.last, lessThan(0.05), reason: 'the last frame is faint');
   });
 
   testWidgets('standalone: the bar groups its own backdrops (spec §7.2)', (

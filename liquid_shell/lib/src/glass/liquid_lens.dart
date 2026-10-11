@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:ui' as ui;
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:liquid_shell/src/glass/glass_theme.dart';
 import 'package:liquid_shell/src/glass/liquid_backdrop.dart';
 import 'package:liquid_shell/src/glass/liquid_glass.dart';
@@ -19,17 +19,26 @@ const BoxShadow kLensShadow = BoxShadow(
   blurRadius: 10,
 );
 
+/// The engaged lens's veil over the page: native's milky core (spec VK-503
+/// §7.2, about 10 % of the backdrop passes).
+const double kLensVeil = 0.90;
+
+/// The engaged lens's refracting ring, in points (spec §7.2).
+const double kLensBezel = 14;
+
+/// The blur before the lens shader, logical sigma (spec §7.2).
+const double kLensBlurSigma = 2;
+
 /// The engaged tab lens: a second glass pass that refracts the page behind
 /// the bar (spec VK-503 §7). It fills its box as a capsule. In the liquid
 /// tier it shares the nearest `BackdropGroup`'s backdrop with the pill, so
 /// it samples the page, not the pill.
+///
+/// It draws at full strength: the shader writes alpha 1, so the bar fades
+/// the whole lens once with `Opacity(engage)` (spec §7.2).
 class LiquidLens extends StatefulWidget {
-  /// Creates a lens; [engage] scales the rim and shadow, [refraction] the
-  /// thickness and dispersion.
-  const LiquidLens({required this.engage, required this.refraction, super.key});
-
-  /// 0–1.
-  final double engage;
+  /// Creates a lens; [refraction] scales the thickness and dispersion.
+  const LiquidLens({required this.refraction, super.key});
 
   /// 0–1.
   final double refraction;
@@ -67,9 +76,12 @@ class _LiquidLensState extends State<LiquidLens> {
         final radius = BorderRadius.all(Radius.circular(h / 2));
         final theme = LiquidGlassTheme.of(context);
         final renderer = resolveGlassFor(context);
-        final engage = widget.engage.clamp(0.0, 1.0);
         final refraction = widget.refraction.clamp(0.0, 1.0);
-        final rim = const Color(0xFFFFFFFF).withValues(alpha: 0.35 * engage);
+        final rim = const Color(0xFFFFFFFF).withValues(alpha: 0.35);
+        final scheme = Theme.of(context).colorScheme;
+        final veil = scheme.brightness == Brightness.light
+            ? const Color(0xFFFFFFFF)
+            : scheme.surface;
         final program = LiquidShaderProgram.instance.value;
         final Widget body;
         if (renderer is LiquidShaderRenderer && program != null) {
@@ -79,12 +91,12 @@ class _LiquidLensState extends State<LiquidLens> {
               program: program,
               borderRadius: radius,
               params: LiquidOpticsParams(
-                tint: const Color(0x00000000),
+                tint: veil.withValues(alpha: kLensVeil),
                 rim: rim,
                 refraction: 1.6 * refraction,
                 dispersion: 0.6 * refraction,
-                blurSigma: 0,
-                bezel: h / 2,
+                blurSigma: kLensBlurSigma,
+                bezel: kLensBezel,
                 rimWidth: 1,
               ),
             ),
@@ -106,9 +118,7 @@ class _LiquidLensState extends State<LiquidLens> {
               filter: ui.ImageFilter.blur(sigmaX: 1, sigmaY: 1),
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFFFFF).withValues(
-                    alpha: 0.10 * engage,
-                  ),
+                  color: const Color(0xFFFFFFFF).withValues(alpha: 0.10),
                   borderRadius: radius,
                   border: Border.all(color: rim),
                 ),
@@ -121,16 +131,7 @@ class _LiquidLensState extends State<LiquidLens> {
           children: [
             body,
             // Above the lens, so the lens never samples its own shadow.
-            OutsideShadow(
-              borderRadius: radius,
-              shadow: BoxShadow(
-                color: kLensShadow.color.withValues(
-                  alpha: kLensShadow.color.a * engage,
-                ),
-                offset: kLensShadow.offset,
-                blurRadius: kLensShadow.blurRadius,
-              ),
-            ),
+            OutsideShadow(borderRadius: radius, shadow: kLensShadow),
           ],
         );
       },
