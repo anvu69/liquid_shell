@@ -56,6 +56,59 @@ LiquidShell(
 )
 ```
 
+## A search branch
+
+A search destination (`role: LiquidDestinationRole.search`, see
+[search.md](search.md)) is just an index: the shell draws the field, and
+the branch at that index is your search page. Give it its own `Navigator`,
+as every other tab, so a result's detail pushes inside the tab, under the
+glass back button, and the field and the query stay where they were when
+the user comes back.
+
+```dart
+// Fields of your State class.
+final _search = LiquidSearchController(); // dispose it in dispose()
+late final List<GlobalKey<NavigatorState>> _keys = [
+  for (final _ in destinations) GlobalKey<NavigatorState>(),
+];
+
+// In build: the search destination is the last one.
+LiquidShell(
+  destinations: destinations,
+  selectedIndex: index,
+  onDestinationSelected: (i) {
+    if (i == index) {
+      _keys[i].currentState!.popUntil((route) => route.isFirst); // reselect
+    }
+    setState(() => index = i);
+  },
+  search: LiquidSearch(controller: _search),
+  body: IndexedStack(
+    index: index,
+    children: [
+      for (final (i, root) in [home, library, searchPage].indexed)
+        Navigator(
+          key: _keys[i],
+          onGenerateRoute: (_) => MaterialPageRoute(builder: (_) => root),
+        ),
+    ],
+  ),
+)
+```
+
+- **Reselect pops to the root**, in the search tab too: tapping Search
+  while a detail is open goes back to the results. The query is kept.
+- **Wrap each page in `LiquidPage`** (title, back button). In the native
+  search tab UIKit draws them; the page's `PopScope` runs for the native
+  back circle and its long-press menu, which go through `maybePop`.
+- **Never push the search page above the shell** (on the root navigator).
+  It would cover the tab bar and lose the native field. A trailing action
+  (`tabBarTrailing`) is for something else, such as compose; a shell with
+  a search destination has none.
+- With go_router, the search destination is one more
+  `StatefulShellBranch`; `goBranch(i, initialLocation: i == currentIndex)`
+  gives the same reselect.
+
 ## go_router (until the adapter ships)
 
 ```dart
@@ -79,7 +132,7 @@ StatefulShellRoute.indexedStack(
 |---|---|---|
 | Inside a branch, normal | nothing; pad with `LiquidShellScope.contentPaddingOf(context)` | content scrolls under the glass |
 | Inside a branch, full frame (reader, detail) | `LiquidHideChrome` | every piece of chrome hides while it is mounted and on screen |
-| Above the shell (root navigator: search, sheets) | `LiquidNoChrome` | its insets ignore the chrome underneath |
+| Above the shell (root navigator: compose, sheets) | `LiquidNoChrome` | its insets ignore the chrome underneath |
 | Static content | `LiquidContentInset` | `Padding(contentPaddingOf(context))` |
 
 "Inside a branch" means on a `Navigator` that sits **under** the shell, in

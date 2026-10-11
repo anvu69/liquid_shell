@@ -116,10 +116,21 @@ void main() {
     expect(find.text('Home item 1'), findsOneWidget);
   });
 
-  testWidgets('trailing search opens a page with no chrome', (tester) async {
+  testWidgets('trailing compose opens a page with no chrome', (tester) async {
     await _openCase(tester, 'trailing');
-    await tester.tap(find.byTooltip('Search'));
+    await tester.tap(find.byTooltip('Compose'));
     await tester.pumpAndSettle();
+    final field = tester.element(find.byType(TextField));
+    expect(LiquidShellScope.of(field), LiquidShellScopeData.none());
+  });
+
+  testWidgets('narrow: the trailing compose opens a page with no chrome', (
+    tester,
+  ) async {
+    await _openCase(tester, 'narrow');
+    await tester.tap(find.byTooltip('Compose'));
+    await tester.pumpAndSettle();
+    expect(find.text('New message'), findsOneWidget);
     final field = tester.element(find.byType(TextField));
     expect(LiquidShellScope.of(field), LiquidShellScopeData.none());
   });
@@ -189,7 +200,10 @@ void main() {
     expect(cells.first.left - shell.left, 8 + 4);
     final circle = tester.getRect(
       find.ancestor(
-        of: find.descendant(of: bar, matching: find.byIcon(Icons.search)),
+        of: find.descendant(
+          of: bar,
+          matching: find.byIcon(Icons.edit_outlined),
+        ),
         matching: find.byType(LiquidGlass),
       ),
     );
@@ -224,6 +238,7 @@ void main() {
     'alerts',
     'hide_chrome',
     'native_chrome',
+    'search',
   };
   const flutterIds = {
     'custom_chrome',
@@ -258,7 +273,12 @@ void main() {
           debugPrint = original;
           expect(logs.where((l) => l.contains('sfSymbol')), isEmpty);
           expect(tester.takeException(), isNull);
-          final page = tester.element(find.byType(DemoPage).first);
+          // The search case's pages are LiquidPages, not DemoPages.
+          final page = tester.element(
+            find
+                .byWidgetPredicate((w) => w is DemoPage || w is LiquidPage)
+                .first,
+          );
           expect(LiquidShellScope.of(page).nativeChrome, isTrue);
           expect(find.byType(LiquidTabBar), findsNothing);
           expect(find.byType(LiquidSidebar), findsNothing);
@@ -297,9 +317,9 @@ void main() {
     await _openCase(tester, 'native_chrome');
     final shell = tester.widget<LiquidShell>(find.byType(LiquidShell));
     expect(shell.nativeSidebarFooter, isNotNull);
-    await tester.tap(find.byTooltip('Search'));
+    await tester.tap(find.byTooltip('Compose'));
     await tester.pumpAndSettle();
-    expect(find.text('Searches: 1'), findsOneWidget);
+    expect(find.text('Drafts: 1'), findsOneWidget);
   });
 
   testWidgets('native_chrome guards dirty edits: keep stays, discard leaves', (

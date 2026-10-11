@@ -133,6 +133,9 @@ enum NativeTapTarget {
   destination,
   trailing,
   footer,
+  searchField,
+  searchCancel,
+  back,
 }
 
 /// What a native dialog is.
@@ -234,6 +237,8 @@ class NativeTab {
     required this.sfSymbol,
     this.badge,
     required this.sidebarOnly,
+    required this.search,
+    required this.pages,
   });
 
   String title;
@@ -244,12 +249,18 @@ class NativeTab {
 
   bool sidebarOnly;
 
+  bool search;
+
+  List<NativePage> pages;
+
   List<Object?> _toList() {
     return <Object?>[
       title,
       sfSymbol,
       badge,
       sidebarOnly,
+      search,
+      pages,
     ];
   }
 
@@ -264,6 +275,8 @@ class NativeTab {
       sfSymbol: result[1]! as String,
       badge: result[2] as String?,
       sidebarOnly: result[3]! as bool,
+      search: result[4]! as bool,
+      pages: (result[5]! as List<Object?>).cast<NativePage>(),
     );
   }
 
@@ -279,7 +292,9 @@ class NativeTab {
     return _deepEquals(title, other.title) &&
         _deepEquals(sfSymbol, other.sfSymbol) &&
         _deepEquals(badge, other.badge) &&
-        _deepEquals(sidebarOnly, other.sidebarOnly);
+        _deepEquals(sidebarOnly, other.sidebarOnly) &&
+        _deepEquals(search, other.search) &&
+        _deepEquals(pages, other.pages);
   }
 
   @override
@@ -288,7 +303,7 @@ class NativeTab {
 
   @override
   String toString() {
-    return 'NativeTab(title: $title, sfSymbol: $sfSymbol, badge: $badge, sidebarOnly: $sidebarOnly)';
+    return 'NativeTab(title: $title, sfSymbol: $sfSymbol, badge: $badge, sidebarOnly: $sidebarOnly, search: $search, pages: $pages)';
   }
 }
 
@@ -408,6 +423,257 @@ class NativeFooter {
   }
 }
 
+/// One page of a tab's navigation stack (root first).
+class NativePage {
+  NativePage({
+    required this.title,
+    this.largeTitle,
+  });
+
+  String title;
+
+  bool? largeTitle;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      title,
+      largeTitle,
+    ];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static NativePage decode(Object result) {
+    result as List<Object?>;
+    return NativePage(
+      title: result[0]! as String,
+      largeTitle: result[1] as bool?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! NativePage || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(title, other.title) &&
+        _deepEquals(largeTitle, other.largeTitle);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'NativePage(title: $title, largeTitle: $largeTitle)';
+  }
+}
+
+/// The search tab's field.
+class NativeSearchConfig {
+  NativeSearchConfig({
+    this.placeholder,
+  });
+
+  String? placeholder;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      placeholder,
+    ];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static NativeSearchConfig decode(Object result) {
+    result as List<Object?>;
+    return NativeSearchConfig(
+      placeholder: result[0] as String?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! NativeSearchConfig || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(placeholder, other.placeholder);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'NativeSearchConfig(placeholder: $placeholder)';
+  }
+}
+
+/// A rectangle in the Flutter view's coordinates (points).
+class NativeRect {
+  NativeRect({
+    required this.x,
+    required this.y,
+    required this.width,
+    required this.height,
+  });
+
+  double x;
+
+  double y;
+
+  double width;
+
+  double height;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      x,
+      y,
+      width,
+      height,
+    ];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static NativeRect decode(Object result) {
+    result as List<Object?>;
+    return NativeRect(
+      x: result[0]! as double,
+      y: result[1]! as double,
+      width: result[2]! as double,
+      height: result[3]! as double,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! NativeRect || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(x, other.x) &&
+        _deepEquals(y, other.y) &&
+        _deepEquals(width, other.width) &&
+        _deepEquals(height, other.height);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'NativeRect(x: $x, y: $y, width: $width, height: $height)';
+  }
+}
+
+/// Debug builds: the native search and page state, for integration tests.
+class NativeDebugSnapshot {
+  NativeDebugSnapshot({
+    required this.selectedTab,
+    required this.searchActive,
+    required this.searchText,
+    required this.placement,
+    required this.pageTitles,
+    required this.fieldFrame,
+    required this.firstResponderIsSearch,
+  });
+
+  /// The selected `UITab`'s identifier ("destination<i>", or "" when none).
+  String selectedTab;
+
+  bool searchActive;
+
+  String searchText;
+
+  /// The realised `searchBarPlacement`: "integrated", "stacked", … or "".
+  String placement;
+
+  /// The search tab's navigation titles, root first.
+  List<String> pageTitles;
+
+  NativeRect fieldFrame;
+
+  bool firstResponderIsSearch;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      selectedTab,
+      searchActive,
+      searchText,
+      placement,
+      pageTitles,
+      fieldFrame,
+      firstResponderIsSearch,
+    ];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static NativeDebugSnapshot decode(Object result) {
+    result as List<Object?>;
+    return NativeDebugSnapshot(
+      selectedTab: result[0]! as String,
+      searchActive: result[1]! as bool,
+      searchText: result[2]! as String,
+      placement: result[3]! as String,
+      pageTitles: (result[4]! as List<Object?>).cast<String>(),
+      fieldFrame: result[5]! as NativeRect,
+      firstResponderIsSearch: result[6]! as bool,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! NativeDebugSnapshot || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(selectedTab, other.selectedTab) &&
+        _deepEquals(searchActive, other.searchActive) &&
+        _deepEquals(searchText, other.searchText) &&
+        _deepEquals(placement, other.placement) &&
+        _deepEquals(pageTitles, other.pageTitles) &&
+        _deepEquals(fieldFrame, other.fieldFrame) &&
+        _deepEquals(firstResponderIsSearch, other.firstResponderIsSearch);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'NativeDebugSnapshot(selectedTab: $selectedTab, searchActive: $searchActive, searchText: $searchText, placement: $placement, pageTitles: $pageTitles, fieldFrame: $fieldFrame, firstResponderIsSearch: $firstResponderIsSearch)';
+  }
+}
+
 /// The whole chrome. Applied in order: tabs, selection, footer, tint,
 /// appearance, direction, visibility.
 class NativeChromeConfig {
@@ -417,6 +683,7 @@ class NativeChromeConfig {
     required this.selectedIndex,
     this.trailing,
     this.footer,
+    this.search,
     required this.tintArgb,
     required this.dark,
     required this.rtl,
@@ -433,6 +700,8 @@ class NativeChromeConfig {
   NativeAction? trailing;
 
   NativeFooter? footer;
+
+  NativeSearchConfig? search;
 
   int tintArgb;
 
@@ -451,6 +720,7 @@ class NativeChromeConfig {
       selectedIndex,
       trailing,
       footer,
+      search,
       tintArgb,
       dark,
       rtl,
@@ -471,11 +741,12 @@ class NativeChromeConfig {
       selectedIndex: result[2]! as int,
       trailing: result[3] as NativeAction?,
       footer: result[4] as NativeFooter?,
-      tintArgb: result[5]! as int,
-      dark: result[6]! as bool,
-      rtl: result[7]! as bool,
-      hidden: result[8]! as bool,
-      interactive: result[9]! as bool,
+      search: result[5] as NativeSearchConfig?,
+      tintArgb: result[6]! as int,
+      dark: result[7]! as bool,
+      rtl: result[8]! as bool,
+      hidden: result[9]! as bool,
+      interactive: result[10]! as bool,
     );
   }
 
@@ -493,6 +764,7 @@ class NativeChromeConfig {
         _deepEquals(selectedIndex, other.selectedIndex) &&
         _deepEquals(trailing, other.trailing) &&
         _deepEquals(footer, other.footer) &&
+        _deepEquals(search, other.search) &&
         _deepEquals(tintArgb, other.tintArgb) &&
         _deepEquals(dark, other.dark) &&
         _deepEquals(rtl, other.rtl) &&
@@ -506,7 +778,7 @@ class NativeChromeConfig {
 
   @override
   String toString() {
-    return 'NativeChromeConfig(engaged: $engaged, tabs: $tabs, selectedIndex: $selectedIndex, trailing: $trailing, footer: $footer, tintArgb: $tintArgb, dark: $dark, rtl: $rtl, hidden: $hidden, interactive: $interactive)';
+    return 'NativeChromeConfig(engaged: $engaged, tabs: $tabs, selectedIndex: $selectedIndex, trailing: $trailing, footer: $footer, search: $search, tintArgb: $tintArgb, dark: $dark, rtl: $rtl, hidden: $hidden, interactive: $interactive)';
   }
 }
 
@@ -616,71 +888,6 @@ class NativeDialogAction {
   @override
   String toString() {
     return 'NativeDialogAction(label: $label, style: $style, enabled: $enabled)';
-  }
-}
-
-/// A rect in the Flutter view's points.
-class NativeRect {
-  NativeRect({
-    required this.x,
-    required this.y,
-    required this.width,
-    required this.height,
-  });
-
-  double x;
-
-  double y;
-
-  double width;
-
-  double height;
-
-  List<Object?> _toList() {
-    return <Object?>[
-      x,
-      y,
-      width,
-      height,
-    ];
-  }
-
-  Object encode() {
-    return _toList();
-  }
-
-  static NativeRect decode(Object result) {
-    result as List<Object?>;
-    return NativeRect(
-      x: result[0]! as double,
-      y: result[1]! as double,
-      width: result[2]! as double,
-      height: result[3]! as double,
-    );
-  }
-
-  @override
-  // ignore: avoid_equals_and_hash_code_on_mutable_classes
-  bool operator ==(Object other) {
-    if (other is! NativeRect || other.runtimeType != runtimeType) {
-      return false;
-    }
-    if (identical(this, other)) {
-      return true;
-    }
-    return _deepEquals(x, other.x) &&
-        _deepEquals(y, other.y) &&
-        _deepEquals(width, other.width) &&
-        _deepEquals(height, other.height);
-  }
-
-  @override
-  // ignore: avoid_equals_and_hash_code_on_mutable_classes
-  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
-
-  @override
-  String toString() {
-    return 'NativeRect(x: $x, y: $y, width: $width, height: $height)';
   }
 }
 
@@ -959,26 +1166,35 @@ class _PigeonCodec extends StandardMessageCodec {
     } else if (value is NativeFooter) {
       buffer.putUint8(139);
       writeValue(buffer, value.encode());
-    } else if (value is NativeChromeConfig) {
+    } else if (value is NativePage) {
       buffer.putUint8(140);
       writeValue(buffer, value.encode());
-    } else if (value is NativeWindowControls) {
+    } else if (value is NativeSearchConfig) {
       buffer.putUint8(141);
       writeValue(buffer, value.encode());
-    } else if (value is NativeDialogAction) {
+    } else if (value is NativeRect) {
       buffer.putUint8(142);
       writeValue(buffer, value.encode());
-    } else if (value is NativeRect) {
+    } else if (value is NativeDebugSnapshot) {
       buffer.putUint8(143);
       writeValue(buffer, value.encode());
-    } else if (value is NativeDialogRequest) {
+    } else if (value is NativeChromeConfig) {
       buffer.putUint8(144);
       writeValue(buffer, value.encode());
-    } else if (value is NativeDialogResult) {
+    } else if (value is NativeWindowControls) {
       buffer.putUint8(145);
       writeValue(buffer, value.encode());
-    } else if (value is NativeDialogSnapshot) {
+    } else if (value is NativeDialogAction) {
       buffer.putUint8(146);
+      writeValue(buffer, value.encode());
+    } else if (value is NativeDialogRequest) {
+      buffer.putUint8(147);
+      writeValue(buffer, value.encode());
+    } else if (value is NativeDialogResult) {
+      buffer.putUint8(148);
+      writeValue(buffer, value.encode());
+    } else if (value is NativeDialogSnapshot) {
+      buffer.putUint8(149);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -1020,18 +1236,24 @@ class _PigeonCodec extends StandardMessageCodec {
       case 139:
         return NativeFooter.decode(readValue(buffer)!);
       case 140:
-        return NativeChromeConfig.decode(readValue(buffer)!);
+        return NativePage.decode(readValue(buffer)!);
       case 141:
-        return NativeWindowControls.decode(readValue(buffer)!);
+        return NativeSearchConfig.decode(readValue(buffer)!);
       case 142:
-        return NativeDialogAction.decode(readValue(buffer)!);
-      case 143:
         return NativeRect.decode(readValue(buffer)!);
+      case 143:
+        return NativeDebugSnapshot.decode(readValue(buffer)!);
       case 144:
-        return NativeDialogRequest.decode(readValue(buffer)!);
+        return NativeChromeConfig.decode(readValue(buffer)!);
       case 145:
-        return NativeDialogResult.decode(readValue(buffer)!);
+        return NativeWindowControls.decode(readValue(buffer)!);
       case 146:
+        return NativeDialogAction.decode(readValue(buffer)!);
+      case 147:
+        return NativeDialogRequest.decode(readValue(buffer)!);
+      case 148:
+        return NativeDialogResult.decode(readValue(buffer)!);
+      case 149:
         return NativeDialogSnapshot.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
@@ -1156,6 +1378,89 @@ class NativeShellHostApi {
       isNullValid: true,
     );
   }
+
+  /// Sets the search field's text once no IME composition is in progress.
+  Future<void> setSearchText(String text) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.liquid_shell_ios.NativeShellHostApi.setSearchText$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[text],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
+  }
+
+  /// Presents or dismisses the search; dismissing keeps the text.
+  Future<void> setSearchActive(bool active) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.liquid_shell_ios.NativeShellHostApi.setSearchActive$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[active],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
+  }
+
+  /// The top page's scroll offset of tab [tab] (proxy scroll view).
+  Future<void> setPageScroll(int tab, double offset) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.liquid_shell_ios.NativeShellHostApi.setPageScroll$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[tab, offset],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
+  }
+
+  /// Debug builds: the native search and page state. Release: empty.
+  Future<NativeDebugSnapshot> debugSnapshot() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.liquid_shell_ios.NativeShellHostApi.debugSnapshot$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as NativeDebugSnapshot;
+  }
 }
 
 /// Native → Dart.
@@ -1171,6 +1476,20 @@ abstract class NativeShellFlutterApi {
   void onStateChanged(NativeShellState state);
 
   void onWindowControlsChanged(NativeWindowControls controls);
+
+  void onSearchTextChanged(String text, bool composing);
+
+  void onSearchActiveChanged(bool active);
+
+  void onSearchSubmitted(String text);
+
+  void onSearchFieldChanged(NativeRect frame);
+
+  void onBackTapped(int tab);
+
+  /// UIKit asked to pop tab [tab] to the page at [index] (the back menu, a
+  /// pop-to-root); native did not pop.
+  void onPopToPage(int tab, int index);
 
   static void setUp(
     NativeShellFlutterApi? api, {
@@ -1291,6 +1610,158 @@ abstract class NativeShellFlutterApi {
               args[0]! as NativeWindowControls;
           try {
             api.onWindowControlsChanged(arg_controls);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          } catch (e) {
+            return wrapResponse(
+              error: PlatformException(code: 'error', message: e.toString()),
+            );
+          }
+        });
+      }
+    }
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+        'dev.flutter.pigeon.liquid_shell_ios.NativeShellFlutterApi.onSearchTextChanged$messageChannelSuffix',
+        pigeonChannelCodec,
+        binaryMessenger: binaryMessenger,
+      );
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          final List<Object?> args = message! as List<Object?>;
+          final String arg_text = args[0]! as String;
+          final bool arg_composing = args[1]! as bool;
+          try {
+            api.onSearchTextChanged(arg_text, arg_composing);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          } catch (e) {
+            return wrapResponse(
+              error: PlatformException(code: 'error', message: e.toString()),
+            );
+          }
+        });
+      }
+    }
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+        'dev.flutter.pigeon.liquid_shell_ios.NativeShellFlutterApi.onSearchActiveChanged$messageChannelSuffix',
+        pigeonChannelCodec,
+        binaryMessenger: binaryMessenger,
+      );
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          final List<Object?> args = message! as List<Object?>;
+          final bool arg_active = args[0]! as bool;
+          try {
+            api.onSearchActiveChanged(arg_active);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          } catch (e) {
+            return wrapResponse(
+              error: PlatformException(code: 'error', message: e.toString()),
+            );
+          }
+        });
+      }
+    }
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+        'dev.flutter.pigeon.liquid_shell_ios.NativeShellFlutterApi.onSearchSubmitted$messageChannelSuffix',
+        pigeonChannelCodec,
+        binaryMessenger: binaryMessenger,
+      );
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          final List<Object?> args = message! as List<Object?>;
+          final String arg_text = args[0]! as String;
+          try {
+            api.onSearchSubmitted(arg_text);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          } catch (e) {
+            return wrapResponse(
+              error: PlatformException(code: 'error', message: e.toString()),
+            );
+          }
+        });
+      }
+    }
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+        'dev.flutter.pigeon.liquid_shell_ios.NativeShellFlutterApi.onSearchFieldChanged$messageChannelSuffix',
+        pigeonChannelCodec,
+        binaryMessenger: binaryMessenger,
+      );
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          final List<Object?> args = message! as List<Object?>;
+          final NativeRect arg_frame = args[0]! as NativeRect;
+          try {
+            api.onSearchFieldChanged(arg_frame);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          } catch (e) {
+            return wrapResponse(
+              error: PlatformException(code: 'error', message: e.toString()),
+            );
+          }
+        });
+      }
+    }
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+        'dev.flutter.pigeon.liquid_shell_ios.NativeShellFlutterApi.onBackTapped$messageChannelSuffix',
+        pigeonChannelCodec,
+        binaryMessenger: binaryMessenger,
+      );
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          final List<Object?> args = message! as List<Object?>;
+          final int arg_tab = args[0]! as int;
+          try {
+            api.onBackTapped(arg_tab);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          } catch (e) {
+            return wrapResponse(
+              error: PlatformException(code: 'error', message: e.toString()),
+            );
+          }
+        });
+      }
+    }
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+        'dev.flutter.pigeon.liquid_shell_ios.NativeShellFlutterApi.onPopToPage$messageChannelSuffix',
+        pigeonChannelCodec,
+        binaryMessenger: binaryMessenger,
+      );
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          final List<Object?> args = message! as List<Object?>;
+          final int arg_tab = args[0]! as int;
+          final int arg_index = args[1]! as int;
+          try {
+            api.onPopToPage(arg_tab, arg_index);
             return wrapResponse(empty: true);
           } on PlatformException catch (e) {
             return wrapResponse(error: e);

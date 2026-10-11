@@ -103,6 +103,29 @@ class LiquidShellIOS extends EventChannelLiquidShellPlatform {
   }
 
   @override
+  Future<void> setNativeSearchText(String text) =>
+      _send('setSearchText', () => _host.setSearchText(text));
+
+  @override
+  Future<void> setNativeSearchActive({required bool active}) =>
+      _send('setSearchActive', () => _host.setSearchActive(active));
+
+  @override
+  Future<void> setNativePageScroll({
+    required int tab,
+    required double offset,
+  }) async {
+    // Checked at the boundary: a NaN or infinite offset never crosses.
+    if (!offset.isFinite) return;
+    await _send('setPageScroll', () => _host.setPageScroll(tab, offset));
+  }
+
+  /// Debug builds of the plugin report the native search and page state;
+  /// release builds an empty snapshot. For integration tests.
+  @visibleForTesting
+  Future<NativeDebugSnapshot> debugSnapshot() => _host.debugSnapshot();
+
+  @override
   bool get supportsNativeDialogs => true;
 
   @override
@@ -136,9 +159,7 @@ class LiquidShellIOS extends EventChannelLiquidShellPlatform {
         message: shot.message,
         labels: shot.labels,
         preferredIndex: shot.preferredIndex,
-        sourceRect: rect == null
-            ? null
-            : Rect.fromLTWH(rect.x, rect.y, rect.width, rect.height),
+        sourceRect: rect == null ? null : rectFromNative(rect),
       );
     } on PlatformException catch (error) {
       _logOnce('debugDialog', error);
@@ -201,4 +222,27 @@ final class _NativeReceiver implements NativeShellFlutterApi {
   @override
   void onWindowControlsChanged(NativeWindowControls controls) =>
       _emit(LiquidWindowControlsChanged(controlsFromNative(controls)));
+
+  @override
+  void onSearchTextChanged(String text, bool composing) =>
+      _emit(LiquidNativeSearchTextChanged(text, composing: composing));
+
+  @override
+  void onSearchActiveChanged(bool active) =>
+      _emit(LiquidNativeSearchActiveChanged(active));
+
+  @override
+  void onSearchSubmitted(String text) =>
+      _emit(LiquidNativeSearchSubmitted(text));
+
+  @override
+  void onSearchFieldChanged(NativeRect frame) =>
+      _emit(LiquidNativeSearchFieldChanged(rectFromNative(frame)));
+
+  @override
+  void onBackTapped(int tab) => _emit(LiquidNativeBackTapped(tab));
+
+  @override
+  void onPopToPage(int tab, int index) =>
+      _emit(LiquidNativePopToPage(tab, index: index));
 }

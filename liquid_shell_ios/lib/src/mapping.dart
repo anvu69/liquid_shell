@@ -51,6 +51,11 @@ NativeChromeConfig configToNative(LiquidNativeChromeConfig config) =>
             sfSymbol: tab.sfSymbol,
             badge: tab.badge,
             sidebarOnly: tab.sidebarOnly,
+            search: tab.search,
+            pages: [
+              for (final page in tab.pages)
+                NativePage(title: page.title, largeTitle: page.largeTitle),
+            ],
           ),
       ],
       selectedIndex: config.selectedIndex,
@@ -70,12 +75,24 @@ NativeChromeConfig configToNative(LiquidNativeChromeConfig config) =>
           semanticLabel: footer.semanticLabel,
         ),
       },
+      search: switch (config.search) {
+        null => null,
+        final search => NativeSearchConfig(placeholder: search.placeholder),
+      },
       tintArgb: config.tintArgb,
       dark: config.dark,
       rtl: config.rtl,
       hidden: config.hidden,
       interactive: config.interactive,
     );
+
+/// A native rect, checked at the boundary: any non-finite field makes it
+/// [Rect.zero] ("not on screen").
+Rect rectFromNative(NativeRect rect) {
+  final values = [rect.x, rect.y, rect.width, rect.height];
+  if (values.any((v) => !v.isFinite)) return Rect.zero;
+  return Rect.fromLTWH(rect.x, rect.y, rect.width, rect.height);
+}
 
 /// Interface dialog request → native request. A non-finite anchor is not
 /// sent (spec P3a §6).

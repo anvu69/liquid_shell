@@ -24,13 +24,26 @@ class FakeNativePlatform extends FakeSignalsPlatform {
   /// Every `setNativeSidebarVisible` call.
   final sidebarCalls = <bool>[];
 
+  /// Every `setNativeSearchText`.
+  final searchTexts = <String>[];
+
+  /// Every `setNativeSearchActive`.
+  final searchActives = <bool>[];
+
+  /// Every `setNativePageScroll`, as (tab, offset).
+  final pageScrolls = <(int, double)>[];
+
   /// What [readWindowControls] answers.
   LiquidWindowControls controls = LiquidWindowControls.zero;
 
   /// Number of [readWindowControls] calls.
   int controlReads = 0;
 
-  final _native = StreamController<LiquidNativeEvent>.broadcast();
+  // Synchronous, like a platform message handled before the next frame:
+  // the `pump` after [emitNative] then builds what the event changed.
+  // (Asynchronous delivery would land after that pump's frame check, so
+  // a single pump would never draw it.)
+  final _native = StreamController<LiquidNativeEvent>.broadcast(sync: true);
 
   /// The last config sent.
   LiquidNativeChromeConfig get last => configs.last;
@@ -58,6 +71,19 @@ class FakeNativePlatform extends FakeSignalsPlatform {
   @override
   Future<void> setNativeSidebarVisible({required bool visible}) async =>
       sidebarCalls.add(visible);
+
+  @override
+  Future<void> setNativeSearchText(String text) async => searchTexts.add(text);
+
+  @override
+  Future<void> setNativeSearchActive({required bool active}) async =>
+      searchActives.add(active);
+
+  @override
+  Future<void> setNativePageScroll({
+    required int tab,
+    required double offset,
+  }) async => pageScrolls.add((tab, offset));
 
   @override
   Future<LiquidWindowControls> readWindowControls() async {

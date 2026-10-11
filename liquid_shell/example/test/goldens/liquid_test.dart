@@ -10,6 +10,7 @@ import 'package:liquid_shell_example/cases/basic_tabs.dart';
 import 'package:liquid_shell_example/cases/custom_theme.dart';
 import 'package:liquid_shell_example/cases/forced_tier.dart';
 import 'package:liquid_shell_example/cases/native_alerts.dart';
+import 'package:liquid_shell_example/cases/search.dart';
 import 'package:liquid_shell_example/cases/sidebar_slots.dart';
 
 import '../support/golden_harness.dart';
@@ -150,6 +151,65 @@ void main() {
       const NativeAlertsCase(),
       device: ipadPortrait,
       interact: () => tester.tap(find.text('Action sheet')),
+    );
+  });
+
+  // The search tab's glass (the collapsed circle, the field, the top field
+  // and the back button) is LiquidGlass: on the default tier it is liquid.
+  int liquidSurfaces() => find
+      .byWidgetPredicate((w) => w.runtimeType.toString() == 'LiquidBackdrop')
+      .evaluate()
+      .length;
+
+  Future<void> openSearch(WidgetTester tester) async {
+    await tester.tap(find.bySemanticsLabel('Search'));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('case_search_phone_selected_liquid', (tester) async {
+    await liquid(
+      tester,
+      'case_search_phone_selected_liquid',
+      const SearchCase(),
+      interact: () => openSearch(tester),
+    );
+    // The collapsed circle and the field.
+    expect(liquidSurfaces(), greaterThanOrEqualTo(2));
+  });
+
+  testWidgets('case_search_tablet_selected_liquid', (tester) async {
+    await liquid(
+      tester,
+      'case_search_tablet_selected_liquid',
+      const SearchCase(),
+      device: ipadPortrait,
+      interact: () => openSearch(tester),
+    );
+    // The top bar and the field under it.
+    expect(liquidSurfaces(), greaterThanOrEqualTo(2));
+  });
+
+  testWidgets('case_search_detail_liquid', (tester) async {
+    await liquid(
+      tester,
+      'case_search_detail_liquid',
+      const SearchCase(),
+      interact: () async {
+        await openSearch(tester);
+        await tester.tap(find.text('Hà Nội').first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Hồ Hoàn Kiếm'));
+      },
+    );
+    expect(
+      find.descendant(
+        of: find.byType(LiquidBackButton),
+        matching: find.byWidgetPredicate(
+          (w) => w.runtimeType.toString() == 'LiquidBackdrop',
+        ),
+      ),
+      findsOneWidget,
+      reason: 'the glass back button is liquid',
     );
   });
 

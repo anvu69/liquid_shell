@@ -15,6 +15,9 @@ class LiquidShellStrings {
     this.expandTabBarHint = 'Tap to open the navigation bar',
     this.badgeDot = 'New',
     this.badgeCount = defaultBadgeCount,
+    this.searchPlaceholder = 'Search',
+    this.cancelSearch = 'Cancel search',
+    this.back = 'Back',
     this.dismiss = 'Dismiss',
   });
 
@@ -36,6 +39,16 @@ class LiquidShellStrings {
   /// Spoken after a destination label when it has a count badge.
   final String Function(int count) badgeCount;
 
+  /// The Flutter search field's placeholder when `LiquidSearch.placeholder`
+  /// is null.
+  final String searchPlaceholder;
+
+  /// Semantics and tooltip of the Flutter search field's cancel (×).
+  final String cancelSearch;
+
+  /// Semantics and tooltip of `LiquidBackButton`.
+  final String back;
+
   /// The barrier label of a Flutter action sheet (spec P3a §4.3): screen
   /// readers offer it to close the sheet.
   final String dismiss;
@@ -55,6 +68,9 @@ class LiquidShellStrings {
       other.expandTabBarHint == expandTabBarHint &&
       other.badgeDot == badgeDot &&
       other.badgeCount == badgeCount &&
+      other.searchPlaceholder == searchPlaceholder &&
+      other.cancelSearch == cancelSearch &&
+      other.back == back &&
       other.dismiss == dismiss;
 
   @override
@@ -65,6 +81,9 @@ class LiquidShellStrings {
     expandTabBarHint,
     badgeDot,
     badgeCount,
+    searchPlaceholder,
+    cancelSearch,
+    back,
     dismiss,
   );
 }

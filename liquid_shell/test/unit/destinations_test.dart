@@ -192,6 +192,9 @@ void main() {
       expect(strings.expandTabBarHint, 'Tap to open the navigation bar');
       expect(strings.badgeDot, 'New');
       expect(strings.badgeCount(3), '3 new');
+      expect(strings.searchPlaceholder, 'Search');
+      expect(strings.cancelSearch, 'Cancel search');
+      expect(strings.back, 'Back');
       expect(LiquidShellStrings.defaultBadgeCount(7), '7 new');
     });
 
@@ -210,10 +213,31 @@ void main() {
       ('expandTabBarHint', const LiquidShellStrings(expandTabBarHint: 'x')),
       ('badgeDot', const LiquidShellStrings(badgeDot: 'x')),
       ('badgeCount', const LiquidShellStrings(badgeCount: _otherBadgeCount)),
+      ('searchPlaceholder', const LiquidShellStrings(searchPlaceholder: 'x')),
+      ('cancelSearch', const LiquidShellStrings(cancelSearch: 'x')),
+      ('back', const LiquidShellStrings(back: 'x')),
     ]) {
       test('== sees a different $field alone', () {
         expect(const LiquidShellStrings(), isNot(other));
       });
     }
+  });
+
+  test('role joins == and defaults to standard', () {
+    const icon = Icon(Icons.search);
+    expect(
+      const LiquidDestination(icon: icon, label: 'S').role,
+      LiquidDestinationRole.standard,
+    );
+    expect(
+      const LiquidDestination(icon: icon, label: 'S'),
+      isNot(
+        const LiquidDestination(
+          icon: icon,
+          label: 'S',
+          role: LiquidDestinationRole.search,
+        ),
+      ),
+    );
   });
 }

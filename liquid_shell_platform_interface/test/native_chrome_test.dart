@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
@@ -296,7 +298,7 @@ void main() {
         badge: '3',
       ).toString(),
       'LiquidNativeTab(title: Home, sfSymbol: house, badge: 3, '
-      'sidebarOnly: false)',
+      'sidebarOnly: false, search: false, pages: [])',
     );
     expect(
       const LiquidNativeAction(
@@ -327,6 +329,7 @@ void main() {
       'selectedIndex: 2',
       'trailing: null',
       'footer: null',
+      'search: null',
       'tintArgb: 0xff3d5afe',
       'dark: false',
       'rtl: false',
@@ -357,5 +360,162 @@ void main() {
       const LiquidWindowControlsChanged(LiquidWindowControls.zero).toString(),
       'LiquidWindowControlsChanged(${LiquidWindowControls.zero})',
     );
+  });
+
+  group('P3b search and pages', () {
+    test('LiquidNativePage compares field by field', () {
+      expect(
+        const LiquidNativePage(title: 'Detail', largeTitle: false),
+        const LiquidNativePage(title: 'Detail', largeTitle: false),
+      );
+      expect(
+        const LiquidNativePage(title: 'Detail'),
+        isNot(const LiquidNativePage(title: 'Detail', largeTitle: true)),
+      );
+      expect(
+        const LiquidNativePage(title: 'A').hashCode,
+        const LiquidNativePage(title: 'A').hashCode,
+      );
+      expect(
+        const LiquidNativePage(title: 'A', largeTitle: true).toString(),
+        'LiquidNativePage(title: A, largeTitle: true)',
+      );
+    });
+
+    test('LiquidNativeTab includes search and pages in ==', () {
+      const base = LiquidNativeTab(title: 'Search', sfSymbol: '');
+      expect(base.search, isFalse);
+      expect(base.pages, isEmpty);
+      expect(
+        const LiquidNativeTab(title: 'Search', sfSymbol: '', search: true),
+        isNot(base),
+      );
+      expect(
+        const LiquidNativeTab(
+          title: 'Search',
+          sfSymbol: '',
+          pages: [LiquidNativePage(title: 'Search')],
+        ),
+        isNot(base),
+      );
+      expect(
+        const LiquidNativeTab(
+          title: 'Search',
+          sfSymbol: '',
+          pages: [LiquidNativePage(title: 'Search')],
+        ),
+        const LiquidNativeTab(
+          title: 'Search',
+          sfSymbol: '',
+          pages: [LiquidNativePage(title: 'Search')],
+        ),
+      );
+    });
+
+    test('LiquidNativeSearchConfig and the config field', () {
+      const a = LiquidNativeSearchConfig(placeholder: 'Songs, places');
+      expect(a, const LiquidNativeSearchConfig(placeholder: 'Songs, places'));
+      expect(a, isNot(const LiquidNativeSearchConfig()));
+      expect(
+        const LiquidNativeChromeConfig(engaged: true, search: a),
+        isNot(const LiquidNativeChromeConfig(engaged: true)),
+      );
+      expect(LiquidNativeChromeConfig.dormant.search, isNull);
+      expect(
+        const LiquidNativeChromeConfig(engaged: true, search: a).toString(),
+        contains(
+          'search: LiquidNativeSearchConfig(placeholder: Songs, places)',
+        ),
+      );
+    });
+
+    test('search and back events compare by value', () {
+      expect(
+        const LiquidNativeSearchTextChanged('hồ', composing: true),
+        const LiquidNativeSearchTextChanged('hồ', composing: true),
+      );
+      expect(
+        const LiquidNativeSearchTextChanged('hồ', composing: true),
+        isNot(const LiquidNativeSearchTextChanged('hồ', composing: false)),
+      );
+      expect(
+        const LiquidNativeSearchActiveChanged(true),
+        const LiquidNativeSearchActiveChanged(true),
+      );
+      expect(
+        const LiquidNativeSearchSubmitted('ho'),
+        isNot(const LiquidNativeSearchSubmitted('ha')),
+      );
+      expect(
+        const LiquidNativeSearchFieldChanged(Rect.fromLTWH(8, 490, 330, 48)),
+        const LiquidNativeSearchFieldChanged(Rect.fromLTWH(8, 490, 330, 48)),
+      );
+      expect(const LiquidNativeBackTapped(2), const LiquidNativeBackTapped(2));
+      expect(
+        const LiquidNativeBackTapped(2),
+        isNot(const LiquidNativeBackTapped(1)),
+      );
+      expect(
+        const LiquidNativePopToPage(2, index: 0),
+        const LiquidNativePopToPage(2, index: 0),
+      );
+      expect(
+        const LiquidNativePopToPage(2, index: 0),
+        isNot(const LiquidNativePopToPage(2, index: 1)),
+      );
+      expect(
+        const LiquidNativePopToPage(2, index: 0),
+        isNot(const LiquidNativePopToPage(1, index: 0)),
+      );
+      expect(
+        const LiquidNativeSearchTextChanged('a', composing: false).toString(),
+        'LiquidNativeSearchTextChanged(a, composing: false)',
+      );
+    });
+
+    test('the P3b types hash by value and name their fields', () {
+      const frame = Rect.fromLTWH(8, 490, 330, 48);
+      final pairs = <(Object, Object, String)>[
+        (
+          const LiquidNativeSearchConfig(placeholder: 'x'),
+          const LiquidNativeSearchConfig(placeholder: 'x'),
+          'LiquidNativeSearchConfig(placeholder: x)',
+        ),
+        (
+          const LiquidNativeSearchTextChanged('a', composing: true),
+          const LiquidNativeSearchTextChanged('a', composing: true),
+          'LiquidNativeSearchTextChanged(a, composing: true)',
+        ),
+        (
+          const LiquidNativeSearchActiveChanged(false),
+          const LiquidNativeSearchActiveChanged(false),
+          'LiquidNativeSearchActiveChanged(false)',
+        ),
+        (
+          const LiquidNativeSearchSubmitted('ho'),
+          const LiquidNativeSearchSubmitted('ho'),
+          'LiquidNativeSearchSubmitted(ho)',
+        ),
+        (
+          const LiquidNativeSearchFieldChanged(frame),
+          const LiquidNativeSearchFieldChanged(frame),
+          'LiquidNativeSearchFieldChanged($frame)',
+        ),
+        (
+          const LiquidNativeBackTapped(1),
+          const LiquidNativeBackTapped(1),
+          'LiquidNativeBackTapped(1)',
+        ),
+        (
+          const LiquidNativePopToPage(1, index: 0),
+          const LiquidNativePopToPage(1, index: 0),
+          'LiquidNativePopToPage(1, index: 0)',
+        ),
+      ];
+      for (final (a, b, text) in pairs) {
+        expect(a.hashCode, b.hashCode, reason: text);
+        expect(a.toString(), text);
+      }
+    });
   });
 }
