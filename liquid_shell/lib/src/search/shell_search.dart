@@ -45,6 +45,11 @@ final class ShellSearch implements SearchDriver {
   // The controller's text came from the user's typing in the field (not
   // from the app): native has it, unless its scene was rebuilt.
   bool _userText = false;
+  // The next native entry tells native the search is inactive, unless the
+  // app asked for activation since: after an attach (a hot restart: Dart
+  // starts inactive while the old native search may be active) and after
+  // a reconnect (the new field starts inactive).
+  bool _syncInactive = true;
   bool _native = false;
   bool _writing = false;
   bool _disposed = false;
@@ -126,7 +131,16 @@ final class ShellSearch implements SearchDriver {
   /// a text the app set is replayed. A reconnect whose first state differs
   /// looks the same here: the plugin's installer carries the old field's
   /// text to the new one natively.
+  ///
+  /// A reconnect also ends the active state: the new field has no focus.
   void replay({required bool reconnect}) {
+    if (reconnect) {
+      _syncInactive = true;
+      final controller = _controller;
+      if (controller != null && controller.isActive) {
+        applySearchEdit(controller, controller.value.copyWith(active: false));
+      }
+    }
     if (!reconnect && _userText) return;
     _sentShown = false;
     _replay = true;
@@ -203,6 +217,10 @@ final class ShellSearch implements SearchDriver {
       _replay = false;
       claim()?.setSearchText(controller.text);
     }
+    if (entered && _syncInactive) {
+      _syncInactive = false;
+      if (!controller.isActive) claim()?.setSearchActive(active: false);
+    }
     if (left && controller.isActive) {
       applySearchEdit(controller, controller.value.copyWith(active: false));
     }
@@ -222,6 +240,7 @@ final class ShellSearch implements SearchDriver {
       return;
     }
     if (native) {
+      _syncInactive = false;
       FocusManager.instance.primaryFocus?.unfocus();
       claim()?.setSearchActive(active: true);
     } else {

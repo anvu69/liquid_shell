@@ -73,9 +73,13 @@ Future<(FakeNativePlatform, LiquidSearchController, List<String>)> _pump(
     padding: _compactPadding,
     settle: settle,
   );
-  // The first native entry replays the (empty) text (spec §7.10); the
-  // tests below are about what happens after it.
-  if (settle) fake.searchTexts.clear();
+  // The first native entry replays the (empty) text (spec §7.10) and
+  // tells native the search is inactive; the tests below are about what
+  // happens after it.
+  if (settle) {
+    fake.searchTexts.clear();
+    fake.searchActives.clear();
+  }
   return (fake, controller, changes);
 }
 
@@ -296,6 +300,8 @@ void main() {
     expect(logs, [contains('activate() ignored')]);
     fake.emitNative(const LiquidNativeDestinationTapped(2));
     await tester.pumpAndSettle();
+    expect(fake.searchActives, [false], reason: 'the first native entry');
+    fake.searchActives.clear();
     // A Flutter text field elsewhere has the focus (first-responder rule,
     // spec §7.4): activation takes it away before native focuses its field.
     final focus = FocusNode();
@@ -653,6 +659,7 @@ void main() {
       await pumpShell(tester, at(padded: true), padding: _compactPadding);
       expect(tester.takeException(), isNull);
       fake.searchTexts.clear();
+      fake.searchActives.clear();
       controller.text = 'y';
       await tester.pump();
       expect(fake.searchTexts, ['y']);
@@ -677,6 +684,7 @@ void main() {
       );
       await pumpShell(tester, shell(first), padding: _compactPadding);
       fake.searchTexts.clear();
+      fake.searchActives.clear();
       fake.emitNative(const LiquidNativeSearchActiveChanged(true));
       await tester.pump();
       await pumpShell(tester, shell(second), padding: _compactPadding);
@@ -1527,6 +1535,44 @@ void main() {
       fake.pushState(const LiquidNativeShellState(installed: false));
       await tester.pumpAndSettle();
       expect(fieldText(tester), 'phố cổ');
+    });
+
+    testWidgets('Minor 3: a reconnected field starts inactive: Dart follows '
+        'and tells native on entry', (tester) async {
+      final (fake, controller, _) = await _pump(tester);
+      fake.emitNative(const LiquidNativeSearchActiveChanged(true));
+      await tester.pump();
+      expect(controller.isActive, isTrue, reason: 'precondition');
+      fake.searchActives.clear();
+      // The same state again: a rebuilt native controller (spec §7.10).
+      fake.pushState(_compact);
+      await tester.pumpAndSettle();
+      expect(controller.isActive, isFalse);
+      expect(fake.searchActives, [false]);
+    });
+
+    testWidgets('Minor 3: the first native entry after an attach (a hot '
+        'restart) tells native the search is inactive', (tester) async {
+      final fake = installFakeNative(state: _compact);
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      await pumpShell(
+        tester,
+        _searchShell(controller),
+        padding: _compactPadding,
+      );
+      expect(fake.searchActives, [false]);
+      await tester.pumpAndSettle();
+      expect(fake.searchActives, [false], reason: 'once');
+    });
+
+    testWidgets('Minor 3: an activation asked before the entry is not '
+        'undone', (tester) async {
+      final (fake, controller, _) = await _pump(tester);
+      fake.pushState(_compact);
+      controller.activate();
+      await tester.pumpAndSettle();
+      expect(fake.searchActives, [true]);
     });
   });
 }
