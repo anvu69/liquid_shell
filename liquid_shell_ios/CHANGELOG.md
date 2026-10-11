@@ -14,6 +14,10 @@
   its containers are background, so touches there reach Flutter.
 - A scene reconnect carries the search text to the new shell.
 
+## 0.1.0-dev.4
+
+- Reports Low Power Mode as `powerSave`.
+
 ## 0.1.0-dev.3
 
 - Native alerts and action sheets presented from the engine's own window

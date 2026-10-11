@@ -1,2 +1,4 @@
 tags:
   golden:
+  # Needs `flutter test --enable-impeller`: the liquid tier's shader.
+  liquid_golden:

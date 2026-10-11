@@ -1,11 +1,13 @@
 package vn.lasoai.liquid_shell
 
 import android.app.Activity
+import android.app.ActivityManager
 import android.app.UiModeManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.database.ContentObserver
 import android.os.Build
 import android.os.Handler
@@ -118,6 +120,20 @@ class LiquidShellPlugin : FlutterPlugin, ActivityAware, EventChannel.StreamHandl
                 null
             },
             apiLevel = api,
+            isLowRamDevice = attempt {
+                ctx?.getSystemService(ActivityManager::class.java)?.isLowRamDevice
+            },
+            totalMemBytes = attempt {
+                ctx?.getSystemService(ActivityManager::class.java)?.let { manager ->
+                    ActivityManager.MemoryInfo().also(manager::getMemoryInfo).totalMem
+                }
+            },
+            vulkan11 = attempt {
+                ctx?.packageManager?.hasSystemFeature(
+                    PackageManager.FEATURE_VULKAN_HARDWARE_VERSION,
+                    SignalReader.VULKAN_1_1,
+                )
+            },
         )
     }
 
@@ -203,18 +219,6 @@ class LiquidShellPlugin : FlutterPlugin, ActivityAware, EventChannel.StreamHandl
         blurListener = null
         blurWindowManager = null
     }
-
-    /** Runs [block]; any SecurityException or other runtime failure → null. */
-    private inline fun <T> attempt(block: () -> T): T? =
-        try {
-            block()
-        } catch (e: SecurityException) {
-            null
-        } catch (e: Settings.SettingNotFoundException) {
-            null
-        } catch (e: RuntimeException) {
-            null
-        }
 
     private companion object {
         const val CHANNEL = "vn.lasoai.liquid_shell/signals"

@@ -5,13 +5,12 @@ import 'package:liquid_shell/liquid_shell.dart';
 
 /// Runs before every test file in this package.
 ///
-/// `flutter test` reports Android with no shader filters, so the device
-/// probe would answer "cannot blur" and every glass would be solid. Tests
-/// that exercise the probe set the override back to null themselves.
+/// Without `--enable-impeller` there are no shader filters, so glass is
+/// frosted unless a test opts into the liquid tier with
+/// `debugLiquidGlassCanRefractOverride`; this resets it after each test.
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
-  setUp(() => debugLiquidGlassCanBlurOverride = true);
   tearDown(() {
-    debugLiquidGlassCanBlurOverride = null;
+    debugLiquidGlassCanRefractOverride = null;
     debugResetLiquidGlassSignals();
     debugResetLiquidNative();
   });

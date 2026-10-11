@@ -65,12 +65,15 @@ List<_Chunk> _chunks(Uint8List bytes) {
   return chunks;
 }
 
-/// A decoded 8-bit RGB or RGBA PNG without interlacing.
+/// A decoded 8- or 16-bit RGB or RGBA PNG without interlacing.
 typedef DecodedPng = ({
   int width,
   int height,
   int colorType,
-  // Unfiltered samples, row after row, without filter bytes.
+  // Bits per sample in the file: 8, or 16 (iOS simulator screenshots).
+  int depth,
+  // Unfiltered samples, row after row, without filter bytes; 16-bit
+  // samples are rounded to 8 bits.
   Uint8List samples,
   // The filter types its rows used.
   Set<int> filters,
@@ -78,8 +81,8 @@ typedef DecodedPng = ({
   Uint8List rgba,
 });
 
-/// Decodes [bytes]. Throws a [FormatException] for anything but 8-bit,
-/// non-interlaced RGB (colour type 2) or RGBA (6).
+/// Decodes [bytes]. Throws a [FormatException] for anything but 8- or
+/// 16-bit, non-interlaced RGB (colour type 2) or RGBA (6).
 DecodedPng decodePng(Uint8List bytes) {
   final chunks = _chunks(bytes);
   final ihdr = ByteData.sublistView(chunks.first.data);
@@ -88,7 +91,9 @@ DecodedPng decodePng(Uint8List bytes) {
   final depth = ihdr.getUint8(8);
   final colorType = ihdr.getUint8(9);
   final interlace = ihdr.getUint8(12);
-  if (depth != 8 || (colorType != 2 && colorType != 6) || interlace != 0) {
+  if ((depth != 8 && depth != 16) ||
+      (colorType != 2 && colorType != 6) ||
+      interlace != 0) {
     throw FormatException(
       'unsupported PNG: depth $depth, colour type $colorType, '
       'interlace $interlace',
@@ -99,9 +104,10 @@ DecodedPng decodePng(Uint8List bytes) {
     if (c.type == 'IDAT') idat.add(c.data);
   }
   final raw = zlib.decode(idat.takeBytes());
-  final bpp = colorType == 6 ? 4 : 3;
+  final channels = colorType == 6 ? 4 : 3;
+  final bpp = channels * depth ~/ 8;
   final stride = width * bpp;
-  final samples = Uint8List(stride * height);
+  var samples = Uint8List(stride * height);
   final filters = <int>{};
   for (var y = 0; y < height; y++) {
     final filter = raw[y * (stride + 1)];
@@ -113,6 +119,14 @@ DecodedPng decodePng(Uint8List bytes) {
       final b = y > 0 ? samples[row - stride + x] : 0;
       final c = x >= bpp && y > 0 ? samples[row - stride + x - bpp] : 0;
       samples[row + x] = (raw[src + x] + _predict(filter, a, b, c)) & 0xff;
+    }
+  }
+  if (depth == 16) {
+    final wide = samples;
+    samples = Uint8List(wide.length ~/ 2);
+    for (var i = 0; i < samples.length; i++) {
+      final v = wide[i * 2] << 8 | wide[i * 2 + 1];
+      samples[i] = (v * 255 + 32767) ~/ 65535;
     }
   }
   final rgba = colorType == 6 ? samples : Uint8List(width * height * 4);
@@ -129,6 +143,7 @@ DecodedPng decodePng(Uint8List bytes) {
     width: width,
     height: height,
     colorType: colorType,
+    depth: depth,
     samples: samples,
     filters: filters,
     rgba: rgba,
@@ -191,6 +206,8 @@ Uint8List? compressPng(Uint8List bytes) {
   } on FormatException {
     return null;
   }
+  // Rewriting 16-bit samples in 8 bits would not be lossless.
+  if (png.depth != 8) return null;
   var colorType = png.colorType;
   var samples = png.samples;
   final pixels = png.width * png.height;

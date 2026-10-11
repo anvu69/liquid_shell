@@ -11,6 +11,10 @@
 - Three methods, with defaults that do nothing: `setNativeSearchText`,
   `setNativeSearchActive` and `setNativePageScroll`.
 
+## 0.1.0-dev.4
+
+- `LiquidPlatformSignals.lowEnd` and `glesOnly`.
+
 ## 0.1.0-dev.3
 
 - `supportsNativeDialogs`, `presentNativeDialog` and the native dialog

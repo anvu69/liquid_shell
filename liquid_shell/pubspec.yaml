@@ -30,3 +30,7 @@ flutter:
         default_package: liquid_shell_ios
       android:
         default_package: liquid_shell_android
+  # The liquid tier's lens (spec 2026-10-10 §4). Apps load it as
+  # packages/liquid_shell/shaders/liquid_glass.frag.
+  shaders:
+    - shaders/liquid_glass.frag

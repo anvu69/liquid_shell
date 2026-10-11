@@ -44,7 +44,9 @@ class _ForcedTierCaseState extends State<ForcedTierCase> {
               onSelectionChanged: (s) => setState(() => _tier = s.single),
             ),
             if (_tier == LiquidGlassTier.liquid)
-              const Text('No liquid renderer is registered: drawing frosted.'),
+              const Text(
+                'Liquid needs Impeller; without it this draws frosted.',
+              ),
           ],
         ),
       ),

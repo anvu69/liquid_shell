@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
+import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell_example/cases/cases.dart';
 import 'package:liquid_shell_example/cases/native_alerts.dart';
 import 'package:liquid_shell_example/cases/search.dart';
+import 'package:liquid_shell_example/support/chrome_mode.dart';
 import 'package:liquid_shell_example/support/drawn_by_flutter.dart';
 import 'package:liquid_shell_example/support/launch_demo.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // The first frame is already liquid, so no screenshot catches the
+  // frosted → liquid cross-fade.
+  await LiquidGlass.precache();
   runApp(ExampleApp(demo: await launchDemo()));
 }
 
@@ -25,7 +30,7 @@ void debugReleaseDemoSemantics() {
 const kExampleSeed = Color(0xFF3D5AFE);
 
 /// The example app: a list of cases, each opening one screen.
-class ExampleApp extends StatelessWidget {
+class ExampleApp extends StatefulWidget {
   /// Creates the app. [demo] opens one case directly (UI tests): `search`
   /// and `search-guarded` open the search case; `alert` and `sheet` open
   /// the alerts case and run that demo (spec P3a §9.4).
@@ -36,7 +41,23 @@ class ExampleApp extends StatelessWidget {
   final String? demo;
 
   @override
+  State<ExampleApp> createState() => _ExampleAppState();
+}
+
+class _ExampleAppState extends State<ExampleApp> {
+  final ValueNotifier<ExampleChromeMode> _mode = ValueNotifier(
+    ExampleChromeMode.native,
+  );
+
+  @override
+  void dispose() {
+    _mode.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final demo = widget.demo;
     final home = switch (demo) {
       'search' => const SearchCase(),
       'search-guarded' => const SearchCase(guardDetails: true),
@@ -48,14 +69,17 @@ class ExampleApp extends StatelessWidget {
     if (home is SearchCase) {
       _demoSemantics ??= SemanticsBinding.instance.ensureSemantics();
     }
-    return MaterialApp(
-      title: 'liquid_shell',
-      theme: ThemeData(colorSchemeSeed: kExampleSeed),
-      darkTheme: ThemeData(
-        colorSchemeSeed: kExampleSeed,
-        brightness: Brightness.dark,
+    return ChromeModeScope(
+      notifier: _mode,
+      child: MaterialApp(
+        title: 'liquid_shell',
+        theme: ThemeData(colorSchemeSeed: kExampleSeed),
+        darkTheme: ThemeData(
+          colorSchemeSeed: kExampleSeed,
+          brightness: Brightness.dark,
+        ),
+        home: home,
       ),
-      home: home,
     );
   }
 }
@@ -78,9 +102,11 @@ class CaseList extends StatelessWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute<void>(
-                builder: (_) => DrawnByFlutter(
-                  reason: entry.drawnByFlutter,
-                  child: entry.page,
+                builder: (_) => CaseFrame(
+                  child: DrawnByFlutter(
+                    reason: entry.drawnByFlutter,
+                    child: entry.page,
+                  ),
                 ),
               ),
             ),
