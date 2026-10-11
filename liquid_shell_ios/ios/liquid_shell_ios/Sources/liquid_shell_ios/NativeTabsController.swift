@@ -583,10 +583,10 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   }
 
   /// The text a shell installed after a scene reconnect starts with (spec
-  /// §7.10): Dart's newest write, held for another tab or a composition,
-  /// else the field's.
+  /// §7.10): Dart's newest write, held for another tab, kept through a
+  /// dismissal or held for a composition, else the field's.
   var carriedSearchText: String {
-    heldSearchText ?? searchBridge.pendingText ?? searchBridge.text
+    heldSearchText ?? searchBridge.newestText
   }
 
   /// Dart's activate / deactivate. Activation needs the search tab

@@ -53,6 +53,11 @@ final class SearchBridge: NSObject, UISearchResultsUpdating, UISearchControllerD
 
   var text: String { controller.searchBar.text ?? "" }
 
+  /// The text the field will show once UIKit is done: the text a
+  /// dismissal Dart asked for keeps (UIKit has emptied the field), else
+  /// Dart's text held for a composition, else the field's.
+  var newestText: String { keepOnDismiss ?? pendingText ?? text }
+
   /// Dart's text: now, or once the composition ends.
   func setText(_ new: String) {
     if keepOnDismiss != nil {

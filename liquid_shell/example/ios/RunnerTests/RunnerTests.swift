@@ -1429,6 +1429,29 @@ extension NativeTabsTests {
     XCTAssertEqual(try tabs(in: next).searchBridge.text, "hà")
   }
 
+  /// A scene disconnect while a dismissal Dart asked for is running: UIKit
+  /// empties the field, and the text to carry is the one the dismissal
+  /// keeps, not "" (Task 11 review). Dart text held for a composition is
+  /// newer than the field's too.
+  func testTheCarriedTextIsDartsNewestDuringADismissalOrAComposition() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let bridge = tabs.searchBridge
+    tabs.setSearchText("phố")
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    settle(sending: "searchActive false") {
+      tabs.setSearchActive(false)
+      tabs.setSearchText("hồ")
+      XCTAssertEqual(tabs.carriedSearchText, "hồ", "the dismissal's kept text")
+    }
+    XCTAssertEqual(bridge.text, "hồ", "precondition: the dismissal put it back")
+
+    var composing = true
+    bridge.isComposing = { composing }
+    tabs.setSearchText("hà")
+    XCTAssertEqual(tabs.carriedSearchText, "hà", "held for the composition")
+    composing = false
+  }
+
   func testTheSearchDestinationIsUIKitsSearchTabWithTheAppsTitle() throws {
     let tabs = try installedSearchShell()
     let search = try XCTUnwrap(tabs.searchTab)
