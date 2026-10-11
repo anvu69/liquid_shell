@@ -122,8 +122,17 @@ void main() {
       expect(rtl.clampCentre(400), 266);
     });
 
+    test('no slots: clampCentre is the pill centre, restLensAt is zero', () {
+      final empty = compact(0);
+      expect(empty.slots, isEmpty);
+      expect(empty.clampCentre(0), empty.pill.center.dx);
+      expect(empty.clampCentre(400), empty.pill.center.dx);
+      expect(empty.restLensAt(empty.pill.center.dx), Size.zero);
+    });
+
     test('restLensAt is the slot size (uniform slots)', () {
       expect(g.restLensAt(150), const Size(94, 54));
+      expect(g.restLensAt(250), const Size(94, 54));
     });
 
     test('restLensAt interpolates between content-sized slots', () {

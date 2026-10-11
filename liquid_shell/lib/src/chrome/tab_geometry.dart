@@ -163,15 +163,15 @@ class TabBarGeometry {
       ..sort((a, b) => a.center.dx.compareTo(b.center.dx));
     if (x <= order.first.center.dx) return order.first.size;
     if (x >= order.last.center.dx) return order.last.size;
-    for (var i = 0; i < order.length - 1; i++) {
-      final a = order[i];
-      final b = order[i + 1];
-      if (x <= b.center.dx) {
-        final t = (x - a.center.dx) / (b.center.dx - a.center.dx);
-        return Size.lerp(a.size, b.size, t)!;
-      }
+    // first < x < last, so a later centre is >= x and i + 1 stays in range.
+    var i = 0;
+    while (x > order[i + 1].center.dx) {
+      i++;
     }
-    return order.last.size;
+    final a = order[i];
+    final b = order[i + 1];
+    final t = (x - a.center.dx) / (b.center.dx - a.center.dx);
+    return Size.lerp(a.size, b.size, t)!;
   }
 
   @override
