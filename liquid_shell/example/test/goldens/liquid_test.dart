@@ -231,7 +231,8 @@ void main() {
       device: iphone,
       brightness: Brightness.dark,
     );
-    final home = tester.getCenter(find.byIcon(Icons.home_outlined).first);
+    // The bar draws the filled selectedIcon in every slot (spec §6.1).
+    final home = tester.getCenter(find.byIcon(Icons.home).first);
     final finger = await tester.startGesture(home);
     for (var i = 0; i < 20; i++) {
       await tester.pump(const Duration(milliseconds: 16));

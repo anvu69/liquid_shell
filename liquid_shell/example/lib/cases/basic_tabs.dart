@@ -23,16 +23,19 @@ class _BasicTabsCaseState extends State<BasicTabsCase> {
       destinations: const [
         LiquidDestination(
           icon: Icon(Icons.home_outlined),
+          selectedIcon: Icon(Icons.home),
           label: 'Home',
           sfSymbol: 'house',
         ),
         LiquidDestination(
-          icon: Icon(Icons.explore_outlined),
+          icon: Icon(Icons.map_outlined),
+          selectedIcon: Icon(Icons.map),
           label: 'Explore',
           sfSymbol: 'map',
         ),
         LiquidDestination(
           icon: Icon(Icons.settings_outlined),
+          selectedIcon: Icon(Icons.settings),
           label: 'Settings',
           sfSymbol: 'gear',
         ),

@@ -44,6 +44,45 @@ The same screen with one field changed at a time:
 |---|---|---|
 | <img src="images/liquid_dispersion_03.png" width="240" alt="dispersion 0.3: a faint colour fringe"> | <img src="images/liquid_default.png" width="240" alt="default liquid glass"> | <img src="images/liquid_default_dark.png" width="240" alt="default liquid glass, dark"> |
 
+## The tab lens and the pocket
+
+**The tab lens.** At rest the selected tab of the Flutter tab bar sits in
+a flat `selectionFill` capsule, with no extra pass. A touch engages a
+second liquid pass at the capsule: a `LiquidLens` that reads the same
+backdrop as the pill, so it bends the page behind the bar rather than the
+pill. It has a 14 pt refracting ring around a flat core, a milky veil
+(white at 0.90 in light, `colorScheme.surface` at 0.90 in dark), a σ 2
+blur, a 1 pt rim, a soft shadow, and a rainbow fringe that grows with the
+press (dispersion up to 0.6), the only fringe the default theme draws.
+It fades in and out as one layer. On the frosted tier the lens is a
+lightly blurred white capsule with a rim; on solid, an opaque capsule.
+More in [tab_bar.md](tab_bar.md).
+
+**The scroll-edge pocket.** Under the liquid bottom bar the page fades
+into a soft blur and a faint dim over the bottom 148 pt, as iOS 26 draws
+its scroll-edge pocket. Flutter has no variable blur, so it is three
+bands of 49.3 pt (σ 0.5, 1.0 and 1.6 from top to bottom) and a gradient
+to black at 1.2 % (light) or 8 % (dark). Only the liquid tier with
+`liquidBlurSigma > 0` draws it: frosted, solid and Reduce Transparency
+have none.
+
+## Defaults changed in 0.1.0-dev.6
+
+`LiquidGlassTheme.fromColorScheme` changed these defaults for every glass
+surface (bars, circles, the sidebar, dialogs, the back button), to match
+the iOS 26.5 material:
+
+| Field | Was | Becomes |
+|---|---|---|
+| `rimHighlight` | white @ 0.50 (light) / 0.18 (dark) | white @ 0.12 (light) / 0.22 (dark) |
+| `shadow` | `0x24000000`, (0, 6), blur 20, spread −2 | `0x12000000` (7 %), (0, 3), blur 20, spread 0 |
+| `dispersion` | 0.3 | 0 (the touched tab lens sets its own) |
+| `labelStyle` | 10 / 1.4 / w600 / 0.4 | 10 / 1.2 / w500 / 0 |
+
+It also gained `selectionFill`, `tabForeground`, `badgeColor` and
+`tabIconSize` (see [theming.md](theming.md)). Pass the old values through
+`copyWith` for the previous look.
+
 ## When it is not drawn
 
 The tier drops to **frosted** without Impeller (Android 9 and lower, the
@@ -105,7 +144,9 @@ frosted and then cross-fades. To start liquid:
 
 All chrome shares one backdrop copy (`BackdropGroup`). Each surface adds a
 small blur and one pass of the lens over its own area. Never put glass on
-list cells.
+list cells. The pocket adds three blur passes over its 148 pt. The tab
+lens adds one pass only while the bar is touched or the lens is moving
+(under a second after release); at rest it costs nothing.
 
 In profile and release builds a frame guard watches raster times while
 liquid glass is on screen. After three windows of 60 frames in a row whose

@@ -390,6 +390,25 @@ void main() {
     expect(find.text('Result: cancel'), findsOneWidget);
   });
 
+  testWidgets('every case destination has a filled selectedIcon (spec '
+      'VK-503 §14)', (tester) async {
+    for (final entry in kCases) {
+      await tester.pumpWidget(MaterialApp(home: entry.page));
+      await tester.pump();
+      final shells = tester.widgetList<LiquidShell>(find.byType(LiquidShell));
+      for (final shell in shells) {
+        for (final d in shell.destinations) {
+          if (d.role == LiquidDestinationRole.search) continue;
+          expect(
+            d.selectedIcon,
+            isNotNull,
+            reason: '${entry.id}: ${d.label} needs a filled selectedIcon',
+          );
+        }
+      }
+    }
+  });
+
   testWidgets('autorun shows the alert by itself, then the result', (
     tester,
   ) async {
