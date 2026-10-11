@@ -450,10 +450,13 @@ The tab's `UISearchTab` provider returns the `ShellNavController`, built once pe
 | `prominentTabIdentifier` | — (API is 27+) | `UISearchTab.identifier` (Q10) | — | nil (Q1: the system look) |
 | `preferredSearchBarPlacement` | `.automatic` (tab-hosted at the bottom) | `.automatic` | `.stacked` | `.stacked` |
 | `hidesSearchBarWhenScrolling` | default | default | false | false |
-| Root `largeTitleDisplayMode` | `.inline` (unless `pages[0].largeTitle == false`) | `.inline` | `.never` (unless `pages[0].largeTitle == true`) | `.never` |
+| Root `largeTitleDisplayMode` | `.inline` (unless `pages[0].largeTitle == false`) | `.inline` | `.never` (`.always` if `pages[0].largeTitle == true`) | `.never` |
+| Root small title | UIKit's | UIKit's | a leading title item at compact width | a leading title item at compact width |
 | `obscuresBackgroundDuringPresentation` | false | false | false | false |
 
 `.inline` (iOS 17+), not `.always`: Apple Music's large title sits on the bar row, right under the status bar and level with its trailing items. `.always` adds a 52pt row under the bar, which put our title about 60pt lower (Task 12 side by side). Under a back button UIKit turns `.inline` into `.always`. Pushed pages that ask for a large title keep `.always`.
+
+**iPad title item.** UIKit draws no `.never` or `.inline` title for a `UISearchTab`'s root on an iPad (measured on 26.5 and 27.0, with every `navigationItem.style`, a `titleView` and a `titleMenuProvider`; a plain `UITab`'s root does show it). Only `.always` still draws, as a large title on its own row. Apple Music's narrow window shows a small "Search" right of the window controls, with the field on the row below. The search root therefore shows its title as a leading `UIBarButtonItem(customView:)` label (headline font, Dynamic Type, header trait, `hidesSharedBackground`) at compact width. UIKit places it right of the window controls and hides it while the search is active, when the field rises onto that row. At regular width the top tab bar names the tab, and there is no item.
 
 "iPad" means `userInterfaceIdiom == .pad`, so a narrow iPad window keeps the stacked top field (the video), and an iPhone in landscape keeps the bottom field. The search tab's `title` and `image` come from the destination (`label`, `sfSymbol` when set); otherwise UIKit's localised "Search" and magnifying glass stay. `searchBar.placeholder` is `config.search.placeholder` when set.
 

@@ -110,28 +110,42 @@ final class ShellMathTests: XCTestCase {
   }
 }
 
+@available(iOS 17.0, *)
 final class SearchMathTests: XCTestCase {
   func testAnIPhoneKeepsUIKitsTabHostedFieldAndALargeTitle() {
     XCTAssertEqual(
       SearchMath.style(isPad: false, osMajor: 26, rootLargeTitle: nil),
-      SearchTabStyle(placement: .automatic, hidesWhenScrolling: nil, largeTitle: true, prominent: false))
+      SearchTabStyle(
+        placement: .automatic, hidesWhenScrolling: nil, titleMode: .inline, titleItem: false,
+        prominent: false))
   }
 
   func testAnIPhoneOnIOS27MakesTheSearchTabProminent() {
     XCTAssertTrue(SearchMath.style(isPad: false, osMajor: 27, rootLargeTitle: nil).prominent)
   }
 
-  func testAnIPadIsStackedInlineAndNeverProminent() {
+  /// UIKit draws no title for a `UISearchTab`'s root on an iPad, whatever
+  /// the small-title mode (Task 12): the small title "Search" next to the
+  /// window controls (Apple Music) is a leading title item.
+  func testAnIPadIsStackedUnderATitleItemAndNeverProminent() {
     for os in [26, 27] {
       XCTAssertEqual(
         SearchMath.style(isPad: true, osMajor: os, rootLargeTitle: nil),
-        SearchTabStyle(placement: .stacked, hidesWhenScrolling: false, largeTitle: false, prominent: false))
+        SearchTabStyle(
+          placement: .stacked, hidesWhenScrolling: false, titleMode: .never, titleItem: true,
+          prominent: false))
     }
   }
 
+  /// A large title on an iPad is `.always`: UIKit drops a `UISearchTab`
+  /// root's `.inline` title there too.
   func testTheAppsLargeTitleChoiceWins() {
-    XCTAssertFalse(SearchMath.style(isPad: false, osMajor: 26, rootLargeTitle: false).largeTitle)
-    XCTAssertTrue(SearchMath.style(isPad: true, osMajor: 27, rootLargeTitle: true).largeTitle)
+    let phone = SearchMath.style(isPad: false, osMajor: 26, rootLargeTitle: false)
+    XCTAssertEqual(phone.titleMode, .never)
+    XCTAssertFalse(phone.titleItem)
+    let pad = SearchMath.style(isPad: true, osMajor: 27, rootLargeTitle: true)
+    XCTAssertEqual(pad.titleMode, .always)
+    XCTAssertFalse(pad.titleItem)
   }
 
   func testTheTopIsHeldOnlyWhileTheProxyIsScrolled() {
@@ -1460,6 +1474,36 @@ extension NativeTabsTests {
       XCTAssertEqual(item.preferredSearchBarPlacement, .automatic)
       XCTAssertEqual(item.largeTitleDisplayMode, .inline)
     }
+  }
+
+  /// A narrow iPad window: the search root's small title is a leading item,
+  /// which UIKit puts right of the window controls, with the stacked field
+  /// on the row below (Apple Music). It follows the root's title, and a
+  /// regular width (the top tab bar names the tab) has none.
+  func testANarrowIPadShowsTheSearchRootsTitleAsALeadingItem() throws {
+    try requireIPad()
+    let flutter = UIViewController()
+    let tabs = NativeTabsController(flutter: flutter, events: events)
+    let window = try portraitWindow(root: UIViewController(), width: 375)
+    let container = ShellContainerController(tabs: tabs, flutter: flutter)
+    window.rootViewController = container
+    self.window = window
+    tabs.dartAttached = true
+    tabs.apply(searchConfig(selected: 2))
+    settle()
+    let root = try XCTUnwrap(tabs.navControllers[2]).rootHost
+    func titleItem() -> String? {
+      (root.navigationItem.leftBarButtonItem?.customView as? UILabel)?.text
+    }
+    XCTAssertEqual(titleItem(), "Find", "no pages: the destination's label")
+    tabs.apply(searchConfig(selected: 2, pages: [NativePage(title: "Search")]))
+    settle()
+    XCTAssertEqual(titleItem(), "Search")
+    XCTAssertEqual(root.navigationItem.largeTitleDisplayMode, .never)
+    window.frame.size.width = window.windowScene!.coordinateSpace.bounds.width
+    settle()
+    XCTAssertEqual(tabs.traitCollection.horizontalSizeClass, .regular, "precondition")
+    XCTAssertNil(root.navigationItem.leftBarButtonItem, "regular: no title item")
   }
 
   /// Apple Music's large title shares the bar row with its trailing items,

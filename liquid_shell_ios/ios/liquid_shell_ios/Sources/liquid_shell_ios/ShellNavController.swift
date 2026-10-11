@@ -177,6 +177,9 @@ final class PageHostController: UIViewController {
 
   override func viewDidLoad() {
     super.viewDidLoad()
+    registerForTraitChanges([UITraitHorizontalSizeClass.self]) { (host: Self, _) in
+      host.updateTitleItem()
+    }
     view.backgroundColor = .clear
     proxy.frame = view.bounds
     proxy.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -215,8 +218,42 @@ final class PageHostController: UIViewController {
     navigationItem.preferredSearchBarPlacement =
       style.placement == .stacked ? .stacked : .automatic
     if let hides = style.hidesWhenScrolling { navigationItem.hidesSearchBarWhenScrolling = hides }
-    // `.inline`: the large title on the bar row, right under the status
-    // bar, as Apple Music draws it; `.always` adds a 52pt row under the bar.
-    navigationItem.largeTitleDisplayMode = style.largeTitle ? .inline : .never
+    // `.inline` on an iPhone: the large title on the bar row, right under
+    // the status bar, as Apple Music draws it; `.always` adds a 52pt row.
+    navigationItem.largeTitleDisplayMode = style.titleMode
+    wantsTitleItem = style.titleItem
+  }
+
+  /// Whether the small title is a leading item (an iPad's search root,
+  /// spec §7.2): shown at compact width, where Apple Music puts "Search"
+  /// right of the window controls with the field on the row below. At
+  /// regular width the top tab bar names the tab.
+  private var wantsTitleItem = false {
+    didSet { updateTitleItem() }
+  }
+
+  private var titleLabel: UILabel?
+
+  override var title: String? {
+    didSet { titleLabel?.text = title }
+  }
+
+  private func updateTitleItem() {
+    guard wantsTitleItem, traitCollection.horizontalSizeClass == .compact else {
+      if navigationItem.leftBarButtonItem != nil { navigationItem.leftBarButtonItem = nil }
+      titleLabel = nil
+      return
+    }
+    guard titleLabel == nil else { return }
+    let label = UILabel()
+    label.text = title
+    label.font = .preferredFont(forTextStyle: .headline)
+    label.adjustsFontForContentSizeCategory = true
+    label.accessibilityTraits = .header
+    let item = UIBarButtonItem(customView: label)
+    // Text, not a button: no glass platter behind it.
+    item.hidesSharedBackground = true
+    titleLabel = label
+    navigationItem.leftBarButtonItem = item
   }
 }

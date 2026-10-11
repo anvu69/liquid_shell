@@ -13,25 +13,38 @@ struct SearchTabStyle: Equatable {
   let placement: SearchPlacement
   /// nil keeps UIKit's default.
   let hidesWhenScrolling: Bool?
-  let largeTitle: Bool
+  /// The root's `largeTitleDisplayMode`.
+  let titleMode: UINavigationItem.LargeTitleDisplayMode
+  /// The root's small title as a leading item, at compact width: UIKit
+  /// draws no title for a `UISearchTab`'s root on an iPad.
+  let titleItem: Bool
   /// `UITabBarController.prominentTabIdentifier` = the search tab (iOS 27).
   let prominent: Bool
 }
 
 /// Pure decisions of the search tab, unit-tested without UIKit.
 enum SearchMath {
-  /// iPhone: UIKit's tab-hosted field, a large title, and on iOS 27 the
-  /// prominent search tab (without it 27 makes Search an inline tab).
-  /// iPad (any width): the stacked field under an inline title, always
-  /// visible; never prominent (Q1). The app's `largeTitle` wins when set.
+  /// iPhone: UIKit's tab-hosted field, a large title on the bar row
+  /// (`.inline`, Apple Music), and on iOS 27 the prominent search tab
+  /// (without it 27 makes Search an inline tab). iPad (any width): the
+  /// stacked field, always visible, under a small title; never prominent
+  /// (Q1). The app's `largeTitle` wins when set.
+  ///
+  /// UIKit draws no `.never` or `.inline` title for a `UISearchTab`'s root
+  /// on an iPad (measured on 26.5 and 27.0; a plain `UITab`'s root shows
+  /// it). The small title is therefore a leading item there, and a large
+  /// one is `.always`, the only mode UIKit still draws.
+  @available(iOS 17.0, *)
   static func style(isPad: Bool, osMajor: Int, rootLargeTitle: Bool?) -> SearchTabStyle {
     if isPad {
+      let large = rootLargeTitle ?? false
       return SearchTabStyle(
-        placement: .stacked, hidesWhenScrolling: false, largeTitle: rootLargeTitle ?? false,
-        prominent: false)
+        placement: .stacked, hidesWhenScrolling: false, titleMode: large ? .always : .never,
+        titleItem: !large, prominent: false)
     }
     return SearchTabStyle(
-      placement: .automatic, hidesWhenScrolling: nil, largeTitle: rootLargeTitle ?? true,
+      placement: .automatic, hidesWhenScrolling: nil,
+      titleMode: (rootLargeTitle ?? true) ? .inline : .never, titleItem: false,
       prominent: osMajor >= 27)
   }
 
