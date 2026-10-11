@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:liquid_shell/src/chrome/fit_label.dart';
+import 'package:liquid_shell/src/chrome/glass_tab_bar.dart';
 import 'package:liquid_shell/src/chrome/large_content_viewer.dart';
 import 'package:liquid_shell/src/chrome/text_scale.dart';
 import 'package:liquid_shell/src/destinations/badge.dart';
@@ -24,16 +25,15 @@ enum LiquidTabBarPosition {
 /// The gap between the pill and the trailing circle.
 const double kLiquidTabBarTrailingGap = 8;
 
-/// Below this width (logical pixels) the bottom tab bar is *narrow*: its
-/// pill padding drops from 8 to 4, and `LiquidShell` shrinks the row margin
-/// from 16 to 8, so 5 tabs plus a trailing action keep 44pt-wide cells down
-/// to 320 at text scale 1 (iPad Slide Over, ⅓ Split View, small phones).
+/// Below this width (logical pixels) the bottom tab bar is *narrow*:
+/// `LiquidShell` shrinks the row margin to 8, so 5 tabs plus a trailing
+/// action keep hit targets of at least 44pt down to 320 at text scale 1
+/// (iPad Slide Over, ⅓ Split View, small phones).
 /// Larger text grows the pill, and the square trailing circle with it, so
 /// cells can drop below 44pt there.
 ///
 /// A narrow bar also fits its labels (Q18): a label that does not fit its
-/// cell first takes the cell's side padding, then shrinks down to 10pt, and
-/// only then ellipsizes.
+/// label box first shrinks down to 10pt, and only then ellipsizes.
 const double kLiquidNarrowWidth = 340;
 
 /// A floating glass pill of destinations, with an optional separate glass
@@ -41,6 +41,11 @@ const double kLiquidNarrowWidth = 340;
 ///
 /// `LiquidShell` places it for you. Use it directly to build your own
 /// chrome. It draws the row only: the caller adds the outer margins.
+///
+/// The bottom bar fills the width it is given and places a native-sized pill
+/// in it (spec VK-503 §5): centred, or pinned to the start with the trailing
+/// circle at the end. The gaps pass touches through. Selection commits on
+/// release, and every slot draws `selectedIcon ?? icon`.
 ///
 /// Standalone use needs a [Directionality] and an [Overlay] above it: the
 /// trailing tooltip and the large content viewer (long press at accessibility
@@ -80,8 +85,8 @@ class LiquidTabBar extends StatelessWidget {
   /// Optional action in a separate circle at the trailing end.
   final LiquidTabAction? trailing;
 
-  /// Shows only the selected cell. A tap then calls [onExpand] and does not
-  /// change the destination.
+  /// Collapses the bottom bar to a 48pt circle with the selected icon. A tap
+  /// then calls [onExpand] and does not change the destination.
   final bool minimized;
 
   /// Called when the minimised bar is tapped. When null, the minimised bar
@@ -91,9 +96,8 @@ class LiquidTabBar extends StatelessWidget {
   /// Strings for the minimised hint, the expand announcement and badges.
   final LiquidShellStrings strings;
 
-  /// Whether to use the narrow pill padding (4 instead of 8 at each end of
-  /// the bottom pill) and fit the bottom labels (they take the cell's side
-  /// padding, then shrink to 10pt, before they ellipsize). Null: narrow when
+  /// Whether to fit the bottom labels (they shrink to 10pt before they
+  /// ellipsize). Null: narrow when
   /// `MediaQuery.sizeOf(context).width` is below [kLiquidNarrowWidth]. The
   /// top bar is the same either way.
   ///
@@ -116,6 +120,38 @@ class LiquidTabBar extends StatelessWidget {
       debugCheckHasOverlay(context),
       'LiquidTabBar needs an Overlay ancestor.',
     );
+    if (position == LiquidTabBarPosition.top) return _TopBar(bar: this);
+    return GlassTabBar(
+      destinations: destinations,
+      selectedIndex: selectedIndex,
+      onSelect: onDestinationSelected,
+      trailing: trailing,
+      minimized: minimized,
+      onCollapsedTap: onExpand,
+      strings: strings,
+      narrow: narrow ?? MediaQuery.sizeOf(context).width < kLiquidNarrowWidth,
+    );
+  }
+}
+
+/// The regular top bar as it was before spec VK-503. Task 11 replaces it.
+class _TopBar extends StatelessWidget {
+  const _TopBar({required this.bar});
+
+  final LiquidTabBar bar;
+
+  @override
+  Widget build(BuildContext context) {
+    final LiquidTabBar(
+      :destinations,
+      :selectedIndex,
+      :onDestinationSelected,
+      :position,
+      :trailing,
+      :minimized,
+      :onExpand,
+      :strings,
+    ) = bar;
     final visible = [
       for (final (i, destination) in destinations.indexed)
         if (destination.placement == LiquidPlacement.everywhere) i,
@@ -150,7 +186,7 @@ class LiquidTabBar extends StatelessWidget {
     }
 
     final narrow =
-        this.narrow ?? MediaQuery.sizeOf(context).width < kLiquidNarrowWidth;
+        bar.narrow ?? MediaQuery.sizeOf(context).width < kLiquidNarrowWidth;
     final cells = Padding(
       padding: top
           ? const EdgeInsets.all(4)

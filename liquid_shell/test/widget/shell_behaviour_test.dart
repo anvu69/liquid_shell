@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
+import 'package:liquid_shell/src/chrome/glass_tab_bar.dart';
 
 import '../helpers/fake_signals_platform.dart';
 import '../helpers/shell_harness.dart';
@@ -19,9 +20,9 @@ void main() {
     testWidgets('a tap selects; reselect calls back too', (tester) async {
       final selections = <int>[];
       await pumpShell(tester, TestShell(selections: selections));
-      await tester.tap(find.text('Inbox'));
+      await tester.tap(tabSlot('Inbox'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Inbox'));
+      await tester.tap(tabSlot('Inbox'));
       await tester.pumpAndSettle();
       expect(selections, [1, 1]);
     });
@@ -223,7 +224,7 @@ void main() {
       final original = FlutterError.onError;
       FlutterError.onError = errors.add;
       try {
-        await tester.tap(find.text('Inbox'));
+        await tester.tap(tabSlot('Inbox'));
         await tester.pumpAndSettle();
       } finally {
         FlutterError.onError = original;
@@ -253,8 +254,8 @@ void main() {
           },
         ),
       );
-      await tester.tap(find.text('Inbox'));
-      await tester.tap(find.text('Settings'));
+      await tester.tap(tabSlot('Inbox'));
+      await tester.tap(tabSlot('Settings'));
       await tester.pump();
       pending.complete(true);
       await tester.pumpAndSettle();
@@ -269,7 +270,7 @@ void main() {
         tester,
         TestShell(selections: selections, guard: (i) => pending.future),
       );
-      await tester.tap(find.text('Inbox'));
+      await tester.tap(tabSlot('Inbox'));
       await tester.pumpWidget(const SizedBox());
       pending.complete(true);
       await tester.pump();
@@ -300,7 +301,7 @@ void main() {
             },
           ),
         );
-        await tester.tap(find.text('Settings'));
+        await tester.tap(tabSlot('Settings'));
         await tester.pump();
         rebuild(() => destinations = next);
         await tester.pumpAndSettle();
@@ -361,7 +362,7 @@ void main() {
           },
         ),
       );
-      await tester.tap(find.text('Home'));
+      await tester.tap(tabSlot('Home'));
       await tester.pumpAndSettle();
       tester.state<TestShellState>(find.byType(TestShell)).select(3);
       await tester.pumpAndSettle();
@@ -389,15 +390,25 @@ void main() {
         tester,
         TestShell(initialIndex: 2, onHidden: hidden.add),
       );
-      final scheme = Theme.of(
+      final foreground = LiquidGlassTheme.of(
         tester.element(find.byType(LiquidTabBar)),
-      ).colorScheme;
+      ).tabForeground;
       for (final label in ['Home', 'Inbox', 'Settings']) {
-        expect(
-          tester.widget<Text>(find.text(label)).style!.color,
-          scheme.onSurfaceVariant,
+        final text = find.descendant(
+          of: find.byKey(kTabNormalKey),
+          matching: find.text(label),
         );
+        expect(tester.widget<Text>(text).style!.color, foreground);
       }
+      // No lens: the tinted copy is clipped away entirely.
+      final tinted = find.byKey(kTabTintedKey);
+      final clip = tester
+          .widget<ClipPath>(tinted)
+          .clipper!
+          .getClip(
+            tester.getSize(tinted),
+          );
+      expect(clip.getBounds().isEmpty, isTrue);
       expect(hidden, [2]);
       await tester.pump();
       expect(hidden, [2]);
@@ -487,11 +498,11 @@ void main() {
       await tester.drag(list, const Offset(0, -300));
       await tester.pumpAndSettle();
       expect(find.text('Inbox'), findsNothing);
-      expect(find.text('Home'), findsOneWidget);
+      expect(tester.getSize(find.byKey(kTabPillKey)), const Size(48, 48));
 
       await tester.drag(list, const Offset(0, 100));
       await tester.pumpAndSettle();
-      expect(find.text('Inbox'), findsOneWidget);
+      expect(tabSlot('Inbox'), findsOneWidget);
     });
 
     testWidgets('a horizontal carousel does not minimise; the vertical '
@@ -525,7 +536,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('card 0'), findsNothing, reason: 'it did scroll');
-      expect(find.text('Inbox'), findsOneWidget);
+      expect(tabSlot('Inbox'), findsOneWidget);
 
       await tester.drag(
         find.byKey(const ValueKey('page-0')),
@@ -545,9 +556,9 @@ void main() {
         const Offset(0, -300),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Home'));
+      await tester.tap(tabSlot('Home'));
       await tester.pumpAndSettle();
-      expect(find.text('Inbox'), findsOneWidget);
+      expect(tabSlot('Inbox'), findsOneWidget);
       expect(selections, isEmpty);
       expect(
         tester.takeAnnouncements().single.message,
@@ -562,7 +573,7 @@ void main() {
         const Offset(0, -300),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Inbox'), findsOneWidget);
+      expect(tabSlot('Inbox'), findsOneWidget);
     });
 
     testWidgets('does not apply to the top bar', (tester) async {
@@ -580,7 +591,7 @@ void main() {
       expect(find.text('Inbox'), findsOneWidget);
       // The scroll above left no minimised state behind for compact.
       await resize(tester, kPhone);
-      expect(find.text('Inbox'), findsOneWidget);
+      expect(tabSlot('Inbox'), findsOneWidget);
     });
   });
 

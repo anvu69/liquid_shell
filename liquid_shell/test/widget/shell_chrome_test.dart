@@ -151,14 +151,9 @@ void main() {
         padding: const EdgeInsets.only(top: 20),
         direction: direction,
       );
+      // The slots' touch and semantics nodes (spec VK-503 §5.1).
       return [
-        for (final label in labels.take(count))
-          tester.getRect(
-            find.ancestor(
-              of: find.text(label),
-              matching: find.byType(InkWell),
-            ),
-          ),
+        for (final label in labels.take(count)) tester.getRect(tabSlot(label)),
       ];
     }
 
@@ -186,8 +181,8 @@ void main() {
       ),
     );
 
-    testWidgets('320: 5 tabs + trailing keep 45.2pt cells with margin 8 and '
-        'pill padding 4, tile the pill, and each tap selects its tab', (
+    testWidgets('320: 5 tabs + trailing keep 51.6pt slots with margin 8 and '
+        'inset 4, tile the pill, and each tap selects its tab', (
       tester,
     ) async {
       final selections = <int>[];
@@ -201,31 +196,40 @@ void main() {
       expect(row(tester).left, 8);
       expect(row(tester).right, 312);
       expect(rects.first.left - pill(tester).left, 4);
-      // (320 − 2×8 margin − 62 circle − 8 gap − 2×4 pill padding) / 5.
+      // Native slots (spec VK-503 §5.1): pitch 43.6, hit capsule 51.6.
+      final home = tester.getRect(
+        find.byWidgetPredicate(
+          (w) =>
+              w is Semantics &&
+              (w.properties.label?.startsWith('Home') ?? false),
+        ),
+      );
+      expect(home.width, closeTo(51.6, 0.01));
+      expect(home.width, greaterThanOrEqualTo(44));
       for (final rect in rects) {
-        expect(rect.width, greaterThanOrEqualTo(44));
-        expect(rect.width, moreOrLessEquals(45.2, epsilon: 0.01));
         expect(rect.height, greaterThanOrEqualTo(44));
       }
+      // Neighbouring capsules overlap by 8, so the pill stays tiled.
       for (var i = 1; i < rects.length; i++) {
-        expect(rects[i].left, moreOrLessEquals(rects[i - 1].right));
+        expect(rects[i].left, moreOrLessEquals(rects[i - 1].right - 8));
       }
       expect(circle(tester).right, 312);
-      for (final label in labels) {
-        await tester.tap(find.text(label));
+      for (final rect in rects) {
+        await tester.tapAt(rect.center);
         await tester.pumpAndSettle();
       }
       expect(selections, [0, 1, 2, 3, 4]);
     });
 
-    testWidgets('375: the regular margin 16 and pill padding 8 are kept', (
+    testWidgets('375: the regular margin 16 is kept; native slots', (
       tester,
     ) async {
       final rects = await cells(tester, 5, trailing: add, width: 375);
       expect(row(tester).left, 16);
       expect(row(tester).right, 375 - 16);
-      expect(rects.first.left - pill(tester).left, 8);
       expect(circle(tester).right, 375 - 16);
+      // (375 − 32 − 70 − 16) / 5 + 8 (spec VK-503 §5.1).
+      expect(rects.first.width, closeTo(59.4, 0.01));
       for (final rect in rects) {
         expect(rect.width, greaterThanOrEqualTo(44));
       }
@@ -237,7 +241,8 @@ void main() {
       var rects = await cells(tester, 5, trailing: add, width: 339);
       expect(row(tester).left, 8);
       expect(row(tester).right, 339 - 8);
-      expect(rects.first.left - pill(tester).left, 4);
+      // (339 − 16 − 70 − 16) / 5 + 8.
+      expect(rects.first.width, closeTo(55.4, 0.01));
       for (final rect in rects) {
         expect(rect.width, greaterThanOrEqualTo(44));
       }
@@ -245,14 +250,14 @@ void main() {
       rects = await cells(tester, 5, trailing: add, width: 340);
       expect(row(tester).left, 16);
       expect(row(tester).right, 340 - 16);
-      expect(rects.first.left - pill(tester).left, 8);
-      // (340 − 32 − 62 − 8 − 16) / 5 = 44.4.
+      // (340 − 32 − 70 − 16) / 5 + 8.
+      expect(rects.first.width, closeTo(52.4, 0.01));
       for (final rect in rects) {
         expect(rect.width, greaterThanOrEqualTo(44));
       }
     });
 
-    testWidgets('RTL at 320: mirrored, same margins, 45.2pt cells', (
+    testWidgets('RTL at 320: mirrored, same margins, 51.6pt slots', (
       tester,
     ) async {
       final rects = await cells(
@@ -269,7 +274,7 @@ void main() {
       expect(pill(tester).right - rects.first.right, 4);
       expect(rects.first.left, greaterThan(rects.last.left));
       for (final rect in rects) {
-        expect(rect.width, moreOrLessEquals(45.2, epsilon: 0.01));
+        expect(rect.width, moreOrLessEquals(51.6, epsilon: 0.01));
       }
     });
 

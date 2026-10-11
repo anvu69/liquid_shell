@@ -599,7 +599,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(_pill(tester).minimized, isTrue);
       expect(_rect(tester, kSearchFieldKey), circle);
-      await tester.tap(find.byType(LiquidTabBar));
+      // Only the minimized circle takes touches (spec VK-503 §5.4).
+      await tester.tap(tabSlot('Home'));
       await tester.pumpAndSettle();
       expect(_pill(tester).minimized, isFalse, reason: 'a tap expands');
     });
