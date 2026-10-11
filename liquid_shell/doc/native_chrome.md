@@ -194,8 +194,9 @@ and the glass back circle; `LiquidPage` draws only its child.
 - **Large titles.** On iPhone a root page's large title sits on the bar
   row (`.inline`); on iPad the root's title is small, unless it asks for a
   large title (`largeTitle: true`), which then gets its own row and
-  collapses as the page scrolls. UIKit draws a pushed page's large title
-  small and centred, on iPhone and on iPad.
+  collapses as the page scrolls. Under the default root (`.inline` on
+  iPhone, `.never` on iPad), UIKit draws a pushed page's large title small
+  and centred.
 - **Scroll.** The first vertical scroll view of the top page sends its
   offset, once per frame, to its host's proxy, which drives the collapse and
   the scroll-edge effect. A page without a scroll view counts as offset 0.
@@ -211,7 +212,8 @@ to a background view of the native chrome. Background is every view on the
 chain from
 
 ```
-(selected as? UINavigationController)?.topViewController?.view ?? selected.view
+(selected as? UINavigationController)?.topViewController?.viewIfLoaded
+  ?? selected?.viewIfLoaded
 ```
 
 up to the tab bar controller's view, wrapper views included. In the search

@@ -1445,11 +1445,9 @@ extension NativeTabsTests {
     }
     XCTAssertEqual(bridge.text, "hồ", "precondition: the dismissal put it back")
 
-    var composing = true
-    bridge.isComposing = { composing }
+    bridge.isComposing = { true }
     tabs.setSearchText("hà")
     XCTAssertEqual(tabs.carriedSearchText, "hà", "held for the composition")
-    composing = false
   }
 
   func testTheSearchDestinationIsUIKitsSearchTabWithTheAppsTitle() throws {

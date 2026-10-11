@@ -34,11 +34,12 @@ class LiquidPage extends StatefulWidget {
   ///
   /// A root page's large title sits on the bar row, as in Apple Music; a
   /// pushed page's gets a row of its own below the back button. Under the
-  /// native search tab (iOS 26 native chrome, iPhone and iPad), UIKit draws
-  /// a pushed page's large title small and centred instead: the tab's root
-  /// uses UIKit's `.inline` mode (`.never` on iPad), and UIKit then draws
-  /// no large title for the pages pushed above it. The Flutter bar (iOS
-  /// before 26, Android, no native chrome) draws it large.
+  /// native search tab (iOS 26 native chrome), UIKit draws a pushed page's
+  /// large title small and centred instead: the tab's root uses UIKit's
+  /// `.inline` mode on iPhone and `.never` on an iPad root without a large
+  /// title, and UIKit then draws no large title for the pages pushed above
+  /// it. The Flutter bar (iOS before 26, Android, no native chrome) draws
+  /// it large.
   final bool? largeTitle;
 
   /// The page. Its first vertical scroll view drives the native large

@@ -138,7 +138,7 @@ UIKit has `UISearchTab` since iOS 18, but not the glass morph. The native shell 
 
 ## 4. Public API (`liquid_shell`)
 
-Exported from `package:liquid_shell/liquid_shell.dart`. Every change is additive (`0.1.0-dev.3`, Q16).
+Exported from `package:liquid_shell/liquid_shell.dart`. Every change is additive (`0.1.0-dev.3` in Q16; shipped as `0.1.0-dev.5`, because P3a and the liquid tier merge first with dev.3 and dev.4).
 
 ### 4.1 The search destination
 
@@ -814,7 +814,7 @@ Frame numbers are listed in `docs/qa/p3b/compare.md` by name only. The composed 
 - New `liquid_shell/doc/search.md`: API, phases per platform, the controller rules, the Telex rule, troubleshooting (a field that does not appear: `sfSymbol`, opt-in, `chromeBuilder`).
 - `doc/native_chrome.md`: the search tab, the extended hit-test rule, the page stack.
 - `doc/router_integration.md`: a search branch with `IndexedStack`; a branch `Navigator` per tab so details push inside the tab.
-- CHANGELOGs of the four packages: `0.1.0-dev.3`.
+- CHANGELOGs of the four packages: `0.1.0-dev.3` (shipped as `0.1.0-dev.5`, §4).
 - CI: `integration-ios-native` gains the iOS 27.0 leg and `native_search_test.dart`; `ios-ui` (from P3a) runs `SearchUITests`.
 
 ## 14. Error handling
@@ -871,7 +871,7 @@ Mỗi dòng có đề xuất mặc định; anh không trả lời thì dùng đ
 | Q13 | Chạm ⌕ có tự bật bàn phím không? (thiết kế VK-342 nói có; video nói không) | **Không:** chọn tab Tìm thì ô chưa focus, như video; chỉ chạm vào ô hoặc `activate()` mới bật bàn phím |
 | Q14 | Vuốt-để-quay-lại trong tab Tìm ở P3b-1 (trước S2): Flutter xử lý cử chỉ, thanh native đổi khi cử chỉ kết thúc | **Đồng ý** (P3b-2 quyết định có cho thanh chạy theo ngón tay không) |
 | Q15 | iOS 18 (có `UISearchTab` nhưng không có kính/hiệu ứng mới): native hay bản Flutter? | **Bản Flutter** (như P2: native chỉ từ iOS 26) |
-| Q16 | Phiên bản | **`0.1.0-dev.3`** cho cả bốn gói, chưa publish |
+| Q16 | Phiên bản | **`0.1.0-dev.3`** cho cả bốn gói, chưa publish (khi merge: `0.1.0-dev.5`, vì P3a và liquid tier lấy dev.3 và dev.4) |
 | Q17 | Trang đẩy trên navigator gốc (đè lên cả shell) có thanh điều hướng native không? | **Chưa:** giữ như P2 (khung native ẩn, trang dùng thanh kính Flutter); xem lại sau P3b-2 |
 | Q18 | Ví dụ cũ dùng nút ⌕ để đẩy trang tìm (mẫu anh đã bác) | **Đổi thành nút "Compose"**, README chỉ app tìm kiếm sang tab Tìm |
 | Q19 | iPhone, trang chi tiết đẩy trong tab Tìm: nếu UIKit vẫn để ô tìm ở đáy đè lên trang chi tiết thì ẩn thanh đáy khi đẩy (`hidesBottomBarWhenPushed`)? | **Theo kết quả đo ở Task 1; nếu ô đè lên trang thì ẩn**, anh so với Apple Music khi duyệt ảnh |

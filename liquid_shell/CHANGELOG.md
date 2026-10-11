@@ -16,11 +16,12 @@
   the native search tab, UIKit draws the title and its glass back circle;
   every back, the long-press back menu included, is a proposal that goes
   through `Navigator.maybePop`, so `PopScope` runs.
-- A root `LiquidPage`'s large title now sits on the bar row (as Apple
-  Music's does), natively and in the Flutter bar, on every platform. A
-  pushed page's large title keeps a row of its own; under the native
-  search tab, UIKit draws it small and centred (see
-  `LiquidPage.largeTitle`).
+- A root `LiquidPage`'s large title now sits on the bar row, as Apple
+  Music's does: in the Flutter bar on every platform, and natively on
+  iPhone (on iPad the native search root shows a small title, or its own
+  large-title row with `largeTitle: true`). A pushed page's large title
+  keeps a row of its own in the Flutter bar; under the native search tab,
+  UIKit draws it small and centred (see `LiquidPage.largeTitle`).
 - `LiquidShellScopeData.searchPhase` and `nativePageBar`; `chromeInsets`
   covers the search field in every phase, so
   `LiquidShellScope.contentPaddingOf` keeps working (never add

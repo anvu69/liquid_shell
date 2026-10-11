@@ -433,8 +433,9 @@ write `value.text` back into the controller while `composing`. More in
 
 Wrap each page of a tab's navigator in a `LiquidPage(title:, child:)`. It
 gives the page its title and, when the navigator can pop, a 44pt glass
-`LiquidBackButton`. A root page with a large title draws it on the bar row,
-as Apple Music does; a pushed page draws it on a row below the back button.
+`LiquidBackButton`. In the Flutter bar a root page's large title sits on
+the bar row, as Apple Music's does, and a pushed page's on a row below the
+back button.
 
 Where the tab has a native navigation bar (iOS 26 native chrome: the search
 tab in this release) UIKit draws the title and its glass back circle, and

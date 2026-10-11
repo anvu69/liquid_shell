@@ -393,8 +393,10 @@ void main() {
         (1, 0.0),
         reason: 'the reused host drops the old offset',
       );
-      // Native applied the 0: the new page's padding is the resting one
-      // (a title still collapsed by the old offset would give less).
+      // The replacing page starts at the resting padding. UIKit draws these
+      // pushed large titles small (spec §7.2), so nothing collapses and the
+      // held top keeps the padding while scrolled: this pins "no jump",
+      // and the offset itself is pinned by the call above.
       final replacedTop = topOf(find.text('No scroll view'));
       debugPrint(
         'liquid_shell N-4 top: resting $restingTop scrolled $scrolledTop '
