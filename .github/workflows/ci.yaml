@@ -207,15 +207,20 @@ jobs:
   integration-ios-native:
     # Every iOS 26 iPhone and iPad installs the native chrome (owner D1):
     # one job per idiom, so a stalled simulator costs one leg, not both.
-    name: integration-ios-native (${{ matrix.device }})
+    # Each idiom runs on the newest runtime on the runner, and again on
+    # iOS 27: that leg is an early warning and never blocks (the runner
+    # image may not have the runtime yet).
+    name: integration-ios-native (${{ matrix.device }}${{ matrix.runtime != '' && format(', {0}', matrix.runtime) || '' }})
     runs-on: macos-latest
+    continue-on-error: ${{ matrix.runtime != '' }}
     # The script stops a stalled drive after 20 min (IOS_DRIVE_TIMEOUT 1200 s)
-    # and retries it once: 40 min, plus the build.
-    timeout-minutes: 60
+    # and retries it once, per target: two targets, plus the build.
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
         device: [iPad, iPhone]
+        runtime: ["", "iOS 27"]
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -224,16 +229,21 @@ jobs:
           flutter-version: 3.44.x
           cache: true
       - run: make get
-      - name: Native shell on the newest ${{ matrix.device }} simulator (iOS 26+)
+      - name: Native shell and search tab on the newest ${{ matrix.device }} simulator
         run: |
-          udid=$(xcrun simctl list devices available | grep -F "    ${{ matrix.device }}" | tail -n1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          udid=$(xcrun simctl list devices available ${IOS_RUNTIME:+"$IOS_RUNTIME"} | grep -F "    ${{ matrix.device }}" | tail -n1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          if [ -z "$udid" ]; then
+            echo "::error::no ${{ matrix.device }} simulator for ${IOS_RUNTIME:-any runtime}"
+            exit 1
+          fi
           NATIVE_DEVICES="$udid=true" tool/integration_ios_native.sh
         env:
-          IOS_RUNTIME: ""
+          IOS_RUNTIME: ${{ matrix.runtime }}
+          NATIVE_TESTS: integration_test/native_shell_test.dart integration_test/native_search_test.dart
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: native-shell-screenshots-${{ matrix.device }}
+          name: native-shell-screenshots-${{ matrix.device }}-${{ strategy.job-index }}
           path: liquid_shell/example/build/integration_screenshots/
 
   goldens:
