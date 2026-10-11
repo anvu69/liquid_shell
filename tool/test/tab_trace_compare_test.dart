@@ -210,4 +210,53 @@ void main() {
     expect(within(1.19, 1.16, abs: 0.02).pass, isFalse);
     expect(within(0.33, 0.30, rel: 0.10).pass, isTrue);
   });
+
+  group('§17.4 rows added in VK-503 Task 16', () {
+    test('fitDelay recovers the delay of a trace, to the half millisecond', () {
+      for (final delay in [0.0, 0.010, 0.025, 0.040]) {
+        expect(
+          fitDelay(
+            spring(115, 201, delay: delay),
+            from: 115,
+            to: 201,
+            zeta: 0.79,
+            response: 0.39,
+          ),
+          closeTo(delay, 0.0006),
+        );
+      }
+    });
+
+    test('restRect: the lens rect of a sample, from its centre and size', () {
+      expect(restRect({'x': 115, 'y': 822, 'w': 94, 'h': 54}), [
+        68,
+        795,
+        94,
+        54,
+      ]);
+    });
+
+    test('ripple: start glow, growth and the time it is gone', () {
+      final trace = [
+        for (var f = 0; f <= 40; f++)
+          <String, double>{
+            't': 1 + f / 60,
+            'glowD': 93 * (1 + 3 * math.min<double>(1, f / 30)),
+            'glow': f < 30 ? 0.28 * (1 - f / 30) : 0.0,
+          },
+      ];
+      final r = ripple(trace);
+      expect(r.diameter, 93);
+      expect(r.opacity, 0.28);
+      // The last visible sample: 29 of the 30 frames of growth.
+      expect(r.growth, closeTo(3.9, 1e-9));
+      expect(r.fade, closeTo(0.5, 1e-9));
+    });
+
+    test('colourCheck: every channel within the tolerance', () {
+      expect(colourCheck([236, 236, 236], [236, 236, 236], 4).pass, isTrue);
+      expect(colourCheck([232, 236, 240], [236, 236, 236], 4).pass, isTrue);
+      expect(colourCheck([224, 221, 228], [236, 236, 236], 4).pass, isFalse);
+    });
+  });
 }

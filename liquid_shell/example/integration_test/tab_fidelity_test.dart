@@ -4,6 +4,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
@@ -123,9 +124,102 @@ void main() {
       circle.height,
     ];
     await record('expand', () => tester.tapAt(circle.center));
+    debugTabTrace = null;
+
+    // Rest colours (spec §17.4): the bar over a white page in light and a
+    // black one in dark, read back from the engine at the device scale.
+    final colors = <String, List<double>>{};
+    for (final (name, brightness, page) in [
+      ('light', Brightness.light, const Color(0xFFFFFFFF)),
+      ('dark', Brightness.dark, const Color(0xFF000000)),
+    ]) {
+      final boundary = GlobalKey();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(brightness: brightness),
+          home: LiquidGlassScope(
+            policy: const LiquidGlassPolicy(
+              forcedTier: LiquidGlassTier.liquid,
+            ),
+            child: RepaintBoundary(
+              key: boundary,
+              child: Scaffold(
+                backgroundColor: page,
+                body: Stack(
+                  children: [
+                    Positioned(
+                      left: 21,
+                      right: 21,
+                      bottom: 21,
+                      child: LiquidTabBar(
+                        destinations: const [
+                          LiquidDestination(
+                            icon: Icon(Icons.home),
+                            label: 'Home',
+                          ),
+                          LiquidDestination(
+                            icon: Icon(Icons.map),
+                            label: 'Explore',
+                          ),
+                          LiquidDestination(
+                            icon: Icon(Icons.settings),
+                            label: 'Settings',
+                          ),
+                        ],
+                        selectedIndex: 0,
+                        onDestinationSelected: (_) {},
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await _settle(tester);
+      final ratio = tester.view.devicePixelRatio;
+      final render =
+          boundary.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+      final image = await render.toImage(pixelRatio: ratio);
+      final width = image.width;
+      final bytes = (await image.toByteData())!;
+      image.dispose();
+      List<double> rgb(Offset p) {
+        final i = ((p.dy * ratio).floor() * width + (p.dx * ratio).floor()) * 4;
+        return [
+          for (var c = 0; c < 3; c++) bytes.getUint8(i + c).toDouble(),
+        ];
+      }
+
+      final pill = tester.getRect(find.byKey(kTabPillKey));
+      // Between slots 1 and 2: glass with nothing drawn on it.
+      colors['${name}Fill'] = rgb(
+        Offset(pill.left + 4 + 86 * 2, pill.center.dy),
+      );
+      // Inside slot 0's rest capsule, left of the Home icon.
+      colors['${name}Capsule'] = rgb(Offset(pill.left + 16, pill.center.dy));
+      // The unselected "Explore" label: its darkest pixel in light, its
+      // brightest in dark (the stem of a glyph, clear of antialiasing).
+      final label = tester.getRect(find.text('Explore').first);
+      List<double>? extreme;
+      for (var y = label.top; y < label.bottom; y += 1 / ratio) {
+        for (var x = label.left; x < label.right; x += 1 / ratio) {
+          final c = rgb(Offset(x, y));
+          final l = c.reduce((a, b) => a + b);
+          final e = extreme?.reduce((a, b) => a + b);
+          if (e == null || (name == 'light' ? l < e : l > e)) extreme = c;
+        }
+      }
+      colors['${name}Label'] = extreme!;
+    }
 
     binding.reportData = {
-      'tabfid': {'geometry': geometry, 'sequences': sequences},
+      'tabfid': {
+        'geometry': geometry,
+        'sequences': sequences,
+        'colors': colors,
+      },
     };
   }, timeout: const Timeout(Duration(minutes: 3)));
 }

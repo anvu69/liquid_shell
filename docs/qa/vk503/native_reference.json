@@ -17,5 +17,17 @@
   "press": {"w": 110, "h": 70, "scale": 1.052, "glow": 0.28},
   "flight": {"oneSlotHeight": 1.55, "twoSlotWidth": 1.33, "pop": 1.16},
   "glow": {"diameter": 93, "opacity": 0.28, "ripple": 4, "fade": 0.5},
-  "colors": {"lensOverWhite": [236, 236, 236], "tolerance": 4}
+  "dragLag": {
+    "reference": "fit",
+    "note": "VK-503 Task 16: the gate compares against the dragFollow fit's analytic ramp lag (7.09 pt at 90 pt/s, spec §17.1), not research §4.2's 'about 9 pt'. The 9 pt is one hand-read value from the same trace the fit (rms 0.31 pt) used; the idb strips cannot settle it (native there has no finger marker and its rows trail Flutter by 20-30 pt, far more than 2 pt, so the alignment, not the lag, dominates)."
+  },
+  "colors": {
+    "lightFill": [254, 254, 254],
+    "lightCapsule": [236, 236, 236],
+    "lightLabel": [25, 25, 25],
+    "darkFill": [25, 25, 25],
+    "darkCapsule": [58, 58, 58],
+    "darkLabel": [244, 244, 244],
+    "tolerance": 4
+  }
 }

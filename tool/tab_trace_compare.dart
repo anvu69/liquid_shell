@@ -153,6 +153,80 @@ Check checkTapOvershoot(
   return within(overshoot(xs, from, to), overshoot(ref, from, to), abs: 1);
 }
 
+/// The tap delay that fits [trace] best: the start time of the reference
+/// spring (least squares over the first 0.3 s, searched in 0.5 ms steps
+/// from 0 to 75 ms). Spec §17.4: 25 ms ± 1 frame.
+double fitDelay(
+  List<Map<String, double>> trace, {
+  required double from,
+  required double to,
+  required double zeta,
+  required double response,
+}) {
+  var best = 0.0;
+  var bestError = double.infinity;
+  for (var step = 0; step <= 150; step++) {
+    final delay = step * 0.0005;
+    var error = 0.0;
+    for (final s in trace) {
+      final t = s['t']!;
+      if (t > 0.3) break;
+      final ref = t < delay
+          ? from
+          : from + springAt(to - from, zeta, response, t - delay);
+      error += math.pow(s['x']! - ref, 2);
+    }
+    if (error < bestError) {
+      bestError = error;
+      best = delay;
+    }
+  }
+  return best;
+}
+
+/// The lens rect of a trace [sample] as `[left, top, width, height]`.
+List<double> restRect(Map<String, double> sample) => [
+  sample['x']! - sample['w']! / 2,
+  sample['y']! - sample['h']! / 2,
+  sample['w']!,
+  sample['h']!,
+];
+
+/// A tap's finger glow ripple (research §3): the glow at the first sample
+/// (the release), how far its diameter grows over that, and how long after
+/// the first sample it is gone.
+({double diameter, double opacity, double growth, double fade}) ripple(
+  List<Map<String, double>> trace,
+) {
+  final first = trace.first;
+  final t0 = first['t']!;
+  var widest = first['glowD']!;
+  var fade = double.infinity;
+  for (final s in trace) {
+    if (s['glow']! > 0) widest = math.max(widest, s['glowD']!);
+    if (s['glow']! == 0 && fade.isInfinite) fade = s['t']! - t0;
+  }
+  return (
+    diameter: first['glowD']!,
+    opacity: first['glow']!,
+    growth: widest / first['glowD']!,
+    fade: fade,
+  );
+}
+
+/// [got] against [want], every channel within [tolerance] (spec §17.4).
+Check colourCheck(List<double> got, List<double> want, double tolerance) {
+  final worst = [
+    for (var c = 0; c < 3; c++) (got[c] - want[c]).abs(),
+  ].reduce(math.max);
+  return (
+    pass: worst <= tolerance,
+    detail:
+        '${got.map((v) => v.round()).join('/')} vs '
+        '${want.map((v) => v.round()).join('/')} (±${tolerance.round()})',
+  );
+}
+
 void main(List<String> args) {
   if (args.length != 2) {
     stderr.writeln(
@@ -231,7 +305,47 @@ void main(List<String> args) {
           response: d(tap, 'response'),
           delay: d(tap, 'delay'),
         ),
+      ))
+      ..add((
+        '$name delay',
+        within(
+          fitDelay(
+            shifted,
+            from: from,
+            to: to,
+            zeta: d(tap, 'zeta'),
+            response: d(tap, 'response'),
+          ),
+          d(tap, 'delay'),
+          abs: 1 / 60,
+        ),
       ));
+  }
+
+  // Slot rects (±1 pt): the lens at rest after each tap is its slot.
+  final slots = geometry['slots3']! as List<dynamic>;
+  for (final (slot, name) in [
+    (0, 'tap_3_1'),
+    (1, 'tap_1_2'),
+    (2, 'tap_2_3'),
+  ]) {
+    final want = [
+      for (final v in slots[slot] as List<dynamic>) (v as num).toDouble(),
+    ];
+    final got = restRect(seqs[name]!.last);
+    final worst = [
+      for (var i = 0; i < 4; i++) (got[i] - want[i]).abs(),
+    ].reduce(math.max);
+    rows.add((
+      'slot$slot rect',
+      (
+        pass: worst <= d(geometry, 'tolerance') + 1e-9,
+        detail:
+            '${got.map((v) => v.toStringAsFixed(1)).join(', ')} vs '
+            '${want.map((v) => v.toStringAsFixed(0)).join(', ')} '
+            '(±${d(geometry, 'tolerance')})',
+      ),
+    ));
   }
 
   // Flight peaks (±10 %).
@@ -263,6 +377,25 @@ void main(List<String> args) {
       ),
     ));
 
+  // The finger glow of a tap (research §3): 93 pt at 0.28, then ×4 and
+  // gone in 0.5 s.
+  final glow = reference['glow']! as Map<String, dynamic>;
+  final tapGlow = ripple(oneSlot);
+  rows
+    ..add((
+      'glow diameter',
+      within(tapGlow.diameter, d(glow, 'diameter'), abs: 2),
+    ))
+    ..add((
+      'glow opacity',
+      within(tapGlow.opacity, d(glow, 'opacity'), abs: 0.03),
+    ))
+    ..add((
+      'glow ripple',
+      within(tapGlow.growth, d(glow, 'ripple'), rel: 0.10),
+    ))
+    ..add(('glow fade', within(tapGlow.fade, d(glow, 'fade'), rel: 0.10)));
+
   // Press and hold.
   final press = reference['press']! as Map<String, dynamic>;
   final held = seqs['press_hold']!.last;
@@ -275,16 +408,25 @@ void main(List<String> args) {
     ))
     ..add(('press glow', within(held['glow']!, d(press, 'glow'), abs: 0.03)));
 
-  // Drag lag at 90 pt/s (±10 % of the follow spring's ramp lag).
+  // Drag lag at 90 pt/s (±10 % of the follow spring's ramp lag). The
+  // reference is the fit's analytic lag, 7.09 pt (spec §17.1), not the
+  // research's "about 9 pt": VK-503 Task 16 kept the fit (see
+  // native_reference.json `dragLag`).
   final follow = spring('dragFollow');
-  rows.add((
-    'drag lag',
-    within(
-      steadyLag(seqs['slow_drag']!),
-      rampLag(90, d(follow, 'zeta'), d(follow, 'response')),
-      rel: 0.10,
-    ),
-  ));
+  rows
+    ..add((
+      'drag lag',
+      within(
+        steadyLag(seqs['slow_drag']!),
+        rampLag(90, d(follow, 'zeta'), d(follow, 'response')),
+        rel: 0.10,
+      ),
+    ))
+    // A fast flick lands on the finger's slot, Home (research §4.2).
+    ..add((
+      'flick lands under the finger',
+      within(seqs['fast_flick']!.last['x']!, 115, abs: 0.5),
+    ));
 
   // Minimize (settle ±10 %).
   final collapse = spring('collapse');
@@ -311,6 +453,45 @@ void main(List<String> args) {
       rel: 0.10,
     ),
   ));
+
+  // Expand (settle ±10 %): the morph back from the circle, no delay.
+  final expand = spring('expand');
+  final grow = seqs['expand']!;
+  final e0 = grow.first['t']!;
+  final es = [for (final s in grow) s['morph']!];
+  final ets = [for (final s in grow) s['t']! - e0];
+  final eref = [
+    for (final t in ets)
+      1 - springAt(1, d(expand, 'zeta'), d(expand, 'response'), t),
+  ];
+  rows.add((
+    'expand settle',
+    within(
+      settle(es, 0, tol: 0.005, ts: ets),
+      settle(eref, 0, tol: 0.005, ts: ets),
+      rel: 0.10,
+    ),
+  ));
+
+  // Rest colours (±4 per channel over a white or black page).
+  final colours = reference['colors']! as Map<String, dynamic>;
+  final sampled = data['colors']! as Map<String, dynamic>;
+  for (final name in [
+    'lightFill',
+    'lightCapsule',
+    'lightLabel',
+    'darkFill',
+    'darkCapsule',
+    'darkLabel',
+  ]) {
+    List<double> rgb(Map<String, dynamic> m) => [
+      for (final v in m[name]! as List<dynamic>) (v as num).toDouble(),
+    ];
+    rows.add((
+      'colour $name',
+      colourCheck(rgb(sampled), rgb(colours), d(colours, 'tolerance')),
+    ));
+  }
 
   var failed = 0;
   stdout.writeln('| check | result | detail |\n|---|---|---|');
