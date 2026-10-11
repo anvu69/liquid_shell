@@ -180,7 +180,8 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       applySearch(new)
       for (index, nav) in navControllers where new.tabs.indices.contains(index) {
         nav.applyPages(
-          new.tabs[index].pages, rootTitle: new.tabs[index].title, tabIndex: index, events: events)
+          new.tabs[index].pages, rootTitle: new.tabs[index].title, tabIndex: index,
+          staysSelected: Int(new.selectedIndex) == index, events: events)
       }
       select(Int(new.selectedIndex))
     }

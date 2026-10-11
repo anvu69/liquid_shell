@@ -1919,6 +1919,42 @@ extension NativeTabsTests {
     XCTAssertEqual(titles(nav), ["Search"])
   }
 
+  /// VK-502: a tab's stack applied with the config that selects the tab
+  /// is a restore, never animated: the tab was offstage. Either the stack
+  /// it kept (nothing to do) or one that changed while it was away (set
+  /// without a transition). Nor is one applied as the tab is left. At both
+  /// widths on an iPad.
+  func testAStackAppliedWithItsTabsSelectionIsNotAnimated() throws {
+    let pages = [NativePage(title: "Search"), NativePage(title: "Hồ Hoàn Kiếm")]
+    let widths: [UIUserInterfaceSizeClass?] =
+      UIDevice.current.userInterfaceIdiom == .pad ? [.regular, .compact] : [nil]
+    for width in widths {
+      let tabs = try installedSearchShell(selected: 2, pages: pages, sizeClass: width)
+      let nav = try XCTUnwrap(tabs.navControllers[2])
+      let kept = nav.viewControllers
+      tabs.apply(searchConfig(selected: 0, pages: pages))
+      settle()
+      tabs.apply(searchConfig(selected: 2, pages: pages))
+      XCTAssertNil(nav.transitionCoordinator, "kept: no transition (\(String(describing: width)))")
+      XCTAssertEqual(nav.viewControllers, kept, "the same hosts")
+      settle()
+
+      tabs.apply(searchConfig(selected: 0, pages: [pages[0]]))
+      XCTAssertNil(nav.transitionCoordinator, "left with a shorter stack: no pop")
+      settle()
+      tabs.apply(searchConfig(selected: 2, pages: pages))
+      XCTAssertNil(nav.transitionCoordinator, "changed while away: set, not pushed")
+      XCTAssertEqual(titles(nav), ["Search", "Hồ Hoàn Kiếm"])
+      settle()
+
+      // Away and back before UIKit takes the tab's view out of the window.
+      tabs.apply(searchConfig(selected: 0, pages: pages))
+      tabs.apply(searchConfig(selected: 2, pages: [pages[0]]))
+      XCTAssertNil(nav.transitionCoordinator, "a quick return: set, not popped")
+      settle()
+    }
+  }
+
   func testTheNativeBackButtonOnlyProposes() throws {
     let tabs = try installedSearchShell(
       selected: 2, pages: [NativePage(title: "Search"), NativePage(title: "Detail")])

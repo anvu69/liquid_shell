@@ -499,6 +499,8 @@ Dart sends the search tab's page stack as `NativeTab.pages` (root first, §8.4).
 - **Count shrinks** → pop to the remaining count, animated.
 - **Same count** → update titles and large-title modes in place.
 
+Only a tab that stays selected animates. A stack applied with the config that selects the tab, or leaves it, is set without a transition: coming back to a tab restores it as it was (VK-502).
+
 UIKit draws the glass back circle (44×44 at x 16 on iPhone, research §4.1) for every page above the root. Each pushed host sets `navigationItem.backAction = UIAction { onBackTapped(tabIndex) }`: the tap is a **proposal**. Dart calls `Navigator.maybePop()` for the top page; when the Flutter route pops, the next stack is one shorter and native pops. A refused pop (`PopScope` with a dirty form) changes nothing.
 
 **UIKit's other pops are proposals too** (Task 12 finding). The back circle's long-press menu does not call `backAction`: choosing an entry calls `popToViewController(_:animated:)` (from `_tryRequestPopToItem`). An accessibility escape or a keyboard back can call `popViewController(animated:)`, and a reselect can call `popToRootViewController(animated:)`. `ShellNavController` overrides all three: it keeps its stack and sends `onPopToPage(tab, index)` (`LiquidNativePopToPage`), `index` being the page that should end on top. Dart pops the Flutter pages above it, top first, each with `maybePop` (its `PopScope` runs). A refused pop, or a route that is not a page on top (a sheet), ends it. One page down is exactly a back tap. Native then follows the shorter stack through `setViewControllers`, which never goes through those overrides. Before this, the menu popped native alone and Flutter kept the detail page with no back button.

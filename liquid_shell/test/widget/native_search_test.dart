@@ -1649,4 +1649,61 @@ void main() {
       expect(_searchStacks(fake, from), everyElement(['Search']));
     });
   });
+
+  group('VK-502: a tab keeps its pages while offstage', () {
+    // iPhone; iPad at regular width (top bar); iPad at compact width (a
+    // narrow window: UIKit's compact bar). Branches kept alive by an
+    // IndexedStack (Visibility) or, as a router's shell route does, by
+    // Offstage + TickerMode.
+    const forms = [
+      ('iPhone', _compact, kPhone, _compactPadding),
+      (
+        'iPad regular',
+        LiquidNativeShellState(installed: true),
+        kTabletLandscape,
+        EdgeInsets.only(top: 74, bottom: 20),
+      ),
+      ('iPad narrow', _compact, Size(375, 1194), _compactPadding),
+    ];
+    for (final (form, state, size, padding) in forms) {
+      for (final offstage in [false, true]) {
+        final branches = offstage ? 'Offstage branches' : 'an IndexedStack';
+        testWidgets('$form, $branches: away and back, every config keeps the '
+            'search stack', (tester) async {
+          final fake = installFakeNative(state: state);
+          final controller = LiquidSearchController();
+          addTearDown(controller.dispose);
+          await pumpShell(
+            tester,
+            TestShell(
+              destinations: _destinations,
+              initialIndex: 2,
+              pageBuilder: _homeNavigatorPage,
+              offstageBranches: offstage,
+              search: LiquidSearch(controller: controller),
+            ),
+            size: size,
+            padding: padding,
+          );
+          await _pushDetail(tester);
+          expect(fake.last.tabs.last.pages.map((p) => p.title), [
+            'Search',
+            'Hồ Hoàn Kiếm',
+          ]);
+          final from = fake.configs.length;
+          fake.emitNative(const LiquidNativeDestinationTapped(0));
+          await tester.pumpAndSettle();
+          expect(fake.last.selectedIndex, 0);
+          fake.emitNative(const LiquidNativeDestinationTapped(2));
+          await tester.pumpAndSettle();
+          expect(fake.last.selectedIndex, 2);
+          expect(_searchStacks(fake, from), isNotEmpty);
+          expect(
+            _searchStacks(fake, from),
+            everyElement(['Search', 'Hồ Hoàn Kiếm']),
+          );
+        });
+      }
+    }
+  });
 }
