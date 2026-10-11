@@ -30,6 +30,9 @@
 - `LiquidChromeSlot.searchField` and
   `LiquidChromeDetails.search` (`LiquidSearchChromeDetails`) for a
   `chromeBuilder`.
+- **Breaking:** `LiquidChromeSlot` gains `searchField`, so an exhaustive
+  `switch (details.slot)` in a `chromeBuilder` needs the new case (or a
+  `default`).
 - Example: a real "Search" case (songs and places, Vietnamese without
   accents matches); the trailing action case is now "Compose".
 
