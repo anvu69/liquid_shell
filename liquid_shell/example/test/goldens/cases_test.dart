@@ -12,6 +12,7 @@ import 'package:liquid_shell_example/cases/discard_guard.dart';
 import 'package:liquid_shell_example/cases/forced_tier.dart';
 import 'package:liquid_shell_example/cases/hide_chrome.dart';
 import 'package:liquid_shell_example/cases/narrow_width.dart';
+import 'package:liquid_shell_example/cases/native_alerts.dart';
 import 'package:liquid_shell_example/cases/sidebar_only.dart';
 import 'package:liquid_shell_example/cases/sidebar_slots.dart';
 import 'package:liquid_shell_example/cases/standalone_widgets.dart';
@@ -73,6 +74,25 @@ void main() {
       'case_guard',
       const DiscardGuardCase(),
       interact: () => tester.tap(find.text('Explore')),
+    );
+  });
+
+  testWidgets('case_alert', (tester) async {
+    await golden(
+      tester,
+      'case_alert',
+      const NativeAlertsCase(),
+      interact: () => tester.tap(find.text('Alert')),
+    );
+  });
+
+  testWidgets('case_action_sheet', (tester) async {
+    await golden(
+      tester,
+      'case_action_sheet',
+      const NativeAlertsCase(),
+      device: ipadPortrait,
+      interact: () => tester.tap(find.text('Action sheet')),
     );
   });
 

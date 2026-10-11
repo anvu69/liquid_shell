@@ -221,6 +221,7 @@ void main() {
     'sidebar_slots',
     'trailing',
     'guard',
+    'alerts',
     'hide_chrome',
     'native_chrome',
   };
@@ -347,4 +348,39 @@ void main() {
       expect(page.left, greaterThanOrEqualTo(sidebar.right));
     },
   );
+
+  testWidgets('the alerts case answers through the Flutter glass alert', (
+    tester,
+  ) async {
+    await _openCase(tester, 'alerts');
+    await tester.tap(find.text('Alert'));
+    await tester.pumpAndSettle();
+    expect(find.text('Discard changes?'), findsOneWidget);
+    await tester.tap(find.text('Discard'));
+    await tester.pumpAndSettle();
+    expect(find.text('Result: discard'), findsOneWidget);
+  });
+
+  testWidgets('a tap outside the action sheet answers its cancel value', (
+    tester,
+  ) async {
+    await _openCase(tester, 'alerts');
+    await tester.tap(find.text('Action sheet'));
+    await tester.pumpAndSettle();
+    expect(find.text('Delete photo'), findsOneWidget);
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
+    expect(find.text('Result: cancel'), findsOneWidget);
+  });
+
+  testWidgets('autorun shows the alert by itself, then the result', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const ExampleApp(demo: 'alert'));
+    await tester.pumpAndSettle();
+    expect(find.text('Discard changes?'), findsOneWidget);
+    await tester.tap(find.text('Keep editing'));
+    await tester.pumpAndSettle();
+    expect(find.text('Result: keep'), findsWidgets);
+  });
 }

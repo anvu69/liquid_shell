@@ -1,3 +1,11 @@
+## 0.1.0-dev.3
+
+- `showLiquidAlert` / `showLiquidActionSheet`: native `UIAlertController` on
+  iOS 26+, Flutter glass elsewhere; `LiquidAlertAction`,
+  `LiquidAlertActionStyle`, `LiquidDialogPresentation`;
+  `LiquidShellStrings.dismiss`. Example: Alerts and action sheets case; the
+  guard uses the native alert.
+
 ## 0.1.0-dev.2
 
 - Native iOS 26 chrome (opt-in) on iPhone and iPad, compact windows

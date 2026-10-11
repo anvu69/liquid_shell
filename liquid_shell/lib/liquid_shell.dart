@@ -11,6 +11,9 @@ export 'src/destinations/badge.dart'
     show LiquidBadge, LiquidCountBadge, LiquidDotBadge;
 export 'src/destinations/destination.dart';
 export 'src/destinations/tab_action.dart';
+export 'src/dialogs/dialog_types.dart';
+export 'src/dialogs/show_dialogs.dart'
+    show showLiquidActionSheet, showLiquidAlert;
 export 'src/glass/glass_scope.dart';
 export 'src/glass/glass_theme.dart';
 export 'src/glass/liquid_glass.dart';

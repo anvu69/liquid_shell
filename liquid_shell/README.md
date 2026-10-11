@@ -37,6 +37,8 @@ dependency.
   `UITabBarController` tab bar and sidebar (with a native footer) on iPhone
   and iPad, the floating bottom bar at compact width; the Flutter chrome
   everywhere else.
+- **Native alerts and action sheets** on iOS 26 (`UIAlertController`),
+  the same glass drawn by Flutter elsewhere.
 - **Window controls**: on iPadOS 26 windowed apps, the shell's top row and
   your large titles move past the close/minimise/resize cluster.
 - Runtime dependencies: Flutter and this plugin's own packages only (plus
@@ -335,21 +337,21 @@ bool _dirty = true;
 
 Future<bool> _confirmLeave(int index) async {
   if (!_dirty || index == _index) return true;
-  final discard = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Discard changes?'),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: const Text('Keep editing'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, true),
-          child: const Text('Discard'),
-        ),
-      ],
-    ),
+  final discard = await showLiquidAlert<bool>(
+    context,
+    title: 'Discard changes?',
+    actions: const [
+      LiquidAlertAction(
+        label: 'Keep editing',
+        value: false,
+        style: LiquidAlertActionStyle.cancel,
+      ),
+      LiquidAlertAction(
+        label: 'Discard',
+        value: true,
+        style: LiquidAlertActionStyle.destructive,
+      ),
+    ],
   );
   return discard ?? false;
 }
@@ -377,6 +379,83 @@ Widget build(BuildContext context) => LiquidShell(
 ```
 
 <img src="doc/images/case_guard.png" width="260" alt="Discard changes dialog">
+
+### Alerts and action sheets
+
+`showLiquidAlert` and `showLiquidActionSheet` complete with the value of the
+action the user picked. On iOS 26 and later they are the system's own
+`UIAlertController`, with Liquid Glass, above the native tab bar and
+sidebar. On Android and on iOS before 26 they are drawn by Flutter, with the
+same glass as the shell (`LiquidGlass`). Pass
+`presentation: LiquidDialogPresentation.flutter` to draw Flutter everywhere,
+or `.system` for UIKit's alert on every iOS.
+
+<?code-excerpt "native_alerts.dart (readme)"?>
+```dart
+// True for "Discard"; false for "Keep editing" or a dismissal.
+Future<bool?> _confirmDiscard({
+  LiquidDialogPresentation presentation = LiquidDialogPresentation.auto,
+}) => showLiquidAlert<bool>(
+  context,
+  title: 'Discard changes?',
+  message: 'Your edits will be lost.',
+  actions: const [
+    LiquidAlertAction(
+      label: 'Keep editing',
+      value: false,
+      style: LiquidAlertActionStyle.cancel,
+    ),
+    LiquidAlertAction(
+      label: 'Discard',
+      value: true,
+      style: LiquidAlertActionStyle.destructive,
+    ),
+  ],
+  presentation: presentation,
+);
+
+// Pass the tapped button's context: on iPad the sheet points at it.
+Future<String?> _photoAction(
+  BuildContext button, {
+  LiquidDialogPresentation presentation = LiquidDialogPresentation.auto,
+}) => showLiquidActionSheet<String>(
+  button,
+  title: 'Photo',
+  actions: const [
+    LiquidAlertAction(
+      label: 'Delete photo',
+      value: 'delete',
+      style: LiquidAlertActionStyle.destructive,
+    ),
+    LiquidAlertAction(label: 'Share', value: 'share'),
+    LiquidAlertAction(
+      label: 'Cancel',
+      value: 'cancel',
+      style: LiquidAlertActionStyle.cancel,
+    ),
+  ],
+  presentation: presentation,
+);
+```
+
+| | iOS 26+ | iOS 15–25 | Android |
+|---|---|---|---|
+| `auto` (default) | `UIAlertController` (glass) | Flutter glass | Flutter glass |
+| `system` | `UIAlertController` (glass) | `UIAlertController` | Flutter glass |
+| `flutter` | Flutter glass | Flutter glass | Flutter glass |
+
+- A tap outside an action sheet, Escape or Android back completes with the
+  cancel action's value, or null without one.
+- At most one `cancel` and one `preferred` action. A blank label, no
+  actions, a disabled preferred action or no enabled action throws
+  `ArgumentError`.
+- Every visible string is yours. The Flutter sheet's barrier uses
+  `LiquidShellStrings.dismiss` for screen readers.
+
+<img src="doc/images/case_alert.png" width="260" alt="Glass alert">
+<img src="doc/images/case_action_sheet.png" width="360" alt="Glass action sheet at its button">
+
+Details: [doc/native_dialogs.md](doc/native_dialogs.md).
 
 ### Hide the chrome, or none at all
 
@@ -916,8 +995,9 @@ How it behaves:
   like Flutter taps; the native selection changes only when the guard
   accepts. The trailing action and the footer call your callbacks.
 - A page pushed above the shell hides the native chrome while it covers the
-  shell; a dialog above the shell makes it ignore touches, and hides the
-  compact bar.
+  shell; a Flutter dialog above the shell makes it ignore touches, and
+  hides the compact bar. A native alert (`showLiquidAlert`) is drawn above
+  it and changes nothing.
 - `LiquidHideChrome` hides it, as it hides the Flutter chrome.
 - `LiquidShellScope.of(context).nativeChrome` tells pages which chrome is
   on screen. `sidebarHeader` and `sidebarFooter` are Flutter widgets and
@@ -1007,7 +1087,8 @@ content viewer (see [Custom chrome](#custom-chrome)).
   destination. Strings the system draws (the sidebar button's VoiceOver
   label) follow the device language, not your app's. The compact native
   bar does not minimise on scroll (`minimizeOnScroll` is Flutter-only), and
-  it hides while a dialog or sheet is up (the body keeps its inset).
+  it hides while a Flutter dialog or sheet is up (the body keeps its
+  inset); a native alert leaves it in place.
 - **A frame or two without chrome at start on iOS.** Whether the app opted
   in, and the iOS version, are known only natively, so on iOS a shell that
   could use native chrome draws none until the platform answers, even in
@@ -1025,6 +1106,15 @@ content viewer (see [Custom chrome](#custom-chrome)).
   shell nested in another shell's body (sub-tabs) takes it from the outer
   one, which then shows no navigation; give a nested shell
   `nativeChrome: LiquidNativeChrome.off`.
+- **Native alerts.** A hot restart with a system alert up leaves an
+  orphan alert in debug builds; a tap closes it. After a system alert,
+  VoiceOver focus goes back to the Flutter view, not to the node that was
+  tapped. Alerts have no text fields yet (P3a-2). The system alert's text
+  follows the device's Dynamic Type, not your `TextScaler`, and system
+  dialog text follows the device language for any string UIKit adds (none
+  in alerts; VoiceOver hints). Unverified on a real iOS < 26 runtime
+  (Q9): the iOS 15–25 paths are checked by XCTest with the OS version
+  injected. See [doc/native_dialogs.md](doc/native_dialogs.md#known-limits).
 - **No liquid tier yet.** Forcing `LiquidGlassTier.liquid` draws frosted.
   The liquid tier comes in P4.
 - **Android signals are best effort.** Each one that cannot be read
@@ -1036,13 +1126,18 @@ content viewer (see [Custom chrome](#custom-chrome)).
 - [doc/tiers.md](doc/tiers.md): tiers, the policy, signals, writing a renderer
 - [doc/native_chrome.md](doc/native_chrome.md): native iOS chrome, its
   install rules, behaviour and limits
+- [doc/native_dialogs.md](doc/native_dialogs.md): native alerts and action
+  sheets, who draws them, how the answer is decided, troubleshooting
 - [doc/router_integration.md](doc/router_integration.md): `IndexedStack`,
   `Navigator` and go_router wiring, branch state, hide/no chrome, system
   back, known limits
 
 ## Roadmap
 
-- **P2 (this release):** native iOS 26 chrome and window controls.
+- **P2:** native iOS 26 chrome and window controls.
+- **P3a (this release, done):** native alerts and action sheets.
+- **P3a-2 (next):** share sheet, haptics, date picker and text fields in
+  alerts.
 - **P3:** a glass back button and title bar, a search field and a search tab.
 - **P4:** the liquid tier on Android, as a `LiquidGlassRenderer` adapter.
 - **P5:** a go_router adapter (`StatefulShellRoute` builder, route-driven

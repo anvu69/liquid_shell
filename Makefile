@@ -19,7 +19,7 @@ COVERAGE_MIN := 90
 
 .PHONY: help get format format-check analyze test coverage goldens \
         goldens-update provenance snippets verify pana publish-check \
-        android-unit ios-unit integration-ios integration-ios-native integration-android pigeon pigeon-check
+        android-unit ios-unit ios-ui integration-ios integration-ios-native integration-android pigeon pigeon-check
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -126,13 +126,23 @@ ios-unit: ## XCTest of liquid_shell_ios (example RunnerTests) on an iPad or iPho
 	cd $(EXAMPLE)/ios && $(CURDIR)/tool/with_timeout.sh $(IOS_UNIT_TIMEOUT) \
 	  xcodebuild test -workspace Runner.xcworkspace -scheme Runner \
 	  -destination "id=$${IOS_UNIT_DEVICE:?set IOS_UNIT_DEVICE to a simulator UDID}" \
-	  -only-testing:RunnerTests -parallel-testing-enabled NO \
+	  -only-testing:RunnerTests -skip-testing:RunnerUITests -parallel-testing-enabled NO \
 	  -collect-test-diagnostics never \
 	  -test-timeouts-enabled YES -default-test-execution-time-allowance 60 \
 	  -maximum-test-execution-time-allowance 120 \
 	  -resultBundlePath $(IOS_UNIT_RESULT) -quiet \
 	  || { status=$$?; [ ! -d $(IOS_UNIT_RESULT) ] || \
 	    xcrun xcresulttool get test-results summary --path $(IOS_UNIT_RESULT); exit $$status; }
+
+ios-ui: ## XCUITest: real taps on native dialogs (example RunnerUITests) on a simulator; IOS_UNIT_DEVICE=<udid>
+	cd $(EXAMPLE) && $(FLUTTER) build ios --config-only --simulator --debug
+	cd $(EXAMPLE)/ios && $(CURDIR)/tool/with_timeout.sh $(IOS_UNIT_TIMEOUT) \
+	  xcodebuild test -workspace Runner.xcworkspace -scheme Runner \
+	  -destination "id=$${IOS_UNIT_DEVICE:?set IOS_UNIT_DEVICE to a simulator UDID}" \
+	  -only-testing:RunnerUITests -parallel-testing-enabled NO \
+	  -collect-test-diagnostics never \
+	  -test-timeouts-enabled YES -default-test-execution-time-allowance 180 \
+	  -maximum-test-execution-time-allowance 300 -quiet
 
 integration-ios: ## Signal channel round-trip on an iOS simulator
 	FLUTTER="$(FLUTTER)" tool/integration_ios.sh
