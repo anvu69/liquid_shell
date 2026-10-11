@@ -216,8 +216,9 @@ jobs:
     # Every iOS 26 iPhone and iPad installs the native chrome (owner D1):
     # one job per idiom, so a stalled simulator costs one leg, not both.
     # Each idiom runs on iOS 26, and again on iOS 27: that leg is an early
-    # warning and never blocks (the runner image may not have the runtime
-    # yet).
+    # warning and never blocks. When the runner image has no iOS 27
+    # runtime yet it warns and passes, so a red iOS 27 leg means a
+    # regression, not a missing simulator.
     name: integration-ios-native (${{ matrix.device }}, ${{ matrix.runtime }})
     runs-on: macos-latest
     continue-on-error: ${{ matrix.runtime == 'iOS 27' }}
@@ -240,21 +241,33 @@ jobs:
           channel: stable
           flutter-version: 3.44.x
           cache: true
-      - run: make get
-      - name: Native shell, dialogs and search tab on the newest ${{ matrix.device }} simulator (${{ matrix.runtime }})
+      - name: The newest ${{ matrix.device }} simulator on ${{ matrix.runtime }}
+        id: sim
         run: |
           udid=$(xcrun simctl list devices available "$IOS_RUNTIME" | grep -F "    ${{ matrix.device }}" | tail -n1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
           if [ -z "$udid" ]; then
+            if [ "$IOS_RUNTIME" = "iOS 27" ]; then
+              echo "::warning::no ${{ matrix.device }} simulator on $IOS_RUNTIME in this runner image; leg skipped"
+              exit 0
+            fi
             echo "::error::no ${{ matrix.device }} simulator on $IOS_RUNTIME"
             exit 1
           fi
-          NATIVE_DEVICES="$udid=true" tool/integration_ios_native.sh
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+        env:
+          IOS_RUNTIME: ${{ matrix.runtime }}
+      - if: steps.sim.outputs.udid != ''
+        run: make get
+      - name: Native shell, dialogs and search tab on the newest ${{ matrix.device }} simulator (${{ matrix.runtime }})
+        if: steps.sim.outputs.udid != ''
+        run: NATIVE_DEVICES="${{ steps.sim.outputs.udid }}=true" tool/integration_ios_native.sh
         env:
           IOS_RUNTIME: ${{ matrix.runtime }}
           NATIVE_TARGETS: native_shell_test.dart native_dialogs_test.dart native_search_test.dart
       - name: Native vs Flutter liquid on the newest ${{ matrix.device }} simulator (${{ matrix.runtime }})
+        if: steps.sim.outputs.udid != ''
         run: |
-          udid=$(xcrun simctl list devices available "$IOS_RUNTIME" | grep -F "    ${{ matrix.device }}" | tail -n1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          udid="${{ steps.sim.outputs.udid }}"
           cd liquid_shell/example
           flutter drive --driver=test_driver/integration_test.dart \
             --target=integration_test/liquid_compare_test.dart -d "$udid" \
@@ -265,10 +278,8 @@ jobs:
           for n in build/integration_screenshots/ios_*_native.png; do
             dart run ../../tool/side_by_side.dart "$n" "${n%_native.png}_flutterLiquid.png" "build/compare/$(basename "${n%_native.png}").png"
           done
-        env:
-          IOS_RUNTIME: ${{ matrix.runtime }}
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && steps.sim.outputs.udid != ''
         with:
           name: native-shell-screenshots-${{ matrix.device }}-${{ strategy.job-index }}
           path: |
