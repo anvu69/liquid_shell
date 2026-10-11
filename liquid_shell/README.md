@@ -28,9 +28,11 @@ dependency.
 - **Narrow windows.** Down to 320pt (Slide Over, ⅓ Split View, small
   phones), 5 tabs plus a trailing action keep 44pt-wide cells at text
   scale 1, and the labels shrink to fit.
-- **Glass tiers** (liquid, frosted, solid) behind a `LiquidGlassRenderer`
-  seam, with automatic **solid fallback** for Reduce Transparency, battery
-  saver, disabled window blurs and devices that cannot blur.
+- **Liquid glass by default**: the package's own lens shader on Impeller
+  (iOS, Android 10+), with automatic **frosted** fallback (no Impeller,
+  low-end or GLES-only Android, battery saver, Low Power Mode, slow frames)
+  and **solid** for Reduce Transparency, Increase Contrast and disabled
+  window blurs.
 - **Accessible**: semantics, large-text icon-only cells with a large content
   viewer, RTL, and every string replaceable through `LiquidShellStrings`.
 - **Native iOS 26 chrome**, opt-in: the system's own
@@ -46,9 +48,10 @@ dependency.
 
 | Platform | Look | Signals |
 |---|---|---|
-| iOS 15+ | Glass pill and sidebar; native `UITabBarController` chrome on iOS 26 (opt-in) | Reduce Transparency, iPadOS 26 window controls |
-| Android | Same as iOS | Animations off / high contrast, battery saver, window blurs disabled (API 31+), no Impeller |
-| Web, macOS, Windows, Linux | Frosted glass | None (always frosted unless forced) |
+| iOS 15+ | Liquid glass pill and sidebar; native `UITabBarController` chrome on iOS 26 (opt-in) | Reduce Transparency, Increase Contrast, Low Power Mode, iPadOS 26 window controls |
+| Android 10+ | Liquid glass, as on iOS (frosted on Android 9 and lower: no Impeller) | Animations off / high contrast, battery saver, window blurs disabled (API 31+), low memory, no Vulkan 1.1 |
+| macOS | Liquid glass (Impeller is Flutter's default there) | None |
+| Web, Windows, Linux | Frosted glass (no Impeller shader filters by default) | None |
 
 ## Install
 
@@ -707,6 +710,10 @@ Widget build(BuildContext context) {
     brightness: _brightness,
   );
   final glass = LiquidGlassTheme.fromColorScheme(scheme).copyWith(
+    // Liquid: the default tier on Impeller (iOS, Android 10+, macOS).
+    liquidTint: scheme.primaryContainer.withValues(alpha: 0.5),
+    liquidBlurSigma: 3,
+    // Frosted: no Impeller, battery saver, Low Power Mode, slow frames.
     tint: scheme.primaryContainer.withValues(alpha: 0.6),
     blurSigma: 18,
     labelStyle: const TextStyle(
@@ -741,9 +748,29 @@ Widget build(BuildContext context) {
 }
 ```
 
-<img src="doc/images/case_custom_theme.png" width="260" alt="Brand-tinted glass">
+| Liquid (Impeller: the default tier) | Frosted |
+|---|---|
+| <img src="doc/images/case_custom_theme_liquid.png" width="260" alt="Brand-tinted liquid glass"> | <img src="doc/images/case_custom_theme.png" width="260" alt="Brand-tinted frosted glass"> |
 
-See [doc/theming.md](doc/theming.md) for every field and its default.
+Each tier reads its own fields: `liquidTint` and `liquidBlurSigma` style
+the liquid tier, `tint` and `blurSigma` only frosted. Set both pairs for a
+brand theme. See [doc/theming.md](doc/theming.md) for every field and its
+default.
+
+### Liquid glass
+
+iOS 26 native (left) and Flutter liquid (right):
+
+<img src="doc/images/compare_iphone_basic.png" width="410" alt="iOS 26 native (left) and Flutter liquid (right), iPhone">
+
+<img src="doc/images/compare_ipad_sidebar_slots.png" width="820" alt="iOS 26 native (left) and Flutter liquid (right), iPad">
+
+iOS 26 native iPhone (left) and Flutter liquid on Android (right):
+
+<img src="doc/images/compare_android_basic.png" width="410" alt="iOS 26 native (left) and Flutter liquid on Android (right)">
+
+What the lens draws, its theme fields, when it falls back and what it
+costs: [doc/liquid.md](doc/liquid.md).
 
 ### Forced tier
 
@@ -774,7 +801,9 @@ Widget build(BuildContext context) {
             onSelectionChanged: (s) => setState(() => _tier = s.single),
           ),
           if (_tier == LiquidGlassTier.liquid)
-            const Text('No liquid renderer is registered: drawing frosted.'),
+            const Text(
+              'Liquid needs Impeller; without it this draws frosted.',
+            ),
         ],
       ),
     ),
@@ -782,12 +811,12 @@ Widget build(BuildContext context) {
 }
 ```
 
-| Frosted | Solid |
-|---|---|
-| <img src="doc/images/case_tier_frosted.png" width="260" alt="Frosted tier"> | <img src="doc/images/case_tier_solid.png" width="260" alt="Solid tier"> |
+| Liquid | Frosted | Solid |
+|---|---|---|
+| <img src="doc/images/case_tier_liquid.png" width="260" alt="Liquid tier"> | <img src="doc/images/case_tier_frosted.png" width="260" alt="Frosted tier"> | <img src="doc/images/case_tier_solid.png" width="260" alt="Solid tier"> |
 
-No liquid renderer ships yet; forcing `liquid` draws frosted. See
-[doc/tiers.md](doc/tiers.md).
+Forcing `liquid` without Impeller (Android 9 and lower, the web) draws
+frosted. See [doc/tiers.md](doc/tiers.md).
 
 ### Form factors
 
@@ -1047,16 +1076,19 @@ layout, insets and sidebar state with `LiquidShellScope.of(context)`.
 
 ## Accessibility and fallbacks
 
-Glass turns solid when any of these is on. A signal that cannot be read
+Glass is liquid unless one of these is on. A signal that cannot be read
 counts as off, so the shell never fails to draw.
 
-| Signal | iOS | Android |
-|---|---|---|
-| Reduce transparency | Reduce Transparency | Animator duration scale 0, or high contrast (API 34+ contrast, or high-text-contrast) |
-| High contrast | Increase Contrast | (reported through reduce transparency) |
-| Battery saver | not used | Battery Saver |
-| Window blurs disabled | not used | `isCrossWindowBlurEnabled` false (API 31+) |
-| Cannot blur | never | No Impeller (Skia, API 28 and lower) |
+| Signal | iOS | Android | Glass |
+|---|---|---|---|
+| Reduce transparency | Reduce Transparency | Animator duration scale 0, or high contrast (API 34+ contrast, or high-text-contrast) | solid |
+| High contrast | Increase Contrast | (reported through reduce transparency) | solid |
+| Window blurs disabled | not used | `isCrossWindowBlurEnabled` false (API 31+), without battery saver | solid |
+| Power saving | Low Power Mode | Battery Saver | frosted |
+| Low-end device | not used | `isLowRamDevice`, or less than 3 GiB of memory | frosted |
+| GLES only | not used | Android 10+ without Vulkan 1.1 | frosted |
+| Slow frames | raster p90 over 1.25 × the frame budget for three 60-frame windows (profile and release) | same | frosted |
+| No Impeller | never | Skia, API 28 and lower | frosted |
 
 Cells and rows are buttons with labels, badge text and selected state. From
 1.6× text size the bar is icon-only and a long press shows the label large.
@@ -1106,6 +1138,26 @@ content viewer (see [Custom chrome](#custom-chrome)).
   shell nested in another shell's body (sub-tabs) takes it from the outer
   one, which then shows no navigation; give a nested shell
   `nativeChrome: LiquidNativeChrome.off`.
+- **Liquid glass inside another BackdropFilter draws frosted.** Flutter
+  3.44 gives a nested filter coordinates relative to its parent's region,
+  so the lens cannot be placed there.
+- **Liquid glass is opaque.** It writes opaque pixels: over a transparent
+  window (add-to-app with a transparent `FlutterView`, Android
+  `TransparencyMode.transparent`, an overlay window) or in an image capture
+  of a subtree (`RepaintBoundary.toImage`, share-as-image) it is a solid
+  grey or tinted slab, not see-through glass. An `Opacity` or fade ancestor
+  fades it normally. Force frosted there with
+  `LiquidGlassScope(policy: LiquidGlassPolicy(forcedTier: LiquidGlassTier.frosted))`.
+- **The lens assumes an upright, unscaled glass.** Under a scaling or
+  rotating ancestor (zoom page transitions, scale-in dialogs,
+  `CupertinoContextMenu`) the lens is placed on the glass's axis-aligned
+  bounding box, with the corner radii, bezel and rim at their unscaled
+  size, so its corners do not match the clip; force frosted inside such a
+  transform if it stays on screen.
+- **One frame of lens lag in some moves.** A transition of the nearest
+  route or a scroll of the nearest `Scrollable` moves the lens in the same
+  frame. Glass under a `CompositedTransformFollower`, or moved by an outer
+  `Navigator`'s route or an outer `Scrollable`, is placed one frame late.
 - **Native alerts.** A hot restart with a system alert up leaves an
   orphan alert in debug builds; a tap closes it. After a system alert,
   VoiceOver focus goes back to the Flutter view, not to the node that was
@@ -1115,8 +1167,6 @@ content viewer (see [Custom chrome](#custom-chrome)).
   in alerts; VoiceOver hints). Unverified on a real iOS < 26 runtime
   (Q9): the iOS 15–25 paths are checked by XCTest with the OS version
   injected. See [doc/native_dialogs.md](doc/native_dialogs.md#known-limits).
-- **No liquid tier yet.** Forcing `LiquidGlassTier.liquid` draws frosted.
-  The liquid tier comes in P4.
 - **Android signals are best effort.** Each one that cannot be read
   counts as off.
 
@@ -1124,6 +1174,8 @@ content viewer (see [Custom chrome](#custom-chrome)).
 
 - [doc/theming.md](doc/theming.md): `LiquidGlassTheme` fields and defaults
 - [doc/tiers.md](doc/tiers.md): tiers, the policy, signals, writing a renderer
+- [doc/liquid.md](doc/liquid.md): the liquid lens, its theme fields,
+  fallbacks and cost
 - [doc/native_chrome.md](doc/native_chrome.md): native iOS chrome, its
   install rules, behaviour and limits
 - [doc/native_dialogs.md](doc/native_dialogs.md): native alerts and action
@@ -1135,11 +1187,11 @@ content viewer (see [Custom chrome](#custom-chrome)).
 ## Roadmap
 
 - **P2:** native iOS 26 chrome and window controls.
-- **P3a (this release, done):** native alerts and action sheets.
+- **P3a (0.1.0-dev.3, done):** native alerts and action sheets.
 - **P3a-2 (next):** share sheet, haptics, date picker and text fields in
   alerts.
 - **P3:** a glass back button and title bar, a search field and a search tab.
-- **P4:** the liquid tier on Android, as a `LiquidGlassRenderer` adapter.
+- **P4 (this release):** the liquid tier in the core package.
 - **P5:** a go_router adapter (`StatefulShellRoute` builder, route-driven
   hide chrome).
 - **P6:** final docs pass and 0.1.0 on pub.dev.

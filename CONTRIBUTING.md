@@ -24,6 +24,8 @@
 | `make ios-ui IOS_UNIT_DEVICE=<udid>` | XCUITest: real taps on native dialogs (example `RunnerUITests`) on one simulator; CI runs it, non-blocking, on the newest iPad and iPhone |
 | `make pigeon` / `make pigeon-check` | Regenerate the native channel / fail when the generated files drift (part of `verify`) |
 | `make pana` / `make publish-check` | pub.dev scoring and publish dry-run |
+| `make test-impeller` | Shader tests under Impeller (macOS) |
+| `make compare-images` | Native vs Flutter liquid screenshots |
 
 ## Coverage gate
 

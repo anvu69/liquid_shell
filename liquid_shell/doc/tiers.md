@@ -2,7 +2,7 @@
 
 | Tier | Drawn as | Ships in |
 |---|---|---|
-| `liquid` | refracting glass | a separate adapter package (planned); none in this package |
+| `liquid` | the built-in lens shader (Impeller); see [liquid.md](liquid.md) | built in |
 | `frosted` | backdrop blur, tint, 1px border, rim highlight, outside shadow | built in |
 | `solid` | opaque fill, border, outside shadow; no blur | built in |
 
@@ -14,21 +14,36 @@ scroll position survive.
 
 `LiquidGlassPolicy.resolve(context, signals)`:
 
-1. `forcedTier` set → that tier. If it has no supported renderer, step down
-   liquid → frosted → solid (logged once in debug builds).
-2. Any signal asks for solid (`LiquidGlassSignals.prefersSolid`) → solid.
-3. Otherwise the richest tier with a supported renderer: liquid if a
-   registered liquid renderer's `isSupported` is true, else frosted.
+1. `forcedTier` set → that tier, stepping down liquid → frosted → solid
+   when it has no supported renderer (logged once in debug builds). A
+   forced tier wins over every signal.
+2. `signals.prefersSolid` → solid.
+3. `signals.prefersFrosted` → frosted.
+4. Otherwise liquid.
+
+Liquid is drawn by the first registered liquid renderer whose
+`isSupported` is true, else by the built-in lens shader when it is
+supported (Impeller's shader filters, the shader loaded, and no
+`BackdropFilter` above the glass), else frosted.
 
 Signals:
 
-| Field | Source |
-|---|---|
-| `reduceTransparency` | iOS Reduce Transparency. Android: animator duration scale 0, contrast > 0 (API 34+), or the high-text-contrast setting |
-| `highContrast` | `MediaQuery.highContrastOf` (reported by iOS) |
-| `powerSave` | Android battery saver (iOS Low Power Mode is ignored, like the system glass) |
-| `blurDisabled` | Android 12+ `WindowManager.isCrossWindowBlurEnabled` false: battery saver, GPU without blur, or the developer "disable window blurs" switch |
-| `canBlur` | false only on Android without Impeller (`ImageFilter.isShaderFilterSupported`, Skia on API 28 and lower) |
+| Field | Source | Effect |
+|---|---|---|
+| `reduceTransparency` | iOS Reduce Transparency. Android: animator duration scale 0, contrast > 0 (API 34+), or the high-text-contrast setting | solid |
+| `highContrast` | `MediaQuery.highContrastOf` (reported by iOS) | solid |
+| `blurDisabled` | Android 12+ `WindowManager.isCrossWindowBlurEnabled` false: battery saver, GPU without blur, or the developer "disable window blurs" switch | solid, only when `powerSave` is off (battery saver turns window blurs off too) |
+| `powerSave` | Android battery saver; iOS Low Power Mode | frosted |
+| `lowEnd` | Android `isLowRamDevice`, or less than 3 GiB of memory | frosted |
+| `glesOnly` | Android 10+ without Vulkan 1.1 | frosted |
+| `slowFrames` | the frame guard: three 60-frame windows in a row with a raster p90 above 1.25 × the frame budget (1 s / refresh rate, never below 16.7 ms); profile and release only, for the rest of the session | frosted |
+
+- `prefersSolid` = `reduceTransparency || highContrast || (blurDisabled && !powerSave)`.
+- `prefersFrosted` = `powerSave || lowEnd || glesOnly || slowFrames`.
+
+Without Impeller (Android 9 and lower, the web) there are no shader
+filters, so the built-in liquid renderer is unsupported and glass is
+frosted.
 
 Android signals are best effort: OEM builds vary, and Android 16's "Reduce
 blur effects" has no public API (on the API 36 emulator it is not exposed as
@@ -72,6 +87,9 @@ swapping one in rebuilds the glass.
 
 ## Writing a renderer
 
+A registered renderer wins over the built-in one of its tier, so this one
+replaces the lens shader wherever it is supported:
+
 ```dart
 import 'dart:ui' as ui;
 
@@ -110,9 +128,9 @@ the renderer counts as unsupported.
 
 ## Testing
 
-`flutter test` reports Android without shader filters, so the probe answers
-"cannot blur" and glass is solid. Set the override in
-`test/flutter_test_config.dart`:
+`flutter test` has no shader filters unless it runs with
+`--enable-impeller`, so glass is frosted and app tests need no setup. Reset
+the signals between tests in `test/flutter_test_config.dart`:
 
 ```dart
 import 'dart:async';
@@ -121,11 +139,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
-  setUp(() => debugLiquidGlassCanBlurOverride = true);
-  tearDown(() {
-    debugLiquidGlassCanBlurOverride = null;
-    debugResetLiquidGlassSignals();
-  });
+  tearDown(debugResetLiquidGlassSignals);
   await testMain();
 }
 ```
+
+Leave `debugLiquidGlassCanRefractOverride` null there: `false` would pin
+frosted in `flutter test --enable-impeller` runs too, where liquid glass
+can be drawn (await `LiquidGlass.precache()` inside `tester.runAsync`
+first).

@@ -19,7 +19,8 @@ COVERAGE_MIN := 90
 
 .PHONY: help get format format-check analyze test coverage goldens \
         goldens-update provenance snippets verify pana publish-check \
-        android-unit ios-unit ios-ui integration-ios integration-ios-native integration-android pigeon pigeon-check
+        android-unit ios-unit ios-ui integration-ios integration-ios-native integration-android pigeon pigeon-check \
+        test-impeller compare-images
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -41,10 +42,14 @@ test: ## Unit and widget tests in every package and the example (no goldens)
 	@set -e; for p in $(PACKAGES) $(EXAMPLE); do \
 	  if [ -d $$p/test ]; then \
 	    echo "▸ test $$p"; \
-	    (cd $$p && $(FLUTTER) test --exclude-tags golden); \
+	    (cd $$p && $(FLUTTER) test --exclude-tags golden,impeller,liquid_golden); \
 	  fi; \
 	done
 	$(DART) test tool/test
+
+test-impeller: ## Shader tests under Impeller (macOS + Flutter 3.44.x only)
+	@if [ "$$(uname)" != Darwin ]; then echo "▸ test-impeller runs on macOS only"; exit 0; fi
+	cd liquid_shell && $(FLUTTER) test --enable-impeller --tags impeller
 
 coverage: ## Tests with coverage; fails below COVERAGE_MIN, with no tests, with no lib lines, or when COVERED misses a package with lib code
 	@$(DART) run tool/check_covered.dart "$(PACKAGES)" "$(COVERED)"
@@ -53,20 +58,30 @@ coverage: ## Tests with coverage; fails below COVERAGE_MIN, with no tests, with 
 	for p in $(COVERED); do \
 	  echo "▸ coverage $$p"; \
 	  $(DART) run tool/gen_coverage_helper.dart $$p; \
-	  (cd $$p && $(FLUTTER) test --exclude-tags golden --coverage); \
+	  (cd $$p && $(FLUTTER) test --exclude-tags golden,impeller,liquid_golden --coverage); \
 	  $(DART) run tool/check_coverage.dart $$p/coverage/lcov.info $(COVERAGE_MIN); \
 	done
 
-goldens: ## Golden tests (reference toolchain: macOS + Flutter 3.44.x)
+goldens: ## Golden tests (reference toolchain: macOS + Flutter 3.44.x); liquid ones under Impeller
 	@if [ -d $(EXAMPLE)/test/goldens ]; then \
-	  cd $(EXAMPLE) && $(FLUTTER) test --tags golden; \
+	  cd $(EXAMPLE) && $(FLUTTER) test --tags golden && \
+	  $(FLUTTER) test --enable-impeller --tags liquid_golden; \
 	else echo "▸ no goldens yet"; fi
 
 goldens-update: ## Regenerate every golden and doc image, then recompress them losslessly
 	FLUTTER="$(FLUTTER)" DART="$(DART)" tool/update_goldens.sh
 
-provenance: ## Fail on app names or banned dependencies outside docs/
+compare-images: ## Native vs Flutter liquid side by side (iOS sims you create, emulator in ANDROID_SERIAL); README subset to doc/images
+	FLUTTER="$(FLUTTER)" DART="$(DART)" tool/compare_ios.sh
+	FLUTTER="$(FLUTTER)" DART="$(DART)" tool/compare_android.sh
+	cp $(EXAMPLE)/build/compare/ios_iphone_basic.png liquid_shell/doc/images/compare_iphone_basic.png
+	cp $(EXAMPLE)/build/compare/ios_ipad_sidebar_slots_sidebar.png liquid_shell/doc/images/compare_ipad_sidebar_slots.png
+	cp $(EXAMPLE)/build/compare/android_basic.png liquid_shell/doc/images/compare_android_basic.png
+	$(DART) run tool/compress_pngs.dart liquid_shell/doc/images
+
+provenance: ## Fail on app names or banned dependencies outside docs/, or glass outside LiquidGlass
 	tool/check_provenance.sh
+	tool/check_glass_seam.sh
 
 snippets: ## README snippets must equal their #docregion in example/lib/cases
 	@if [ -f tool/check_readme_snippets.dart ]; then \
@@ -90,7 +105,7 @@ pigeon-check: pigeon ## Fail when the committed channel code drifts from its Pig
 	  exit 1; }
 	@echo "✓ pigeon output matches its source"
 
-verify: format-check analyze provenance pigeon-check test coverage goldens snippets ## Everything CI's blocking jobs run
+verify: format-check analyze provenance pigeon-check test test-impeller coverage goldens snippets ## Everything CI's blocking jobs run
 	@echo "✓ verify passed"
 
 pana: ## pana for each package (see docs/plans: pre-publish limits)

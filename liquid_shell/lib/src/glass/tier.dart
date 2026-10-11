@@ -1,7 +1,7 @@
 /// How a glass surface is drawn, from richest to plainest.
 enum LiquidGlassTier {
-  /// Refracting glass. Needs a registered renderer (none ships in this
-  /// package yet).
+  /// Refracting glass: the built-in lens shader (Impeller), or a
+  /// registered renderer.
   liquid,
 
   /// Blurred backdrop with a tint, border, rim highlight and shadow.

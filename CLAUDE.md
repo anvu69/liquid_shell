@@ -34,6 +34,7 @@ the spec in `docs/specs/`, and the plan in `docs/plans/`.
 - **Never loosen `analysis_options.yaml`** to get code through. Fix the code.
 - **Goldens** are regenerated only with `make goldens-update` on macOS +
   Flutter 3.44.6. Never edit images by hand.
+- **Clean-room shader.** Never open or copy another glass package's shader or glass code (liquid_glass_renderer, liquid_glass_widgets, liquid_glass_easy, …). Derive from spec 2026-10-10 §4.
 
 ## Commands
 
@@ -48,4 +49,6 @@ make ios-unit IOS_UNIT_DEVICE=<udid>   # XCTest of liquid_shell_ios
 make ios-ui IOS_UNIT_DEVICE=<udid>   # XCUITest: real taps on native dialogs
 make pigeon                   # regenerate the native channel
 make integration-android
+make test-impeller   # shader tests under Impeller (macOS)
+make compare-images   # native vs Flutter liquid screenshots
 ```

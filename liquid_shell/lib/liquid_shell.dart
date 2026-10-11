@@ -20,7 +20,7 @@ export 'src/glass/liquid_glass.dart';
 export 'src/glass/policy.dart' show LiquidGlassPolicy, LiquidGlassSignals;
 export 'src/glass/renderer.dart';
 export 'src/glass/signals_controller.dart'
-    show debugLiquidGlassCanBlurOverride, debugResetLiquidGlassSignals;
+    show debugLiquidGlassCanRefractOverride, debugResetLiquidGlassSignals;
 export 'src/glass/tier.dart';
 export 'src/native/native_chrome.dart';
 export 'src/native/native_reset.dart';
