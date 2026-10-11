@@ -1906,10 +1906,17 @@ extension NativeTabsTests {
       "the native bar is Flutter's top padding")
   }
 
+  /// An out-of-line large title (`.always`) collapses under the proxy while
+  /// Flutter's top is held. The iPhone search root's `.inline` title sits
+  /// on the bar row and moves nothing, and UIKit then shows a pushed page's
+  /// title small; an iPad search root that asks for a large title is
+  /// `.always`.
   func testTheProxyCollapsesTheLargeTitleWhileFlutterKeepsItsTop() throws {
-    try requirePhone()
-    let tabs = try installedSearchShell(selected: 2)
+    try requireIPad()
+    let tabs = try installedSearchShell(
+      selected: 2, pages: [NativePage(title: "Search", largeTitle: true)])
     let host = try XCTUnwrap(tabs.topHost(ofTab: 2))
+    XCTAssertEqual(host.navigationItem.largeTitleDisplayMode, .always, "precondition")
     let restingFlutterTop = tabs.flutter.view.safeAreaInsets.top
     let restingHostTop = host.view.safeAreaInsets.top
     tabs.setPageScroll(tab: 2, offset: 400)

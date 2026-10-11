@@ -95,8 +95,10 @@ final class SearchUITests: XCTestCase {
     // Hold, then lift away from the button: the menu stays open.
     back.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
       .press(forDuration: 1.5, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)))
+    // The menu's entry, not the back button or the (selected) Search tab
+    // of an iPad's top tab bar.
     let entry = app.buttons.matching(
-      NSPredicate(format: "label == 'Search' AND identifier != 'BackButton'")
+      NSPredicate(format: "label == 'Search' AND identifier != 'BackButton' AND selected == NO")
     ).allElementsBoundByIndex.first { $0.frame.minY < app.frame.midY }
     XCTAssertNotNil(entry, "the back menu's entry for the search root")
     entry?.tap()
