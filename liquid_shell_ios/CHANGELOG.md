@@ -1,6 +1,11 @@
-## 0.1.0-dev.3
+## 0.1.0-dev.4
 
 - Reports Low Power Mode as `powerSave`.
+
+## 0.1.0-dev.3
+
+- Native alerts and action sheets presented from the engine's own window
+  (`NativeDialogPresenter`), over the Pigeon channel.
 
 ## 0.1.0-dev.2
 

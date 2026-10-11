@@ -9,11 +9,14 @@ import UIKit
 ///   low-end and GLES-only are always false here (Metal is always present).
 /// - Installs the native iPadOS 26 shell and answers the Pigeon channel
 ///   (`NativeShellInstaller`, spec P2 §5).
+/// - Presents native alerts and action sheets (`NativeDialogPresenter`, spec P3a §5).
 public final class LiquidShellPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   private var sink: FlutterEventSink?
   private var observer: NSObjectProtocol?
   private var powerObserver: NSObjectProtocol?
   private var installer: NativeShellInstaller?
+  /// Readable by the example's XCTests (`@testable`): the engine-teardown test.
+  private(set) var dialogs: NativeDialogPresenter?
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     let plugin = LiquidShellPlugin()
@@ -34,6 +37,10 @@ public final class LiquidShellPlugin: NSObject, FlutterPlugin, FlutterStreamHand
     NativeShellHostApiSetup.setUp(binaryMessenger: messenger, api: installer)
     installer.start()
     plugin.installer = installer
+    let dialogs = NativeDialogPresenter(
+      flutterViewController: { [weak registrar] in registrar?.viewController })
+    NativeDialogHostApiSetup.setUp(binaryMessenger: messenger, api: dialogs)
+    plugin.dialogs = dialogs
     registrar.publish(plugin)
   }
 
@@ -53,6 +60,8 @@ public final class LiquidShellPlugin: NSObject, FlutterPlugin, FlutterStreamHand
   public func detachFromEngine(for registrar: FlutterPluginRegistrar) {
     installer?.stop()
     NativeShellHostApiSetup.setUp(binaryMessenger: registrar.messenger(), api: nil)
+    dialogs?.dismissAll()
+    NativeDialogHostApiSetup.setUp(binaryMessenger: registrar.messenger(), api: nil)
     removeObserver()
   }
 

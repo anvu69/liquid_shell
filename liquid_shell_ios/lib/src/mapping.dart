@@ -1,3 +1,5 @@
+import 'dart:ui' show Rect;
+
 import 'package:liquid_shell_ios/src/native_shell_api.g.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
@@ -74,3 +76,72 @@ NativeChromeConfig configToNative(LiquidNativeChromeConfig config) =>
       hidden: config.hidden,
       interactive: config.interactive,
     );
+
+/// Interface dialog request → native request. A non-finite anchor is not
+/// sent (spec P3a §6).
+NativeDialogRequest dialogRequestToNative(LiquidNativeDialogRequest request) =>
+    NativeDialogRequest(
+      kind: switch (request.kind) {
+        LiquidNativeDialogKind.alert => NativeDialogKind.alert,
+        LiquidNativeDialogKind.actionSheet => NativeDialogKind.actionSheet,
+      },
+      title: request.title,
+      message: request.message,
+      actions: [
+        for (final action in request.actions)
+          NativeDialogAction(
+            label: action.label,
+            style: switch (action.style) {
+              LiquidNativeDialogActionStyle.standard =>
+                NativeDialogActionStyle.standard,
+              LiquidNativeDialogActionStyle.cancel =>
+                NativeDialogActionStyle.cancel,
+              LiquidNativeDialogActionStyle.destructive =>
+                NativeDialogActionStyle.destructive,
+            },
+            enabled: action.enabled,
+          ),
+      ],
+      preferredIndex: request.preferredIndex,
+      anchor: switch (request.anchor) {
+        final Rect rect? when rect.isFinite => NativeRect(
+          x: rect.left,
+          y: rect.top,
+          width: rect.width,
+          height: rect.height,
+        ),
+        _ => null,
+      },
+      tintArgb: request.tintArgb,
+      dark: request.dark,
+      rtl: request.rtl,
+      requireGlass: request.requireGlass,
+    );
+
+/// Native result → interface result, checked at the boundary: an index
+/// outside the request's [actionCount] actions is a dismissal, and an
+/// unavailable answer without a reason is a channel error.
+LiquidNativeDialogResult dialogResultFromNative(
+  NativeDialogResult result, {
+  required int actionCount,
+}) => switch (result.outcome) {
+  NativeDialogOutcome.chose => switch (result.actionIndex) {
+    final int index? when index >= 0 && index < actionCount =>
+      LiquidNativeDialogChose(index),
+    _ => const LiquidNativeDialogDismissed(),
+  },
+  NativeDialogOutcome.dismissed => const LiquidNativeDialogDismissed(),
+  NativeDialogOutcome.unavailable => LiquidNativeDialogUnavailable(
+    switch (result.reason) {
+      NativeDialogUnavailableReason.osTooOld =>
+        LiquidNativeDialogUnavailableReason.osTooOld,
+      NativeDialogUnavailableReason.noWindow =>
+        LiquidNativeDialogUnavailableReason.noWindow,
+      NativeDialogUnavailableReason.refused =>
+        LiquidNativeDialogUnavailableReason.refused,
+      NativeDialogUnavailableReason.disabledByEnvironment =>
+        LiquidNativeDialogUnavailableReason.disabledByEnvironment,
+      null => LiquidNativeDialogUnavailableReason.channelError,
+    },
+  ),
+};

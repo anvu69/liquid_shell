@@ -1,4 +1,4 @@
-## 0.1.0-dev.3
+## 0.1.0-dev.4
 
 - **Liquid glass.** A built-in, clean-room lens shader draws the `liquid`
   tier on Impeller: edge refraction, a specular rim, light dispersion,
@@ -30,6 +30,14 @@
   it writes opaque pixels, so over a transparent window or in an image
   capture of a subtree it is a solid tint (force `frosted` there); under a
   scaling or rotating ancestor the lens is placed on the bounding box.
+
+## 0.1.0-dev.3
+
+- `showLiquidAlert` / `showLiquidActionSheet`: native `UIAlertController` on
+  iOS 26+, Flutter glass elsewhere; `LiquidAlertAction`,
+  `LiquidAlertActionStyle`, `LiquidDialogPresentation`;
+  `LiquidShellStrings.dismiss`. Example: Alerts and action sheets case; the
+  guard uses the native alert.
 
 ## 0.1.0-dev.2
 

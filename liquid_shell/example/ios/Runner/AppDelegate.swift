@@ -14,5 +14,15 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    // UI tests launch the example on one demo (LIQUID_SHELL_EXAMPLE_DEMO,
+    // lib/support/launch_demo.dart). Dart cannot read the process
+    // environment on iOS, so it asks here.
+    FlutterMethodChannel(
+      name: "liquid_shell_example/launch",
+      binaryMessenger: engineBridge.applicationRegistrar.messenger()
+    ).setMethodCallHandler { call, result in
+      guard call.method == "demo" else { return result(FlutterMethodNotImplemented) }
+      result(ProcessInfo.processInfo.environment["LIQUID_SHELL_EXAMPLE_DEMO"])
+    }
   }
 }

@@ -46,6 +46,7 @@ make android-unit
 make integration-ios
 make integration-ios-native   # native iPadOS shell, iPad + iPhone simulators
 make ios-unit IOS_UNIT_DEVICE=<udid>   # XCTest of liquid_shell_ios
+make ios-ui IOS_UNIT_DEVICE=<udid>   # XCUITest: real taps on native dialogs
 make pigeon                   # regenerate the native channel
 make integration-android
 make test-impeller   # shader tests under Impeller (macOS)

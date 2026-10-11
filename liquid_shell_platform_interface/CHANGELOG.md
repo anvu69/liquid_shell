@@ -1,6 +1,11 @@
-## 0.1.0-dev.3
+## 0.1.0-dev.4
 
 - `LiquidPlatformSignals.lowEnd` and `glesOnly`.
+
+## 0.1.0-dev.3
+
+- `supportsNativeDialogs`, `presentNativeDialog` and the native dialog
+  request/result types.
 
 ## 0.1.0-dev.2
 
