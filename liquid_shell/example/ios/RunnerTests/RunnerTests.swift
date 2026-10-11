@@ -2047,9 +2047,9 @@ extension NativeTabsTests {
     XCTAssertTrue(
       try hit(tabs, CGPoint(x: root.bounds.midX, y: root.bounds.midY)) === tabs.flutter.view,
       "selected: the body")
-    // Active.
-    tabs.setSearchActive(true)
-    settle()
+    // Active: wait for the presentation to end (the iPad's stacked field
+    // rises; a slow runner outlasts a fixed settle).
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
     XCTAssertTrue(isNative(try hit(tabs, try fieldCentre()), tabs), "active: the field")
     let body = CGPoint(x: root.bounds.midX, y: root.bounds.height * 0.35)
     XCTAssertTrue(try hit(tabs, body) === tabs.flutter.view, "active: the body")
