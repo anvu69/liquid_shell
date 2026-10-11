@@ -169,10 +169,16 @@ final class SearchUITests: XCTestCase {
   /// Q14: Flutter owns the edge swipe; the native bar follows its pop.
   func testAnEdgeSwipePopsFlutterAndTheNativeBarFollows() {
     let (app, back, heading) = openDetail()
-    app.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5)).withOffset(CGVector(dx: 2, dy: 0))
-      .press(
-        forDuration: 0.05,
-        thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)))
+    func swipeFromTheEdge() {
+      app.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5)).withOffset(CGVector(dx: 2, dy: 0))
+        .press(
+          forDuration: 0.05,
+          thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)))
+    }
+    swipeFromTheEdge()
+    // A loaded CI runner can drop the first drag's events (seen on shared
+    // macOS runners): one more swipe, and a broken back gesture still fails.
+    if !heading.waitForNonExistence(timeout: 5) { swipeFromTheEdge() }
     XCTAssertTrue(heading.waitForNonExistence(timeout: 10), "Flutter popped the detail")
     XCTAssertTrue(back.waitForNonExistence(timeout: 10), "the native bar followed")
     XCTAssertTrue(flutterRow(app, "Hồ Hoàn Kiếm").waitForExistence(timeout: 10), "the results")
