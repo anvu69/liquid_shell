@@ -69,6 +69,7 @@ class GlassTabBar extends StatefulWidget {
     this.externalTarget,
     this.reserveTrailing = false,
     this.collapseDelay = true,
+    this.tintCollapsed = true,
     super.key,
   }) : assert(
          externalTarget == null || trailing == null,
@@ -116,6 +117,11 @@ class GlassTabBar extends StatefulWidget {
 
   /// A collapse waits 0.24 s (scroll); false for the search collapse.
   final bool collapseDelay;
+
+  /// Whether the collapsed circle tints the selected tab's icon. False for
+  /// the search collapse: the circle holds the previous tab, not the
+  /// current one, in the unselected colour (spec VK-503 §11).
+  final bool tintCollapsed;
 
   @override
   State<GlassTabBar> createState() => _GlassTabBarState();
@@ -171,7 +177,7 @@ class _GlassTabBarState extends State<GlassTabBar>
     _syncOwnTarget();
     if (oldWidget.minimized != widget.minimized) {
       // A minimize takes the touch away: no stale hover, no late commit.
-      if (widget.minimized) _cancel();
+      if (widget.minimized) _cancel(building: true);
       _minimize
         ..reduceMotion = MediaQuery.disableAnimationsOf(context)
         ..set(widget.minimized, delayed: widget.collapseDelay);
@@ -283,8 +289,21 @@ class _GlassTabBarState extends State<GlassTabBar>
     if (slot != null) widget.onSelect(_shown[slot]);
   }
 
-  void _cancel() {
-    _target?.hovered.value = false;
+  /// [building]: called from `didUpdateWidget`. The shell's ⌕ listens to
+  /// an external target from outside this bar, so it is cleared after the
+  /// frame instead of marking that listener dirty mid-build.
+  void _cancel({bool building = false}) {
+    final t = _target;
+    if (t != null && building && identical(t, widget.externalTarget)) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        // Gone or handed back: the shell clears a target it stops feeding.
+        if (mounted && identical(widget.externalTarget, t)) {
+          t.hovered.value = false;
+        }
+      });
+    } else {
+      t?.hovered.value = false;
+    }
     _motion?.cancel();
     _kick();
   }
@@ -550,7 +569,7 @@ class _GlassTabBarState extends State<GlassTabBar>
                 opacity: (morph / 0.4).clamp(0.0, 1.0),
                 child: _CollapsedIcon(
                   destination: shown[collapsedSlot],
-                  color: selectedSlot == null
+                  color: selectedSlot == null || !widget.tintCollapsed
                       ? theme.tabForeground
                       : scheme.primary,
                 ),

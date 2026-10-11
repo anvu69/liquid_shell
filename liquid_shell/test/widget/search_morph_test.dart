@@ -19,17 +19,53 @@ const _destinations = [
 // kPhone is 393 × 852; the row bottom is 852 − 21.
 const double _rowBottom = 852.0 - 21;
 
-Future<LiquidSearchController> _pump(WidgetTester tester) async {
+Future<LiquidSearchController> _pump(
+  WidgetTester tester, {
+  Widget Function(int index)? pageBuilder,
+}) async {
   final controller = LiquidSearchController();
   addTearDown(controller.dispose);
   await pumpShell(
     tester,
     TestShell(
       destinations: _destinations,
+      pageBuilder: pageBuilder,
       search: LiquidSearch(controller: controller),
     ),
   );
   return controller;
+}
+
+/// Whether the idle ⌕ shows the lens hover.
+bool _hovered(WidgetTester tester) => tester
+    .widget<TabHoverHighlight>(
+      find.descendant(
+        of: find.byKey(kSearchFieldKey),
+        matching: find.byType(TabHoverHighlight),
+      ),
+    )
+    .hovered
+    .value;
+
+/// A lens drag from Home that is now over the ⌕.
+Future<TestGesture> _hoverSearch(WidgetTester tester) async {
+  final g = await tester.startGesture(
+    tester.getCenter(find.bySemanticsLabel('Home')),
+  );
+  await g.moveTo(tester.getCenter(find.byKey(kSearchFieldKey)));
+  await tester.pump(const Duration(milliseconds: 100));
+  expect(_hovered(tester), isTrue);
+  return g;
+}
+
+/// The colour the bar draws its collapsed circle's icon in.
+Color? _collapsedIconColor(WidgetTester tester) {
+  final icon = find.descendant(
+    of: find.byType(GlassTabBar),
+    matching: find.byIcon(Icons.home),
+  );
+  expect(icon, findsOneWidget);
+  return IconTheme.of(tester.element(icon)).color;
 }
 
 void main() {
@@ -107,5 +143,88 @@ void main() {
     expect(highlight.hovered.value, isFalse);
     await g.up();
     await tester.pumpAndSettle();
+    expect(
+      scopeOf(tester).searchPhase,
+      LiquidSearchPhase.idle,
+      reason: 'the late release neither selects search nor commits',
+    );
+    expect(tester.state<TestShellState>(find.byType(TestShell)).index, 0);
+  });
+
+  testWidgets('the bar leaving the tree mid-drag lets go of the highlight', (
+    tester,
+  ) async {
+    final hide = ValueNotifier(false);
+    addTearDown(hide.dispose);
+    await _pump(
+      tester,
+      pageBuilder: (i) => i == 0
+          ? ValueListenableBuilder<bool>(
+              valueListenable: hide,
+              builder: (_, hidden, child) =>
+                  LiquidHideChrome(enabled: hidden, child: child!),
+              child: const TestPage(label: 'Home'),
+            )
+          : TestPage(label: _destinations[i].label),
+    );
+    final g = await _hoverSearch(tester);
+    hide.value = true;
+    await tester.pumpAndSettle();
+    hide.value = false;
+    await tester.pumpAndSettle();
+    expect(_hovered(tester), isFalse);
+    await g.up();
+    await tester.pumpAndSettle();
+    expect(scopeOf(tester).searchPhase, LiquidSearchPhase.idle);
+  });
+
+  testWidgets('a second finger scrolling while the lens hovers the ⌕', (
+    tester,
+  ) async {
+    await _pump(tester);
+    final g = await _hoverSearch(tester);
+    // The scroll minimizes the idle bar, which cancels the lens.
+    final scroll = await tester.startGesture(const Offset(200, 400));
+    for (var i = 0; i < 6; i++) {
+      await scroll.moveBy(const Offset(0, -50));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await scroll.up();
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<GlassTabBar>(find.byType(GlassTabBar)).minimized,
+      true,
+    );
+    expect(_hovered(tester), isFalse);
+    await g.up();
+    await tester.pumpAndSettle();
+    expect(scopeOf(tester).searchPhase, LiquidSearchPhase.idle);
+  });
+
+  testWidgets('selected: the collapsed circle draws the previous tab '
+      'untinted', (tester) async {
+    await _pump(tester);
+    await tester.tap(find.bySemanticsLabel('Search'));
+    await tester.pumpAndSettle();
+    expect(
+      _collapsedIconColor(tester),
+      LiquidGlassTheme.of(
+        tester.element(find.byType(GlassTabBar)),
+      ).tabForeground,
+    );
+  });
+
+  testWidgets('idle, scroll-minimized: the circle keeps the current tab '
+      'tinted', (tester) async {
+    await _pump(tester);
+    await tester.drag(
+      find.byKey(const ValueKey('list-Home')),
+      const Offset(0, -300),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      _collapsedIconColor(tester),
+      Theme.of(tester.element(find.byType(GlassTabBar))).colorScheme.primary,
+    );
   });
 }

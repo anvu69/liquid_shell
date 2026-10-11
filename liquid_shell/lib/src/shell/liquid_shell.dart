@@ -270,9 +270,6 @@ class _LiquidShellState extends State<LiquidShell>
     // A selection change expands the minimized bar (spec VK-503 §10, Q7).
     if (oldWidget.selectedIndex != widget.selectedIndex) {
       _minimized.value = false;
-      // The bar stops feeding the ⌕ target once search is selected: a
-      // hover it had would outlive the drag.
-      _searchTarget.hovered.value = false;
     }
     _configureSearch();
   }
@@ -955,6 +952,16 @@ class _LiquidShellState extends State<LiquidShell>
             direction: Directionality.of(context),
           )
         : null;
+    // A hover on the ⌕ outlives a drag whose bar stops feeding the target
+    // (search selected, chrome hidden, another layout). Cleared after the
+    // frame: the ⌕ that listens may be mid-build.
+    final searchTargetFed =
+        phase == LiquidSearchPhase.idle && compactRects != null;
+    if (!searchTargetFed && _searchTarget.hovered.value) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _searchTarget.hovered.value = false;
+      });
+    }
     // The regular top field (spec P3b §9.3): selected and active only.
     final regularFieldTop =
         phase != null &&
@@ -1150,6 +1157,7 @@ class _LiquidShellState extends State<LiquidShell>
                                 onSelect: _onSelect,
                                 minimized: collapsed,
                                 collapseDelay: idle,
+                                tintCollapsed: idle,
                                 onCollapsedTap: idle
                                     ? _expand
                                     : () => _onSelect(_previousIndex),

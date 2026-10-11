@@ -632,6 +632,26 @@ void main() {
       expect(selections, [2, 1]);
       expect(_pill(tester).minimized, isFalse, reason: 'back in idle');
     });
+    testWidgets('selected: a scroll there leaves no minimize behind', (
+      tester,
+    ) async {
+      await _pump(tester, initialIndex: 2);
+      await tester.drag(
+        find.byKey(const ValueKey('list-Search')),
+        const Offset(0, -300),
+      );
+      await tester.pumpAndSettle();
+      // The app drops the search tab; the same index is now a plain tab,
+      // so nothing resets the flag a scroll would have set.
+      const places = LiquidDestination(icon: Icon(Icons.map), label: 'Places');
+      await pumpShell(
+        tester,
+        TestShell(destinations: [..._destinations.take(2), places]),
+      );
+      await tester.pumpAndSettle();
+      expect(scopeOf(tester, 'Places').searchPhase, isNull);
+      expect(_pill(tester).minimized, isFalse);
+    });
   });
 
   testWidgets('chromeBuilder: the pill slot lists the other tabs, and the '
