@@ -1575,4 +1575,78 @@ void main() {
       expect(fake.searchActives, [true]);
     });
   });
+
+  group("VK-491: the search tab never shows another tab's pages", () {
+    // Switching tabs, the shell computes the new tab's stack before the
+    // pages of the old and the new branch hear that their visibility
+    // changed: the old tab's page still says it is the one on screen.
+
+    testWidgets('a native tap from Home sends only the search stack', (
+      tester,
+    ) async {
+      final (fake, _, _) = await _pump(
+        tester,
+        initialIndex: 0,
+        pageBuilder: _homeNavigatorPage,
+      );
+      final from = fake.configs.length;
+      fake.emitNative(const LiquidNativeDestinationTapped(2));
+      await tester.pumpAndSettle();
+      expect(fake.last.selectedIndex, 2);
+      expect(_searchStacks(fake, from), isNotEmpty);
+      expect(_searchStacks(fake, from), everyElement(['Search']));
+    });
+
+    testWidgets('an app selection from Home sends only the search stack', (
+      tester,
+    ) async {
+      final (fake, _, _) = await _pump(
+        tester,
+        initialIndex: 0,
+        pageBuilder: _homeNavigatorPage,
+      );
+      final from = fake.configs.length;
+      tester.state<TestShellState>(find.byType(TestShell)).select(2);
+      await tester.pumpAndSettle();
+      expect(fake.last.selectedIndex, 2);
+      expect(_searchStacks(fake, from), isNotEmpty);
+      expect(_searchStacks(fake, from), everyElement(['Search']));
+    });
+
+    testWidgets('back to a search tab with a pushed page: its whole stack, '
+        'no pop and push again', (tester) async {
+      final (fake, _, _) = await _pump(
+        tester,
+        pageBuilder: _homeNavigatorPage,
+      );
+      await _pushDetail(tester);
+      fake.emitNative(const LiquidNativeDestinationTapped(0));
+      await tester.pumpAndSettle();
+      expect(fake.last.selectedIndex, 0);
+      final from = fake.configs.length;
+      fake.emitNative(const LiquidNativeDestinationTapped(2));
+      await tester.pumpAndSettle();
+      expect(fake.last.selectedIndex, 2);
+      expect(_searchStacks(fake, from), isNotEmpty);
+      expect(
+        _searchStacks(fake, from),
+        everyElement(['Search', 'Hồ Hoàn Kiếm']),
+      );
+    });
+
+    testWidgets("Home as a page of the shell's own route: only the search "
+        'stack', (tester) async {
+      final (fake, _, _) = await _pump(
+        tester,
+        initialIndex: 0,
+        pageBuilder: _homeLiquidPage,
+      );
+      final from = fake.configs.length;
+      fake.emitNative(const LiquidNativeDestinationTapped(2));
+      await tester.pumpAndSettle();
+      expect(fake.last.selectedIndex, 2);
+      expect(_searchStacks(fake, from), isNotEmpty);
+      expect(_searchStacks(fake, from), everyElement(['Search']));
+    });
+  });
 }

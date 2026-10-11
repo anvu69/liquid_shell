@@ -209,7 +209,7 @@ class _LiquidShellState extends State<LiquidShell>
   bool _tickersOff = false;
   bool _nativeEngaged = false;
   LiquidNativeShellState? _nativeState;
-  LiquidNativeChromeConfig? _nativeConfig;
+  LiquidNativeChromeConfig Function()? _nativeConfig;
   bool _nativeSendScheduled = false;
   bool _forceNativeSend = false;
   bool _symbolHintLogged = false;
@@ -372,8 +372,9 @@ class _LiquidShellState extends State<LiquidShell>
   }
 
   /// Sends the latest native config after the frame: never during build,
-  /// at most once per frame, deduplicated by the host.
-  void _scheduleNativeSend(LiquidNativeChromeConfig config) {
+  /// at most once per frame, deduplicated by the host. [config] is built
+  /// then, once the body has built too (the page stack, VK-491).
+  void _scheduleNativeSend(LiquidNativeChromeConfig Function() config) {
     _nativeConfig = config;
     if (_nativeSendScheduled) return;
     _nativeSendScheduled = true;
@@ -383,7 +384,7 @@ class _LiquidShellState extends State<LiquidShell>
       final force = _forceNativeSend;
       _forceNativeSend = false;
       if (mounted && latest != null) {
-        _claim?.update(latest, force: force);
+        _claim?.update(latest(), force: force);
         _search.afterConfigSent();
       }
     });
@@ -391,9 +392,12 @@ class _LiquidShellState extends State<LiquidShell>
 
   // --- pages (PageRegistry) -----------------------------------------------
   //
-  // Pages register, update and leave while the body builds: every change
-  // rebuilds the shell after the frame (`_rebuild`), and the next build
-  // computes the stack (spec P3b §8.4).
+  // Pages register, update and leave while the body builds, after the
+  // shell's own build: every change rebuilds the shell after the frame
+  // (`_rebuild`). The stack is computed after the frame, when the config
+  // is sent (spec P3b §8.4), never in the build: on a tab switch the
+  // pages of both tabs only hear of it once the shell has built, and the
+  // tab just left would still say its page is the one on screen (VK-491).
 
   @override
   PageHandle registerPage(PageEntry entry) {
@@ -452,6 +456,20 @@ class _LiquidShellState extends State<LiquidShell>
         if (_pageRecords.contains(record) &&
             (record.entry.route?.isActive ?? false))
           record,
+    ];
+  }
+
+  /// Computes [tab]'s stack for the config. After the frame: the pages
+  /// have heard of this frame's changes by then (VK-491).
+  void _updatePageStack(int tab) {
+    final stack = _stackFor(tab);
+    _stackRecords[tab] = stack;
+    _pageStacks[tab] = [
+      for (final record in stack)
+        LiquidNativePage(
+          title: record.entry.title,
+          largeTitle: record.entry.largeTitle,
+        ),
     ];
   }
 
@@ -1405,17 +1423,6 @@ class _LiquidShellState extends State<LiquidShell>
       selected: selected,
       searchIndex: searchIndex,
     );
-    if (_nativePageBar) {
-      final stack = _stackFor(selected);
-      _stackRecords[selected] = stack;
-      _pageStacks[selected] = [
-        for (final record in stack)
-          LiquidNativePage(
-            title: record.entry.title,
-            largeTitle: record.entry.largeTitle,
-          ),
-      ];
-    }
     if (_nativePageBar || _scrollRecord != null) _scheduleScrollSync();
     final searchActive = _search.controller?.isActive ?? false;
     // A dialog or sheet above an active search: the keyboard and the field
@@ -1430,29 +1437,36 @@ class _LiquidShellState extends State<LiquidShell>
     }
     if (owner) {
       final theme = Theme.of(context);
-      _scheduleNativeSend(
-        nativeConfigFor(
+      final destinations = widget.destinations;
+      final trailing = widget.tabBarTrailing;
+      final footer = widget.nativeSidebarFooter;
+      // The compact bar is drawn above the Flutter view: it would cover
+      // the bottom of a sheet or dialog drawn there, so it hides while one
+      // is above the shell. The top bar and sidebar only turn inert (§7.4).
+      final hidden =
+          _hideRequests > 0 ||
+          _covered ||
+          ((state?.compact ?? false) && !_routeCurrent);
+      final interactive = _routeCurrent && !_guardPending;
+      final placeholder = widget.search?.placeholder;
+      final pageBar = _nativePageBar;
+      _scheduleNativeSend(() {
+        if (pageBar) _updatePageStack(selected);
+        return nativeConfigFor(
           engaged: engaged,
-          destinations: widget.destinations,
+          destinations: destinations,
           selectedIndex: selected,
-          trailing: widget.tabBarTrailing,
-          footer: widget.nativeSidebarFooter,
+          trailing: trailing,
+          footer: footer,
           tint: theme.colorScheme.primary,
           dark: theme.brightness == Brightness.dark,
           rtl: rtl,
-          // The compact bar is drawn above the Flutter view: it would
-          // cover the bottom of a sheet or dialog drawn there, so it hides
-          // while one is above the shell. The top bar and sidebar only
-          // turn inert (§7.4).
-          hidden:
-              _hideRequests > 0 ||
-              _covered ||
-              ((state?.compact ?? false) && !_routeCurrent),
-          interactive: _routeCurrent && !_guardPending,
-          searchPlaceholder: widget.search?.placeholder,
+          hidden: hidden,
+          interactive: interactive,
+          searchPlaceholder: placeholder,
           pageStacks: _pageStacks,
-        ),
-      );
+        );
+      });
     }
     // Pending: the platform may install native chrome (any iOS 26 iPhone
     // or iPad, owner D1) but has not answered yet, and this shell would use

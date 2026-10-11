@@ -575,7 +575,7 @@ An internal `ShellSearch` object, owned by `_LiquidShellState`, attaches to `Liq
 
 `LiquidPage` registers with the nearest shell through a `PageRegistry` (implemented by the shell's state, published by `ShellScopeMarker` next to the hide-chrome registry). A registration carries the page's `title`, `largeTitle`, its `ModalRoute`, its `NavigatorState` and a sequence number.
 
-After each frame in which registrations, routes or the selection changed, the shell computes the selected tab's stack with a pure function:
+After each frame in which registrations, routes or the selection changed, the shell computes the selected tab's stack with a pure function. It does so after the frame, when it sends the config, and never in its own build: the shell builds before its body, so on a tab switch the page of the tab just left would still report that it is on screen, and the new tab would get that page's stack for one frame (VK-491).
 1. The **top page** is the registered page whose route `isCurrent` and whose `TickerMode` is enabled (on screen, not covered, not in an offstage branch).
 2. The **stack** is every registered page in the top page's navigator whose route `isActive`, in sequence order (registration order is push order).
 3. No top page → an empty stack: the native root shows the destination's label (a tab whose pages do not use `LiquidPage`, or a page without `LiquidPage` pushed above one). **Except under a cover**, where the last stack stays (less pages that left or whose route is gone), so native neither pops to the root nor pushes everything again, animated, when the cover goes:
