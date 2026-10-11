@@ -42,6 +42,57 @@ int? nextOnset(
   return null;
 }
 
+/// Every onset in [frames]. The search resumes [skip] frames after each
+/// onset (a strip's length), or 1 frame after it when [skip] is 0.
+List<int> onsetsOf(
+  List<Rgba> frames, {
+  required double threshold,
+  required int skip,
+}) {
+  final onsets = <int>[];
+  var from = 0;
+  for (;;) {
+    final onset = nextOnset(frames, from, threshold: threshold);
+    if (onset == null) return onsets;
+    onsets.add(onset);
+    from = onset + (skip > 0 ? skip : 1);
+  }
+}
+
+/// Both recordings run the same sequences, so they must hold as many
+/// onsets. When they do not, the k-th pairing is wrong from the first extra
+/// onset on.
+class OnsetMismatch implements Exception {
+  /// Creates the failure for the two onset lists.
+  OnsetMismatch(this.native, this.flutter);
+
+  /// The native onsets.
+  final List<int> native;
+
+  /// The Flutter onsets.
+  final List<int> flutter;
+
+  /// The pairs both lists have, in order: trust them only up to the first
+  /// extra onset.
+  List<(int, int)> get pairs => [
+    for (var k = 0; k < native.length && k < flutter.length; k++)
+      (native[k], flutter[k]),
+  ];
+
+  @override
+  String toString() =>
+      'OnsetMismatch: ${native.length} native onsets $native, '
+      '${flutter.length} Flutter onsets $flutter';
+}
+
+/// The k-th native onset with the k-th Flutter one. Throws
+/// [OnsetMismatch] when the counts differ or there is no onset at all.
+List<(int, int)> pairOnsets(List<int> native, List<int> flutter) {
+  final mismatch = OnsetMismatch(native, flutter);
+  if (native.isEmpty || native.length != flutter.length) throw mismatch;
+  return mismatch.pairs;
+}
+
 /// [rows] pairs (native left, Flutter right) from the two onsets, one every
 /// [every] frames, separated by [gap] white pixels.
 Rgba composeStrip(
@@ -151,21 +202,38 @@ void main(List<String> args) {
   final every = int.parse(opt('--every') ?? '3');
   final rows = int.parse(opt('--rows') ?? '18');
   // The mean change over the whole band: a lens moving in a 160 pt band
-  // changes about 0.5 % of it, far below the default.
+  // changes about 0.5 % of it, far below the default. Measured on the
+  // VK-503 runs: a moving lens peaks at 1.4 to 4.5, a still bar stays
+  // under 0.45 (single-frame encoder noise), so tab_frames.sh passes 0.5.
   final threshold = double.parse(opt('--threshold') ?? '3');
   final native = loadFrames(args[0], band[0], band[1]);
   final flutter = loadFrames(args[1], band[0], band[1]);
   Directory(args[2]).createSync(recursive: true);
-  var n = 0;
-  var f = 0;
-  for (var k = 1; ; k++) {
-    final a = nextOnset(native, n, threshold: threshold);
-    final b = nextOnset(flutter, f, threshold: threshold);
-    if (a == null || b == null) break;
+  final skip = every * rows;
+  final nativeOnsets = onsetsOf(native, threshold: threshold, skip: skip);
+  final flutterOnsets = onsetsOf(flutter, threshold: threshold, skip: skip);
+  var pairs = <(int, int)>[];
+  OnsetMismatch? mismatch;
+  try {
+    pairs = pairOnsets(nativeOnsets, flutterOnsets);
+  } on OnsetMismatch catch (e) {
+    mismatch = e;
+    pairs = e.pairs;
+  }
+  for (final (k, (a, b)) in pairs.indexed) {
     final strip = composeStrip(native, a, flutter, b, every: every, rows: rows);
-    File('${args[2]}/frames_$k.png').writeAsBytesSync(encodeRgbaPng(strip));
-    stdout.writeln('frames_$k.png: native @$a, flutter @$b');
-    n = a + every * rows;
-    f = b + every * rows;
+    File('${args[2]}/frames_${k + 1}.png').writeAsBytesSync(
+      encodeRgbaPng(strip),
+    );
+    stdout.writeln('frames_${k + 1}.png: native @$a, flutter @$b');
+  }
+  if (mismatch != null) {
+    stderr
+      ..writeln('✗ $mismatch')
+      ..writeln(
+        '✗ the k-th pairing is wrong after the first extra onset: check the '
+        'strips by eye, or fix the drivers so both runs move alike',
+      );
+    exit(1);
   }
 }

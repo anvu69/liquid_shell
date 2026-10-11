@@ -7,7 +7,8 @@
 # IOS_RUNTIME    simctl runtime (default iOS 26.5)
 #
 # Every step is time-boxed (tool/with_timeout.sh), so a lost simulator or a
-# stuck build fails the run instead of hanging it. Both apps are built
+# stuck build fails the run instead of hanging it. macOS only: it reads
+# simctl's "Recording started" line and uses the system perl and bc. Both apps are built
 # before their recording starts, so a recording holds the run itself, not
 # the build.
 set -euo pipefail
@@ -20,16 +21,16 @@ command -v ffmpeg >/dev/null || [ "${TRACES_ONLY:-}" = 1 ] || {
   echo "✗ tab_frames.sh needs ffmpeg (brew install ffmpeg)" >&2; exit 1; }
 cap() { "$tool_dir/with_timeout.sh" "$@"; }
 
-udid=$(xcrun simctl create "vk503-tabfid" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro "$IOS_RUNTIME")
+udid=$(cap 120 xcrun simctl create "vk503-tabfid" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro "$IOS_RUNTIME")
 ticker=
 cleanup() {
   [ -z "$ticker" ] || kill "$ticker" 2>/dev/null || true
-  xcrun simctl delete "$udid" || true
+  cap 120 xcrun simctl delete "$udid" || true
 }
 trap cleanup EXIT
 cap 300 xcrun simctl boot "$udid"
 cap 300 xcrun simctl bootstatus "$udid" -b >/dev/null
-xcrun simctl ui "$udid" appearance light
+cap 60 xcrun simctl ui "$udid" appearance light
 
 out=build/tabfid
 command rm -rf "$out"
@@ -46,9 +47,23 @@ tick() {
   local i=0
   while :; do
     i=$((1 - i))
-    xcrun simctl status_bar "$udid" override --time "9:4$i" >/dev/null 2>&1 || true
+    cap 10 xcrun simctl status_bar "$udid" override --time "9:4$i" \
+      >/dev/null 2>&1 || true
     sleep 0.1
   done
+}
+
+# Stops `simctl io recordVideo`: SIGINT makes it write the file; a
+# recorder that has not exited after 30 s (a lost simulator) is killed.
+stop_recorder() {
+  local pid=$1 i
+  kill -INT "$pid" 2>/dev/null || true
+  for i in $(seq 60); do
+    kill -0 "$pid" 2>/dev/null || break
+    sleep 0.5
+  done
+  kill -KILL "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
 }
 
 # Records the screen while <command> runs. Both drivers print "TABFID
@@ -71,10 +86,10 @@ record() { # <name> <command...>
   status=${PIPESTATUS[0]}
   set -e
   sleep 1
-  kill -INT "$rec"; wait "$rec" || true
+  stop_recorder "$rec"
   kill "$ticker"; wait "$ticker" 2>/dev/null || true
   ticker=
-  xcrun simctl status_bar "$udid" clear
+  cap 60 xcrun simctl status_bar "$udid" clear
   [ "$status" = 0 ] || return "$status"
   local t0 mark
   t0=$(grep -m1 'Recording started' "$out/$name.rec" | cut -d' ' -f1)
