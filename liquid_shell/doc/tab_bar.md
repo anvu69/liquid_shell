@@ -94,6 +94,8 @@ state in `LiquidChromeDetails.minimized` and expands with
 
 On the liquid tier the page fades into a soft blur and a faint dim over
 the bottom 148 pt, under the bar, as iOS draws its scroll-edge pocket.
+Under the 44 pt landscape bar it is 128.8 pt: native starts the pocket
+64.8 pt above the pill in both forms.
 Frosted and solid glass, and Reduce Transparency, draw no pocket.
 
 ## Accessibility

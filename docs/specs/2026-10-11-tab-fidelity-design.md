@@ -567,6 +567,8 @@ Native puts a 147.8 pt progressive blur and dim under the bar (research §5). Fl
 
 Frosted and solid get no pocket. It adds three backdrop passes over 148 pt of height, so the frame guard covers it. Under reduce transparency there is no pocket.
 
+*Amended in Task 16:* under the 44 pt landscape bar the pocket is **128.8 pt**, measured (the TabFid layer dump in landscape: `ScrollEdgeEffectView` at y 273.2, 128.8 tall on 874 × 402). Native starts the pocket 64.8 pt above the pill top in both forms: 21 + 62 + 64.8 = 147.8 in portrait, 20 + 44 + 64.8 = 128.8 in landscape. The provisional 148 × 44 / 62 ≈ 105 is gone.
+
 ## 16. Public API changes
 
 | Change | Kind |

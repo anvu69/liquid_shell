@@ -1137,13 +1137,10 @@ class _LiquidShellState extends State<LiquidShell>
           left: 0,
           right: 0,
           bottom: 0,
-          // Landscape scales the portrait 148 pt by the bar (44 / 62 ≈ 105
-          // pt). Provisional: the native landscape pocket is unmeasured; to
-          // be confirmed in Task 15 against native frames.
+          // The native landscape pocket is 128.8 pt (measured, see
+          // kScrollPocketLandscapeExtent), not the portrait 148.
           height: barForm == TabBarForm.landscape
-              ? kScrollPocketExtent *
-                    TabMetrics.landscapeExtent /
-                    TabMetrics.pillExtent
+              ? kScrollPocketLandscapeExtent
               : kScrollPocketExtent,
           child: const ScrollEdgePocket(),
         ),

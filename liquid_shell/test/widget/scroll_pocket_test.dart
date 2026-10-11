@@ -98,14 +98,16 @@ void main() {
     expect(bands, everyElement(same(pill.backdropKey)));
   });
 
-  testWidgets('landscape phone: the pocket follows the 44 pt bar', (
-    tester,
-  ) async {
+  testWidgets('landscape phone: the native 128.8 pt pocket of the 44 pt '
+      'bar', (tester) async {
     await _liquid(tester);
     await pumpShell(tester, const TestShell(), size: kPhoneLandscape);
     expect(_bands, findsNWidgets(3));
     final rect = tester.getRect(find.byKey(kScrollPocketKey));
-    expect(rect.height, closeTo(148 * 44 / 62, 1e-9));
+    // Native starts the pocket 64.8 pt above the pill top: 147.8 in
+    // portrait, 20 + 44 + 64.8 = 128.8 in landscape (TabFid layer dump,
+    // ScrollEdgeEffectView 0, 273.2, 874 × 128.8 at 874 × 402).
+    expect(rect.height, closeTo(128.8, 1e-9));
     expect(rect.bottom, kPhoneLandscape.height);
   });
 

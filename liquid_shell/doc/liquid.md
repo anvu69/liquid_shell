@@ -59,10 +59,10 @@ lightly blurred white capsule with a rim; on solid, an opaque capsule.
 More in [tab_bar.md](tab_bar.md).
 
 **The scroll-edge pocket.** Under the liquid bottom bar the page fades
-into a soft blur and a faint dim over the bottom 148 pt, as iOS 26 draws
-its scroll-edge pocket. Flutter has no variable blur, so it is three
-bands of 49.3 pt (σ 0.5, 1.0 and 1.6 from top to bottom) and a gradient
-to black at 1.2 % (light) or 8 % (dark). Only the liquid tier with
+into a soft blur and a faint dim over the bottom 148 pt (128.8 pt under
+the 44 pt landscape bar), as iOS 26 draws its scroll-edge pocket. Flutter
+has no variable blur, so it is three equal bands (σ 0.5, 1.0 and 1.6 from
+top to bottom) and a gradient to black at 1.2 % (light) or 8 % (dark). Only the liquid tier with
 `liquidBlurSigma > 0` draws it: frosted, solid and Reduce Transparency
 have none.
 
@@ -145,7 +145,7 @@ frosted and then cross-fades. To start liquid:
 
 All chrome shares one backdrop copy (`BackdropGroup`). Each surface adds a
 small blur and one pass of the lens over its own area. Never put glass on
-list cells. The pocket adds three blur passes over its 148 pt. The tab
+list cells. The pocket adds three blur passes over its 148 pt (128.8 pt in landscape). The tab
 lens adds one pass only while the bar is touched or the lens is moving
 (under a second after release); at rest it costs nothing.
 
