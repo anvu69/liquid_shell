@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/semantics.dart';
@@ -65,6 +66,9 @@ class GlassTabBar extends StatefulWidget {
     this.collapsedKey,
     this.strings = const LiquidShellStrings(),
     this.narrow = false,
+    this.externalTarget,
+    this.reserveTrailing = false,
+    this.collapseDelay = true,
     super.key,
   });
 
@@ -99,6 +103,16 @@ class GlassTabBar extends StatefulWidget {
   /// Narrow labels fit themselves (P1 Q18).
   final bool narrow;
 
+  /// A drop target the shell owns (the search ⌕), bar-local.
+  final TabDragTarget? externalTarget;
+
+  /// Lay out as if a trailing circle were there (the search ⌕ is drawn by
+  /// the shell, spec §11).
+  final bool reserveTrailing;
+
+  /// A collapse waits 0.24 s (scroll); false for the search collapse.
+  final bool collapseDelay;
+
   @override
   State<GlassTabBar> createState() => _GlassTabBarState();
 }
@@ -116,8 +130,52 @@ class _GlassTabBarState extends State<GlassTabBar>
   /// not the pill (spec §7.2). One key for the bar's life.
   final BackdropKey _backdropKey = BackdropKey();
 
+  late final MinimizeMotion _minimize = MinimizeMotion(
+    minimized: widget.minimized,
+  );
+
+  /// The last laid-out geometry: the trailing target's rect reads it.
+  TabBarGeometry? _geometry;
+
+  /// The trailing circle's drop target, while there is a trailing action.
+  TabDragTarget? _ownTarget;
+
+  TabDragTarget? get _target => widget.externalTarget ?? _ownTarget;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncOwnTarget();
+  }
+
+  void _syncOwnTarget() {
+    final action = widget.trailing;
+    if (action == null) {
+      _ownTarget?.dispose();
+      _ownTarget = null;
+    } else {
+      _ownTarget ??= TabDragTarget(
+        rect: () => _geometry?.trailing ?? Rect.zero,
+        onRelease: () => widget.trailing?.onPressed(),
+      );
+    }
+  }
+
+  @override
+  void didUpdateWidget(GlassTabBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncOwnTarget();
+    if (oldWidget.minimized != widget.minimized) {
+      _minimize
+        ..reduceMotion = MediaQuery.disableAnimationsOf(context)
+        ..set(widget.minimized, delayed: widget.collapseDelay);
+      _kick();
+    }
+  }
+
   @override
   void dispose() {
+    _ownTarget?.dispose();
     _ticker?.dispose();
     super.dispose();
   }
@@ -132,8 +190,8 @@ class _GlassTabBarState extends State<GlassTabBar>
     return s < 0 ? null : s;
   }
 
-  /// 0 = full bar, 1 = minimized circle. Task 9 animates it.
-  double get _morph => widget.minimized ? 1 : 0;
+  /// 0 = full bar, 1 = minimized circle; below 0 in the expand overshoot.
+  double get _morph => _minimize.value;
 
   LensMotion _sync(TabBarGeometry g) {
     final selected = _slotOf(widget.selectedIndex);
@@ -159,24 +217,27 @@ class _GlassTabBarState extends State<GlassTabBar>
   void _onTick(Duration elapsed) {
     final dt = ((elapsed - _last).inMicroseconds / 1e6).clamp(0.0, 1 / 30);
     _last = elapsed;
+    final minimizing = _minimize.advance(dt);
     final m = _motion;
-    if (m == null) return;
-    var moving = m.advance(dt);
-    for (final _ in m.takeCrossings()) {
-      // Spec §9 / Q6: one selection click per slot crossing while dragging.
-      unawaited(HapticFeedback.selectionClick());
-    }
-    if (!moving) {
-      final selected = _slotOf(widget.selectedIndex);
-      if (m.pending != null && m.pending != selected) {
-        // The app did not adopt the commit (spec §8.7).
-        m.returnTo(selected);
-        moving = true;
-      } else {
-        m.accept();
-        _ticker?.stop();
+    var moving = m != null && m.advance(dt);
+    if (m != null) {
+      for (final _ in m.takeCrossings()) {
+        // Spec §9 / Q6: one selection click per slot crossing while
+        // dragging.
+        unawaited(HapticFeedback.selectionClick());
+      }
+      if (!moving) {
+        final selected = _slotOf(widget.selectedIndex);
+        if (m.pending != null && m.pending != selected) {
+          // The app did not adopt the commit (spec §8.7).
+          m.returnTo(selected);
+          moving = true;
+        } else {
+          m.accept();
+        }
       }
     }
+    if (!moving && !minimizing) _ticker?.stop();
     setState(() {});
   }
 
@@ -185,9 +246,22 @@ class _GlassTabBarState extends State<GlassTabBar>
     _kick();
   }
 
-  void _move(Offset p) => _motion?.move(p);
+  void _move(Offset p) {
+    _motion?.move(p);
+    final t = _target;
+    if (t != null) t.hovered.value = t.rect().inflate(4).contains(p);
+  }
 
   void _up(Offset p, double velocity) {
+    final t = _target;
+    if (t != null && t.hovered.value) {
+      // Released over the target: it fires, no slot commits (spec §8.8).
+      t.hovered.value = false;
+      _motion?.cancel();
+      _kick();
+      t.onRelease();
+      return;
+    }
     final m = _motion;
     if (m == null) return;
     // The slot under the finger is the one whose tap area holds it (the
@@ -201,6 +275,7 @@ class _GlassTabBarState extends State<GlassTabBar>
   }
 
   void _cancel() {
+    _target?.hovered.value = false;
     _motion?.cancel();
     _kick();
   }
@@ -232,7 +307,7 @@ class _GlassTabBarState extends State<GlassTabBar>
   ) => compactTabGeometry(
     count: _shown.length,
     maxWidth: maxWidth,
-    trailing: widget.trailing != null,
+    trailing: widget.trailing != null || widget.reserveTrailing,
     direction: direction,
     extent: extent,
   );
@@ -252,7 +327,11 @@ class _GlassTabBarState extends State<GlassTabBar>
         math.max(0.0, lineHeight - TabMetrics.labelHeight);
     final bar = LayoutBuilder(
       builder: (context, constraints) {
-        final g = _geometryFor(constraints.maxWidth, direction, extent);
+        final g = _geometry = _geometryFor(
+          constraints.maxWidth,
+          direction,
+          extent,
+        );
         final motion = _sync(g);
         final override = debugTabLensOverride;
         var shown = override == null ? motion.frame : override(motion.frame);
@@ -302,11 +381,12 @@ class _GlassTabBarState extends State<GlassTabBar>
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final direction = Directionality.of(context);
-    final morph = _morph.clamp(0.0, 1.0);
+    // Unclamped: the expand overshoot extrapolates the rects.
+    final morph = _morph;
     final eager =
         !ax && Scrollable.maybeOf(context, axis: Axis.vertical) == null;
     final fade = 1 - (morph / 0.4).clamp(0.0, 1.0);
-    final dip = 1 - TabSprings.dip * math.sin(math.pi * morph);
+    final dip = _minimize.dip;
     final glass = _scaleAbout(
       Rect.lerp(g.pill, g.minimized, morph)!,
       frame.pillScale * dip,
@@ -474,7 +554,10 @@ class _GlassTabBarState extends State<GlassTabBar>
         Positioned.fromRect(
           key: kTabTrailingKey,
           rect: Rect.lerp(g.trailing, g.minimizedTrailing, morph)!,
-          child: LiquidActionCircle(action: action),
+          child: TabHoverHighlight(
+            hovered: _ownTarget!.hovered,
+            child: LiquidActionCircle(action: action),
+          ),
         ),
       // 5. Touches and semantics: one recognizer for the whole row (spec
       //    §8.6), fed only by the slots' tap areas. It waits instead of
@@ -881,4 +964,71 @@ class _PillPainter extends CustomPainter {
       old.glowCenter != glowCenter ||
       old.glowDiameter != glowDiameter ||
       old.glowOpacity != glowOpacity;
+}
+
+/// A drop target for the lens drag (spec VK-503 §8.8): the trailing circle
+/// or the search ⌕. The lens stays clamped to the pill; a release while
+/// [hovered] fires [onRelease] instead of committing a slot.
+class TabDragTarget {
+  /// Creates a target whose [rect] is bar-local.
+  TabDragTarget({required this.rect, required this.onRelease});
+
+  /// Where it is now, bar-local.
+  final Rect Function() rect;
+
+  /// Released over it.
+  final VoidCallback onRelease;
+
+  /// The finger is over it.
+  final ValueNotifier<bool> hovered = ValueNotifier(false);
+
+  /// Releases [hovered].
+  void dispose() => hovered.dispose();
+}
+
+/// The white press/hover overlay on a glass circle (spec §8.8): 0.85 in
+/// light, 0.25 in dark.
+class TabHoverHighlight extends StatelessWidget {
+  /// Creates the overlay over [child].
+  const TabHoverHighlight({
+    required this.hovered,
+    required this.child,
+    super.key,
+  });
+
+  /// When true, the overlay shows.
+  final ValueListenable<bool> hovered;
+
+  /// The circle.
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        child,
+        IgnorePointer(
+          child: ValueListenableBuilder<bool>(
+            valueListenable: hovered,
+            builder: (context, on, _) => AnimatedOpacity(
+              opacity: on ? 1 : 0,
+              duration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 100),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFFFFFFFF).withValues(
+                    alpha: dark ? 0.25 : 0.85,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }

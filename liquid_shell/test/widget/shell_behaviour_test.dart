@@ -488,17 +488,33 @@ void main() {
   });
 
   group('minimise on scroll (§5.7)', () {
-    testWidgets('reverse minimises, forward expands', (tester) async {
+    testWidgets('reverse minimises; forward does not expand; a tap does '
+        '(spec VK-503 §10, Q7)', (tester) async {
       await pumpShell(tester, const TestShell());
       final list = find.byKey(const ValueKey('list-Home'));
       await tester.drag(list, const Offset(0, -300));
       await tester.pumpAndSettle();
-      expect(find.text('Inbox'), findsNothing);
+      expect(find.byKey(kTabPillKey), findsOneWidget);
       expect(tester.getSize(find.byKey(kTabPillKey)), const Size(48, 48));
-
-      await tester.drag(list, const Offset(0, 100));
+      await tester.drag(list, const Offset(0, 300));
       await tester.pumpAndSettle();
-      expect(tabSlot('Inbox'), findsOneWidget);
+      expect(tester.getSize(find.byKey(kTabPillKey)), const Size(48, 48));
+      await tester.tap(find.byKey(kTabPillKey));
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byKey(kTabPillKey)).height, 62);
+    });
+
+    testWidgets('a selection change expands the minimized bar', (
+      tester,
+    ) async {
+      await pumpShell(tester, const TestShell());
+      final list = find.byKey(const ValueKey('list-Home'));
+      await tester.drag(list, const Offset(0, -300));
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byKey(kTabPillKey)), const Size(48, 48));
+      tester.state<TestShellState>(find.byType(TestShell)).select(3);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byKey(kTabPillKey)).height, 62);
     });
 
     testWidgets('a horizontal carousel does not minimise; the vertical '

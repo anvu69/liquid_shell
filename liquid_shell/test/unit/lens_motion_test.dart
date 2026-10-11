@@ -452,4 +452,72 @@ void main() {
       expect(m.frame.lens.size, const Size(94, 54));
     });
   });
+
+  group('minimize (research §6)', () {
+    test(
+      'collapse waits 0.24 s, then settles on the collapse spring ± 10 %',
+      () {
+        final m = MinimizeMotion(minimized: false)..set(true);
+        final values = <double>[];
+        for (var f = 0; f < 120; f++) {
+          m.advance(dt);
+          values.add(m.value);
+        }
+        expect(values[(0.2 / dt).floor()], 0);
+        final ours = settleTime(values, 1, tolerance: 0.005);
+        final reference = settleTime(
+          referenceTrace(
+            TabSprings.collapse,
+            0,
+            1,
+            delay: TabSprings.minimizeDelay,
+          ),
+          1,
+          tolerance: 0.005,
+        );
+        expect(ours, closeTo(reference, reference * 0.10));
+      },
+    );
+
+    test('the dip reaches ×0.96 at the midpoint', () {
+      final m = MinimizeMotion(minimized: false)..set(true, delayed: false);
+      var lowest = 1.0;
+      for (var f = 0; f < 60; f++) {
+        m.advance(dt);
+        if (m.dip < lowest) lowest = m.dip;
+      }
+      expect(lowest, closeTo(0.96, 0.005));
+    });
+
+    test('expand overshoots slightly below 0, then rests at 0', () {
+      final m = MinimizeMotion(minimized: true)..set(false);
+      var lowest = 1.0;
+      for (var f = 0; f < 90; f++) {
+        m.advance(dt);
+        if (m.value < lowest) lowest = m.value;
+      }
+      expect(lowest, lessThan(0));
+      expect(m.value, 0);
+      expect(m.advance(dt), isFalse);
+    });
+
+    test('a quick reverse during the delay never collapses', () {
+      final m = MinimizeMotion(minimized: false)
+        ..set(true)
+        ..advance(0.1)
+        ..set(false);
+      for (var f = 0; f < 60; f++) {
+        m.advance(dt);
+      }
+      expect(m.value, 0);
+    });
+
+    test('reduce motion: instant', () {
+      final m = MinimizeMotion(minimized: false)
+        ..reduceMotion = true
+        ..set(true);
+      expect(m.value, 1);
+      expect(m.advance(dt), isFalse);
+    });
+  });
 }

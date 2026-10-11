@@ -421,8 +421,9 @@ class _BadgedIcon extends StatelessWidget {
   }
 }
 
-/// A glass circle for a [LiquidTabAction]: square, as tall as its row.
-class LiquidActionCircle extends StatelessWidget {
+/// A glass circle for a [LiquidTabAction]: square, as tall as its row. A
+/// press shows the white highlight (spec VK-503 §8.8), not ink.
+class LiquidActionCircle extends StatefulWidget {
   /// Creates the circle.
   const LiquidActionCircle({required this.action, super.key});
 
@@ -430,33 +431,56 @@ class LiquidActionCircle extends StatelessWidget {
   final LiquidTabAction action;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    container: true,
-    button: true,
-    label: action.semanticLabel,
-    onTap: action.onPressed,
-    excludeSemantics: true,
-    child: Tooltip(
-      message: action.semanticLabel,
-      excludeFromSemantics: true,
-      child: LiquidGlass(
-        child: InkWell(
-          customBorder: const CircleBorder(),
+  State<LiquidActionCircle> createState() => _LiquidActionCircleState();
+}
+
+class _LiquidActionCircleState extends State<LiquidActionCircle> {
+  final ValueNotifier<bool> _pressed = ValueNotifier(false);
+
+  @override
+  void dispose() {
+    _pressed.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final action = widget.action;
+    final theme = LiquidGlassTheme.of(context);
+    return Semantics(
+      container: true,
+      button: true,
+      label: action.semanticLabel,
+      onTap: action.onPressed,
+      excludeSemantics: true,
+      child: Tooltip(
+        message: action.semanticLabel,
+        excludeFromSemantics: true,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (_) => _pressed.value = true,
+          onTapUp: (_) => _pressed.value = false,
+          onTapCancel: () => _pressed.value = false,
           onTap: action.onPressed,
           child: AspectRatio(
             aspectRatio: 1,
-            child: Center(
-              child: IconTheme.merge(
-                data: IconThemeData(
-                  size: 26,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+            child: TabHoverHighlight(
+              hovered: _pressed,
+              child: LiquidGlass(
+                child: Center(
+                  child: IconTheme.merge(
+                    data: IconThemeData(
+                      size: theme.tabIconSize,
+                      color: theme.tabForeground,
+                    ),
+                    child: action.icon,
+                  ),
                 ),
-                child: action.icon,
               ),
             ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }

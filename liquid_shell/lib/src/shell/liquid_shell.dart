@@ -253,6 +253,10 @@ class _LiquidShellState extends State<LiquidShell>
   void didUpdateWidget(LiquidShell oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.nativeChrome != widget.nativeChrome) _syncClaim();
+    // A selection change expands the minimized bar (spec VK-503 §10, Q7).
+    if (oldWidget.selectedIndex != widget.selectedIndex) {
+      _minimized.value = false;
+    }
     _configureSearch();
   }
 
@@ -718,7 +722,7 @@ class _LiquidShellState extends State<LiquidShell>
       case ScrollDirection.reverse:
         _minimized.value = true;
       case ScrollDirection.forward:
-        _minimized.value = false;
+        break; // Q7: native stays minimized; a tap or a selection expands.
       case ScrollDirection.idle:
         break;
     }

@@ -204,6 +204,50 @@ void main() {
     handle.dispose();
   });
 
+  testWidgets('trailing circle: a white press highlight instead of ink, '
+      'native foreground (spec VK-503 §8.8)', (tester) async {
+    await tester.pumpWidget(
+      _host(
+        trailing: LiquidTabAction(
+          icon: const Icon(Icons.search),
+          onPressed: () {},
+          semanticLabel: 'Search',
+        ),
+      ),
+    );
+    final circle = find.byKey(kTabTrailingKey);
+    expect(
+      find.descendant(of: circle, matching: find.byType(InkWell)),
+      findsNothing,
+    );
+    final press = find.descendant(
+      of: circle,
+      matching: find.byType(TabHoverHighlight),
+    );
+    bool pressed() =>
+        tester.widgetList<TabHoverHighlight>(press).any((h) => h.hovered.value);
+    expect(pressed(), isFalse);
+    final g = await tester.startGesture(tester.getCenter(circle));
+    // The tap recognizer shares the arena (tooltip), so it reports the
+    // down after the press timeout, as ink does.
+    await tester.pump(kPressTimeout);
+    expect(pressed(), isTrue);
+    await g.up();
+    await tester.pump();
+    expect(pressed(), isFalse);
+    final icon = tester.widget<IconTheme>(
+      find
+          .ancestor(
+            of: find.byIcon(Icons.search),
+            matching: find.byType(IconTheme),
+          )
+          .first,
+    );
+    final glass = LiquidGlassTheme.of(tester.element(circle));
+    expect(icon.data.color, glass.tabForeground);
+    expect(icon.data.size, glass.tabIconSize);
+  });
+
   testWidgets('minimised: the selected icon only, in a 48 circle; trailing '
       'kept (spec VK-503 §10)', (tester) async {
     final handle = tester.ensureSemantics();

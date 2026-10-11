@@ -565,3 +565,61 @@ class LensMotion {
     );
   }
 }
+
+/// The minimize morph scalar: 0 = full bar, 1 = circle (spec VK-503 §10).
+class MinimizeMotion {
+  /// Starts at rest.
+  MinimizeMotion({required bool minimized})
+    : _target = minimized,
+      _value = SpringValue(minimized ? 1 : 0, TabSprings.collapse);
+
+  /// Reduce motion: every change is instant.
+  bool reduceMotion = false;
+
+  bool _target;
+  final SpringValue _value;
+  double _wait = 0;
+
+  /// The morph amount (it overshoots below 0 on expand).
+  double get value => _value.value;
+
+  /// The requested state.
+  bool get minimized => _target;
+
+  /// Requests [minimized]; a collapse waits [TabSprings.minimizeDelay]
+  /// when [delayed].
+  // The state is the call's subject (`set(true)`), as on a switch.
+  // ignore: avoid_positional_boolean_parameters
+  void set(bool minimized, {bool delayed = true}) {
+    if (minimized == _target) return;
+    _target = minimized;
+    final end = minimized ? 1.0 : 0.0;
+    if (reduceMotion) {
+      _wait = 0;
+      _value.jump(end);
+      return;
+    }
+    _value.spring = minimized ? TabSprings.collapse : TabSprings.expand;
+    _wait = minimized && delayed ? TabSprings.minimizeDelay : 0;
+    if (_wait == 0) _value.target = end;
+  }
+
+  /// Advances [dt]; true while moving or waiting.
+  bool advance(double dt) {
+    if (_wait > 0) {
+      _wait -= dt;
+      if (_wait > 0) return true;
+      _value.target = _target ? 1 : 0;
+    }
+    _value.advance(dt);
+    if (_value.settled(0.005)) {
+      _value.jump(_value.target);
+      return false;
+    }
+    return true;
+  }
+
+  /// The ×0.96 dip at the midpoint.
+  double get dip =>
+      1 - TabSprings.dip * math.sin(math.pi * value.clamp(0.0, 1.0));
+}
