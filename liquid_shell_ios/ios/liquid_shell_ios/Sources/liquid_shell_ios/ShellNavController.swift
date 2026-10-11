@@ -73,13 +73,14 @@ final class ShellNavController: UINavigationController {
   /// pop for a shorter one, retitle in place. The root's title is the first
   /// page's, or the destination's label without pages. Each pushed page's
   /// back button only proposes (`onBackTapped`); Dart pops the Flutter
-  /// route and the next stack pops here. Animated only on screen, and only
-  /// when the tab stays selected (VK-502): a stack applied with the config
-  /// that leaves the tab ran its pop or push as the tab went, and that
-  /// transition kept the tab's view in the window, so the stack applied on
-  /// the way back (a restore) animated too.
+  /// route and the next stack pops here. Animated only when [shown]: the
+  /// tab is selected and stays so (VK-502). A stack applied with the config
+  /// that selects the tab, or leaves it, is a restore, set without a
+  /// transition. The window does not tell: UIKit keeps a tab just left in
+  /// it for a while (iOS 26.5), and longer after a transition ran as the
+  /// tab went.
   func applyPages(
-    _ pages: [NativePage], rootTitle: String, tabIndex: Int, staysSelected: Bool,
+    _ pages: [NativePage], rootTitle: String, tabIndex: Int, shown: Bool,
     events: NativeShellFlutterApiProtocol
   ) {
     let wanted = pages.isEmpty ? [NativePage(title: rootTitle, largeTitle: nil)] : pages
@@ -117,7 +118,7 @@ final class ShellNavController: UINavigationController {
       return
     }
     let animated =
-      staysSelected && viewIfLoaded?.window != nil && !UIAccessibility.isReduceMotionEnabled
+      shown && viewIfLoaded?.window != nil && !UIAccessibility.isReduceMotionEnabled
     setViewControllers(hosts, animated: animated)
     // Spec §7.9: once more when the push or pop ends, so Flutter ends on the
     // new top page's insets. Without an animation the shell syncs at the end

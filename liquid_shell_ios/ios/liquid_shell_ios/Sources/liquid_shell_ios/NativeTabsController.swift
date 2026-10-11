@@ -181,7 +181,9 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       for (index, nav) in navControllers where new.tabs.indices.contains(index) {
         nav.applyPages(
           new.tabs[index].pages, rootTitle: new.tabs[index].title, tabIndex: index,
-          staysSelected: Int(new.selectedIndex) == index, events: events)
+          // Before `select`: the tab shown now, and still after it.
+          shown: selectedViewController === nav && Int(new.selectedIndex) == index,
+          events: events)
       }
       select(Int(new.selectedIndex))
     }
