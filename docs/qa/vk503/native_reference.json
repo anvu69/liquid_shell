@@ -11,7 +11,7 @@
     "dragFollow": {"zeta": 0.75, "response": 0.33},
     "snap": {"zeta": 0.92, "response": 0.35},
     "collapse": {"zeta": 0.80, "response": 0.30, "delay": 0.24},
-    "expand": {"zeta": 0.70, "response": 0.35},
+    "expand": {"zeta": 0.80, "response": 0.35},
     "tolerance": 0.10
   },
   "press": {"w": 110, "h": 70, "scale": 1.052, "glow": 0.28},

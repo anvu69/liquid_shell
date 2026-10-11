@@ -62,8 +62,11 @@ abstract final class TabSprings {
   /// Minimize collapse.
   static final SpringDescription collapse = fittedSpring(0.8, 0.30);
 
-  /// Minimize expand (small overshoot).
-  static final SpringDescription expand = fittedSpring(0.7, 0.35);
+  /// Minimize expand (small overshoot). Research §6 gives only "≈ 0.35 s,
+  /// small overshoot"; ζ 0.80 makes the 3-tab pill's right edge overshoot
+  /// ≈ 4 pt, as the native TabFid expand strip shows (ζ 0.70: ≈ 12 pt, and
+  /// a full-width pill brushed the ⌕). VK-503 Task 16.
+  static final SpringDescription expand = fittedSpring(0.8, 0.35);
 
   /// Reduce motion: the rest-size capsule following the finger.
   static final SpringDescription reduced = fittedSpring(1, 0.25);

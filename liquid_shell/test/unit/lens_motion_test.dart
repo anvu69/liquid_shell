@@ -501,6 +501,20 @@ void main() {
       expect(m.advance(dt), isFalse);
     });
 
+    test('expand: the 3-tab pill right edge overshoots ≈ 4 pt, as native '
+        '(VK-503 Task 16, TabFid expand strip; ζ 0.70 gave ≈ 12)', () {
+      final m = MinimizeMotion(minimized: true)..set(false);
+      var lowest = 1.0;
+      for (var f = 0; f < 90; f++) {
+        m.advance(dt);
+        if (m.value < lowest) lowest = m.value;
+      }
+      // The glass rect is lerp(pill, minimized, morph): below 0 the right
+      // edge extrapolates past the pill by −morph × its travel.
+      final travel = g3.pill.right - g3.minimized.right;
+      expect(-lowest * travel, closeTo(4, 1));
+    });
+
     test('a quick reverse during the delay never collapses', () {
       final m = MinimizeMotion(minimized: false)
         ..set(true)

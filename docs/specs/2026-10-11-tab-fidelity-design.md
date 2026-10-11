@@ -312,7 +312,7 @@ The lens pokes outside the pill while pressed (73.6 pt tall against a 65.2 pt pi
 | `pressScale` / `releaseScale` | 0.63 / 0.61 | 0.31 / 0.35 s | pill scale |
 | `effectIn` / `effectOut` | 1.0 / 1.0 | 0.25 / 0.50 s | refraction, highlight |
 | `engageIn` / `engageOut` | 1.0 / 1.0 | 0.065 / 0.20 s | engage (≈ 60 ms in, research §3) |
-| `collapse` / `expand` | 0.80 / 0.70 | 0.30 / 0.35 s | minimize morph |
+| `collapse` / `expand` | 0.80 / 0.80 | 0.30 / 0.35 s | minimize morph (expand ζ was 0.70; Task 16 set 0.80, see §10) |
 
 ### 8.2 States
 
@@ -442,7 +442,7 @@ The research could not observe tab bar haptics on the simulator (§4.4). The own
   - **The selected icon** moves from its slot's icon frame to the circle centre. It is drawn in the selected colour, with its badge.
   - **The lens fill** fades with the labels. The minimized circle shows no selection capsule.
   - **The trailing circle** lerps from its `E × E` rect to its `48 × 48` rect about the same centre.
-- **Expand.** A tap on the circle sets `minimized` false (the shell's `onExpand`). `morph` goes 1 → 0 on `expand` (ζ 0.70 gives a small overshoot), with no delay.
+- **Expand.** A tap on the circle sets `minimized` false (the shell's `onExpand`). `morph` goes 1 → 0 on `expand`, with no delay. *Amended in Task 16:* ζ 0.80, not 0.70. Research §6 gives only "≈ 0.35 s, small overshoot". The native TabFid expand strip shows the right edge passing the pill by about 4 pt; ζ 0.70 gave about 12 pt (4.6 % of the 262 pt travel), and a full-width pill 8 pt from the ⌕ overlapped it for a few frames. ζ 0.80 overshoots 1.5 %, about 4 pt. The rect lerp stays unclamped: UIKit springs the frame, so the overshoot is a frame extrapolation, not a scale.
 - **Hit test.** It is the current glass rect only.
 - **Reduce motion.** Instant: no delay, no spring, no dip.
 - **Implementation.** It is one glass shape (`LiquidGlass` positioned at the animated rect), not two cross-faded shapes. The research suggests a smooth-min SDF for a gooey merge of the pill and ⌕, but native swaps visibility during the dip, so one moving rect plus the ⌕ shrinking about its own centre reads the same (research §6).
