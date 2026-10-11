@@ -7,6 +7,7 @@ import 'package:liquid_shell_example/support/search_data.dart';
 Future<void> _pump(
   WidgetTester tester, {
   Size size = const Size(393, 852),
+  bool guardDetails = false,
 }) async {
   tester.view
     ..devicePixelRatio = 1
@@ -14,7 +15,9 @@ Future<void> _pump(
     ..padding = const FakeViewPadding(top: 59, bottom: 34)
     ..viewPadding = const FakeViewPadding(top: 59, bottom: 34);
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(const MaterialApp(home: SearchCase()));
+  await tester.pumpWidget(
+    MaterialApp(home: SearchCase(guardDetails: guardDetails)),
+  );
   await tester.pumpAndSettle();
 }
 
@@ -277,5 +280,21 @@ void main() {
       expect(find.text('Hồ Hoàn Kiếm'), findsOneWidget);
       expect(find.byType(LiquidBackButton), findsOneWidget);
     });
+
+    for (final guarded in [false, true]) {
+      testWidgets('guardDetails $guarded: a detail '
+          '${guarded ? 'refuses' : 'accepts'} the back', (tester) async {
+        await _pump(tester, guardDetails: guarded);
+        await _openSearch(tester);
+        await tester.tap(find.text('Nhạc Trịnh').first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Diễm xưa'));
+        await tester.pumpAndSettle();
+        expect(find.byType(Chip), findsOneWidget, reason: 'the detail');
+        await tester.tap(find.byType(LiquidBackButton));
+        await tester.pumpAndSettle();
+        expect(find.byType(Chip), guarded ? findsOneWidget : findsNothing);
+      });
+    }
   });
 }

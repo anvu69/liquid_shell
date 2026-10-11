@@ -25,7 +25,8 @@ const kExampleSeed = Color(0xFF3D5AFE);
 
 /// The example app: a list of cases, each opening one screen.
 class ExampleApp extends StatelessWidget {
-  /// Creates the app. [demo] opens one case directly (UI tests): `search`.
+  /// Creates the app. [demo] opens one case directly (UI tests): `search`,
+  /// `search-guarded`.
   const ExampleApp({this.demo, super.key});
 
   /// The case to open at launch, or null for the case list.
@@ -35,6 +36,7 @@ class ExampleApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final home = switch (demo) {
       'search' => const SearchCase(),
+      'search-guarded' => const SearchCase(guardDetails: true),
       _ => const CaseList(),
     };
     // XCUITest reads Flutter's rows through the accessibility tree.

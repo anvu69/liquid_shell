@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Native iOS 26 shell on simulators (spec P2 §9.4).
+# Native iOS 26 shell and search tab on simulators (spec P2 §9.4, P3b §12.5).
 #
 #   tool/integration_ios_native.sh
 #
@@ -9,7 +9,8 @@
 #                 false when it must not (default
 #                 "iPad Air 11-inch (M4)=true;iPhone 17 Pro=true").
 #                 A 36-character UDID works in place of a name.
-# NATIVE_TESTS   space-separated integration targets (default: native_shell_test.dart and native_search_test.dart).
+# NATIVE_TESTS    space-separated integration targets (default:
+#                 native_shell_test.dart and native_search_test.dart).
 # FLUTTER         flutter command (default: flutter).
 # IOS_DRIVE_TIMEOUT  seconds one `flutter drive` may run (default 1200).
 #
@@ -19,7 +20,8 @@
 #
 # Screenshots land in liquid_shell/example/build/integration_screenshots/
 # (native_<run>_home.png, native_<run>_sidebar.png): the doc images of the
-# native chrome, which goldens cannot draw (spec P2 §9.5).
+# native chrome, which goldens cannot draw (spec P2 §9.5); and
+# search_<run>_<phase>.png, one per phase of the search tab (spec P3b §12.7).
 set -euo pipefail
 tool_dir=$(cd "$(dirname "$0")" && pwd)
 cd "$tool_dir/../liquid_shell/example"

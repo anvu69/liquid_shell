@@ -16,7 +16,8 @@ Telex (3) and VoiceOver (9) can only be checked by hand.
 - [ ] **4. iPhone and iPad Air, iOS 27:** switch tabs and back → the query is
   still there.
 - [ ] **5. iPhone and iPad Air, iOS 27:** tap a result → detail with the glass
-  back circle; back → results. Long-press the back circle → the back menu.
+  back circle; back → results. Long-press the back circle → the back menu;
+  pick "Search" → the results, with no detail left behind.
 - [ ] **6. iPad Air, iOS 27, narrow window:** Search inside the bottom bar; field
   under •••, rises level with ••• when active.
 - [ ] **7. iPad Air, iOS 27, full screen:** Search in the top bar / sidebar; field
@@ -24,7 +25,10 @@ Telex (3) and VoiceOver (9) can only be checked by hand.
 - [ ] **8. iPhone and iPad Air, iOS 27:** a dirty form + Search →
   "Discard changes?".
 - [ ] **9. iPhone and iPad Air, iOS 27:** VoiceOver: the field, ×, the collapsed
-  circle and the back circle are announced; the results are reachable.
+  circle and the back circle are announced; the results are reachable. On a
+  detail, the two-finger Z (escape) goes back to the results, with no
+  "bonk" and nothing else closing. On iPad, in a narrow window, the small
+  "Search" title is announced as a heading after the window controls.
 - [ ] **10. Android emulator and iOS 18 (if available):** the same states drawn
   in glass.
 
@@ -35,5 +39,9 @@ Telex (3) and VoiceOver (9) can only be checked by hand.
   iOS 26.5 and 27.0. Flutter's result rows are read through Flutter's
   semantics: a row's title and subtitle merge into one label, so the test
   matches the label's start ("Hồ Hoàn Kiếm…").
+- `SearchUITests` also picks entries from the back circle's long-press menu
+  (the menu pops Flutter too) and, in the `search-guarded` demo where every
+  detail refuses to close (`PopScope`), checks that a refused pick two pages
+  up leaves the detail, its bar and its back circle in place (Task 13).
 - `make integration-ios-native` (`native_search_test.dart`, Task 11) checks
   every phase's frames and insets.

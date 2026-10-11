@@ -10,9 +10,9 @@ final class SearchUITests: XCTestCase {
     continueAfterFailure = false
   }
 
-  private func launch() -> XCUIApplication {
+  private func launch(demo: String = "search") -> XCUIApplication {
     let app = XCUIApplication()
-    app.launchEnvironment["LIQUID_SHELL_EXAMPLE_DEMO"] = "search"
+    app.launchEnvironment["LIQUID_SHELL_EXAMPLE_DEMO"] = demo
     app.launch()
     return app
   }
@@ -28,6 +28,37 @@ final class SearchUITests: XCTestCase {
   private func flutterRow(_ app: XCUIApplication, _ title: String) -> XCUIElement {
     app.descendants(matching: .any)
       .matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
+  }
+
+  /// The first element of [query] that [accept]s, waited for: a menu
+  /// appears after its animation.
+  private func waitForFirst(
+    _ query: XCUIElementQuery, timeout: TimeInterval = 10,
+    where accept: (XCUIElement) -> Bool
+  ) -> XCUIElement? {
+    let deadline = Date().addingTimeInterval(timeout)
+    repeat {
+      if let found = query.allElementsBoundByIndex.first(where: accept) { return found }
+      RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+    } while Date() < deadline
+    return nil
+  }
+
+  /// Opens the back button's history menu and returns its entry for the
+  /// page titled [title]: hold, then lift away from the button, and the
+  /// menu stays open. The entry is not the back button, nor the (selected)
+  /// Search tab of an iPad's top tab bar, nor the iPhone's ⌕ at the bottom.
+  private func backMenuEntry(
+    _ app: XCUIApplication, _ back: XCUIElement, _ title: String
+  ) -> XCUIElement? {
+    back.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+      .press(
+        forDuration: 1.5,
+        thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)))
+    let entries = app.buttons.matching(
+      NSPredicate(
+        format: "label == %@ AND identifier != 'BackButton' AND selected == NO", title))
+    return waitForFirst(entries) { $0.frame.minY < app.frame.midY }
   }
 
   func testTheSearchTabFieldResultsAndBack() {
@@ -47,7 +78,7 @@ final class SearchUITests: XCTestCase {
     XCTAssertTrue(result.waitForExistence(timeout: 10), "Flutter's live results")
 
     result.tap()
-    let back = app.navigationBars.buttons.element(boundBy: 0)
+    let back = app.navigationBars.buttons["BackButton"]
     XCTAssertTrue(back.waitForExistence(timeout: 10), "the native glass back button")
     back.tap()
     XCTAssertTrue(flutterRow(app, "Hồ Hoàn Kiếm").waitForExistence(timeout: 10))
@@ -65,9 +96,6 @@ final class SearchUITests: XCTestCase {
     XCTAssertEqual((field.value as? String) ?? "", field.placeholderValue ?? "")
   }
 
-  /// The back button's long-press menu pops UIKit without its
-  /// `backAction`: Flutter must pop too, or it keeps the detail page with
-  /// no back button (Task 12 finding).
   /// Searches "ho hoan" and opens the result's detail page; returns the
   /// app, the native back button and the detail's heading.
   private func openDetail() -> (XCUIApplication, XCUIElement, XCUIElement) {
@@ -89,23 +117,53 @@ final class SearchUITests: XCTestCase {
     return (app, back, heading)
   }
 
+  /// The back button's long-press menu pops UIKit without its
+  /// `backAction`: Flutter must pop too, or it keeps the detail page with
+  /// no back button (Task 12 finding).
   func testTheBackMenuPopsTheFlutterPageToo() {
     let (app, back, heading) = openDetail()
-
-    // Hold, then lift away from the button: the menu stays open.
-    back.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-      .press(forDuration: 1.5, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)))
-    // The menu's entry, not the back button or the (selected) Search tab
-    // of an iPad's top tab bar.
-    let entry = app.buttons.matching(
-      NSPredicate(format: "label == 'Search' AND identifier != 'BackButton' AND selected == NO")
-    ).allElementsBoundByIndex.first { $0.frame.minY < app.frame.midY }
+    let entry = backMenuEntry(app, back, "Search")
     XCTAssertNotNil(entry, "the back menu's entry for the search root")
     entry?.tap()
 
     XCTAssertTrue(back.waitForNonExistence(timeout: 10), "native popped")
     XCTAssertTrue(heading.waitForNonExistence(timeout: 10), "Flutter popped the detail too")
     XCTAssertTrue(flutterRow(app, "Hồ Hoàn Kiếm").waitForExistence(timeout: 10), "the results")
+  }
+
+  /// A pop the page refuses (`PopScope`), picked from the back menu two
+  /// pages up: Flutter's walk stops at that page, and UIKit, which never
+  /// popped by itself, keeps the page and its bar (Task 12 review).
+  func testARefusedPopFromTheBackMenuKeepsThePageAndItsBar() {
+    let app = launch(demo: "search-guarded")
+    let tab = searchTabButton(app)
+    XCTAssertTrue(tab.waitForExistence(timeout: timeout))
+    tab.tap()
+    let category = flutterRow(app, "Nhạc Trịnh")
+    XCTAssertTrue(category.waitForExistence(timeout: 10), "the category grid")
+    category.tap()
+    let song = flutterRow(app, "Diễm xưa")
+    XCTAssertTrue(song.waitForExistence(timeout: 10), "the category's page")
+    song.tap()
+    let back = app.navigationBars.buttons["BackButton"]
+    XCTAssertTrue(back.waitForExistence(timeout: 10), "the native glass back button")
+    // Flutter's detail: the subtitle line is its own text only there.
+    let detail = app.staticTexts["Trịnh Công Sơn"]
+    XCTAssertTrue(detail.waitForExistence(timeout: 10), "the guarded detail")
+    let bar = app.navigationBars["Diễm xưa"]
+    XCTAssertTrue(bar.waitForExistence(timeout: 10), "the detail's native bar")
+
+    let entry = backMenuEntry(app, back, "Search")
+    XCTAssertNotNil(entry, "the back menu's entry for the search root")
+    entry?.tap()
+    XCTAssertFalse(detail.waitForNonExistence(timeout: 3), "the page refused")
+    XCTAssertTrue(bar.exists, "the bar still shows the detail")
+    XCTAssertTrue(back.isHittable, "and its back button")
+
+    // A plain back is still a proposal: refused too, nothing moves.
+    back.tap()
+    XCTAssertFalse(detail.waitForNonExistence(timeout: 3), "the page refused")
+    XCTAssertTrue(bar.exists, "the bar still shows the detail")
   }
 
   /// Q14: Flutter owns the edge swipe; the native bar follows its pop.

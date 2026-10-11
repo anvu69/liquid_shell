@@ -163,3 +163,36 @@ iPad 27.0    liquid_shell search active: keyboard 337.0 field 20.0,32.0 780.0x44
 The placement and every frame match the P6 rows above: `.stacked` is
 realised on iPadOS 26.5 as on 27.0. The iPhone's active field frame, which
 P6 could read only from the accessibility tree, now reaches Flutter.
+
+### Task 13 re-run (after the `.inline` root, Task 12)
+
+Fresh simulators (`vk439 …`), the same command and devices; all passed.
+Only the iPhone's resting top changed: the search root's large title now
+sits on the 54pt bar row (`.inline`), so the page's top padding is
+62 + 54 = 116 instead of 168.7 (62 + 54 + the 52.7pt title row). Every
+field frame and inset is unchanged; the iPad (`.never` root) is unchanged.
+
+```
+iPhone 26.5  liquid_shell search selected: placement inline field 88.0,798.0 286.0x48.0 insets EdgeInsets(0.0, 0.0, 0.0, 83.0) padding EdgeInsets(0.0, 116.0, 0.0, 83.0)
+iPhone 27.0  liquid_shell search selected: placement inline field 88.0,798.0 286.0x48.0 insets EdgeInsets(0.0, 0.0, 0.0, 83.0) padding EdgeInsets(0.0, 116.0, 0.0, 83.0)
+iPad 26.5    liquid_shell search selected: placement stacked field 20.0,87.0 780.0x44.0 insets EdgeInsets(0.0, 146.0, 0.0, 0.0) padding EdgeInsets(0.0, 146.0, 0.0, 20.0)
+iPad 27.0    liquid_shell search selected: placement stacked field 20.0,86.0 780.0x44.0 insets EdgeInsets(0.0, 140.0, 0.0, 0.0) padding EdgeInsets(0.0, 140.0, 0.0, 20.0)
+iPhone 26.5  liquid_shell search active: keyboard 335.0 field 8.0,483.0 330.0x48.0 insets EdgeInsets(0.0, 0.0, 0.0, 399.0)
+iPhone 27.0  liquid_shell search active: keyboard 328.0 field 8.0,490.0 330.0x48.0 insets EdgeInsets(0.0, 0.0, 0.0, 392.0)
+iPad 26.5    liquid_shell search active: keyboard 337.0 field 20.0,38.0 780.0x44.0 insets EdgeInsets(0.0, 90.0, 0.0, 0.0)
+iPad 27.0    liquid_shell search active: keyboard 337.0 field 20.0,32.0 780.0x44.0 insets EdgeInsets(0.0, 86.0, 0.0, 0.0)
+```
+
+N-4 now also reads the pushed page's top padding: at rest on "Long", with
+"Long" scrolled to 300, and on "Plain" after the replacement.
+
+```
+iPhone 26.5 / 27.0  liquid_shell N-4 top: resting 116.0 scrolled 116.0 replaced 116.0
+iPad 26.5 / 27.0    liquid_shell N-4 top: resting 144.0 scrolled 144.0 replaced 144.0
+```
+
+The pushed `largeTitle: true` pages show a small centred title on iPhone
+and iPad (the `replaced` screenshot changed from Task 11's expanded "Plain"
+to a small one), so nothing collapses and the held top keeps the padding
+put while scrolled. The test asserts that "Plain" starts at the resting
+value.

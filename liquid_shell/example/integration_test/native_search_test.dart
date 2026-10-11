@@ -363,10 +363,16 @@ void main() {
           )
           .ignore();
       await _settle(tester);
+      // The page's top padding with its title at rest (offset 0), read
+      // above the list (a ListView takes the padding from its children).
+      double topOf(Finder finder) =>
+          MediaQuery.paddingOf(tester.element(finder)).top;
+      final restingTop = topOf(find.byType(ListView));
       scroll.jumpTo(300);
       await _settle(tester);
       expect((await _ios.debugSnapshot()).pageTitles, ['Find', 'Long']);
       expect(recorder.scrolls.last, (1, 300.0));
+      final scrolledTop = topOf(find.byType(ListView));
       await shot('scrolled');
 
       navigator.currentState!
@@ -387,6 +393,14 @@ void main() {
         (1, 0.0),
         reason: 'the reused host drops the old offset',
       );
+      // Native applied the 0: the new page's padding is the resting one
+      // (a title still collapsed by the old offset would give less).
+      final replacedTop = topOf(find.text('No scroll view'));
+      debugPrint(
+        'liquid_shell N-4 top: resting $restingTop scrolled $scrolledTop '
+        'replaced $replacedTop',
+      );
+      expect(replacedTop, closeTo(restingTop, 1));
       await shot('replaced');
     },
     skip: !_expectNative,

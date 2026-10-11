@@ -15,7 +15,13 @@ import 'package:liquid_shell_example/support/wallpaper.dart';
 /// lives here.
 class SearchCase extends StatefulWidget {
   /// Creates the case.
-  const SearchCase({super.key});
+  const SearchCase({this.guardDetails = false, super.key});
+
+  /// Every detail page refuses to close, as a page with unsaved input
+  /// would (`PopScope(canPop: false)`): a refused back, from the button or
+  /// its long-press menu, leaves both the page and the bar where they were.
+  /// The UI tests launch it as the `search-guarded` demo.
+  final bool guardDetails;
 
   @override
   State<SearchCase> createState() => _SearchCaseState();
@@ -326,7 +332,14 @@ class _DetailPage extends StatelessWidget {
   final SearchItem item;
 
   @override
-  Widget build(BuildContext context) => _Page(
+  Widget build(BuildContext context) => PopScope(
+    canPop:
+        !(context.findAncestorWidgetOfExactType<SearchCase>()?.guardDetails ??
+            false),
+    child: _page(context),
+  );
+
+  Widget _page(BuildContext context) => _Page(
     title: item.title,
     child: Builder(
       builder: (context) {
