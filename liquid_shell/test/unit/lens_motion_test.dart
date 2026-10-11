@@ -74,6 +74,40 @@ void main() {
       expect(m.phase, LensPhase.rest);
     });
 
+    test('the lens leaves 25 ms after the commit, not at the frame before '
+        '(spec §17.4 tap delay; VK-503 Task 16)', () {
+      final m = LensMotion(geometry: g3, selected: 0)..tapSlot(1);
+      final xs = [for (final f in run(m, 0.3)) f.lens.center.dx];
+      final reference = referenceTrace(
+        TabSprings.tap,
+        94,
+        180,
+        delay: TabSprings.tapDelay,
+        seconds: 0.3,
+      );
+      for (var i = 0; i < xs.length; i++) {
+        expect(xs[i], closeTo(reference[i], 0.05), reason: 'frame ${i + 1}');
+      }
+    });
+
+    test('a touch tap holds the lens for the 25 ms too: the press does not '
+        'start the flight early (VK-503 Task 16)', () {
+      final m = LensMotion(geometry: g3, selected: 0)
+        ..down(const Offset(180, 31))
+        ..up(const Offset(180, 31));
+      final xs = [for (final f in run(m, 0.3)) f.lens.center.dx];
+      final reference = referenceTrace(
+        TabSprings.tap,
+        94,
+        180,
+        delay: TabSprings.tapDelay,
+        seconds: 0.3,
+      );
+      for (var i = 0; i < xs.length; i++) {
+        expect(xs[i], closeTo(reference[i], 0.05), reason: 'frame ${i + 1}');
+      }
+    });
+
     test(
       'one slot lifts: height ×1.55 ± 10 % at 0.15–0.30 s, width ≤ ×0.92',
       () {

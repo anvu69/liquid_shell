@@ -383,7 +383,9 @@ class LensMotion {
     _age = 0;
     _flightSlots = from == null ? 1 : math.max(1, (slot - from).abs());
     _flightTarget = _geometry.centreOf(slot);
-    _x.spring = TabSprings.tap;
+    // The press aimed the lens at the finger: hold it where it is for the
+    // 25 ms delay, then fly (research §3; it left at touch-down before).
+    _x.retarget(_x.value, TabSprings.tap);
     _popSlot = slot;
     _pop.retarget(TabSprings.pop, TabSprings.tap);
   }
@@ -397,6 +399,9 @@ class LensMotion {
     var engage = 0.0;
     var refraction = 0.0;
     var highlight = 0.0;
+    // Of this frame, the part the lens x already moves toward the tap
+    // target: all of it, except in the frame where the 25 ms delay ends.
+    var flightDt = dt;
     switch (_phase) {
       case LensPhase.pressed || LensPhase.dragging:
         if (!reduceMotion) {
@@ -408,7 +413,14 @@ class LensMotion {
           highlight = TabSprings.highlightPress;
         }
       case LensPhase.flying:
+        final before = _age;
         _age += dt;
+        if (before < TabSprings.tapDelay && _age >= TabSprings.tapDelay) {
+          // The delay ends inside this frame: up to then the lens keeps
+          // its old target, so it leaves at 25 ms, not a frame early.
+          _x.advance(TabSprings.tapDelay - before);
+          flightDt = _age - TabSprings.tapDelay;
+        }
         if (_age >= TabSprings.tapDelay) _x.target = _flightTarget;
         if (_geometry.form == TabBarForm.top) {
           if (_age < TabSprings.liftUntil) {
@@ -462,7 +474,7 @@ class LensMotion {
     );
     if (holding) _glowDiameter.target = TabSprings.glowHeldDiameter;
     for (final s in _springs) {
-      s.advance(dt);
+      s.advance(identical(s, _x) ? flightDt : dt);
     }
     _advanceRipple(dt);
     _advanceGhost(dt);

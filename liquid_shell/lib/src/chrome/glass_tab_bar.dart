@@ -236,7 +236,13 @@ class _GlassTabBarState extends State<GlassTabBar>
   }
 
   void _onTick(Duration elapsed) {
-    final dt = ((elapsed - _last).inMicroseconds / 1e6).clamp(0.0, 1 / 30);
+    // Wall time, as Core Animation: a long frame moves the lens on. The
+    // springs cap one step at SpringValue.maxAdvance (VK-503 Task 16: a
+    // 1/30 s cap left the lens 10 ms behind after a 44 ms first frame).
+    final dt = ((elapsed - _last).inMicroseconds / 1e6).clamp(
+      0.0,
+      SpringValue.maxAdvance,
+    );
     _last = elapsed;
     final minimizing = _minimize.advance(dt);
     final m = _motion;

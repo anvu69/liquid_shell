@@ -1,12 +1,14 @@
 import 'package:flutter/gestures.dart'
     show DeviceGestureSettings, kLongPressTimeout;
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart' show SpringSimulation;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/chrome/glass_tab_bar.dart';
 import 'package:liquid_shell/src/chrome/large_content_viewer.dart';
 import 'package:liquid_shell/src/chrome/tab_geometry.dart';
+import 'package:liquid_shell/src/chrome/tab_springs.dart';
 
 const _screen = Size(402, 874);
 const double _y = 874.0 - 21 - 31;
@@ -297,6 +299,27 @@ void main() {
     await drag.up();
     await tester.pumpAndSettle();
     expect(log, [2]);
+  });
+
+  testWidgets('a long frame advances the lens by its wall time, as Core '
+      'Animation does (VK-503 Task 16: no 1/30 s cap)', (tester) async {
+    // The lens centre in the bar's own frame, before the pill's bulge
+    // scales the drawing.
+    final xs = <double>[];
+    debugTabTrace = (s) => xs.add(s['x']!);
+    addTearDown(() => debugTabTrace = null);
+    await _pump(tester, <int>[]);
+    await tester.tapAt(_explore);
+    await tester.pump(); // the ticker's first tick: elapsed 0
+    await tester.pump(const Duration(milliseconds: 50));
+    // 50 ms after the commit: 25 ms of delay, then 25 ms of flight.
+    final want = SpringSimulation(
+      TabSprings.tap,
+      _home.dx,
+      _explore.dx,
+      0,
+    ).x(0.025);
+    expect(xs.last, closeTo(want, 0.05));
   });
 
   testWidgets('the ticker stops at rest', (tester) async {
