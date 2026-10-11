@@ -134,16 +134,37 @@ the middle of it breaks the composition.
 
 - **Natively** the field is a real `UISearchTextField`: iOS runs the IME,
   not Flutter's text input. Text the app sets is written only when no
-  composition is open; one that arrives during a composition waits for it
-  to end, and the user's own input wins over it.
+  composition (marked text) is open.
 - **In the Flutter field** the shell writes the controller's text into the
   field only when the field has no composition and the text differs. The
   field is one persistent `TextField`: phase changes move and resize it,
   and never rebuild it under a new parent while it has focus.
-- **Your side.** `LiquidSearchValue.composing` is true while a composition
-  is open. Filter on `value.text` as it changes, if you like, but never
-  write `value.text` (or a transformed text) back into the controller while
-  `composing`: that is the write that breaks Telex.
+- **Your side: write only for app actions.** Read `value.text` as it
+  changes (filter, fetch results), but set `controller.text` only for an
+  app action: a recent search tapped, a reset, `clear()`. Never write in
+  reply to `onChanged`, not even a trimmed or lowercased copy of the
+  user's text. Such a write is computed from a text that may already be
+  stale; the field applies it because it differs, and the keystrokes
+  typed meanwhile are lost. `LiquidSearchValue.composing` does not guard
+  this: Apple's Vietnamese Telex keyboard never marks its text, so
+  `composing` stays false natively while the user types Telex.
+
+### An app write during a composition
+
+Where an IME does mark its text (Japanese kana natively; Telex in the
+Flutter field on Android), the two fields resolve an app write that lands
+mid-composition differently. Both keep the composition intact; they
+differ in who wins:
+
+| | The write is | Then |
+|---|---|---|
+| Native field | held | The user wins: their next change, the commit included, drops the held write. It is applied only if the composition is cancelled back to the last reported text. |
+| Flutter field | held | The app wins: when the composition ends, the held write replaces the committed text. |
+
+So a recent search tapped mid-composition shows the tapped query in the
+Flutter field, but natively the user's committed text stays and the tap
+is lost. Make such writes from taps that end the composition first (a tap
+outside the field does), or check `composing` before writing.
 
 ## Insets
 

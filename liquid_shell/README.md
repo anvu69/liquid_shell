@@ -429,9 +429,12 @@ raised field above the keyboard included. Pad the page with
 `Scaffold` with `resizeToAvoidBottomInset` would count the keyboard twice).
 
 **Vietnamese and other IMEs.** On iOS 26 the native field owns the IME,
-so Telex composes as in any iOS app. `LiquidSearchValue.composing` is true
-while a composition is open: filter on `value.text` if you like, but never
-write `value.text` back into the controller while `composing`. More in
+so Telex composes as in any iOS app. Read `value.text` freely (filter, fetch
+results), but write `controller.text` only for an app action, such as a
+recent search tapped or a reset, and never in reply to `onChanged`. A
+write-back computed from the user's text (trimmed, lowercased) can be
+stale by the time it lands and erases keystrokes in flight. Apple's Telex
+never marks its text as composing, so `composing` will not warn you. More in
 [doc/search.md](doc/search.md).
 
 ### Pages and the back button

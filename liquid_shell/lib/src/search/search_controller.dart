@@ -108,9 +108,20 @@ class LiquidSearchController extends ValueNotifier<LiquidSearchValue> {
   /// The field's text.
   String get text => value.text;
 
-  /// Replaces the text. The field shows it (natively once no IME
-  /// composition is in progress). Does not call `LiquidSearch.onChanged`.
-  /// The same text is a no-op, also during a composition.
+  /// Replaces the text. The field shows it. Does not call
+  /// `LiquidSearch.onChanged`. The same text is a no-op, also during a
+  /// composition.
+  ///
+  /// Write only for an app action (a recent search tapped, a reset), never
+  /// in reply to `LiquidSearch.onChanged`: a write computed from the user's
+  /// text may be stale when it lands, and erases keystrokes in flight.
+  /// Apple's Vietnamese Telex never marks its text, so
+  /// [LiquidSearchValue.composing] does not warn you.
+  ///
+  /// A write during an IME composition (marked text) is held by both
+  /// fields, then resolved differently: natively the user's next change,
+  /// the commit included, drops it (the user wins); in the Flutter field it
+  /// replaces the committed text once the composition ends (the app wins).
   set text(String text) => value = value.copyWith(text: text);
 
   /// The app's write. A new [LiquidSearchValue.text] goes to the field and

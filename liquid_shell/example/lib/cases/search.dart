@@ -228,8 +228,10 @@ class _SearchPage extends StatelessWidget {
         ListTile(
           leading: const Icon(Icons.history),
           title: Text(query),
-          // Safe mid-composition too: the shell holds the write until the
-          // IME composition ends.
+          // An app action, so the app may write the text (never write in
+          // reply to onChanged). Mid-composition both fields hold the
+          // write: natively the user's commit then wins, in the Flutter
+          // field this query does (doc/search.md).
           onTap: () => controller.text = query,
         ),
   ];
