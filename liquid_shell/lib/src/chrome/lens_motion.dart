@@ -350,7 +350,9 @@ class LensMotion {
   void _startRipple() {
     if (reduceMotion || _glowCenter == null) return;
     _rippleAge = 0;
-    _rippleOpacity = _glowOpacity.value;
+    // From the full glow, as native: a quick tap lifts before the glow's
+    // 80 ms fade-in has run, and its ripple would start invisible.
+    _rippleOpacity = TabSprings.glowOpacity;
     _rippleDiameter = _glowDiameter.value;
   }
 

@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -378,6 +379,30 @@ void main() {
       run(m, 0.3);
       expect(m.frame.glowOpacity, 0);
       expect(m.frame.glowCenter, isNull);
+    });
+
+    test('a quick tap ripples too: from the 0.28, 93 pt glow (research §3; '
+        'VK-503 Task 16)', () {
+      // Down and up before any frame: the glow had no time to fade in, and
+      // the ripple started from opacity 0, invisible.
+      final m = LensMotion(geometry: g3, selected: 0)
+        ..down(const Offset(180, 31))
+        ..up(const Offset(180, 31))
+        ..advance(0);
+      expect(m.frame.glowOpacity, closeTo(TabSprings.glowOpacity, 0.001));
+      expect(m.frame.glowDiameter, closeTo(TabSprings.glowDiameter, 0.001));
+      var widest = 0.0;
+      var gone = double.infinity;
+      run(
+        m,
+        0.6,
+        each: (t) {
+          widest = math.max(widest, m.frame.glowDiameter);
+          if (m.frame.glowOpacity == 0 && gone.isInfinite) gone = t;
+        },
+      );
+      expect(widest / TabSprings.glowDiameter, closeTo(4, 0.4));
+      expect(gone, closeTo(0.5, 0.05));
     });
 
     test('a tap on the selected slot commits it again (reselect)', () {
