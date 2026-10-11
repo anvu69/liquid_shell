@@ -37,6 +37,10 @@ dependency.
   `UITabBarController` tab bar and sidebar (with a native footer) on iPhone
   and iPad, the floating bottom bar at compact width; the Flutter chrome
   everywhere else.
+- **Search tab**: a real search tab, UIKit's own on iOS 26 (iPhone: the ⌕
+  becomes the field and the tabs collapse; iPad: the field under the title
+  row rises when active), the same states in glass elsewhere.
+- **Pages and the glass back button**: `LiquidPage`.
 - **Window controls**: on iPadOS 26 windowed apps, the shell's top row and
   your large titles move past the close/minimise/resize cluster.
 - Runtime dependencies: Flutter and this plugin's own packages only (plus
@@ -401,6 +405,48 @@ Widget _branch(int index, Widget root) => Navigator(
 ```
 
 <img src="doc/images/case_search_phone_selected.png" width="260" alt="Search tab selected: the tabs collapse to one circle beside the field, over a category grid"> <img src="doc/images/case_search_phone_active.png" width="260" alt="Search active: the field above the keyboard, a scope bar and recent searches"> <img src="doc/images/case_search_tablet_selected.png" width="260" alt="Search tab on a tablet: the field under the top bar">
+
+The shell reports the phase in `LiquidShellScope.of(context).searchPhase`:
+
+| Phase | iPhone, iOS 26 native | iPad, iOS 26 native | Glass (elsewhere) |
+|---|---|---|---|
+| `idle`: another tab | The tab pill, and the ⌕ as a separate circle | Search is a tab of the top bar, the sidebar or the bottom bar | The pill and a ⌕ circle; on a wide screen a cell of the top bar or a sidebar row |
+| `selected`: keyboard down | The pill collapses to one circle (back to the previous tab) and the ⌕ becomes a field at the bottom | A small title, and the field on the row below it | Compact: the circle and the field morph in the bottom row. Wide: a field under the top bar |
+| `active`: the field has focus | The field rides above the keyboard, with × | The field rises into the title row, with ⓧ | Compact: the field above the keyboard, with ×. Wide: the field moves into the top bar row |
+| × | Clears the query and goes back to `selected` | Clears the query and goes back to `selected` | Clears the query and goes back to `selected` |
+
+Selecting the tab never focuses the field; `controller.activate()` does.
+The query is kept when the user switches tabs, and only × clears it.
+
+**Insets.** `chromeInsets` covers the search field in every phase, the
+raised field above the keyboard included. Pad the page with
+`LiquidShellScope.contentPaddingOf`; never also add `viewInsets` (a
+`Scaffold` with `resizeToAvoidBottomInset` would count the keyboard twice).
+
+**Vietnamese and other IMEs.** On iOS 26 the native field owns the IME,
+so Telex composes as in any iOS app. `LiquidSearchValue.composing` is true
+while a composition is open: filter on `value.text` if you like, but never
+write `value.text` back into the controller while `composing`. More in
+[doc/search.md](doc/search.md).
+
+### Pages and the back button
+
+Wrap each page of a tab's navigator in a `LiquidPage(title:, child:)`. It
+gives the page its title and, when the navigator can pop, a 44pt glass
+`LiquidBackButton`. A root page with a large title draws it on the bar row,
+as Apple Music does; a pushed page draws it on a row below the back button.
+
+Where the tab has a native navigation bar (iOS 26 native chrome: the search
+tab in this release) UIKit draws the title and its glass back circle, and
+`LiquidPage` draws only its child. Everywhere else it draws a Flutter glass
+bar. The page's first vertical scroll view drives the native large title
+and the scroll-edge effect.
+
+Every back respects the page's `PopScope`. The button, the native back
+circle and its long-press history menu (each page in turn, top first) call
+`Navigator.maybePop`, and Flutter's back swipe is off while a page refuses.
+A refused pop leaves the page and the bar where they were. `LiquidBackButton` also
+works on its own, with `onPressed` to replace `maybePop`.
 
 ### "Discard changes?" guard
 
@@ -1114,6 +1160,12 @@ content viewer (see [Custom chrome](#custom-chrome)).
   shell nested in another shell's body (sub-tabs) takes it from the outer
   one, which then shows no navigation; give a nested shell
   `nativeChrome: LiquidNativeChrome.off`.
+- **Native navigation bars are on the search tab only** (P3b-2 brings them
+  to every tab). Under the native search tab, a pushed page's large title
+  is drawn small (`LiquidPage.largeTitle`).
+- **The native back swipe does not follow the finger yet.** Flutter's back
+  gesture moves the page, and the native bar switches when it ends.
+- **Pages pushed above the shell keep the Flutter bar.**
 - **No liquid tier yet.** Forcing `LiquidGlassTier.liquid` draws frosted.
   The liquid tier comes in P4.
 - **Android signals are best effort.** Each one that cannot be read
@@ -1125,14 +1177,17 @@ content viewer (see [Custom chrome](#custom-chrome)).
 - [doc/tiers.md](doc/tiers.md): tiers, the policy, signals, writing a renderer
 - [doc/native_chrome.md](doc/native_chrome.md): native iOS chrome, its
   install rules, behaviour and limits
+- [doc/search.md](doc/search.md): the search tab, its phases, the
+  controller rules, IMEs and insets
 - [doc/router_integration.md](doc/router_integration.md): `IndexedStack`,
   `Navigator` and go_router wiring, branch state, hide/no chrome, system
   back, known limits
 
 ## Roadmap
 
-- **P2 (this release):** native iOS 26 chrome and window controls.
-- **P3:** a glass back button and title bar, a search field and a search tab.
+- **P2:** native iOS 26 chrome and window controls.
+- **P3 (this release, part 1):** the search tab, `LiquidPage` and the glass
+  back button. Next: the native navigation bar on every tab.
 - **P4:** the liquid tier on Android, as a `LiquidGlassRenderer` adapter.
 - **P5:** a go_router adapter (`StatefulShellRoute` builder, route-driven
   hide chrome).

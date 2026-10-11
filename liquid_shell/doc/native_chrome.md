@@ -131,6 +131,97 @@ without native chrome (Android, web, desktop) answer at once.
   follows the theme's brightness, and the direction follows the shell's
   `Directionality`.
 
+## Search tab
+
+A destination with `role: LiquidDestinationRole.search` (see
+[search.md](search.md)) becomes UIKit's `UISearchTab`. It needs no
+`sfSymbol`: without one UIKit draws its own magnifying glass and, natively,
+its localised "Search" placeholder. Its view controller is a clear
+navigation controller, so the tab has a native navigation bar:
+
+```
+ShellContainerController
+├─ FlutterViewController                  the body, as before
+└─ NativeTabsController (clear)
+   ├─ UITab per destination → a clear host
+   └─ UISearchTab (the search destination) → a clear UINavigationController
+        ├─ the root page host: its navigationItem holds the UISearchController
+        └─ one host per pushed LiquidPage: title and the glass back button
+```
+
+Every host is clear: Flutter draws the page under it, and the hosts only
+carry the titles, the back circle and the field. Each host has an invisible
+proxy scroll view that the shell scrolls with your page, so UIKit runs its
+large-title collapse and its scroll-edge effect.
+
+| | iPhone | iPad (any width) |
+|---|---|---|
+| Field | Tab-hosted: the ⌕ beside the pill becomes the field at the bottom | `.stacked`: under the title row, rising into it when active |
+| `automaticallyActivatesSearch` | false: selecting the tab never focuses the field | false |
+| Prominent tab | The search tab on iOS 27 (a separate circle); iOS 26 has no such API | None: the system look per iPadOS version |
+| Root title | `.inline`: the large title on the bar row, as in Apple Music | Small; at compact width a leading title item right of the window controls |
+| `obscuresBackgroundDuringPresentation` | false: your results stay visible | false |
+
+Selecting the search tab is a proposal, as for every tab: the shell runs
+`beforeDestinationChange`, then selects it natively, and UIKit runs the
+same morph as for its own tap. The iPhone's collapsed circle proposes the
+previous tab. Text, focus and submit travel between the field and your
+`LiquidSearchController` without echo, and Dart's text waits for an IME
+composition to end (see [search.md](search.md#vietnamese-and-other-imes)).
+
+The field's frame reaches the shell after every layout and keyboard move,
+and the shell's `chromeInsets` cover it: on iPhone the bottom inset follows
+the field above the keyboard; on iPad the stacked field is in the top safe
+area already.
+
+## Page stacks and the back button
+
+The search tab shows your pages in its native bar: each `LiquidPage` on the
+tab's navigator is one host, root first. When you push, UIKit pushes; when
+Flutter pops, UIKit pops, with its own animation. UIKit draws the title
+and the glass back circle; `LiquidPage` draws only its child.
+
+- **Every back is a proposal.** The back circle, its long-press history
+  menu, an accessibility escape and a keyboard back never pop UIKit
+  directly. They ask Dart, which calls `Navigator.maybePop` on the pages
+  above the chosen one, top first, so each page's `PopScope` runs. A
+  refused pop stops there, and UIKit follows only what Flutter really
+  popped. A back while a sheet is open in the tab closes the sheet.
+- **The back swipe is Flutter's.** UIKit's interactive pop gestures are off
+  in the search tab; the left-edge swipe reaches Flutter, whose page route
+  runs its own back gesture. The native bar switches when the gesture ends:
+  it does not follow the finger yet.
+- **Large titles.** On iPhone a root page's large title sits on the bar
+  row (`.inline`); on iPad the root's title is small, unless it asks for a
+  large title (`largeTitle: true`), which then gets its own row and
+  collapses as the page scrolls. UIKit draws a pushed page's large title
+  small and centred, on iPhone and on iPad.
+- **Scroll.** The first vertical scroll view of the top page sends its
+  offset, once per frame, to its host's proxy, which drives the collapse and
+  the scroll-edge effect. A page without a scroll view counts as offset 0.
+  While the title collapses, the page's top padding stays put, so content
+  does not jump under the finger.
+- **Pages above the shell** (on the app's root navigator) hide the native
+  chrome as before, and keep the Flutter bar.
+
+## Hit testing
+
+The container lets a touch through to Flutter when UIKit would deliver it
+to a background view of the native chrome. Background is every view on the
+chain from
+
+```
+(selected as? UINavigationController)?.topViewController?.view ?? selected.view
+```
+
+up to the tab bar controller's view, wrapper views included. In the search
+tab that is the top page host's view and its navigation containers. The
+navigation bar (title, back circle, stacked field), the tab-hosted field, ×
+and the collapsed circle are not on that chain, so they stay with UIKit;
+your page under them gets every other touch. During a push or pop animation
+the leaving page is not on the chain, so a tap on it in those 0.35 s does
+nothing.
+
 ## Limits
 
 - The native chrome is drawn by UIKit, so widget tests and goldens cannot
