@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
+import 'package:liquid_shell/src/glass/liquid_optics.dart';
 
 void main() {
   final light = ColorScheme.fromSeed(seedColor: const Color(0xFF3366CC));
@@ -132,5 +133,122 @@ void main() {
     expect(a, b);
     expect(a.hashCode, b.hashCode);
     expect(a, isNot(a.copyWith(borderWidth: 2)));
+  });
+
+  group('liquid fields (spec §5.6)', () {
+    final light = LiquidGlassTheme.fromColorScheme(
+      ColorScheme.fromSeed(seedColor: const Color(0xFF3366CC)),
+    );
+    final dark = LiquidGlassTheme.fromColorScheme(
+      ColorScheme.fromSeed(
+        seedColor: const Color(0xFF3366CC),
+        brightness: Brightness.dark,
+      ),
+    );
+
+    test('defaults', () {
+      // Tuned against iOS 26 native (spec §3.6.1): light enough that the
+      // lens shows what it bends.
+      expect(light.liquidTint.a, closeTo(0.40, 1e-3));
+      expect(dark.liquidTint.a, closeTo(0.45, 1e-3));
+      expect(light.refraction, 1);
+      expect(light.dispersion, 0.3);
+      expect(light.liquidBlurSigma, 2);
+      expect(dark.liquidBlurSigma, 2);
+    });
+
+    test('copyWith, lerp and equality cover them', () {
+      final changed = light.copyWith(
+        liquidTint: const Color(0x11223344),
+        refraction: 2,
+        dispersion: 0,
+        liquidBlurSigma: 0,
+      );
+      expect(changed.liquidTint, const Color(0x11223344));
+      expect(changed.refraction, 2);
+      expect(changed.dispersion, 0);
+      expect(changed.liquidBlurSigma, 0);
+      expect(changed, isNot(light));
+      expect(light.copyWith(), light);
+      expect(light.copyWith().hashCode, light.hashCode);
+      final half = light.lerp(changed, 0.5);
+      expect(half.refraction, 1.5);
+      expect(half.dispersion, closeTo(0.15, 1e-9));
+      expect(half.liquidBlurSigma, 1);
+    });
+
+    group('liquidTint is optional (spec §5.6: every field has a default)', () {
+      LiquidGlassTheme bare(Color solid) => LiquidGlassTheme(
+        tint: solid.withValues(alpha: 0.72),
+        solid: solid,
+        border: const Color(0x47000000),
+        rimHighlight: const Color(0x80FFFFFF),
+        shadow: const BoxShadow(),
+        labelStyle: const TextStyle(),
+      );
+
+      test('defaults to solid @ 0.40 over a light solid', () {
+        final scheme = ColorScheme.fromSeed(seedColor: const Color(0xFF3366CC));
+        final theme = bare(scheme.surface);
+        expect(theme.liquidTint, scheme.surface.withValues(alpha: 0.40));
+        expect(
+          theme.liquidTint,
+          LiquidGlassTheme.fromColorScheme(scheme).liquidTint,
+        );
+      });
+
+      test('defaults to solid @ 0.45 over a dark solid', () {
+        final scheme = ColorScheme.fromSeed(
+          seedColor: const Color(0xFF3366CC),
+          brightness: Brightness.dark,
+        );
+        final theme = bare(scheme.surface);
+        expect(theme.liquidTint, scheme.surface.withValues(alpha: 0.45));
+        expect(
+          theme.liquidTint,
+          LiquidGlassTheme.fromColorScheme(scheme).liquidTint,
+        );
+      });
+
+      test('a derived default follows copyWith(solid:)', () {
+        final theme = bare(const Color(0xFFFFFFFF));
+        final moved = theme.copyWith(solid: const Color(0xFF000000));
+        expect(
+          moved.liquidTint,
+          const Color(0xFF000000).withValues(alpha: 0.45),
+        );
+      });
+
+      test('an explicit liquidTint survives copyWith(solid:)', () {
+        final theme = bare(
+          const Color(0xFFFFFFFF),
+        ).copyWith(liquidTint: const Color(0x11223344));
+        final moved = theme.copyWith(solid: const Color(0xFF000000));
+        expect(moved.liquidTint, const Color(0x11223344));
+      });
+
+      test('== and hashCode compare the resolved tint', () {
+        const white = Color(0xFFFFFFFF);
+        final derived = bare(white);
+        final explicit = derived.copyWith(
+          liquidTint: white.withValues(alpha: 0.40),
+        );
+        expect(derived, explicit);
+        expect(derived.hashCode, explicit.hashCode);
+      });
+    });
+
+    test('LiquidOpticsParams.fromTheme maps the fields', () {
+      expect(
+        LiquidOpticsParams.fromTheme(light),
+        LiquidOpticsParams(
+          tint: light.liquidTint,
+          rim: light.rimHighlight,
+          refraction: 1,
+          dispersion: 0.3,
+          blurSigma: 2,
+        ),
+      );
+    });
   });
 }

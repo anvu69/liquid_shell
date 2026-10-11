@@ -20,19 +20,23 @@ bool nativeChromeEngaged({
   required LiquidNativeShellState? state,
   required bool hasChromeBuilder,
   required bool describable,
+  required bool glassTierForced,
 }) =>
     nativeChromePossible(
       mode: mode,
       hasChromeBuilder: hasChromeBuilder,
       describable: describable,
+      glassTierForced: glassTierForced,
     ) &&
     owner &&
     state != null &&
     state.installed;
 
 /// The conditions of [nativeChromeEngaged] that the shell knows without the
-/// platform: the app allows it, it has no custom Flutter chrome, and it
-/// can be drawn natively. Pure.
+/// platform: the app allows it, it has no custom Flutter chrome, no
+/// `LiquidGlassScope` above it forces a glass tier (an app that forces a
+/// tier asks for Flutter glass; spec 2026-10-10 §9.1), and it can be drawn
+/// natively. Pure.
 ///
 /// While the platform has not answered (pending), only a shell for which
 /// this holds waits with no chrome; every other one draws Flutter chrome
@@ -41,7 +45,12 @@ bool nativeChromePossible({
   required LiquidNativeChrome mode,
   required bool hasChromeBuilder,
   required bool describable,
-}) => mode == LiquidNativeChrome.auto && !hasChromeBuilder && describable;
+  required bool glassTierForced,
+}) =>
+    mode == LiquidNativeChrome.auto &&
+    !hasChromeBuilder &&
+    !glassTierForced &&
+    describable;
 
 /// Whether every destination and the trailing action have an SF Symbol.
 bool nativeDescribable(

@@ -3,15 +3,17 @@ import UIKit
 
 /// The iOS side of liquid_shell.
 ///
-/// - Streams Reduce Transparency over the `vn.lasoai.liquid_shell/signals`
-///   event channel (spec P1 §6). Battery saver and blur-disabled are always
-///   false here: the system's own glass ignores Low Power Mode.
+/// - Streams Reduce Transparency and Low Power Mode over the
+///   `vn.lasoai.liquid_shell/signals` event channel (spec P1 §6; Low Power
+///   Mode as `powerSave`: spec 2026-10-10 §7.2, owner Q8). Blur-disabled,
+///   low-end and GLES-only are always false here (Metal is always present).
 /// - Installs the native iPadOS 26 shell and answers the Pigeon channel
 ///   (`NativeShellInstaller`, spec P2 §5).
 /// - Presents native alerts and action sheets (`NativeDialogPresenter`, spec P3a §5).
 public final class LiquidShellPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   private var sink: FlutterEventSink?
   private var observer: NSObjectProtocol?
+  private var powerObserver: NSObjectProtocol?
   private var installer: NativeShellInstaller?
   /// Readable by the example's XCTests (`@testable`): the engine-teardown test.
   private(set) var dialogs: NativeDialogPresenter?
@@ -76,6 +78,13 @@ public final class LiquidShellPlugin: NSObject, FlutterPlugin, FlutterStreamHand
     ) { [weak self] _ in
       self?.send()
     }
+    powerObserver = NotificationCenter.default.addObserver(
+      forName: Notification.Name.NSProcessInfoPowerStateDidChange,
+      object: nil,
+      queue: .main
+    ) { [weak self] _ in
+      self?.send()
+    }
     send()
     return nil
   }
@@ -87,17 +96,31 @@ public final class LiquidShellPlugin: NSObject, FlutterPlugin, FlutterStreamHand
   }
 
   private func removeObserver() {
-    if let observer = observer {
-      NotificationCenter.default.removeObserver(observer)
+    for token in [observer, powerObserver] {
+      if let token = token {
+        NotificationCenter.default.removeObserver(token)
+      }
     }
     observer = nil
+    powerObserver = nil
   }
 
   private func send() {
-    sink?([
-      "reduceTransparency": UIAccessibility.isReduceTransparencyEnabled,
-      "powerSave": false,
+    sink?(
+      LiquidShellPlugin.signalsPayload(
+        reduceTransparency: UIAccessibility.isReduceTransparencyEnabled,
+        lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled))
+  }
+
+  /// The signals event (spec P1 §6.2; `powerSave` is Low Power Mode,
+  /// spec 2026-10-10 §7.2). Pure, for XCTest.
+  static func signalsPayload(reduceTransparency: Bool, lowPowerMode: Bool) -> [String: Bool] {
+    [
+      "reduceTransparency": reduceTransparency,
+      "powerSave": lowPowerMode,
       "blurDisabled": false,
-    ])
+      "lowEnd": false,
+      "glesOnly": false,
+    ]
   }
 }

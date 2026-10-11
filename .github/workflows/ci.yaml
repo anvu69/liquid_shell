@@ -134,7 +134,14 @@ jobs:
           # plugin reads as reduce transparency. The script also sets its own
           # baseline of 1 and restores the starting value on exit.
           disable-animations: false
-          script: tool/integration_android.sh
+          script: |
+            tool/integration_android.sh
+            cd liquid_shell/example && flutter drive --driver=test_driver/integration_test.dart --target=integration_test/liquid_compare_test.dart --dart-define=COMPARE_PLATFORM=android --dart-define=COMPARE_DEVICE=phone --dart-define=COMPARE_MODES=flutterLiquid
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: liquid-android-screenshots
+          path: liquid_shell/example/build/integration_screenshots/
 
   integration-ios:
     runs-on: macos-latest
@@ -212,7 +219,8 @@ jobs:
     # Two drives per leg (NATIVE_TARGETS: native_shell_test.dart and
     # native_dialogs_test.dart; about 15 min each, build included). The
     # script stops a stalled drive after 20 min (IOS_DRIVE_TIMEOUT 1200 s)
-    # and retries it once, per target: up to 80 min, plus the setup.
+    # and retries it once, per target: up to 80 min, plus the setup and
+    # the native vs Flutter liquid drive (one try, a few minutes).
     timeout-minutes: 100
     strategy:
       fail-fast: false
@@ -232,11 +240,26 @@ jobs:
           NATIVE_DEVICES="$udid=true" tool/integration_ios_native.sh
         env:
           IOS_RUNTIME: ""
+      - name: Native vs Flutter liquid on the newest ${{ matrix.device }} simulator
+        run: |
+          udid=$(xcrun simctl list devices available | grep -F "    ${{ matrix.device }}" | tail -n1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          cd liquid_shell/example
+          flutter drive --driver=test_driver/integration_test.dart \
+            --target=integration_test/liquid_compare_test.dart -d "$udid" \
+            --dart-define=COMPARE_PLATFORM=ios \
+            --dart-define=COMPARE_DEVICE=$(echo "${{ matrix.device }}" | tr '[:upper:]' '[:lower:]') \
+            --dart-define=EXPECT_NATIVE=true
+          mkdir -p build/compare
+          for n in build/integration_screenshots/ios_*_native.png; do
+            dart run ../../tool/side_by_side.dart "$n" "${n%_native.png}_flutterLiquid.png" "build/compare/$(basename "${n%_native.png}").png"
+          done
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: native-shell-screenshots-${{ matrix.device }}
-          path: liquid_shell/example/build/integration_screenshots/
+          path: |
+            liquid_shell/example/build/integration_screenshots/
+            liquid_shell/example/build/compare/
 
   goldens:
     name: goldens (${{ matrix.flutter }})
@@ -263,6 +286,11 @@ jobs:
           cache: true
       - run: make get
       - run: make goldens
+      # The shader probes (lens placement and direction) are the early
+      # warning for an engine change; on the informational stable leg they
+      # must run even when its goldens drift.
+      - if: ${{ success() || (always() && matrix.experimental) }}
+        run: make test-impeller
       - if: failure()
         uses: actions/upload-artifact@v4
         with:

@@ -10,6 +10,7 @@ import 'package:liquid_shell/src/chrome/sidebar_toggle.dart';
 import 'package:liquid_shell/src/chrome/tab_bar.dart';
 import 'package:liquid_shell/src/destinations/destination.dart';
 import 'package:liquid_shell/src/destinations/tab_action.dart';
+import 'package:liquid_shell/src/glass/glass_scope.dart';
 import 'package:liquid_shell/src/native/native_chrome.dart';
 import 'package:liquid_shell/src/native/native_host.dart';
 import 'package:liquid_shell/src/native/native_layout.dart';
@@ -869,10 +870,12 @@ class _LiquidShellState extends State<LiquidShell>
       widget.destinations,
       widget.tabBarTrailing,
     );
+    final forced = LiquidGlassScope.policyOf(context).forcedTier != null;
     final possible = nativeChromePossible(
       mode: widget.nativeChrome,
       hasChromeBuilder: widget.chromeBuilder != null,
       describable: describable,
+      glassTierForced: forced,
     );
     final engaged = nativeChromeEngaged(
       mode: widget.nativeChrome,
@@ -880,6 +883,7 @@ class _LiquidShellState extends State<LiquidShell>
       state: state,
       hasChromeBuilder: widget.chromeBuilder != null,
       describable: describable,
+      glassTierForced: forced,
     );
     _debugHintMissingSymbols(state: state, describable: describable);
     final wasEngaged = _nativeEngaged;

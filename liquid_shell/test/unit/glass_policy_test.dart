@@ -1,7 +1,10 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/glass/frosted_renderer.dart';
+import 'package:liquid_shell/src/glass/liquid_renderer.dart';
 import 'package:liquid_shell/src/glass/policy.dart';
 import 'package:liquid_shell/src/glass/solid_renderer.dart';
 
@@ -67,34 +70,58 @@ Future<List<String>> _captureLogs(Future<void> Function() body) async {
 }
 
 void main() {
-  group('LiquidGlassSignals.prefersSolid', () {
-    test('is false with every signal off', () {
+  group('LiquidGlassSignals (spec 2026-10-10 §6.1)', () {
+    test('every signal off prefers neither solid nor frosted', () {
       expect(const LiquidGlassSignals().prefersSolid, isFalse);
+      expect(const LiquidGlassSignals().prefersFrosted, isFalse);
     });
 
-    test('is true for each signal alone', () {
-      expect(
-        const LiquidGlassSignals(reduceTransparency: true).prefersSolid,
-        isTrue,
-      );
-      expect(const LiquidGlassSignals(highContrast: true).prefersSolid, isTrue);
-      expect(const LiquidGlassSignals(powerSave: true).prefersSolid, isTrue);
-      expect(const LiquidGlassSignals(blurDisabled: true).prefersSolid, isTrue);
-      expect(const LiquidGlassSignals(canBlur: false).prefersSolid, isTrue);
+    test('solid: reduce transparency, high contrast, blur disabled', () {
+      for (final signals in const [
+        LiquidGlassSignals(reduceTransparency: true),
+        LiquidGlassSignals(highContrast: true),
+        LiquidGlassSignals(blurDisabled: true),
+      ]) {
+        expect(signals.prefersSolid, isTrue);
+      }
+    });
+
+    test('frosted: power save, low end, GLES only, slow frames', () {
+      for (final signals in const [
+        LiquidGlassSignals(powerSave: true),
+        LiquidGlassSignals(lowEnd: true),
+        LiquidGlassSignals(glesOnly: true),
+        LiquidGlassSignals(slowFrames: true),
+      ]) {
+        expect(signals.prefersFrosted, isTrue);
+        expect(signals.prefersSolid, isFalse);
+      }
+    });
+
+    test('battery saver disables blur too: frosted, not solid (Q9)', () {
+      const signals = LiquidGlassSignals(powerSave: true, blurDisabled: true);
+      expect(signals.prefersSolid, isFalse);
+      expect(signals.prefersFrosted, isTrue);
     });
 
     test('== and hashCode compare every field', () {
+      const each = [
+        LiquidGlassSignals(reduceTransparency: true),
+        LiquidGlassSignals(highContrast: true),
+        LiquidGlassSignals(powerSave: true),
+        LiquidGlassSignals(blurDisabled: true),
+        LiquidGlassSignals(lowEnd: true),
+        LiquidGlassSignals(glesOnly: true),
+        LiquidGlassSignals(slowFrames: true),
+      ];
+      for (var a = 0; a < each.length; a++) {
+        for (var b = 0; b < each.length; b++) {
+          expect(each[a] == each[b], a == b, reason: '$a vs $b');
+        }
+      }
       expect(
-        const LiquidGlassSignals(powerSave: true),
-        const LiquidGlassSignals(powerSave: true),
-      );
-      expect(
-        const LiquidGlassSignals(powerSave: true).hashCode,
-        const LiquidGlassSignals(powerSave: true).hashCode,
-      );
-      expect(
-        const LiquidGlassSignals(powerSave: true),
-        isNot(const LiquidGlassSignals(canBlur: false)),
+        const LiquidGlassSignals(lowEnd: true).hashCode,
+        const LiquidGlassSignals(lowEnd: true).hashCode,
       );
     });
   });
@@ -108,20 +135,49 @@ void main() {
       );
     });
 
-    testWidgets('each signal alone → solid', (tester) async {
+    testWidgets('each signal → its tier (spec §6.3)', (tester) async {
       final context = await _context(tester);
       const policy = LiquidGlassPolicy(
         renderers: [_FakeRenderer(LiquidGlassTier.liquid)],
       );
-      for (final signals in const [
-        LiquidGlassSignals(reduceTransparency: true),
-        LiquidGlassSignals(highContrast: true),
-        LiquidGlassSignals(powerSave: true),
-        LiquidGlassSignals(blurDisabled: true),
-        LiquidGlassSignals(canBlur: false),
+      for (final (signals, tier) in const [
+        (LiquidGlassSignals(), LiquidGlassTier.liquid),
+        (LiquidGlassSignals(reduceTransparency: true), LiquidGlassTier.solid),
+        (LiquidGlassSignals(highContrast: true), LiquidGlassTier.solid),
+        (LiquidGlassSignals(blurDisabled: true), LiquidGlassTier.solid),
+        (LiquidGlassSignals(powerSave: true), LiquidGlassTier.frosted),
+        (
+          LiquidGlassSignals(powerSave: true, blurDisabled: true),
+          LiquidGlassTier.frosted,
+        ),
+        (LiquidGlassSignals(lowEnd: true), LiquidGlassTier.frosted),
+        (LiquidGlassSignals(glesOnly: true), LiquidGlassTier.frosted),
+        (LiquidGlassSignals(slowFrames: true), LiquidGlassTier.frosted),
       ]) {
-        expect(policy.resolve(context, signals), LiquidGlassTier.solid);
+        expect(policy.resolve(context, signals), tier);
       }
+    });
+
+    testWidgets('a forced liquid tier wins over the frosted signals', (
+      tester,
+    ) async {
+      final context = await _context(tester);
+      const policy = LiquidGlassPolicy(
+        forcedTier: LiquidGlassTier.liquid,
+        renderers: [_FakeRenderer(LiquidGlassTier.liquid)],
+      );
+      expect(
+        policy.resolve(
+          context,
+          const LiquidGlassSignals(
+            powerSave: true,
+            lowEnd: true,
+            glesOnly: true,
+            slowFrames: true,
+          ),
+        ),
+        LiquidGlassTier.liquid,
+      );
     });
 
     testWidgets('a supported liquid renderer → liquid', (tester) async {
@@ -282,7 +338,7 @@ void main() {
         resolveGlassRenderer(
           const LiquidGlassPolicy(),
           context,
-          const LiquidGlassSignals(powerSave: true),
+          const LiquidGlassSignals(reduceTransparency: true),
         ),
         isA<SolidGlassRenderer>(),
       );
@@ -290,7 +346,7 @@ void main() {
         resolveGlassRenderer(
           const LiquidGlassPolicy(forcedTier: LiquidGlassTier.liquid),
           context,
-          const LiquidGlassSignals(powerSave: true),
+          const LiquidGlassSignals(reduceTransparency: true),
         ),
         isA<FrostedGlassRenderer>(),
       );
@@ -331,6 +387,90 @@ void main() {
       expect(
         identical(policy.rendererFor(context, LiquidGlassTier.frosted), first),
         isTrue,
+      );
+    });
+  });
+
+  group('the built-in liquid renderer (spec §5.2, §6.2)', () {
+    testWidgets('without shader filters liquid falls back to frosted', (
+      tester,
+    ) async {
+      debugLiquidGlassCanRefractOverride = false;
+      await tester.runAsync(LiquidGlass.precache);
+      final context = await _context(tester);
+      expect(
+        const LiquidGlassPolicy().rendererFor(context, LiquidGlassTier.liquid),
+        isA<FrostedGlassRenderer>(),
+      );
+    });
+
+    testWidgets('before the program loads liquid falls back to frosted', (
+      tester,
+    ) async {
+      debugLiquidGlassCanRefractOverride = true;
+      final context = await _context(tester);
+      expect(
+        const LiquidGlassPolicy().resolve(context, const LiquidGlassSignals()),
+        LiquidGlassTier.frosted,
+      );
+    });
+
+    testWidgets('with shader filters and the program it is the default', (
+      tester,
+    ) async {
+      debugLiquidGlassCanRefractOverride = true;
+      await tester.runAsync(LiquidGlass.precache);
+      final context = await _context(tester);
+      const policy = LiquidGlassPolicy();
+      expect(
+        policy.rendererFor(context, LiquidGlassTier.liquid),
+        isA<LiquidShaderRenderer>(),
+      );
+      expect(
+        policy.resolve(context, const LiquidGlassSignals()),
+        LiquidGlassTier.liquid,
+      );
+    });
+
+    testWidgets('a registered liquid renderer wins over the built-in one', (
+      tester,
+    ) async {
+      debugLiquidGlassCanRefractOverride = true;
+      await tester.runAsync(LiquidGlass.precache);
+      final context = await _context(tester);
+      const mine = _FakeRenderer(LiquidGlassTier.liquid);
+      expect(
+        identical(
+          const LiquidGlassPolicy(
+            renderers: [mine],
+          ).rendererFor(context, LiquidGlassTier.liquid),
+          mine,
+        ),
+        isTrue,
+      );
+    });
+
+    testWidgets('inside another BackdropFilter it is unsupported (Q10)', (
+      tester,
+    ) async {
+      debugLiquidGlassCanRefractOverride = true;
+      await tester.runAsync(LiquidGlass.precache);
+      late BuildContext inner;
+      await tester.pumpWidget(
+        BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 2, sigmaY: 2),
+          child: Builder(
+            builder: (context) {
+              inner = context;
+              return const SizedBox();
+            },
+          ),
+        ),
+      );
+      expect(const LiquidShaderRenderer().isSupported(inner), isFalse);
+      expect(
+        const LiquidGlassPolicy().rendererFor(inner, LiquidGlassTier.liquid),
+        isA<FrostedGlassRenderer>(),
       );
     });
   });

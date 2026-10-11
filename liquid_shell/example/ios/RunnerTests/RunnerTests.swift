@@ -1644,3 +1644,25 @@ final class PluginDialogWiringTests: XCTestCase {
     wait(for: [met], timeout: 10)
   }
 }
+
+// MARK: Signals payload (spec 2026-10-10 §7.2)
+
+final class SignalsPayloadTests: XCTestCase {
+  func testLowPowerModeIsPowerSave() {
+    XCTAssertEqual(
+      LiquidShellPlugin.signalsPayload(reduceTransparency: false, lowPowerMode: true),
+      [
+        "reduceTransparency": false, "powerSave": true, "blurDisabled": false,
+        "lowEnd": false, "glesOnly": false,
+      ])
+  }
+
+  func testReduceTransparencyAloneIsReported() {
+    XCTAssertEqual(
+      LiquidShellPlugin.signalsPayload(reduceTransparency: true, lowPowerMode: false),
+      [
+        "reduceTransparency": true, "powerSave": false, "blurDisabled": false,
+        "lowEnd": false, "glesOnly": false,
+      ])
+  }
+}

@@ -220,6 +220,21 @@ void main() {
       expect(_scope(tester).sizeClass, LiquidSizeClass.regular);
     });
 
+    testWidgets('a forced glass tier keeps Flutter chrome (spec §9.1)', (
+      tester,
+    ) async {
+      final native = installFakeNative();
+      await _pumpNative(
+        tester,
+        shell: const LiquidGlassScope(
+          policy: LiquidGlassPolicy(forcedTier: LiquidGlassTier.liquid),
+          child: TestShell(destinations: kNative),
+        ),
+      );
+      expect(_flutterChrome(), isTrue);
+      expect(native.last.engaged, isFalse);
+    });
+
     testWidgets('a destination without sfSymbol keeps Flutter chrome', (
       tester,
     ) async {

@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'liquid_shell_ios'
-  s.version          = '0.1.0-dev.3'
+  s.version          = '0.1.0-dev.4'
   s.summary          = 'iOS side of the liquid_shell Flutter plugin.'
   s.description      = <<-DESC
 Streams Reduce Transparency to liquid_shell, installs the native iOS 26
