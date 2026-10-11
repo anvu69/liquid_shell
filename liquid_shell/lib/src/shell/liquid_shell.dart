@@ -201,7 +201,10 @@ class _LiquidShellState extends State<LiquidShell>
   late final GlobalObjectKey _bodyKey = GlobalObjectKey(this);
 
   /// Settled bar heights per (size class, text scale).
-  Map<(LiquidSizeClass, double), double> _measured = const {};
+  /// Measured bar heights by size class, bar form and text scale: each
+  /// orientation keeps its own, so a rotation never starts from the other
+  /// one's height.
+  Map<(LiquidSizeClass, TabBarForm, double), double> _measured = const {};
   ShellPresentation? _presentation;
   bool _sidebarVisible = false;
   bool _guardPending = false;
@@ -642,7 +645,10 @@ class _LiquidShellState extends State<LiquidShell>
     }
   }
 
-  void _onBarHeight((LiquidSizeClass, double) key, double height) {
+  void _onBarHeight(
+    (LiquidSizeClass, TabBarForm, double) key,
+    double height,
+  ) {
     if (!mounted || _measured[key] == height) return;
     setState(() => _measured = {..._measured, key: height});
   }
@@ -932,7 +938,6 @@ class _LiquidShellState extends State<LiquidShell>
     if (_search.focus.hasFocus && (!fieldShown || sizeClassChanged)) {
       _search.releaseField();
     }
-    final barKey = (sizeClass, media.textScaler.scale(14));
     final bottomGap = bottomGapFor(
       platform: Theme.of(context).platform,
       viewPaddingBottom: media.viewPadding.bottom,
@@ -943,15 +948,28 @@ class _LiquidShellState extends State<LiquidShell>
     // Q17: narrow shells trade margin for 44pt-wide cells.
     final narrow = size.width < kLiquidNarrowWidth;
     final barMargin = narrow ? _kNarrowBarMargin : _kBottomBarMargin;
-    // A landscape compact shell gets the 44 pt bar (spec VK-503 §5.2).
-    final landscape = size.width > size.height;
-    final barForm = landscape ? TabBarForm.landscape : TabBarForm.compact;
+    // A compact shell in landscape lower than compactHeight (a phone) gets
+    // the 44 pt bar (spec VK-503 §5.2, §12.1); compactHeight 0 restores P1.
+    final landscape =
+        size.width > size.height &&
+        size.height < widget.breakpoints.compactHeight;
+    final barForm = sizeClass == LiquidSizeClass.regular
+        ? TabBarForm.top
+        : landscape
+        ? TabBarForm.landscape
+        : TabBarForm.compact;
+    final barKey = (sizeClass, barForm, media.textScaler.scale(14));
+    // The bottom row before it is measured: the form's own pill extent.
+    final measuredBar =
+        _measured[barKey] ??
+        (barForm == TabBarForm.landscape ? TabMetrics.landscapeExtent : null);
+    final bottomRowExtent = measuredBar ?? kBottomPillExtent;
     final compactRects = phase != null && kind == LiquidChromeKind.bottomBar
         ? compactSearchRects(
             phase: phase,
             size: size,
             rowBottom: size.height - bottomGap,
-            rowExtent: _measured[barKey] ?? kBottomPillExtent,
+            rowExtent: bottomRowExtent,
             margin: barMargin,
             keyboard: media.viewInsets.bottom,
             direction: Directionality.of(context),
@@ -983,7 +1001,7 @@ class _LiquidShellState extends State<LiquidShell>
     var insets = chromeInsetsFor(
       kind: kind,
       topPadding: media.padding.top,
-      measuredBar: _measured[barKey],
+      measuredBar: measuredBar,
       bottomGap: bottomGap,
     );
     // Content clears the field in every phase (spec P3b §4.6).
@@ -1115,7 +1133,7 @@ class _LiquidShellState extends State<LiquidShell>
         if (phase != null && compactRects != null) {
           // The search row (spec P3b §9.2): the pill of the other
           // destinations, then the ⌕ circle that becomes the field.
-          final rowExtent = _measured[barKey] ?? kBottomPillExtent;
+          final rowExtent = bottomRowExtent;
           final idle = phase == LiquidSearchPhase.idle;
           // The ⌕ in the bar's own coordinates: its top-left is the row's.
           _searchTargetRect = compactRects.field.shift(

@@ -571,4 +571,64 @@ void main() {
       moreOrLessEquals(8 + drawn('A B') + 31 + drawn('C') + 31),
     );
   });
+
+  testWidgets('standalone: a landscape window at least 500 tall keeps the '
+      'compact form (690×600)', (tester) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(690, 600);
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.bottomCenter,
+            child: LiquidTabBar(
+              destinations: _three,
+              selectedIndex: 0,
+              onDestinationSelected: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(tester.getSize(find.byKey(kTabPillKey)).height, 62);
+  });
+
+  testWidgets('landscape form at AX sizes: icon-only slots of 49 (label '
+      'width 0)', (tester) async {
+    tester.view
+      ..devicePixelRatio = 3
+      ..physicalSize = const Size(874, 402) * 3;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(
+            size: Size(874, 402),
+            textScaler: TextScaler.linear(2),
+          ),
+          child: Scaffold(
+            body: Stack(
+              children: [
+                Positioned(
+                  left: TabMetrics.landscapeMargin,
+                  right: TabMetrics.landscapeMargin,
+                  bottom: 20,
+                  child: LiquidTabBar(
+                    destinations: _three,
+                    selectedIndex: 0,
+                    onDestinationSelected: (_) {},
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(find.text('Explore'), findsNothing);
+    // 2 × inset + 3 × 49 + 2 × 4 gaps.
+    expect(tester.getSize(find.byKey(kTabPillKey)).width, 8 + 3 * 49 + 8);
+  });
 }

@@ -182,9 +182,27 @@ void main() {
   testWidgets('top pill is 48 high with label-only cells (spec VK-503 '
       '§5.3)', (tester) async {
     await tester.pumpWidget(_host(position: LiquidTabBarPosition.top));
-    expect(tester.getRect(find.byType(LiquidGlass).first).height, 48);
+    final pill = tester.getRect(find.byType(LiquidGlass).first);
+    expect(pill.height, 48);
     expect(find.byIcon(Icons.home_outlined), findsNothing);
-    expect(find.text('Home'), findsWidgets);
+    Text label(Key copy) => tester.widget<Text>(
+      find.descendant(of: find.byKey(copy), matching: find.text('Home')),
+    );
+    // Normal copy 17 pt w500, tinted copy 17 pt w600 (spec VK-503 §5.3).
+    expect(label(kTabNormalKey).style!.fontSize, 17);
+    expect(label(kTabNormalKey).style!.fontWeight, FontWeight.w500);
+    expect(label(kTabTintedKey).style!.fontSize, 17);
+    expect(label(kTabTintedKey).style!.fontWeight, FontWeight.w600);
+    // The first label starts 4 (inset) + 15.5 (padding) inside the pill,
+    // vertically centred in it.
+    final home = tester.getRect(
+      find.descendant(
+        of: find.byKey(kTabNormalKey),
+        matching: find.text('Home'),
+      ),
+    );
+    expect(home.center.dy, moreOrLessEquals(pill.center.dy));
+    expect(home.left - pill.left, lessThanOrEqualTo(4 + 15.5 + 1e-9));
   });
 
   testWidgets('trailing action: tap, tooltip and semantics', (tester) async {

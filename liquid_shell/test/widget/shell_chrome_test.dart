@@ -84,6 +84,52 @@ void main() {
       expect(pill.left, greaterThanOrEqualTo(38));
     });
 
+    testWidgets('a compact landscape window at least compactHeight tall '
+        'keeps the 62 pt bar (690×600, VK-503 Q8)', (tester) async {
+      await pumpShell(tester, const TestShell(), size: const Size(690, 600));
+      expect(scopeOf(tester).chromeKind, LiquidChromeKind.bottomBar);
+      final pill = tester.getRect(find.byKey(kTabPillKey));
+      expect(pill.height, 62);
+      expect(scopeOf(tester).chromeInsets, const EdgeInsets.only(bottom: 83));
+    });
+
+    testWidgets('compactHeight 0 restores P1: a 690×430 shell keeps the '
+        '62 pt bar at margin 21', (tester) async {
+      await pumpShell(
+        tester,
+        TestShell(
+          breakpoints: const LiquidShellBreakpoints(compactHeight: 0),
+          // Start-pins the pill, so its left edge is the row margin.
+          trailing: LiquidTabAction(
+            icon: const Icon(Icons.search),
+            onPressed: () {},
+            semanticLabel: 'Search',
+          ),
+        ),
+        size: const Size(690, 430),
+      );
+      expect(scopeOf(tester).chromeKind, LiquidChromeKind.bottomBar);
+      final pill = tester.getRect(find.byKey(kTabPillKey));
+      expect(pill.height, 62);
+      expect(pill.left, 21);
+    });
+
+    testWidgets('the measured bar height is kept per form: a rotation uses '
+        'the right height on its first frame', (tester) async {
+      await pumpShell(tester, const TestShell());
+      expect(scopeOf(tester).chromeInsets.bottom, 62 + 21);
+      // Before the landscape bar is measured: its own 44, not portrait's 62.
+      tester.view.physicalSize = kPhoneLandscape;
+      await tester.pump();
+      expect(scopeOf(tester).chromeInsets.bottom, 44 + 21);
+      await tester.pumpAndSettle();
+      expect(scopeOf(tester).chromeInsets.bottom, 44 + 21);
+      // Back to portrait: the cached 62 at once, not landscape's 44.
+      tester.view.physicalSize = kPhone;
+      await tester.pump();
+      expect(scopeOf(tester).chromeInsets.bottom, 62 + 21);
+    });
+
     testWidgets('iPad portrait 834×1194 → top bar; body never resized', (
       tester,
     ) async {

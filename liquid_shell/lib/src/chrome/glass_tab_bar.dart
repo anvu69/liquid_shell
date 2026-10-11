@@ -347,9 +347,15 @@ class _GlassTabBarState extends State<GlassTabBar>
         ),
       };
 
+  /// What [_labelCache] was measured for: the labels, the resolved style,
+  /// the scaler and the direction.
+  (List<String>, TextStyle, TextScaler, TextDirection)? _labelKey;
+  List<double> _labelCache = const [];
+
   /// Label widths in the tinted (widest) weight, so the slots never move
   /// when the selection does. Measured as `Text` draws them: the ambient
-  /// style, the text scaler and Bold Text.
+  /// style, the text scaler and Bold Text. Cached: the bar rebuilds on
+  /// every animation frame.
   List<double> _labelWidths(BuildContext context, TextStyle style) {
     var base = DefaultTextStyle.of(context).style.merge(style);
     if (MediaQuery.boldTextOf(context)) {
@@ -357,11 +363,21 @@ class _GlassTabBarState extends State<GlassTabBar>
     }
     final scaler = MediaQuery.textScalerOf(context);
     final direction = Directionality.of(context);
-    return [
-      for (final i in _shown)
+    final labels = [for (final i in _shown) widget.destinations[i].label];
+    final key = _labelKey;
+    if (key != null &&
+        listEquals(key.$1, labels) &&
+        key.$2 == base &&
+        key.$3 == scaler &&
+        key.$4 == direction) {
+      return _labelCache;
+    }
+    _labelKey = (labels, base, scaler, direction);
+    return _labelCache = [
+      for (final label in labels)
         () {
           final painter = TextPainter(
-            text: TextSpan(text: widget.destinations[i].label, style: base),
+            text: TextSpan(text: label, style: base),
             textDirection: direction,
             textScaler: scaler,
             maxLines: 1,
@@ -394,7 +410,10 @@ class _GlassTabBarState extends State<GlassTabBar>
         extent: extent,
       ),
       TabBarForm.landscape => landscapeTabGeometry(
-        labelWidths: _labelWidths(context, _labelStyle(theme, tinted: true)),
+        // AX sizes draw the icon alone (P1 §5.10): no label room.
+        labelWidths: isAxTextScale(context)
+            ? [for (final _ in _shown) 0.0]
+            : _labelWidths(context, _labelStyle(theme, tinted: true)),
         maxWidth: maxWidth,
         trailing: trailing,
         direction: direction,
