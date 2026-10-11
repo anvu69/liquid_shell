@@ -133,6 +133,21 @@ void main() {
     );
   });
 
+  // The engaged tab lens, frozen pressed: on Home, and straddling Home and
+  // Explore (research native265_slowdrag.png).
+  for (final (name, shift) in [
+    ('tab_lens_pressed', 0.0),
+    ('tab_lens_straddle', 43.0),
+  ]) {
+    testWidgets(name, (tester) async {
+      debugTabLensPress = shift;
+      addTearDown(() => debugTabLensPress = null);
+      await tester.runAsync(LiquidGlass.precache);
+      await pumpGolden(tester, const BasicTabsCase(), device: iphone);
+      await _expectBand(tester, name);
+    });
+  }
+
   // The Flutter glass dialogs are LiquidGlass (owner decision L3): on the
   // default tier they are liquid, like the shell.
   testWidgets('case_alert', (tester) async {

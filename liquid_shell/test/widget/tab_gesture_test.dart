@@ -1,4 +1,5 @@
-import 'package:flutter/gestures.dart' show kLongPressTimeout;
+import 'package:flutter/gestures.dart'
+    show DeviceGestureSettings, kLongPressTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -318,6 +319,37 @@ void main() {
   });
 
   group('inside other gesture owners', () {
+    testWidgets('the bar takes the screen gesture settings: past their '
+        'touch slop a horizontal move is the lens, not a horizontal drag '
+        'around it', (tester) async {
+      final log = <int>[];
+      var outer = 0;
+      await _pump(
+        tester,
+        log,
+        // A device slop of 4 (Android's is about 8), well under kTouchSlop.
+        wrap: (context, page) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            gestureSettings: const DeviceGestureSettings(touchSlop: 4),
+          ),
+          child: GestureDetector(
+            onHorizontalDragStart: (_) => outer++,
+            child: SingleChildScrollView(child: page),
+          ),
+        ),
+      );
+      final g = await tester.startGesture(_explore);
+      await tester.pump();
+      for (var dx = 2.0; dx <= 10; dx += 2) {
+        await g.moveTo(_explore.translate(dx, 0));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await g.up();
+      await tester.pumpAndSettle();
+      expect(outer, 0, reason: 'the lens won at the same slop');
+      expect(log, [1]);
+    });
+
     for (final scale in [1.0, 2.0]) {
       testWidgets('a vertical drag that starts on the bar scrolls the list '
           'around it and selects nothing; a tap and a horizontal drag '

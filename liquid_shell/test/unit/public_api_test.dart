@@ -23,6 +23,13 @@ void main() {
     );
   });
 
+  test('glass_tab_bar.dart exports only the goldens hook', () {
+    expect(
+      _exports().where((e) => e.contains("'src/chrome/glass_tab_bar.dart'")),
+      ["export 'src/chrome/glass_tab_bar.dart' show debugTabLensPress"],
+    );
+  });
+
   test('liquid_lens.dart is not exported', () {
     expect(
       _exports().where((e) => e.contains('liquid_lens.dart')),

@@ -4,6 +4,7 @@ library;
 export 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart'
     show LiquidPlatformSignals, LiquidWindowControls;
 
+export 'src/chrome/glass_tab_bar.dart' show debugTabLensPress;
 export 'src/chrome/sidebar.dart';
 export 'src/chrome/tab_bar.dart'
     show LiquidTabBar, LiquidTabBarPosition, kLiquidNarrowWidth;

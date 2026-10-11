@@ -18,6 +18,7 @@ import 'package:liquid_shell/src/destinations/destination.dart';
 import 'package:liquid_shell/src/destinations/tab_action.dart';
 import 'package:liquid_shell/src/glass/glass_theme.dart';
 import 'package:liquid_shell/src/glass/liquid_glass.dart';
+import 'package:liquid_shell/src/glass/liquid_lens.dart';
 import 'package:liquid_shell/src/shell/strings.dart';
 
 /// The pill glass (tests).
@@ -41,6 +42,12 @@ const double _minTapWidth = 44;
 /// (spec VK-503 §17.3). Reset it to null after use.
 @visibleForTesting
 LensFrame Function(LensFrame frame)? debugTabLensOverride;
+
+/// Goldens: when non-null, every tab bar draws its lens pressed (×1.17 /
+/// ×1.30, engaged, pill ×1.052, highlight 0.845) and shifted by this many
+/// points in x. Reset it to null after use.
+@visibleForTesting
+double? debugTabLensPress;
 
 /// The Flutter tab bar of spec VK-503. Internal: `LiquidTabBar` and the
 /// shell build it. It fills the width it is given (the row between the
@@ -104,6 +111,10 @@ class _GlassTabBarState extends State<GlassTabBar>
   /// `dispose` must not create it (no ancestor lookups there).
   Ticker? _ticker;
   Duration _last = Duration.zero;
+
+  /// The group a standalone bar opens, so the lens samples the page and
+  /// not the pill (spec §7.2). One key for the bar's life.
+  final BackdropKey _backdropKey = BackdropKey();
 
   @override
   void dispose() {
@@ -239,21 +250,39 @@ class _GlassTabBarState extends State<GlassTabBar>
     final extent =
         TabMetrics.pillExtent +
         math.max(0.0, lineHeight - TabMetrics.labelHeight);
-    return LayoutBuilder(
+    final bar = LayoutBuilder(
       builder: (context, constraints) {
         final g = _geometryFor(constraints.maxWidth, direction, extent);
         final motion = _sync(g);
         final override = debugTabLensOverride;
-        final frame = override == null ? motion.frame : override(motion.frame);
+        var shown = override == null ? motion.frame : override(motion.frame);
+        final press = debugTabLensPress;
+        if (press != null) {
+          shown = shown.copyWith(
+            engage: 1,
+            refraction: 1,
+            pillScale: TabSprings.pressScale,
+            highlight: TabSprings.highlightPress,
+            lens: Rect.fromCenter(
+              center: shown.lens.center.translate(press, 0),
+              width: shown.lens.width * TabSprings.pressWidthFactor,
+              height: shown.lens.height * TabSprings.pressHeightFactor,
+            ),
+          );
+        }
         return Material(
           type: MaterialType.transparency,
           child: SizedBox.fromSize(
             size: g.size,
-            child: _layers(context, g, frame, theme, lineHeight, ax),
+            child: _layers(context, g, shown, theme, lineHeight, ax),
           ),
         );
       },
     );
+    // In the shell the bar uses the shell's group.
+    return BackdropGroup.of(context) == null
+        ? BackdropGroup(backdropKey: _backdropKey, child: bar)
+        : bar;
   }
 
   static Rect _scaleAbout(Rect r, double s) => Rect.fromCenter(
@@ -357,7 +386,16 @@ class _GlassTabBarState extends State<GlassTabBar>
                           child: cells(tinted: false),
                         ),
                       ),
-                      // Task 8 inserts the engaged LiquidLens here.
+                      if (frame.visible && frame.engage > 0.001)
+                        Positioned.fromRect(
+                          rect: lens,
+                          // No Opacity: the lens fades its rim, shadow and
+                          // fill by engage itself (spec §7.1, applied once).
+                          child: LiquidLens(
+                            engage: frame.engage,
+                            refraction: frame.refraction,
+                          ),
+                        ),
                       Positioned.fill(
                         child: ClipPath(
                           key: kTabTintedKey,
@@ -451,6 +489,10 @@ class _GlassTabBarState extends State<GlassTabBar>
                   GestureRecognizerFactoryWithHandlers<LensGestureRecognizer>(
                     () => LensGestureRecognizer(debugOwner: this),
                     (r) => r
+                      // The screen's slop, as the scroll views around use.
+                      ..gestureSettings = MediaQuery.maybeGestureSettingsOf(
+                        context,
+                      )
                       ..eager = eager
                       ..onDown = ((p) => _down(p + g.pill.topLeft))
                       ..onMove = ((p) => _move(p + g.pill.topLeft))
