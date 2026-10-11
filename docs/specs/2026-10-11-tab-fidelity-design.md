@@ -252,24 +252,41 @@ Parameters, where `r` is the refraction spring value (§8.4) and `h` the lens he
 | Uniform (liquid tier §4.2) | Value |
 |---|---|
 | `uRect`, `uRadii` | the lens rect in pass pixels, radius `h/2` |
-| bezel | `h/2`: the whole lens is curved. This is passed through the new `LiquidOpticsParams.bezel` override |
+| bezel | **14 pt**: a refracting ring around a flat core. This is passed through the new `LiquidOpticsParams.bezel` override |
 | thickness | `48 · 1.6 · r` pt (native `inputAmount` peaks at −17.5, against the pill's equivalent ≈ −11) |
 | index | 1.5 (unchanged) |
-| dispersion | `0.6 · r`: the visible rainbow rim on the active lens only |
-| tint | transparent: clear glass |
-| rim | white @ `0.35 · engage`, rim width **1 pt** (new `LiquidOpticsParams.rimWidth` override) |
+| dispersion | `0.3 · r`: a faint rainbow rim on the active lens only |
+| tint | white @ **0.85** (light). Dark: `colorScheme.surface` @ 0.85 *(assumption: the dark press was not captured)* |
+| rim | white @ **0.35**, rim width **1 pt** (new `LiquidOpticsParams.rimWidth` override) |
 | saturation | 1.1 (unchanged) |
-| blur before the shader | **0** |
+| blur before the shader | **σ 2 pt** |
+
+*Amended after the Task 8 review (`tab-task-8-review.md`, "Visual fidelity").* The first values (tint transparent, blur 0, bezel `h/2`, dispersion `0.6·r`) gave a clear lens with a rainbow all round. Native's pressed lens (`sbs_press.png` t = 1.00, `native265_rest_vs_pressed_zoom.png`) has a milky core:
+
+- **Tint.** On saturated stripes about 15 % of the backdrop passes (chroma 13 against 88), so the tint is 0.85. That equals the pressed-pill highlight 0.845 (research §4.1).
+- **Bezel.** The measured refracting ring is 13–14 pt wide, then the core is flat. Hence 14 pt.
+- **Blur.** σ 2 pt is native's selection recipe `gaussianBlur r = 2` (research §2) and the pill's `liquidBlurSigma`. On the light page the interior is flat (L 241–248), with the text behind invisible.
+- **Dispersion.** `0.3·r` is the pill's former always-on value (research §5). Under the veil the fringe stays within native's 10–37 chroma at the top and bottom.
+
+**Acceptance** for the pressed band golden (Impeller, the same measures as the review):
+
+- interior luminance std ≤ 4 beside the icon on the light page;
+- chroma (max − min of RGB) > 60 on ≤ 3 % of the lens, icon columns excluded;
+- p99 chroma ≤ 80.
+
+Native measures interior L 241–248, 1.1 % and p99 62.
 
 The shader file does not change. Only the Dart side gains two optional overrides in `LiquidOpticsParams` (`bezel`, `rimWidth`). Null keeps the internal constants, so every existing glass and its goldens are unaffected.
 
-A lens shadow, `BoxShadow(black 10 %, offset (0, 2), blur 10)`, is drawn with `OutsideShadow` while `engage > 0`, scaled by `engage`.
+A lens shadow, `BoxShadow(black 10 %, offset (0, 2), blur 10)`, is drawn with `OutsideShadow` while `engage > 0`.
+
+**One fade.** The shader writes alpha 1, so the lens pass cannot fade itself. `GlassTabBar` draws the whole `LiquidLens` (body, rim and shadow) under `Opacity(engage)` (§7.1, §19). Inside, `LiquidLens` is engage-agnostic: its rim, shadow and fills are constants. Fading in both places would give `engage²`.
 
 ### 7.3 Other tiers
 
 | Tier | Engaged lens |
 |---|---|
-| frosted | `BackdropFilter.grouped(blur σ 1)` clipped to the capsule, white fill @ `0.10·engage`, a 1 pt white rim @ `0.35·engage`, the lens shadow |
+| frosted | `BackdropFilter.grouped(blur σ 1)` clipped to the capsule, white fill @ 0.10, a 1 pt white rim @ 0.35, the lens shadow (all faded once by the `Opacity(engage)` of §7.2) |
 | solid | an opaque capsule `Color.alphaBlend(selectionFill, theme.solid)`, the theme border when `highContrast`, the lens shadow |
 | registered custom liquid renderer | frosted lens (the custom renderer has no lens API) |
 
@@ -560,7 +577,7 @@ Frosted and solid get no pocket. It adds three backdrop passes over 148 pt of he
 | `LiquidTabBar`: same constructor. Selection now commits on release with animation; all slots draw `selectedIcon ?? icon`; no ink | **behaviour change** |
 | Minimize no longer expands on forward scroll (§10) | **behaviour change** |
 | `kTopBarGap` 20 → 5.5 (internal), so regular `chromeInsets.top` shrinks by 14.5 | **behaviour change** |
-| `debugTabLensPress` (goldens) and `debugTabTrace` (acceptance traces), exported as `@visibleForTesting`, next to the existing `debugLiquidGlassCanRefractOverride` | additive, test-only |
+| `debugTabLensPress` (goldens) and `debugTabTrace` (acceptance traces): `@visibleForTesting` in `src/`, **not exported** (the public-API constraint). The example's goldens import them from `src/` under a scoped `// ignore: implementation_imports` | none |
 
 The packages are at `0.1.0-dev.5`. This item ships as `0.1.0-dev.6`, and the CHANGELOG lists every behaviour change (Q22).
 
@@ -614,7 +631,7 @@ The packages are at `0.1.0-dev.5`. This item ships as `0.1.0-dev.6`, and the CHA
 - `lens_layer_test.dart`, with the liquid override on:
   - `LiquidLens` exists only while engaged;
   - it shares the shell's `BackdropGroup` key;
-  - its uniforms carry `bezel = h/2` and rim width 1 at the view scale;
+  - its uniforms carry `bezel = 14 pt`, tint white 0.85, blur σ 2 and rim width 1 at the view scale;
   - frosted and solid lens variants appear per tier.
 - `minimize_test.dart`:
   - the collapse starts at 240 ms and ends at the 48 rect (±0.5);
@@ -639,7 +656,7 @@ The packages are at `0.1.0-dev.5`. This item ships as `0.1.0-dev.6`, and the CHA
   - landscape;
   - the iPad top bar;
   - in light, dark and RTL.
-- **New `liquid_golden` band images** add the engaged lens frozen at `engage = 1` through an exported `@visibleForTesting` hook (`debugTabLensPress`, the x shift of a pressed lens):
+- **New `liquid_golden` band images** add the engaged lens frozen at `engage = 1` through a `@visibleForTesting` hook in `src/` (`debugTabLensPress`, the x shift of a pressed lens):
   - pressed on slot 1;
   - straddling slots 1–2 (the half-tinted icons).
 
