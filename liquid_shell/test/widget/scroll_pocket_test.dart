@@ -2,8 +2,10 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
+import 'package:liquid_shell/src/chrome/glass_tab_bar.dart';
 import 'package:liquid_shell/src/glass/liquid_backdrop.dart';
 import 'package:liquid_shell/src/glass/scroll_pocket.dart';
 
@@ -87,5 +89,39 @@ void main() {
         .renderObjectList<RenderLiquidBackdrop>(find.byType(LiquidBackdrop))
         .first;
     expect(pill.backdropKey, isNotNull);
+    final bands = _bands.evaluate().map(
+      (e) => (e.renderObject! as RenderBackdropFilter).backdropKey,
+    );
+    // One backdrop read for the whole chrome (R1): a band in a group of
+    // its own would get a fresh key and a second read.
+    expect(bands, hasLength(3));
+    expect(bands, everyElement(same(pill.backdropKey)));
+  });
+
+  testWidgets('landscape phone: the pocket follows the 44 pt bar', (
+    tester,
+  ) async {
+    await _liquid(tester);
+    await pumpShell(tester, const TestShell(), size: kPhoneLandscape);
+    expect(_bands, findsNWidgets(3));
+    final rect = tester.getRect(find.byKey(kScrollPocketKey));
+    expect(rect.height, closeTo(148 * 44 / 62, 1e-9));
+    expect(rect.bottom, kPhoneLandscape.height);
+  });
+
+  testWidgets('the pocket stays under the minimized bar', (tester) async {
+    await _liquid(tester);
+    await pumpShell(tester, const TestShell());
+    await tester.drag(
+      find.byKey(const ValueKey('list-Home')),
+      const Offset(0, -300),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.getSize(find.byKey(kTabPillKey)), const Size(48, 48));
+    expect(_bands, findsNWidgets(3));
+    expect(
+      tester.getRect(find.byKey(kScrollPocketKey)).height,
+      kScrollPocketExtent,
+    );
   });
 }

@@ -1128,16 +1128,24 @@ class _LiquidShellState extends State<LiquidShell>
       ),
     );
 
-    // Spec VK-503 §15: the pocket under the default bottom bar.
+    // Spec VK-503 §15: the pocket under the default bottom bar. It follows
+    // the scroll view, not the bar, so it stays while the bar is minimized.
     if (kind == LiquidChromeKind.bottomBar && widget.chromeBuilder == null) {
       children.add(
-        const Positioned(
+        Positioned(
           key: kScrollPocketKey,
           left: 0,
           right: 0,
           bottom: 0,
-          height: kScrollPocketExtent,
-          child: ScrollEdgePocket(),
+          // Landscape scales the portrait 148 pt by the bar (44 / 62 ≈ 105
+          // pt). Provisional: the native landscape pocket is unmeasured; to
+          // be confirmed in Task 15 against native frames.
+          height: barForm == TabBarForm.landscape
+              ? kScrollPocketExtent *
+                    TabMetrics.landscapeExtent /
+                    TabMetrics.pillExtent
+              : kScrollPocketExtent,
+          child: const ScrollEdgePocket(),
         ),
       );
     }
