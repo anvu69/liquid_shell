@@ -2,9 +2,12 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/semantics.dart';
+import 'package:flutter/services.dart';
 import 'package:liquid_shell/src/chrome/fit_label.dart';
 import 'package:liquid_shell/src/chrome/large_content_viewer.dart';
+import 'package:liquid_shell/src/chrome/lens_gesture.dart';
 import 'package:liquid_shell/src/chrome/lens_motion.dart';
 import 'package:liquid_shell/src/chrome/tab_bar.dart' show LiquidActionCircle;
 import 'package:liquid_shell/src/chrome/tab_geometry.dart';
@@ -93,8 +96,20 @@ class GlassTabBar extends StatefulWidget {
   State<GlassTabBar> createState() => _GlassTabBarState();
 }
 
-class _GlassTabBarState extends State<GlassTabBar> {
+class _GlassTabBarState extends State<GlassTabBar>
+    with SingleTickerProviderStateMixin {
   LensMotion? _motion;
+
+  /// Created on the first touch: a bar nobody touches never makes one, and
+  /// `dispose` must not create it (no ancestor lookups there).
+  Ticker? _ticker;
+  Duration _last = Duration.zero;
+
+  @override
+  void dispose() {
+    _ticker?.dispose();
+    super.dispose();
+  }
 
   List<int> get _shown => [
     for (final (i, d) in widget.destinations.indexed)
@@ -122,7 +137,68 @@ class _GlassTabBarState extends State<GlassTabBar> {
     return m;
   }
 
-  void _select(int slot) => widget.onSelect(_shown[slot]);
+  void _kick() {
+    if (!mounted) return;
+    final ticker = _ticker ??= createTicker(_onTick);
+    if (ticker.isActive) return;
+    _last = Duration.zero;
+    unawaited(ticker.start());
+  }
+
+  void _onTick(Duration elapsed) {
+    final dt = ((elapsed - _last).inMicroseconds / 1e6).clamp(0.0, 1 / 30);
+    _last = elapsed;
+    final m = _motion;
+    if (m == null) return;
+    var moving = m.advance(dt);
+    for (final _ in m.takeCrossings()) {
+      // Spec §9 / Q6: one selection click per slot crossing while dragging.
+      unawaited(HapticFeedback.selectionClick());
+    }
+    if (!moving) {
+      final selected = _slotOf(widget.selectedIndex);
+      if (m.pending != null && m.pending != selected) {
+        // The app did not adopt the commit (spec §8.7).
+        m.returnTo(selected);
+        moving = true;
+      } else {
+        m.accept();
+        _ticker?.stop();
+      }
+    }
+    setState(() {});
+  }
+
+  void _down(Offset p) {
+    _motion?.down(p);
+    _kick();
+  }
+
+  void _move(Offset p) => _motion?.move(p);
+
+  void _up(Offset p, double velocity) {
+    final m = _motion;
+    if (m == null) return;
+    // The slot under the finger is the one whose tap area holds it (the
+    // 44 pt rule of [_hitRect]), not merely the nearest centre: the motion
+    // takes that slot's centre as the release point. A drag ignores it.
+    final under = _slotUnder(m.geometry, p.dx);
+    final at = under == null ? p : Offset(m.geometry.centreOf(under), p.dy);
+    final slot = m.up(at, velocity: velocity);
+    _kick();
+    if (slot != null) widget.onSelect(_shown[slot]);
+  }
+
+  void _cancel() {
+    _motion?.cancel();
+    _kick();
+  }
+
+  void _select(int slot) {
+    _motion?.tapSlot(slot);
+    _kick();
+    widget.onSelect(_shown[slot]);
+  }
 
   void _collapsedTap() {
     final tap = widget.onCollapsedTap;
@@ -198,6 +274,8 @@ class _GlassTabBarState extends State<GlassTabBar> {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final direction = Directionality.of(context);
     final morph = _morph.clamp(0.0, 1.0);
+    final eager =
+        !ax && Scrollable.maybeOf(context, axis: Axis.vertical) == null;
     final fade = 1 - (morph / 0.4).clamp(0.0, 1.0);
     final dip = 1 - TabSprings.dip * math.sin(math.pi * morph);
     final glass = _scaleAbout(
@@ -359,18 +437,36 @@ class _GlassTabBarState extends State<GlassTabBar> {
           rect: Rect.lerp(g.trailing, g.minimizedTrailing, morph)!,
           child: LiquidActionCircle(action: action),
         ),
-      // 5. Touches and semantics.
+      // 5. Touches and semantics: one recognizer for the whole row (spec
+      //    §8.6), fed only by the slots' tap areas. It waits instead of
+      //    winning on touch-down at AX sizes (the large content viewer)
+      //    and inside a vertical scroll view, whose scroll it must not
+      //    take.
       if (morph < 0.5)
         Positioned.fromRect(
           rect: g.pill,
-          child: Stack(
-            children: [
-              for (final (s, d) in shown.indexed)
-                Positioned.fromRect(
-                  rect: slots[s],
-                  child: _slotNode(s, d, ax, _hitRect(slots, s)),
-                ),
-            ],
+          child: RawGestureDetector(
+            gestures: {
+              LensGestureRecognizer:
+                  GestureRecognizerFactoryWithHandlers<LensGestureRecognizer>(
+                    () => LensGestureRecognizer(debugOwner: this),
+                    (r) => r
+                      ..eager = eager
+                      ..onDown = ((p) => _down(p + g.pill.topLeft))
+                      ..onMove = ((p) => _move(p + g.pill.topLeft))
+                      ..onUp = ((p, v) => _up(p + g.pill.topLeft, v))
+                      ..onCancel = _cancel,
+                  ),
+            },
+            child: Stack(
+              children: [
+                for (final (s, d) in shown.indexed)
+                  Positioned.fromRect(
+                    rect: slots[s],
+                    child: _slotNode(s, d, ax, _hitRect(slots, s)),
+                  ),
+              ],
+            ),
           ),
         )
       else if (shown.isNotEmpty)
@@ -427,6 +523,15 @@ class _GlassTabBarState extends State<GlassTabBar> {
     ).shift(-r.topLeft);
   }
 
+  /// The slot whose tap area holds bar-local [x], or null.
+  static int? _slotUnder(TabBarGeometry g, double x) {
+    for (var s = 0; s < g.slots.length; s++) {
+      final hit = _hitRect(g.slots, s).shift(g.slots[s].topLeft);
+      if (x >= hit.left && x < hit.right) return s;
+    }
+    return null;
+  }
+
   Widget _slotNode(int slot, LiquidDestination d, bool ax, Rect hit) =>
       Semantics(
         container: true,
@@ -442,10 +547,10 @@ class _GlassTabBarState extends State<GlassTabBar> {
               child: LargeContentViewer(
                 icon: d.selectedIcon ?? d.icon,
                 label: d.label,
-                child: GestureDetector(
+                // Takes the touch for the row's recognizer above.
+                child: const MetaData(
                   behavior: HitTestBehavior.opaque,
-                  onTap: () => _select(slot),
-                  child: const SizedBox.expand(),
+                  child: SizedBox.expand(),
                 ),
               ),
             ),
