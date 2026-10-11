@@ -19,7 +19,7 @@
   "glow": {"diameter": 93, "opacity": 0.28, "ripple": 4, "fade": 0.5},
   "dragLag": {
     "reference": "fit",
-    "note": "VK-503 Task 16: the gate compares against the dragFollow fit's analytic ramp lag (7.09 pt at 90 pt/s, spec §17.1), not research §4.2's 'about 9 pt'. The 9 pt is one hand-read value from the same trace the fit (rms 0.31 pt) used; the idb strips cannot settle it (native there has no finger marker and its rows trail Flutter by 20-30 pt, far more than 2 pt, so the alignment, not the lag, dominates)."
+    "note": "VK-503 Task 16: the gate compares against the dragFollow fit's analytic ramp lag (7.09 pt at 90 pt/s, spec §17.1), not research §4.2's 'about 9 pt'. The 9 pt is one hand-read value from the same trace the fit (rms 0.31 pt) used; the frame strips cannot settle it: native has no finger marker, and the native lens starts its drag 2 to 5 rows (0.1-0.25 s) after Flutter's depending on the driver (idb, XCUITest), so the alignment, not a 2 pt lag difference, dominates."
   },
   "colors": {
     "lightFill": [254, 254, 254],
