@@ -283,7 +283,7 @@ The lens pokes outside the pill while pressed (73.6 pt tall against a 65.2 pt pi
 
 ### 8.1 Springs
 
-`SpringDescription.withDampingRatio(mass: 1, stiffness: (2π/response)², ratio: ζ)`, integrated by a fixed-step (1 ms) semi-implicit Euler `SpringValue`. The targets move every frame, so a closed-form `SpringSimulation` cannot be reused across frames.
+`SpringDescription.withDampingRatio(mass: 1, stiffness: (2π/response)², ratio: ζ)`, integrated by a fixed-step (1 ms) RK4 `SpringValue`. The targets move every frame, so a closed-form `SpringSimulation` cannot be reused across frames. RK4 replaced the first choice, semi-implicit Euler, because Euler's O(h) phase lag missed the 0.05 pt bound against `SpringSimulation` (§17.1): it was off by 0.18–2.3 pt at the first frame of an 86 pt move. RK4 stays within 5e-5 pt.
 
 | Name | ζ | Response | Use |
 |---|---|---|---|

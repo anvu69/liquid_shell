@@ -632,6 +632,8 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ### Task 2: Fitted springs and the fixed-step spring value
 
+> **As built (2c8c249):** `SpringValue` steps with RK4, not semi-implicit Euler, at the same fixed 1 ms. Euler missed this task's 0.05 pt bound against `SpringSimulation` (spec §8.1).
+
 **Files:**
 - Create: `liquid_shell/lib/src/chrome/tab_springs.dart`
 - Create: `liquid_shell/test/helpers/settle.dart`
