@@ -712,6 +712,8 @@ During motion the lens needs a fresh `FragmentShader` per frame, because its uni
 
 ## Quyết định cần chủ sản phẩm xác nhận
 
+> **Chủ sản phẩm chấp nhận toàn bộ đề xuất Q1–Q22 (11/10/2026: "tiếp tục đi. ok hết").** Q22: số phiên bản theo thứ tự merge thực tế (main hiện là dev.5).
+
 Mỗi dòng có đề xuất mặc định. Nếu chủ sản phẩm trả lời "Ok hết" thì áp dụng toàn bộ đề xuất. Các dòng Q14–Q21 là những điểm **không thể giống 100%** (mục §8 của nghiên cứu); mỗi dòng ghi phương án gần nhất có thể làm.
 
 | Q# | câu hỏi | đề xuất |
