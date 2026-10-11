@@ -17,6 +17,14 @@ import 'package:liquid_shell_example/cases/basic_tabs.dart';
 /// bottom, half of the 62 pt pill.
 const double _y = 874.0 - 21 - 31;
 
+/// Bounds every settle: a perpetual animation fails the run within seconds
+/// instead of stalling for pumpAndSettle's default 10 minutes.
+Future<void> _settle(WidgetTester tester) => tester.pumpAndSettle(
+  const Duration(milliseconds: 100),
+  EnginePhase.sendSemanticsUpdate,
+  const Duration(seconds: 10),
+);
+
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized()
     // Every vsync frame, not one per pump: the default policy pumps a
@@ -36,7 +44,7 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await _settle(tester);
     final sequences = <String, List<Map<String, double>>>{};
     var current = <Map<String, double>>[];
     var finger = 0.0;
@@ -45,10 +53,11 @@ void main() {
 
     Future<void> idle() => tester.pump(const Duration(seconds: 1));
     Future<void> record(String name, Future<void> Function() body) async {
+      debugPrint('TABFID $name');
       await idle();
       current = [];
       await body();
-      await tester.pumpAndSettle();
+      await _settle(tester);
       sequences[name] = current;
     }
 
@@ -80,6 +89,10 @@ void main() {
       await g.up();
     }
 
+    // tool/tab_frames.sh cuts the recording here.
+    debugPrint('TABFID start');
+    await idle();
+    await idle();
     await record('tap_1_2', () => tap(201));
     await record('tap_2_3', () => tap(287));
     await record('tap_3_1', () => tap(115));
@@ -111,5 +124,5 @@ void main() {
     binding.reportData = {
       'tabfid': {'geometry': geometry, 'sequences': sequences},
     };
-  });
+  }, timeout: const Timeout(Duration(minutes: 3)));
 }

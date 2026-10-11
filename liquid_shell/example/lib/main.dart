@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:liquid_shell/liquid_shell.dart';
+import 'package:liquid_shell_example/cases/basic_tabs.dart';
 import 'package:liquid_shell_example/cases/cases.dart';
 import 'package:liquid_shell_example/cases/native_alerts.dart';
 import 'package:liquid_shell_example/cases/search.dart';
@@ -50,6 +51,14 @@ class _ExampleAppState extends State<ExampleApp> {
   );
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.demo == 'tabs-liquid') {
+      _mode.value = ExampleChromeMode.flutterLiquid;
+    }
+  }
+
+  @override
   void dispose() {
     _mode.dispose();
     super.dispose();
@@ -62,6 +71,7 @@ class _ExampleAppState extends State<ExampleApp> {
       'search' => const SearchCase(),
       'search-guarded' => const SearchCase(guardDetails: true),
       'alert' || 'sheet' => NativeAlertsCase(autorun: demo),
+      'tabs' || 'tabs-liquid' => const CaseFrame(child: BasicTabsCase()),
       _ => const CaseList(),
     };
     // XCUITest reads the search case's Flutter rows through the
