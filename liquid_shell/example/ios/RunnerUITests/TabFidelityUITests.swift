@@ -14,7 +14,10 @@ final class TabFidelityUITests: XCTestCase {
 
   private func idle() { Thread.sleep(forTimeInterval: 1.0) }
 
-  func testSequences() {
+  func testSequences() throws {
+    // The sequences and coordinates are the iPhone 17 Pro's bottom bar; an
+    // iPad's tab bar is at the top (make ios-ui runs on both).
+    try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .phone, "iPhone only")
     let app = XCUIApplication()
     app.launchEnvironment["LIQUID_SHELL_EXAMPLE_DEMO"] = "tabs"
     app.launch()
