@@ -361,3 +361,62 @@ extension SearchUITests {
     XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10), "no keyboard left")
   }
 }
+
+/// VK-571: with the native search active and the keyboard up, a drag on
+/// the results or a tap on a scope puts the keyboard away and keeps the
+/// search, as Apple Music and Settings do: the query stays in the field,
+/// the results and the × stay.
+extension SearchUITests {
+  /// The native search tab active, "ho hoan" typed, its result shown.
+  fileprivate func typeInTheNativeSearch() -> (XCUIApplication, XCUIElement) {
+    let app = launch()
+    let tab = searchTabButton(app)
+    XCTAssertTrue(tab.waitForExistence(timeout: timeout))
+    tab.tap()
+    let field = app.searchFields.firstMatch
+    XCTAssertTrue(field.waitForExistence(timeout: 10), "the native field")
+    field.tap()
+    XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 30), "the keyboard")
+    field.typeText("ho hoan")
+    XCTAssertTrue(flutterRow(app, "Hồ Hoàn Kiếm").waitForExistence(timeout: 10), "the results")
+    return (app, field)
+  }
+
+  /// The keyboard is gone; the field keeps "ho hoan", the results and the
+  /// × (the search is still active) stay.
+  fileprivate func expectTheKeyboardGoneAndTheSearchKept(
+    _ app: XCUIApplication, _ field: XCUIElement
+  ) {
+    XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10), "the keyboard went")
+    XCTAssertEqual(field.value as? String, "ho hoan", "the query stays")
+    XCTAssertTrue(flutterRow(app, "Hồ Hoàn Kiếm").exists, "the results stay")
+    let exit = searchExit(app)
+    XCTAssertTrue(exit.exists, "the search is still active: its ×")
+    if UIDevice.current.userInterfaceIdiom == .phone {
+      XCTAssertNotEqual(exit.label, "Clear text", "UIKit's ×, not the field's ⓧ")
+    }
+  }
+
+  func testNativeADragOnTheResultsDismissesTheKeyboardAndKeepsTheSearch() {
+    let (app, field) = typeInTheNativeSearch()
+    let row = flutterRow(app, "Hồ Hoàn Kiếm")
+    row.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+      .press(
+        forDuration: 0.05,
+        thenDragTo: row.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: -1.5)))
+    expectTheKeyboardGoneAndTheSearchKept(app, field)
+    // A tap on the field brings the keyboard back, the query intact.
+    field.tap()
+    XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10), "the keyboard again")
+    XCTAssertEqual(field.value as? String, "ho hoan")
+  }
+
+  func testNativeAScopeTapDismissesTheKeyboardAndKeepsTheSearch() {
+    let (app, field) = typeInTheNativeSearch()
+    let places = app.buttons["Places"].firstMatch
+    XCTAssertTrue(places.waitForExistence(timeout: 10), "the scope bar")
+    places.tap()
+    expectTheKeyboardGoneAndTheSearchKept(app, field)
+    XCTAssertTrue(places.isSelected, "the scope changed")
+  }
+}
