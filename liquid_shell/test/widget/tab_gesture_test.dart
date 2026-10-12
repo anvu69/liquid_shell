@@ -244,6 +244,40 @@ void main() {
     expect(_lens(tester).center.dx, closeTo(_home.dx, 0.5));
   });
 
+  testWidgets('a fast drag that stops and holds before lifting is not a '
+      'flick: the lens slot wins (VK-503 Task 16 review I1)', (tester) async {
+    // 1000 pt/s from Settings to 150 (Home's tap area), then the finger
+    // holds still 60 ms and lifts. UIKit's velocity is about 0 after the
+    // pause, so native commits the slot nearest the lagging lens.
+    final xs = <double>[];
+    debugTabTrace = (s) => xs.add(s['x']!);
+    addTearDown(() => debugTabTrace = null);
+    final log = <int>[];
+    final key = await _pump(tester, log);
+    key.currentState!.select(2);
+    await tester.pump();
+    final g = await tester.createGesture();
+    await g.down(_settings);
+    var t = 0;
+    for (var x = _settings.dx - 8; x > 150; x -= 8) {
+      t += 8000;
+      await tester.pump(const Duration(milliseconds: 8));
+      await g.moveTo(Offset(x, _y), timeStamp: Duration(microseconds: t));
+    }
+    t += 8000;
+    await tester.pump(const Duration(milliseconds: 8));
+    await g.moveTo(const Offset(150, _y), timeStamp: Duration(microseconds: t));
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+    t += 60000;
+    final lensAtUp = xs.last;
+    await g.up(timeStamp: Duration(microseconds: t));
+    await tester.pumpAndSettle();
+    expect(lensAtUp, greaterThan(158), reason: 'the lens still lags');
+    expect(log, [1]);
+  });
+
   testWidgets('a rejected commit snaps back after the motion settles', (
     tester,
   ) async {

@@ -34,6 +34,11 @@ class LensGestureRecognizer extends OneSequenceGestureRecognizer {
   Offset _downGlobal = Offset.zero;
   bool _accepted = false;
   VelocityTracker? _tracker;
+  Duration _lastSample = Duration.zero;
+
+  /// A finger still this long before it lifts has no release velocity
+  /// (Flutter's own `_assumePointerMoveStoppedMilliseconds`).
+  static const Duration _stopped = Duration(milliseconds: 40);
 
   @override
   void addAllowedPointer(PointerDownEvent event) {
@@ -42,6 +47,7 @@ class LensGestureRecognizer extends OneSequenceGestureRecognizer {
     _pointer = event.pointer;
     _downGlobal = event.position;
     _accepted = false;
+    _lastSample = event.timeStamp;
     // UIKit's release velocity, as Flutter's iOS scroll views read it: a
     // weighted mean of the last three steps. The least-squares fit reads
     // the slope at the last sample, so a flick that eases out just before
@@ -57,8 +63,12 @@ class LensGestureRecognizer extends OneSequenceGestureRecognizer {
   @override
   void handleEvent(PointerEvent event) {
     if (event.pointer != _pointer) return;
-    _tracker?.addPosition(event.timeStamp, event.localPosition);
     if (event is PointerMoveEvent) {
+      // Down and moves only, as Flutter's drag recognizers feed theirs: the
+      // up sample would reset the tracker's "stopped" clock, so a drag that
+      // rushes, pauses and lifts would read as a flick (Task 16 review I1).
+      _tracker?.addPosition(event.timeStamp, event.localPosition);
+      _lastSample = event.timeStamp;
       final dx = (event.position - _downGlobal).dx.abs();
       if (!_accepted && dx > computeHitSlop(event.kind, gestureSettings)) {
         resolve(GestureDisposition.accepted);
@@ -66,7 +76,8 @@ class LensGestureRecognizer extends OneSequenceGestureRecognizer {
       invokeCallback<void>('onMove', () => onMove?.call(event.localPosition));
     } else if (event is PointerUpEvent) {
       if (!_accepted) resolve(GestureDisposition.accepted);
-      final v = _tracker?.getVelocity().pixelsPerSecond.dx ?? 0;
+      final stopped = event.timeStamp - _lastSample > _stopped;
+      final v = stopped ? 0.0 : _tracker?.getVelocity().pixelsPerSecond.dx ?? 0;
       invokeCallback<void>('onUp', () => onUp?.call(event.localPosition, v));
       stopTrackingPointer(event.pointer);
     } else if (event is PointerCancelEvent) {
