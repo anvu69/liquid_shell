@@ -105,6 +105,18 @@ final class SearchBridge: NSObject, UISearchResultsUpdating, UISearchControllerD
     controller.isActive = false
   }
 
+  /// Puts the keyboard away and keeps the search (VK-571), as a drag on
+  /// Apple Music's results does: the field resigns first responder;
+  /// `isActive`, the text and Cancel stay. Nothing is written. Resigning
+  /// commits marked text, which UIKit may not report as a change: the
+  /// field is read once more, so the commit reaches Dart like any edit.
+  func dismissKeyboard() {
+    guard controller.isActive else { return }
+    let field = controller.searchBar.searchTextField
+    if field.isFirstResponder { _ = field.resignFirstResponder() }
+    updateSearchResults(for: controller)
+  }
+
   #if DEBUG
     /// Debug builds: what UIKit does for a tap on × (clear, then dismiss).
     func debugCancel() {

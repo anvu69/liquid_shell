@@ -111,6 +111,10 @@ class LiquidShellIOS extends EventChannelLiquidShellPlatform {
       _send('setSearchActive', () => _host.setSearchActive(active));
 
   @override
+  Future<void> dismissNativeSearchKeyboard() =>
+      _send('dismissSearchKeyboard', _host.dismissSearchKeyboard);
+
+  @override
   Future<void> setNativePageScroll({
     required int tab,
     required double offset,

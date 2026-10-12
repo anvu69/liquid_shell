@@ -1765,6 +1765,59 @@ extension NativeTabsTests {
     XCTAssertTrue(bridge.controller.isActive)
   }
 
+  /// VK-571: a drag on the results or a scope tap puts the keyboard away
+  /// and keeps the search, as Apple Music and Settings do: the field
+  /// resigns first responder, the search stays active with its text and
+  /// Cancel. No presentation change, no text write, nothing reported.
+  func testDismissingTheSearchKeyboardKeepsTheSearchAndItsText() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let bridge = tabs.searchBridge
+    let field = bridge.controller.searchBar.searchTextField
+    tabs.setSearchText("phố")
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    XCTAssertTrue(field.isFirstResponder, "precondition: the keyboard is up")
+    events.sent.removeAll()
+    tabs.dismissSearchKeyboard()
+    settle()
+    XCTAssertFalse(field.isFirstResponder, "the keyboard went")
+    XCTAssertTrue(bridge.controller.isActive, "the search stays")
+    XCTAssertEqual(bridge.text, "phố", "the query stays")
+    XCTAssertEqual(events.sent, [], "nothing to report: \(events.sent)")
+    // A tap on the field (Dart's activate) brings the keyboard back.
+    tabs.setSearchActive(true)
+    settle()
+    XCTAssertTrue(field.isFirstResponder)
+    XCTAssertTrue(bridge.controller.isActive)
+  }
+
+  /// VK-571: resigning commits marked text (UIKit unmarks it); the commit
+  /// reaches Dart once, the composed text kept. XCTest cannot type marked
+  /// text: the composition is injected.
+  func testDismissingTheKeyboardMidCompositionReportsTheCommit() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let bridge = tabs.searchBridge
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    var composing = true
+    bridge.isComposing = { composing }
+    userTypes("phố", into: bridge)
+    XCTAssertEqual(events.searchTexts.last?.1, true, "precondition: composing")
+    composing = false
+    tabs.dismissSearchKeyboard()
+    XCTAssertEqual(bridge.text, "phố")
+    XCTAssertEqual(events.searchTexts.filter { $0.0 == "phố" && !$0.1 }.count, 1)
+    XCTAssertTrue(bridge.controller.isActive)
+  }
+
+  /// VK-571: no search tab selected, or no active search: nothing happens.
+  func testDismissingTheKeyboardWithoutAnActiveSearchDoesNothing() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let bridge = tabs.searchBridge
+    tabs.dismissSearchKeyboard()
+    settle()
+    XCTAssertFalse(bridge.controller.isActive, "never presents")
+    XCTAssertEqual(events.sent.filter { $0.hasPrefix("search") }, [])
+  }
+
   /// Q2: the user's × clears the text and dismisses; Dart hears both.
   func testTheCancelButtonClearsTheText() throws {
     let tabs = try installedSearchShell(selected: 2)

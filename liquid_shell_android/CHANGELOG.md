@@ -1,6 +1,7 @@
 ## 0.1.0-dev.6
 
-- No changes; versioned with `liquid_shell`.
+- No changes; versioned with `liquid_shell`. `dismissNativeSearchKeyboard`
+  (VK-571) keeps the interface's default, which does nothing.
 
 ## 0.1.0-dev.5
 

@@ -7,6 +7,9 @@
   hidden one) ends an active search and keeps its text: its field no
   longer keeps the keyboard up under the hidden chrome, and an activation
   Dart asks for while the chrome is hidden is ignored (VK-551).
+- `dismissSearchKeyboard` on the channel: the search field resigns first
+  responder and the search stays active with its text; marked text the
+  resignation commits is reported once (VK-571).
 
 ## 0.1.0-dev.5
 
