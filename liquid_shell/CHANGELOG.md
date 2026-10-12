@@ -24,13 +24,21 @@
     scrolls back up, as on iOS 26. A `chromeBuilder` sees the same in
     `LiquidChromeDetails.minimized`: it stays true until the chrome calls
     `details.expand` or the selected destination changes.
+  - `LiquidChromeDetails.minimized` is also true while the search tab is
+    selected (the bar collapses into a circle beside the search field);
+    `details.expand` does not expand it there, leaving search does.
+  - The bottom `LiquidTabBar` fills the width it is given. With a trailing
+    action the pill is pinned at the start and the circle at the end;
+    without one the pill is centred. Give it a narrower box (a `SizedBox`)
+    to keep the circle close to the pill.
   - Landscape phones get the 44 pt bottom bar (icon beside a 12 pt label)
     instead of the top bar: a landscape shell lower than
     `LiquidShellBreakpoints.compactHeight` (500) is compact. Pass
     `compactHeight: 0` for the previous layout.
   - The iPad top bar is 48 pt, label only (17 pt, the search tab as an
     icon), 5.5 pt below the safe area instead of 20, so it sits 14.5 pt
-    higher and a regular layout's `chromeInsets.top` is 14.5 pt smaller.
+    higher and, with the 4 pt lower bar, a regular layout's
+    `chromeInsets.top` is 18.5 pt smaller.
   - The bottom bar margin is 21 pt (8 pt in a narrow shell).
   - Badges are the native 21 pt red capsule, #FF383C in light and
     #FF4245 in dark (`badgeColor`), in the tab bar and the sidebar.

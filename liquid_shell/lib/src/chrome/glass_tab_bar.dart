@@ -34,6 +34,9 @@ const kTabTintedKey = ValueKey<String>('liquid-tab-tinted');
 /// The trailing circle (tests).
 const kTabTrailingKey = ValueKey<String>('liquid-tab-trailing');
 
+/// The keyboard focus ring around a tab slot (tests).
+const kTabFocusKey = ValueKey<String>('liquid-tab-focus');
+
 const _capsule = BorderRadius.all(Radius.circular(999));
 
 /// The smallest tap area a tab keeps (P1 Q17, Apple's 44 pt target).
@@ -161,6 +164,12 @@ class _GlassTabBarState extends State<GlassTabBar>
 
   TabDragTarget? get _target => widget.externalTarget ?? _ownTarget;
 
+  /// The slot that shows the keyboard focus ring, if any.
+  int? _focusedSlot;
+
+  /// The minimized circle's keyboard focus highlight.
+  final ValueNotifier<bool> _collapsedLit = ValueNotifier(false);
+
   @override
   void initState() {
     super.initState();
@@ -198,6 +207,7 @@ class _GlassTabBarState extends State<GlassTabBar>
   void dispose() {
     _ownTarget?.dispose();
     _ticker?.dispose();
+    _collapsedLit.dispose();
     super.dispose();
   }
 
@@ -232,7 +242,15 @@ class _GlassTabBarState extends State<GlassTabBar>
     final ticker = _ticker ??= createTicker(_onTick);
     if (ticker.isActive) return;
     _last = Duration.zero;
-    unawaited(ticker.start());
+    unawaited(_start(ticker));
+  }
+
+  // A future of our own to hand to `unawaited`: newer SDKs mark
+  // `Ticker.start` `@awaitNotRequired` (unnecessary_unawaited) while 3.44
+  // still asks for it (discarded_futures).
+  // The future ends when the ticker stops; nothing waits for it.
+  static Future<void> _start(Ticker ticker) async {
+    await ticker.start();
   }
 
   void _onTick(Duration elapsed) {
@@ -775,6 +793,8 @@ class _GlassTabBarState extends State<GlassTabBar>
           child: _collapsedNode(shown[collapsedSlot]),
         ),
     ];
+    // The slots' focus nodes leave with the slots: no ring left behind.
+    if (morph >= 0.5) _focusedSlot = null;
     return Stack(clipBehavior: Clip.none, children: children);
   }
 
@@ -851,6 +871,26 @@ class _GlassTabBarState extends State<GlassTabBar>
     return null;
   }
 
+  /// Enter and Space on a focused node (as the trailing circle). Touches
+  /// never reach these actions: they go to the row's recognizer, so a slot
+  /// commits once whichever way it is chosen.
+  static Map<Type, Action<Intent>> _activate(VoidCallback onInvoke) => {
+    ActivateIntent: CallbackAction<ActivateIntent>(
+      onInvoke: (_) => onInvoke(),
+    ),
+    ButtonActivateIntent: CallbackAction<ButtonActivateIntent>(
+      onInvoke: (_) => onInvoke(),
+    ),
+  };
+
+  void _focusSlot(int slot, bool on) {
+    if (on) {
+      if (_focusedSlot != slot) setState(() => _focusedSlot = slot);
+    } else if (_focusedSlot == slot) {
+      setState(() => _focusedSlot = null);
+    }
+  }
+
   Widget _slotNode(int slot, LiquidDestination d, bool ax, Rect hit) =>
       Semantics(
         container: true,
@@ -863,16 +903,38 @@ class _GlassTabBarState extends State<GlassTabBar>
           children: [
             Positioned.fromRect(
               rect: hit,
-              child: LargeContentViewer(
-                icon: d.selectedIcon ?? d.icon,
-                label: d.label,
-                // Takes the touch for the row's recognizer above.
-                child: const MetaData(
-                  behavior: HitTestBehavior.opaque,
-                  child: SizedBox.expand(),
+              child: FocusableActionDetector(
+                mouseCursor: SystemMouseCursors.click,
+                actions: _activate(() => _select(slot)),
+                onShowFocusHighlight: (on) => _focusSlot(slot, on),
+                child: LargeContentViewer(
+                  icon: d.selectedIcon ?? d.icon,
+                  label: d.label,
+                  // Takes the touch for the row's recognizer above.
+                  child: const MetaData(
+                    behavior: HitTestBehavior.opaque,
+                    child: SizedBox.expand(),
+                  ),
                 ),
               ),
             ),
+            // A ring, not the circle's white fill: the fill would hide the
+            // label of the tab it marks.
+            if (_focusedSlot == slot)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    key: kTabFocusKey,
+                    decoration: BoxDecoration(
+                      borderRadius: _capsule,
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.primary,
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       );
@@ -894,10 +956,18 @@ class _GlassTabBarState extends State<GlassTabBar>
         // `onCollapsedTap`, and the hint and announcement stay gated.
         onTap: _collapsedTap,
         excludeSemantics: true,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: _collapsedTap,
-          child: const SizedBox.expand(),
+        child: FocusableActionDetector(
+          mouseCursor: SystemMouseCursors.click,
+          actions: _activate(_collapsedTap),
+          onShowFocusHighlight: (on) => _collapsedLit.value = on,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _collapsedTap,
+            child: TabHoverHighlight(
+              hovered: _collapsedLit,
+              child: const SizedBox.expand(),
+            ),
+          ),
         ),
       ),
     );

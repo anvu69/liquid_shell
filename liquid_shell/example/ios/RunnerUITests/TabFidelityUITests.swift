@@ -1,50 +1,105 @@
 import XCTest
 
 /// Drives the native tab bar through the acceptance sequences of spec
-/// VK-503 §17.4 while tool/tab_frames.sh records the screen. Launched with
-/// LIQUID_SHELL_EXAMPLE_DEMO=tabs (the basic case, native chrome).
-/// Coordinates are in points on the iPhone 17 Pro (402 × 874).
+/// VK-503 §17.4 while tool/tab_frames.sh records the screen, and checks
+/// the selected tab after each one. Launched with
+/// LIQUID_SHELL_EXAMPLE_DEMO=tabs (the basic case, native chrome: Home,
+/// Explore, Settings). Every point is taken from the tab buttons' frames,
+/// so it runs on any iPhone, not only the iPhone 17 Pro of the recordings.
 final class TabFidelityUITests: XCTestCase {
-  private let y: CGFloat = 874 - 21 - 31
+  private let timeout: TimeInterval = 60
 
-  private func point(_ app: XCUIApplication, _ x: CGFloat) -> XCUICoordinate {
-    app.coordinate(withNormalizedOffset: .zero)
-      .withOffset(CGVector(dx: x, dy: y))
+  override func setUp() {
+    continueAfterFailure = false
   }
 
   private func idle() { Thread.sleep(forTimeInterval: 1.0) }
 
+  /// A screen point, as the sequences give them.
+  private func point(_ app: XCUIApplication, _ p: CGPoint) -> XCUICoordinate {
+    app.coordinate(withNormalizedOffset: .zero)
+      .withOffset(CGVector(dx: p.x, dy: p.y))
+  }
+
+  private func centre(_ element: XCUIElement) -> CGPoint {
+    CGPoint(x: element.frame.midX, y: element.frame.midY)
+  }
+
+  /// Waits until [tab] is the selected one and the others are not.
+  private func expectSelected(
+    _ tab: String, among tabs: [String: XCUIElement], after step: String,
+    file: StaticString = #filePath, line: UInt = #line
+  ) {
+    let selected = NSPredicate(format: "selected == YES")
+    let shown = expectation(for: selected, evaluatedWith: tabs[tab]!)
+    XCTAssertEqual(
+      XCTWaiter().wait(for: [shown], timeout: 5), .completed,
+      "\(step): \(tab) is selected", file: file, line: line)
+    for (name, button) in tabs where name != tab {
+      XCTAssertFalse(button.isSelected, "\(step): \(name) is not selected", file: file, line: line)
+    }
+  }
+
   func testSequences() throws {
-    // The sequences and coordinates are the iPhone 17 Pro's bottom bar; an
-    // iPad's tab bar is at the top (make ios-ui runs on both).
+    // The sequences are the iPhone's bottom bar; an iPad's tab bar is at
+    // the top (make ios-ui runs on both).
     try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .phone, "iPhone only")
     let app = XCUIApplication()
     app.launchEnvironment["LIQUID_SHELL_EXAMPLE_DEMO"] = "tabs"
     app.launch()
-    XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 60))
+    let bar = app.tabBars.firstMatch
+    XCTAssertTrue(bar.waitForExistence(timeout: timeout))
+    let tabs = [
+      "Home": bar.buttons["Home"],
+      "Explore": bar.buttons["Explore"],
+      "Settings": bar.buttons["Settings"],
+    ]
+    for (name, button) in tabs {
+      XCTAssertTrue(button.waitForExistence(timeout: 10), "the \(name) tab")
+    }
+    expectSelected("Home", among: tabs, after: "launch")
+    let home = centre(tabs["Home"]!)
+    let explore = centre(tabs["Explore"]!)
+    let settings = centre(tabs["Settings"]!)
+    XCTAssertLessThan(home.x, explore.x)
+    XCTAssertLessThan(explore.x, settings.x)
+
     // tool/tab_frames.sh cuts the recording here.
     print("TABFID start")
     idle(); idle()
     // tap_1_2, tap_2_3, tap_3_1
-    for x: CGFloat in [201, 287, 115] { point(app, x).tap(); idle() }
-    // press_hold
-    point(app, 115).press(forDuration: 1.0); idle()
-    // slow_drag: 115 → 287 at 90 pt/s. No hold before the lift, as in the
-    // Flutter run: a held finger makes the release a motion onset of its
-    // own, and tool/tab_strips.dart would pair every later strip wrongly.
-    point(app, 115).press(
-      forDuration: 0.05, thenDragTo: point(app, 287),
+    for (name, p) in [("Explore", explore), ("Settings", settings), ("Home", home)] {
+      point(app, p).tap()
+      idle()
+      expectSelected(name, among: tabs, after: "tap \(name)")
+    }
+    // press_hold on the selected tab: it stays selected.
+    point(app, home).press(forDuration: 1.0); idle()
+    expectSelected("Home", among: tabs, after: "press_hold")
+    // slow_drag: Home → Settings at 90 pt/s. No hold before the lift, as in
+    // the Flutter run: a held finger makes the release a motion onset of
+    // its own, and tool/tab_strips.dart would pair every later strip
+    // wrongly.
+    point(app, home).press(
+      forDuration: 0.05, thenDragTo: point(app, settings),
       withVelocity: XCUIGestureVelocity(90), thenHoldForDuration: 0)
     idle()
-    // fast_flick: 287 → 115 at 1500 pt/s
-    point(app, 287).press(
-      forDuration: 0.05, thenDragTo: point(app, 115),
+    expectSelected("Settings", among: tabs, after: "slow_drag")
+    // fast_flick: Settings → Home at 1500 pt/s
+    point(app, settings).press(
+      forDuration: 0.05, thenDragTo: point(app, home),
       withVelocity: XCUIGestureVelocity(1500), thenHoldForDuration: 0)
     idle()
-    // minimize, then expand by a tap on the circle
+    expectSelected("Home", among: tabs, after: "fast_flick")
+    // minimize, then expand by a tap on the circle. The bar sits as far
+    // from the screen's side as from its bottom, so the circle's centre is
+    // that far in from the leading edge, on the tabs' row.
     app.swipeUp(); idle()
-    app.coordinate(withNormalizedOffset: .zero)
-      .withOffset(CGVector(dx: 52, dy: 822)).tap()
+    let window = app.windows.firstMatch.frame
+    let inset = window.maxY - home.y
+    point(app, CGPoint(x: window.minX + inset, y: home.y)).tap()
     idle()
+    expectSelected("Home", among: tabs, after: "expand")
+    XCTAssertTrue(tabs["Explore"]!.isHittable, "expanded: Explore is back")
   }
 }

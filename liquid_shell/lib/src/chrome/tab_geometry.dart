@@ -321,9 +321,10 @@ TabBarGeometry topTabGeometry({
   const inset = TabMetrics.inset;
   final items = [
     for (final (i, w) in labelWidths.indexed)
-      iconOnly[i]
-          ? TabMetrics.topIconItemWidth
-          : w + 2 * TabMetrics.topItemPadding,
+      if (iconOnly[i])
+        TabMetrics.topIconItemWidth
+      else
+        w + 2 * TabMetrics.topItemPadding,
   ];
   final sum = items.fold<double>(0, (a, b) => a + b);
   final natural = 2 * inset + sum;
