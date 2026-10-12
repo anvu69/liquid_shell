@@ -18,6 +18,10 @@ import 'package:liquid_shell_example/cases/basic_tabs.dart';
 /// bottom, half of the 62 pt pill.
 const double _y = 874.0 - 21 - 31;
 
+/// `make tab-traces` only (tool/tab_frames.sh sets it): extra sequences
+/// the strips cannot have, because they pair the native run's sequences.
+const bool _tracesOnly = bool.fromEnvironment('TABFID_TRACES_ONLY');
+
 /// Bounds every settle: a perpetual animation fails the run within seconds
 /// instead of stalling for pumpAndSettle's default 10 minutes.
 Future<void> _settle(WidgetTester tester) => tester.pumpAndSettle(
@@ -49,7 +53,9 @@ void main() {
     final sequences = <String, List<Map<String, double>>>{};
     var current = <Map<String, double>>[];
     var finger = 0.0;
-    debugTabTrace = (s) => current.add({...s, 'finger': finger});
+    var touching = false;
+    debugTabTrace = (s) =>
+        current.add({...s, 'finger': finger, 'touch': touching ? 1 : 0});
     addTearDown(() => debugTabTrace = null);
 
     Future<void> idle() => tester.pump(const Duration(seconds: 1));
@@ -72,6 +78,16 @@ void main() {
       await tester.tapAt(Offset(x, _y));
     }
 
+    /// A tap pressed [held] seconds, as a finger does.
+    Future<void> pressTap(double x, double held) async {
+      finger = x;
+      touching = true;
+      final g = await tester.startGesture(Offset(x, _y));
+      await tester.pump(Duration(microseconds: (held * 1e6).round()));
+      touching = false;
+      await g.up();
+    }
+
     /// Drags from [from] to [to] at [speed] pt/s of wall-clock time: frames
     /// are live, so the finger's speed is real time, not pump time. Every
     /// event carries its wall-clock time stamp: without one the velocity
@@ -80,6 +96,7 @@ void main() {
       finger = from;
       final clock = Stopwatch()..start();
       final g = await tester.createGesture();
+      touching = true;
       await g.down(Offset(from, _y), timeStamp: clock.elapsed);
       final span = (to - from).abs();
       final sign = (to - from).sign;
@@ -90,6 +107,7 @@ void main() {
         await g.moveTo(Offset(finger, _y), timeStamp: clock.elapsed);
         await tester.pump(const Duration(milliseconds: 4));
       }
+      touching = false;
       await g.up(timeStamp: clock.elapsed);
     }
 
@@ -102,12 +120,15 @@ void main() {
     await record('tap_3_1', () => tap(115));
     await record('press_hold', () async {
       finger = 115;
+      touching = true;
       final g = await tester.startGesture(const Offset(115, _y));
       await tester.pump(const Duration(seconds: 1));
       sequences['press_hold_snapshot'] = List.of(current);
+      touching = false;
       await g.up();
     });
-    // The "held" sample is the last one before the release.
+    // The press alone, and the press with its release.
+    sequences['press_release'] = sequences['press_hold']!;
     sequences['press_hold'] = sequences.remove('press_hold_snapshot')!;
     // Research §4.2: a slow drag at 90 pt/s, a flick of 172 pt in 7
     // frames (≈ 1500 pt/s).
@@ -124,6 +145,11 @@ void main() {
       circle.height,
     ];
     await record('expand', () => tester.tapAt(circle.center));
+    if (_tracesOnly) {
+      // Review I2: an 80 ms tap, Home → Explore; the lift must not brake
+      // the lens the press set moving.
+      await record('tap_held', () => pressTap(201, 0.08));
+    }
     debugTabTrace = null;
 
     // Rest colours (spec §17.4): the bar over a white page in light and a
@@ -131,6 +157,8 @@ void main() {
     final colors = <String, List<double>>{};
     for (final (name, brightness, page) in [
       ('light', Brightness.light, const Color(0xFFFFFFFF)),
+      // The example's search page under the native field (225/223/240).
+      ('lightPage', Brightness.light, const Color(0xFFE1DFF0)),
       ('dark', Brightness.dark, const Color(0xFF000000)),
     ]) {
       final boundary = GlobalKey();
@@ -194,9 +222,12 @@ void main() {
 
       final pill = tester.getRect(find.byKey(kTabPillKey));
       // Between slots 1 and 2: glass with nothing drawn on it.
-      colors['${name}Fill'] = rgb(
-        Offset(pill.left + 4 + 86 * 2, pill.center.dy),
-      );
+      final fill = rgb(Offset(pill.left + 4 + 86 * 2, pill.center.dy));
+      if (name == 'lightPage') {
+        colors['lightFillPage'] = fill;
+        continue;
+      }
+      colors['${name}Fill'] = fill;
       // Inside slot 0's rest capsule, left of the Home icon.
       colors['${name}Capsule'] = rgb(Offset(pill.left + 16, pill.center.dy));
       // The unselected "Explore" label: its darkest pixel in light, its

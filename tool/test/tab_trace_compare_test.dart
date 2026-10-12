@@ -259,4 +259,60 @@ void main() {
       expect(colourCheck([224, 221, 228], [236, 236, 236], 4).pass, isFalse);
     });
   });
+
+  test('morphOvershoot: how far the right edge passes the pill, in pt', () {
+    // The morph dips to −0.0153 on a 262 pt right-edge travel.
+    expect(
+      morphOvershoot([1, 0.4, 0, -0.0153, -0.004, 0], 262),
+      closeTo(4, 0.01),
+    );
+    expect(morphOvershoot([1, 0.5, 0], 262), 0);
+  });
+
+  test('valueAt: linear between samples, clamped at the ends', () {
+    final trace = [
+      {'t': 0.0, 'w': 94.0},
+      {'t': 0.1, 'w': 104.0},
+    ];
+    expect(valueAt(trace, 0.05, 'w'), closeTo(99, 1e-9));
+    expect(valueAt(trace, -1, 'w'), 94);
+    expect(valueAt(trace, 1, 'w'), 104);
+    expect(valueAt(trace, 0.05, 'w', zero: -0.05), 94);
+    expect(valueAt(trace, 0.05, 'w', zero: 0.05), 104);
+  });
+
+  test('liftIndex: the first sample after the finger left', () {
+    final trace = [
+      {'t': 0.0, 'touch': 1.0},
+      {'t': 0.1, 'touch': 1.0},
+      {'t': 0.2, 'touch': 0.0},
+    ];
+    expect(liftIndex(trace), 2);
+    expect(liftTime(trace), closeTo(0.1, 1e-9));
+    expect(
+      liftIndex([
+        {'t': 0.0, 'touch': 0.0},
+      ]),
+      0,
+    );
+  });
+
+  test('speedDips: a lens that brakes and picks up again is caught', () {
+    List<Map<String, double>> trace(List<double> xs) => [
+      for (final (i, x) in xs.indexed) {'t': i / 60, 'x': x},
+    ];
+    // One hump toward 180.
+    expect(
+      speedDips(
+        trace([94, 96, 104, 116, 130, 145, 158, 168, 175, 179, 180]),
+        180,
+      ),
+      0,
+    );
+    // Fast, then braked, then fast again.
+    expect(
+      speedDips(trace([94, 104, 116, 122, 124, 132, 146, 162, 175, 180]), 180),
+      greaterThan(0),
+    );
+  });
 }

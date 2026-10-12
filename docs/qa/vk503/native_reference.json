@@ -7,27 +7,82 @@
     "tolerance": 1
   },
   "springs": {
-    "tap": {"zeta": 0.79, "response": 0.39, "delay": 0.025},
-    "dragFollow": {"zeta": 0.75, "response": 0.33},
-    "snap": {"zeta": 0.92, "response": 0.35},
-    "collapse": {"zeta": 0.80, "response": 0.30, "delay": 0.24},
-    "expand": {"zeta": 0.80, "response": 0.35},
-    "tolerance": 0.10
+    "tap": {
+      "zeta": 0.79,
+      "response": 0.39,
+      "delay": 0.025
+    },
+    "dragFollow": {
+      "zeta": 0.75,
+      "response": 0.33
+    },
+    "snap": {
+      "zeta": 0.92,
+      "response": 0.35
+    },
+    "collapse": {
+      "zeta": 0.8,
+      "response": 0.3,
+      "delay": 0.24
+    },
+    "expand": {
+      "zeta": 0.7,
+      "response": 0.35
+    },
+    "tolerance": 0.1
   },
-  "press": {"w": 110, "h": 70, "scale": 1.052, "glow": 0.28},
-  "flight": {"oneSlotHeight": 1.55, "twoSlotWidth": 1.33, "pop": 1.16},
-  "glow": {"diameter": 93, "opacity": 0.28, "ripple": 4, "fade": 0.5},
+  "flight": {
+    "oneSlotHeight": 1.55,
+    "twoSlotWidth": 1.33,
+    "pop": 1.16
+  },
   "dragLag": {
     "reference": "fit",
     "note": "VK-503 Task 16: the gate compares against the dragFollow fit's analytic ramp lag (7.09 pt at 90 pt/s, spec §17.1), not research §4.2's 'about 9 pt'. The 9 pt is one hand-read value from the same trace the fit (rms 0.31 pt) used; the frame strips cannot settle it: native has no finger marker, and the native lens starts its drag 2 to 5 rows (0.1-0.25 s) after Flutter's depending on the driver (idb, XCUITest), so the alignment, not a 2 pt lag difference, dominates."
   },
   "colors": {
-    "lightFill": [254, 254, 254],
+    "lightFillPage": [242, 240, 254],
     "lightCapsule": [236, 236, 236],
     "lightLabel": [25, 25, 25],
     "darkFill": [25, 25, 25],
     "darkCapsule": [58, 58, 58],
     "darkLabel": [244, 244, 244],
     "tolerance": 4
+  },
+  "sources": {
+    "traces": "research raw per-frame UIKit layer traces, vankhan scratchpad tabfid/runs/n265_basic3.log (iPhone 17 Pro, iOS 26.5, UITabBarController; taps are 65-66 ms presses); times from the touch-down, or from the lift where marked +",
+    "expandOvershoot": "native TabFid expand strip, right edge (Task 15 extra/expand_tabfid_vs_liquid.png)",
+    "lightFillPage": "native over the example's search page, extra/search_close.png (page 225/223/240 under the field)"
+  },
+  "tapShape": {
+    "oneSlot": [[0.069, 95.7, 59.8], [0.165, 87.0, 80.0], [0.198, 84.8, 81.8], [0.265, 91.9, 77.9], [0.298, 94.6, 70.7]],
+    "twoSlot": [[0.068, 102.6, 58.5], [0.149, 124.7, 57.2], [0.182, 127.4, 55.8], [0.249, 120.7, 61.5], [0.282, 114.6, 66.0]]
+  },
+  "pressCourse": {
+    "t": [0.033, 0.067, 0.1, 0.133, 0.2, 0.25],
+    "w": [94.7, 99.2, 103.4, 106.2, 108.4, 109.3],
+    "h": [54.7, 59.3, 63.6, 66.6, 69.7, 70.7],
+    "scaleT": [0.049, 0.083, 0.116, 0.149],
+    "scale": [1.007, 1.023, 1.038, 1.049],
+    "glowT": [0.033, 0.066, 0.099],
+    "glow": [0.059, 0.225, 0.273]
+  },
+  "releaseCourse": {
+    "t": [0.033, 0.067, 0.1, 0.133, 0.167],
+    "w": [109.5, 105.1, 100.7, 97.9, 96.3],
+    "h": [69.5, 65.1, 60.7, 57.6, 55.7],
+    "engage": [1.0, 1.0, 1.0, 0.93, 0.49]
+  },
+  "ripple": {
+    "t": [0.083, 0.149, 0.25, 0.316],
+    "scale": [1.54, 2.43, 3.34, 3.65],
+    "opacity": [0.233, 0.149, 0.063, 0.033]
+  },
+  "flick": {
+    "t": 0.115,
+    "short": 5.1
+  },
+  "expandOvershoot": {
+    "pt": 4
   }
 }

@@ -101,9 +101,13 @@ record() { # <name> <command...>
 
 target=integration_test/tab_fidelity_test.dart
 # shellcheck disable=SC2086 # FLUTTER may be "fvm flutter"
+# Traces-only runs add sequences the strips cannot pair with native's.
+traces_only=false
+[ "${TRACES_ONLY:-}" != 1 ] || traces_only=true
 flutter_run() { cap 1800 $FLUTTER drive \
   --driver=test_driver/integration_test.dart \
-  --target="$target" -d "$udid"; }
+  --target="$target" -d "$udid" \
+  --dart-define=TABFID_TRACES_ONLY="$traces_only"; }
 
 if [ "${TRACES_ONLY:-}" = 1 ]; then
   flutter_run
