@@ -3,6 +3,9 @@
 - A page stack applied with the config that selects or leaves a tab is a
   restore, set without a transition; only a tab that stays selected
   animates its pushes and pops (VK-502).
+- Hidden native chrome (the dormant config of a shell that left, or a
+  hidden one) ends an active search and keeps its text: its field no
+  longer keeps the keyboard up under the hidden chrome (VK-551).
 
 ## 0.1.0-dev.5
 
