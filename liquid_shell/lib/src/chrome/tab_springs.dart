@@ -142,7 +142,9 @@ abstract final class TabSprings {
   /// Ripple growth on release.
   static const double glowRipple = 4;
 
-  /// Ripple duration.
+  /// Ripple response: the ripple's scale and fade follow one critically
+  /// damped spring of this response, 25 ms after the lift; it is gone
+  /// (99 %) after about 0.55 s (research LittleGlowView trace).
   static const double glowFade = 0.5;
 
   /// Icon pop scale.

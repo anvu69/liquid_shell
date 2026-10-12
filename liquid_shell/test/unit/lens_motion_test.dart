@@ -374,7 +374,8 @@ void main() {
       expect(m.frame.pillScale, closeTo(1, 0.001));
     });
 
-    test('the glow ripples ×4 and fades in 0.5 s', () {
+    test('the glow ripples ×4 and is gone by about 0.55 s (native: 0.004 at '
+        '+0.52 s)', () {
       final m = LensMotion(geometry: g3, selected: 0)
         ..down(const Offset(94, 31));
       run(m, 0.5);
@@ -382,7 +383,7 @@ void main() {
       m.up(const Offset(94, 31));
       run(m, 0.25);
       expect(m.frame.glowDiameter, greaterThan(held * 2));
-      run(m, 0.3);
+      run(m, 0.35);
       expect(m.frame.glowOpacity, 0);
       expect(m.frame.glowCenter, isNull);
     });
@@ -408,7 +409,8 @@ void main() {
         },
       );
       expect(widest / TabSprings.glowDiameter, closeTo(4, 0.4));
-      expect(gone, closeTo(0.5, 0.05));
+      // Native: 0.004 at +0.52 s, 0.002 at +0.58 s.
+      expect(gone, closeTo(0.55, 0.05));
     });
 
     test('a tap on the selected slot commits it again (reselect)', () {
@@ -604,6 +606,31 @@ void main() {
         expect(fr.lens.width, closeTo(w, 2.5), reason: 'w frame $k');
         expect(fr.lens.height, closeTo(h, 2.5), reason: 'h frame $k');
         expect(fr.engage, closeTo(op, 0.12), reason: 'engage frame $k');
+      }
+    });
+
+    test('the finger glow answers 25 ms after the down and ripples on a '
+        'critically damped 0.5 s curve (research LittleGlowView trace)', () {
+      final m = LensMotion(geometry: g3, selected: 0)
+        ..down(const Offset(94, 31));
+      final press = frames(m, 1);
+      // opacity 0.059 / 0.225 / 0.273 at 33 / 66 / 99 ms.
+      for (final (k, o) in [(2, 0.059), (4, 0.225), (6, 0.273)]) {
+        expect(press[k - 1].glowOpacity, closeTo(o, 0.05), reason: 'k $k');
+      }
+      m.up(const Offset(94, 31));
+      final ripple = frames(m, 0.6);
+      final d0 = press.last.glowDiameter;
+      // After the lift: (frame, diameter ×, opacity).
+      for (final (k, x, o) in [
+        (5, 1.54, 0.233),
+        (9, 2.43, 0.149),
+        (15, 3.34, 0.063),
+        (21, 3.65, 0.033),
+      ]) {
+        final f = ripple[k - 1];
+        expect(f.glowDiameter / d0, closeTo(x, x * 0.10), reason: 'x $k');
+        expect(f.glowOpacity, closeTo(o, 0.03), reason: 'o $k');
       }
     });
 

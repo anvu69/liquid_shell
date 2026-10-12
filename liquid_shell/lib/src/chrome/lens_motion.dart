@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 
-import 'package:flutter/animation.dart' show Curves;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart' show kTouchSlop;
 import 'package:flutter/painting.dart';
@@ -600,7 +599,9 @@ class LensMotion {
           ? TabSprings.highlightIn
           : TabSprings.effectOut,
     );
-    final holding = interacting && !reduceMotion;
+    // The glow, like the lens, answers 25 ms after the down (research
+    // LittleGlowView trace: 0.06 at 33 ms, 0.23 at 66 ms).
+    final holding = interacting && !reduceMotion && answered;
     _glowOpacity.retarget(
       holding ? TabSprings.glowOpacity : 0,
       holding ? TabSprings.glowIn : TabSprings.effectOut,
@@ -608,11 +609,22 @@ class LensMotion {
     if (holding) _glowDiameter.target = TabSprings.glowHeldDiameter;
   }
 
+  /// The ripple's progress [age] seconds after the lift: a critically
+  /// damped spring of [TabSprings.glowFade] response, 25 ms late. It fits
+  /// the native LittleGlowView trace, scale and opacity alike (×1.54 and
+  /// 0.82 of the glow at +83 ms, ×3.34 and 0.22 at +250 ms).
+  static double _rippleAt(double age) {
+    final t = age - TabSprings.tapDelay;
+    if (t <= 0) return 0;
+    final x = 2 * math.pi / TabSprings.glowFade * t;
+    return 1 - math.exp(-x) * (1 + x);
+  }
+
   void _advanceRipple(double dt) {
     final age = _rippleAge;
     if (age == null) return;
     final next = age + dt;
-    if (next >= TabSprings.glowFade) {
+    if (_rippleAt(next) >= 0.99) {
       _rippleAge = null;
       _glowCenter = null;
       _glowOpacity.jump(0);
@@ -656,11 +668,7 @@ class LensMotion {
         ? _geometry.size.height / 2
         : _geometry.slots.first.center.dy;
     final age = _rippleAge;
-    final ripple = age == null
-        ? null
-        : Curves.easeOutCubic.transform(
-            (age / TabSprings.glowFade).clamp(0.0, 1.0),
-          );
+    final ripple = age == null ? null : _rippleAt(age);
     return LensFrame(
       lens: Rect.fromCenter(
         center: Offset(_x.value, cy),
