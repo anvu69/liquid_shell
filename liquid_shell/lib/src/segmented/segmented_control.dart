@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:liquid_shell/src/chrome/lens_clip.dart';
+import 'package:liquid_shell/src/chrome/sized_layout_builder.dart';
 import 'package:liquid_shell/src/glass/glass_theme.dart';
 import 'package:liquid_shell/src/segmented/segment_geometry.dart';
 
@@ -23,7 +25,7 @@ const BorderRadius _capsule = BorderRadius.all(Radius.circular(999));
 
 /// One segment of a [LiquidSegmentedControl].
 @immutable
-class LiquidSegment {
+class LiquidSegment with Diagnosticable {
   /// Creates a text segment.
   const LiquidSegment({
     required this.label,
@@ -40,6 +42,25 @@ class LiquidSegment {
 
   /// What a screen reader says instead of [label].
   final String? semanticLabel;
+
+  @override
+  bool operator ==(Object other) =>
+      other is LiquidSegment &&
+      other.label == label &&
+      other.enabled == enabled &&
+      other.semanticLabel == semanticLabel;
+
+  @override
+  int get hashCode => Object.hash(label, enabled, semanticLabel);
+
+  @override
+  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+    super.debugFillProperties(properties);
+    properties
+      ..add(StringProperty('label', label))
+      ..add(FlagProperty('enabled', value: enabled, ifFalse: 'disabled'))
+      ..add(StringProperty('semanticLabel', semanticLabel, defaultValue: null));
+  }
 }
 
 /// A segmented control drawn after iOS 26's `UISegmentedControl`, with a
@@ -48,8 +69,12 @@ class LiquidSegment {
 ///
 /// The visible track is 32 pt tall, centred in a 44 pt box, so every
 /// segment's hit target is the full box height × its width. Segments are at
-/// least 44 pt wide, except when [expand] fills a width below 44 pt per
-/// segment (see there).
+/// least 44 pt wide, except in a width below 44 pt per segment (see
+/// [expand]). It never overflows its parent and never cuts a segment off.
+///
+/// A negative [selectedIndex] fails at construction; fewer than two
+/// [segments] or a [selectedIndex] past the last segment fail at build (a
+/// const constructor cannot read a list's length).
 class LiquidSegmentedControl extends StatefulWidget {
   /// Creates a segmented control of at least two [segments].
   const LiquidSegmentedControl({
@@ -59,7 +84,10 @@ class LiquidSegmentedControl extends StatefulWidget {
     this.expand = true,
     this.semanticLabel,
     super.key,
-  });
+  }) : assert(
+         selectedIndex == null || selectedIndex >= 0,
+         'selectedIndex must not be negative.',
+       );
 
   /// The segments, two or more, in index order (right to left in RTL).
   final List<LiquidSegment> segments;
@@ -67,21 +95,45 @@ class LiquidSegmentedControl extends StatefulWidget {
   /// The selected segment, or null for none.
   final int? selectedIndex;
 
-  /// Called with the segment the user chose. Null disables the whole
-  /// control (drawn at half opacity).
+  /// Called with the index of the segment the user chose, in [segments].
+  /// Not called for the segment already selected or for a disabled one.
+  /// Null disables the whole control (drawn at half opacity).
   final ValueChanged<int>? onChanged;
 
-  /// Fill the incoming width (true) or size to the labels: every segment as
-  /// wide as the widest label plus 18 pt (false).
+  /// Fill the incoming width (true) or size to the labels (false): every
+  /// segment as wide as the widest label (Medium weight) plus 18 pt, and at
+  /// least 44 pt.
   ///
-  /// When filling, the control never overflows: below 44 pt per segment,
-  /// every segment shrinks equally to fit (as native's), hit targets follow
-  /// the segment width and labels ellipsize. Sized to the labels, every
-  /// segment is at least 44 pt wide.
+  /// - Under an unbounded width (in a `Row` without `Expanded`, or asked
+  ///   for its intrinsic width) the control sizes to the labels either way.
+  /// - It never overflows: when the width it is given is narrower than it
+  ///   asks for, every segment shrinks equally to fit, as native's do.
+  ///   Below 44 pt per segment, hit targets follow the segment width, and
+  ///   labels that do not fit ellipsize.
   final bool expand;
 
   /// What a screen reader says for the control as a whole.
   final String? semanticLabel;
+
+  @override
+  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+    super.debugFillProperties(properties);
+    properties
+      ..add(IterableProperty<LiquidSegment>('segments', segments))
+      ..add(IntProperty('selectedIndex', selectedIndex, ifNull: 'none'))
+      ..add(
+        FlagProperty('enabled', value: onChanged != null, ifFalse: 'disabled'),
+      )
+      ..add(
+        FlagProperty(
+          'expand',
+          value: expand,
+          ifTrue: 'expand',
+          ifFalse: 'intrinsic',
+        ),
+      )
+      ..add(StringProperty('semanticLabel', semanticLabel, defaultValue: null));
+  }
 
   @override
   State<LiquidSegmentedControl> createState() => _LiquidSegmentedControlState();
@@ -112,10 +164,41 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl> {
     final scaler = MediaQuery.textScalerOf(
       context,
     ).clamp(maxScaleFactor: SegmentMetrics.maxTextScale);
-    final style = theme.segmentLabelStyle;
+    // An override without a size or a line height keeps the spec's 13 pt
+    // on 15.67, so the drawn line and the geometry's agree.
+    final themed = theme.segmentLabelStyle;
+    final fontSize = themed.fontSize ?? SegmentMetrics.labelSize;
+    final style = themed.copyWith(
+      fontSize: fontSize,
+      height:
+          themed.height ?? SegmentMetrics.labelLine / SegmentMetrics.labelSize,
+    );
     final medium = style.copyWith(fontWeight: FontWeight.w500);
-    final lineHeight =
-        scaler.scale(style.fontSize ?? 13) * (style.height ?? 1.2);
+    final lineHeight = scaler.scale(fontSize) * style.height!;
+    List<double>? widths;
+
+    SegmentGeometry geometryFor(BoxConstraints constraints) {
+      SegmentGeometry fill(double width) => segmentGeometry(
+        count: count,
+        maxWidth: width,
+        lineHeight: lineHeight,
+        direction: direction,
+      );
+      final maxWidth = constraints.maxWidth;
+      if (widget.expand && maxWidth.isFinite) return fill(maxWidth);
+      final intrinsic = segmentGeometry(
+        count: count,
+        maxWidth: double.infinity,
+        lineHeight: lineHeight,
+        direction: direction,
+        mediumLabelWidths: widths ??= [
+          for (final s in widget.segments)
+            _width(s.label, medium, scaler, direction),
+        ],
+      );
+      // Never cut a segment off: too narrow for the labels, shrink to fit.
+      return intrinsic.size.width > maxWidth ? fill(maxWidth) : intrinsic;
+    }
 
     return Semantics(
       container: true,
@@ -123,21 +206,12 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl> {
       label: widget.semanticLabel,
       // Orders the segments' nodes visually, right to left in RTL.
       textDirection: direction,
-      child: LayoutBuilder(
+      // Answers intrinsic sizes, which a LayoutBuilder cannot (an
+      // IntrinsicWidth, an AlertDialog's content).
+      child: SizedLayoutBuilder(
+        sizeFor: (constraints) => geometryFor(constraints).size,
         builder: (context, constraints) {
-          final fill = widget.expand && constraints.maxWidth.isFinite;
-          final g = segmentGeometry(
-            count: count,
-            maxWidth: fill ? constraints.maxWidth : double.infinity,
-            lineHeight: lineHeight,
-            direction: direction,
-            mediumLabelWidths: fill
-                ? null
-                : [
-                    for (final s in widget.segments)
-                      _width(s.label, medium, scaler, direction),
-                  ],
-          );
+          final g = geometryFor(constraints);
           final thumb = selected == null ? null : g.slots[selected];
           return SizedBox.fromSize(
             size: g.size,
@@ -208,7 +282,9 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl> {
   }
 
   /// Every label in [style], one line, centred in its label box. The rows
-  /// draw only: the segment nodes carry the semantics.
+  /// draw only: the segment nodes carry the semantics. The DefaultTextStyle
+  /// keeps the ambient one out: under a MaterialApp with no Material above,
+  /// it is the yellow-underlined error style, and [style] inherits.
   Widget _row(SegmentGeometry g, TextStyle style, TextScaler scaler) =>
       IgnorePointer(
         child: ExcludeSemantics(

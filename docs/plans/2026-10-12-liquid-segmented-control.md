@@ -787,6 +787,8 @@ const LiquidLens({required this.refraction, this.engage = 1, this.restFill,
 
 Layout (spec §5): `LayoutBuilder` → `segmentGeometry(count, maxWidth: expand ? constraints.maxWidth : ∞, lineHeight: the scaled 13 pt line (text scale capped at 2), direction, mediumLabelWidths: expand ? null : the w500 `TextPainter` widths)`; the box is `g.size`.
 
+> **Amended in Task 7 review (coordinator):** not a bare `LayoutBuilder`, which throws under `IntrinsicWidth` / `IntrinsicHeight` (an `AlertDialog`'s content, a `Row` with intrinsic children) — and `expand: false` means "intrinsic width". The control uses `SizedLayoutBuilder` (`lib/src/chrome/sized_layout_builder.dart`): a `LayoutBuilder` under a proxy render object that answers intrinsic sizes and dry layout from the same pure `segmentGeometry` size, the approach `fit_label.dart` takes for the tab label. `expand: false` in a parent narrower than the labels falls back to the fill geometry (segments shrink to fit), so no segment is ever cut off.
+
 Paint stack, in the box (rest only in this task; the lens comes in Task 8):
 
 1. the track: `DecoratedBox(color: theme.segmentTrack, borderRadius: capsule)` at `g.track`;

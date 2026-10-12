@@ -21,6 +21,12 @@ abstract final class SegmentMetrics {
   /// The narrowest intrinsic segment (Q-C; native is 32).
   static const double minSegment = 44;
 
+  /// The label's font size at text scale 1 (spike §2).
+  static const double labelSize = 13;
+
+  /// The label's line height at text scale 1 (spike §2).
+  static const double labelLine = 15.67;
+
   /// The track height minus one label line: 32 - 15.67.
   static const double labelBoxOffset = 16.33;
 

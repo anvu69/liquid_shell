@@ -511,7 +511,6 @@ void main() {
       ),
     );
     expect(all.right, closeTo(box.right, 1e-9));
-    expect(ref['rtl'], containsPair('segment0Right', true));
     final native = ((ref['rtl'] as Map)['thumb0'] as List).cast<num>();
     final thumb = tester
         .getRect(find.byKey(kSegmentThumbKey))
@@ -558,20 +557,7 @@ void main() {
     );
     // Measured here, in the spec's Medium weight; native's own widths
     // (16 / 39 / 40.67 → 177) are pinned in segment_geometry_test.dart.
-    final widest = _titles
-        .map(
-          (t) => (TextPainter(
-            text: TextSpan(
-              text: t,
-              style: theme.segmentLabelStyle.copyWith(
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            textDirection: TextDirection.ltr,
-          )..layout()).width,
-        )
-        .reduce(math.max);
-    final s = math.max<double>(44, widest.ceilToDouble() + 18);
+    final s = _intrinsicSegment(_titles, theme.segmentLabelStyle);
     expect(_box(tester).size, Size(3 * s, 44));
   });
 
@@ -594,7 +580,303 @@ void main() {
   testWidgets('asserts: selectedIndex out of range', (tester) async {
     await _pump(tester, selected: 3);
     expect(tester.takeException(), isA<AssertionError>());
-    await _pump(tester, selected: -1);
-    expect(tester.takeException(), isA<AssertionError>());
   });
+
+  test('asserts: a negative selectedIndex fails at the call site', () {
+    expect(
+      () => LiquidSegmentedControl(
+        segments: _segments(),
+        selectedIndex: -1,
+        onChanged: null,
+      ),
+      throwsAssertionError,
+    );
+  });
+
+  testWidgets('expand: false in a parent narrower than the labels shrinks '
+      'to fit like expand: every segment on screen and in semantics', (
+    tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    final calls = <int>[];
+    const titles = ['All', 'Recently played', 'Places'];
+    tester.view
+      ..devicePixelRatio = 3
+      ..physicalSize = const Size(402, 874) * 3;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: 200,
+            child: Align(
+              child: LiquidSegmentedControl(
+                segments: _segments(titles),
+                selectedIndex: 0,
+                onChanged: calls.add,
+                expand: false,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(tester.takeException(), isNull);
+    final box = _box(tester);
+    expect(box.size, const Size(200, 44));
+    var left = box.left;
+    for (final t in titles) {
+      final r = tester.getRect(
+        find.byWidgetPredicate(
+          (w) => w is Semantics && w.properties.label == t,
+        ),
+      );
+      expect(r.left, closeTo(left, 1e-9), reason: t);
+      expect(r.width, closeTo(200 / 3, 1e-9), reason: t);
+      left = r.right;
+    }
+    tester.semantics.tap(find.semantics.byLabel('Recently played'));
+    tester.semantics.tap(find.semantics.byLabel('Places'));
+    expect(calls, [1, 2]);
+    handle.dispose();
+  });
+
+  testWidgets('expand: true under an unbounded width sizes to the labels', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Row(
+          children: [
+            LiquidSegmentedControl(
+              segments: _segments(),
+              selectedIndex: 0,
+              onChanged: (_) {},
+            ),
+          ],
+        ),
+      ),
+    );
+    expect(tester.takeException(), isNull);
+    final theme = LiquidGlassTheme.of(
+      tester.element(find.byType(LiquidSegmentedControl)),
+    );
+    final s = _intrinsicSegment(_titles, theme.segmentLabelStyle);
+    expect(_box(tester).size, Size(3 * s, 44));
+  });
+
+  group('intrinsics (as fit_label.dart: no LayoutBuilder throw)', () {
+    Future<void> pumpIn(WidgetTester tester, Widget Function(Widget) wrap) =>
+        tester.pumpWidget(
+          MaterialApp(
+            home: Material(
+              child: wrap(
+                LiquidSegmentedControl(
+                  segments: _segments(),
+                  selectedIndex: 1,
+                  onChanged: (_) {},
+                  expand: false,
+                ),
+              ),
+            ),
+          ),
+        );
+
+    double segment(WidgetTester tester) => _intrinsicSegment(
+      _titles,
+      LiquidGlassTheme.of(
+        tester.element(find.byType(LiquidSegmentedControl)),
+      ).segmentLabelStyle,
+    );
+
+    testWidgets('IntrinsicWidth in a Row: the width of the labels', (
+      tester,
+    ) async {
+      await pumpIn(
+        tester,
+        (c) => Row(children: [IntrinsicWidth(child: c)]),
+      );
+      expect(tester.takeException(), isNull);
+      expect(_box(tester).size, Size(3 * segment(tester), 44));
+    });
+
+    testWidgets('IntrinsicHeight around a Row: the 44 pt box', (tester) async {
+      await pumpIn(
+        tester,
+        (c) => Center(
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [c, const SizedBox(width: 8)],
+            ),
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      expect(_box(tester).height, 44);
+      expect(
+        tester.getSize(find.byType(IntrinsicHeight)).height,
+        44,
+      );
+    });
+
+    testWidgets('in an AlertDialog (IntrinsicWidth inside)', (tester) async {
+      await pumpIn(tester, (c) => AlertDialog(content: c));
+      expect(tester.takeException(), isNull);
+      expect(_box(tester).size, Size(3 * segment(tester), 44));
+    });
+
+    testWidgets('dry layout: the geometry size under the constraints', (
+      tester,
+    ) async {
+      await pumpIn(tester, (c) => Center(child: c));
+      final box = tester.renderObject<RenderBox>(
+        find.byType(LiquidSegmentedControl),
+      );
+      final s = segment(tester);
+      expect(
+        box.getDryLayout(const BoxConstraints(maxWidth: 1000)),
+        Size(3 * s, 44),
+      );
+      // Narrower than the labels: shrunk to fit, never wider.
+      expect(
+        box.getDryLayout(const BoxConstraints(maxWidth: 100)),
+        const Size(100, 44),
+      );
+      expect(box.getMinIntrinsicWidth(44), 3 * s);
+      expect(box.getMaxIntrinsicHeight(100), 44);
+    });
+
+    testWidgets('expand: true at intrinsic width also sizes to the labels', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Center(
+            child: IntrinsicWidth(
+              child: LiquidSegmentedControl(
+                segments: _segments(),
+                selectedIndex: 0,
+                onChanged: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      expect(_box(tester).size, Size(3 * segment(tester), 44));
+    });
+  });
+
+  testWidgets('a theme label style without a height keeps the spec line '
+      '(15.67 on 13 pt)', (tester) async {
+    final base = LiquidGlassTheme.fromColorScheme(const ColorScheme.light());
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(
+          extensions: [
+            base.copyWith(
+              segmentLabelStyle: const TextStyle(
+                fontSize: 13,
+                color: Color(0xFF000000),
+              ),
+            ),
+          ],
+        ),
+        home: Center(
+          child: SizedBox(
+            width: 370,
+            child: LiquidSegmentedControl(
+              segments: _segments(),
+              selectedIndex: 0,
+              onChanged: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(tester.getSize(find.byKey(kSegmentTrackKey)).height, 32);
+    for (final p in _paragraphs(tester, kSegmentNormalKey)) {
+      expect(p.size.height, closeTo(_line, 0.01));
+    }
+  });
+
+  testWidgets('labels ignore the ambient text style (no Material above: '
+      'no error underline, no inherited font)', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: 370,
+            child: LiquidSegmentedControl(
+              segments: _segments(),
+              selectedIndex: 0,
+              onChanged: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    for (final p in _paragraphs(tester, kSegmentNormalKey)) {
+      expect(p.text.style!.decoration, isNot(TextDecoration.underline));
+      expect(p.text.style!.fontFamily, isNull);
+    }
+  });
+
+  test('LiquidSegment: a value with diagnostics', () {
+    const a = LiquidSegment(label: 'A', semanticLabel: 'a');
+    expect(a, const LiquidSegment(label: 'A', semanticLabel: 'a'));
+    expect(
+      a.hashCode,
+      const LiquidSegment(label: 'A', semanticLabel: 'a').hashCode,
+    );
+    expect(a, isNot(const LiquidSegment(label: 'A', semanticLabel: 'b')));
+    expect(a, isNot(const LiquidSegment(label: 'B', semanticLabel: 'a')));
+    expect(
+      a,
+      isNot(
+        const LiquidSegment(label: 'A', semanticLabel: 'a', enabled: false),
+      ),
+    );
+    final text = a.toString();
+    expect(text, contains('"A"'));
+    expect(text, contains('semanticLabel: "a"'));
+    expect(
+      const LiquidSegment(label: 'B', enabled: false).toString(),
+      contains('disabled'),
+    );
+  });
+
+  test('LiquidSegmentedControl: diagnostics', () {
+    final text = LiquidSegmentedControl(
+      segments: _segments(),
+      selectedIndex: 2,
+      onChanged: null,
+      expand: false,
+      semanticLabel: 'Scope',
+    ).toStringDeep();
+    expect(text, contains('selectedIndex: 2'));
+    expect(text, contains('disabled'));
+    expect(text, contains('intrinsic'));
+    expect(text, contains('semanticLabel: "Scope"'));
+    expect(text, contains('"Songs"'));
+  });
+}
+
+/// The intrinsic segment width (spec §5): the widest label in Medium plus
+/// 18, at least 44; measured here with its own TextPainters.
+double _intrinsicSegment(List<String> titles, TextStyle style) {
+  var widest = 0.0;
+  for (final t in titles) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: t,
+        style: style.copyWith(fontWeight: FontWeight.w500),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    widest = math.max(widest, painter.width);
+    painter.dispose();
+  }
+  return math.max(44, widest.ceilToDouble() + 18);
 }

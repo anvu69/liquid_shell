@@ -122,6 +122,8 @@ lib/src/chrome/
 lib/src/segmented/       (new)
   segment_geometry.dart         pure: SegmentMetrics, SegmentGeometry (implements LensTrack), segmentGeometry()
   segmented_control.dart        LiquidSegment, LiquidSegmentedControl (public); painters
+lib/src/chrome/
+  sized_layout_builder.dart     (Task 7 review) a LayoutBuilder that answers intrinsics and dry layout from the geometry
 lib/src/glass/
   liquid_lens.dart              + optional bezel (default kLensBezel); reused as is otherwise
   glass_theme.dart              + segmentTrack, segmentThumb, segmentLabelStyle
@@ -147,7 +149,7 @@ All values are logical points; "control-local" means the `LiquidSegmentedControl
 |---|---|
 | Track height `H` | **32** at text scale 1; `max(32, lineHeight + 16.33)` above it (§12.3) |
 | Box height | **max(44, H)**: the track is centred in a 44 pt box, so every segment keeps a 44 pt target (owner rule; Q-C) |
-| Track width `W` | `expand: true` (default): the incoming max width, always; below 44 pt per segment every segment shrinks equally to fit, as native's (owner decision, Task 7): no overflow, no clipping, labels ellipsize. `expand: false`: `n · s` with `s = max(44, ceil(widestMediumLabel) + 18)` (native min is 32; Q-C) |
+| Track width `W` | `expand: true` (default): the incoming max width, always; below 44 pt per segment every segment shrinks equally to fit, as native's (owner decision, Task 7): no overflow, no clipping, labels ellipsize. `expand: false`: `n · s` with `s = max(44, ceil(widestMediumLabel) + 18)` (native min is 32; Q-C); in a parent narrower than that, the fill layout of the parent's width (segments shrink to fit, never cut off). Under an unbounded width either mode sizes to the labels. The control answers intrinsic sizes (`SizedLayoutBuilder`, not a bare `LayoutBuilder`, Task 7 review) |
 | Segment `i` (visual) | `Rect(i · W/n, (box − H)/2, W/n, H)`, mirrored in RTL |
 | Thumb `i` at rest (the lens track's slot) | segment `i` deflated by **2**: `(W/n − 4) × (H − 4)`, radius `(H − 4)/2` |
 | Label box | centred in the segment, `lineHeight` tall, max width `W/n − 2·9` **(assumption: the 18 pt intrinsic padding)**, one line, ellipsis |
