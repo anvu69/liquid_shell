@@ -499,6 +499,8 @@ Dart sends the search tab's page stack as `NativeTab.pages` (root first, §8.4).
 - **Count shrinks** → pop to the remaining count, animated.
 - **Same count** → update titles and large-title modes in place.
 
+Only a tab that stays selected animates. A stack applied with the config that selects the tab, or leaves it, is set without a transition: coming back to a tab restores it as it was (VK-502).
+
 UIKit draws the glass back circle (44×44 at x 16 on iPhone, research §4.1) for every page above the root. Each pushed host sets `navigationItem.backAction = UIAction { onBackTapped(tabIndex) }`: the tap is a **proposal**. Dart calls `Navigator.maybePop()` for the top page; when the Flutter route pops, the next stack is one shorter and native pops. A refused pop (`PopScope` with a dirty form) changes nothing.
 
 **UIKit's other pops are proposals too** (Task 12 finding). The back circle's long-press menu does not call `backAction`: choosing an entry calls `popToViewController(_:animated:)` (from `_tryRequestPopToItem`). An accessibility escape or a keyboard back can call `popViewController(animated:)`, and a reselect can call `popToRootViewController(animated:)`. `ShellNavController` overrides all three: it keeps its stack and sends `onPopToPage(tab, index)` (`LiquidNativePopToPage`), `index` being the page that should end on top. Dart pops the Flutter pages above it, top first, each with `maybePop` (its `PopScope` runs). A refused pop, or a route that is not a page on top (a sheet), ends it. One page down is exactly a back tap. Native then follows the shorter stack through `setViewControllers`, which never goes through those overrides. Before this, the menu popped native alone and Flutter kept the detail page with no back button.
@@ -575,7 +577,7 @@ An internal `ShellSearch` object, owned by `_LiquidShellState`, attaches to `Liq
 
 `LiquidPage` registers with the nearest shell through a `PageRegistry` (implemented by the shell's state, published by `ShellScopeMarker` next to the hide-chrome registry). A registration carries the page's `title`, `largeTitle`, its `ModalRoute`, its `NavigatorState` and a sequence number.
 
-After each frame in which registrations, routes or the selection changed, the shell computes the selected tab's stack with a pure function:
+After each frame in which registrations, routes or the selection changed, the shell computes the selected tab's stack with a pure function. It does so after the frame, when it sends the config, and never in its own build: the shell builds before its body, so on a tab switch the page of the tab just left would still report that it is on screen, and the new tab would get that page's stack for one frame (VK-491).
 1. The **top page** is the registered page whose route `isCurrent` and whose `TickerMode` is enabled (on screen, not covered, not in an offstage branch).
 2. The **stack** is every registered page in the top page's navigator whose route `isActive`, in sequence order (registration order is push order).
 3. No top page → an empty stack: the native root shows the destination's label (a tab whose pages do not use `LiquidPage`, or a page without `LiquidPage` pushed above one). **Except under a cover**, where the last stack stays (less pages that left or whose route is gone), so native neither pops to the root nor pushes everything again, animated, when the cover goes:

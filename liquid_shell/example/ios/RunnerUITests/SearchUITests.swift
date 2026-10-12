@@ -184,6 +184,54 @@ final class SearchUITests: XCTestCase {
     XCTAssertTrue(flutterRow(app, "Hồ Hoàn Kiếm").waitForExistence(timeout: 10), "the results")
   }
 
+  /// The tab button for [label]: in the bar, or the iPhone's collapsed
+  /// circle (which carries the previous tab's label).
+  private func tabButton(_ app: XCUIApplication, _ label: String) -> XCUIElement {
+    let inBar = app.tabBars.buttons[label]
+    return inBar.exists ? inBar : app.buttons[label].firstMatch
+  }
+
+  /// VK-502: a tab keeps its pages while another tab is selected. Back on
+  /// Search the detail is there, and native neither pops to the root nor
+  /// pushes the detail again, animated. XCUITest waits for animations to
+  /// end, so the example counts the animated stack changes
+  /// (LIQUID_SHELL_EXAMPLE_TRACE_NAV, AppDelegate.swift).
+  func testReturningToTheSearchTabKeepsItsPageWithNoPush() {
+    let app = XCUIApplication()
+    app.launchEnvironment["LIQUID_SHELL_EXAMPLE_DEMO"] = "search"
+    app.launchEnvironment["LIQUID_SHELL_EXAMPLE_TRACE_NAV"] = "1"
+    app.launch()
+    let tab = searchTabButton(app)
+    XCTAssertTrue(tab.waitForExistence(timeout: timeout))
+    tab.tap()
+    let field = app.searchFields.firstMatch
+    XCTAssertTrue(field.waitForExistence(timeout: 10))
+    field.tap()
+    field.typeText("ho hoan")
+    let result = flutterRow(app, "Hồ Hoàn Kiếm")
+    XCTAssertTrue(result.waitForExistence(timeout: 10))
+    result.tap()
+    let back = app.navigationBars.buttons["BackButton"]
+    XCTAssertTrue(back.waitForExistence(timeout: 10), "the native glass back button")
+    let heading = app.staticTexts["Hồ Hoàn Kiếm"]
+    XCTAssertTrue(heading.waitForExistence(timeout: 10), "the detail")
+    let changes = app.staticTexts["animatedStackChanges"]
+    XCTAssertTrue(changes.waitForExistence(timeout: 10), "the trace")
+    XCTAssertEqual(changes.label, "animated stack changes: 1", "the push")
+
+    let home = tabButton(app, "Home")
+    XCTAssertTrue(home.waitForExistence(timeout: 10), "the Home tab")
+    home.tap()
+    XCTAssertTrue(flutterRow(app, "Diễm xưa").waitForExistence(timeout: 10), "Home's list")
+    searchTabButton(app).tap()
+    XCTAssertTrue(heading.waitForExistence(timeout: 10), "the detail, kept")
+    XCTAssertTrue(back.waitForExistence(timeout: 10), "its back button")
+    XCTAssertTrue(app.navigationBars["Hồ Hoàn Kiếm"].exists, "its bar")
+    // Late messages would come within a second.
+    RunLoop.current.run(until: Date().addingTimeInterval(1))
+    XCTAssertEqual(changes.label, "animated stack changes: 1", "no pop and push again")
+  }
+
   /// Apple Music's large title shares the bar row, right under the status
   /// bar (UIKit's `.inline`), not a row below it (Task 12 side by side).
   func testTheSearchRootsLargeTitleSitsOnTheBarRow() throws {
