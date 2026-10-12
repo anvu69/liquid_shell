@@ -30,6 +30,6 @@ List<double> referenceTrace(
   final frames = (seconds / dt).round();
   return [
     for (var f = 1; f <= frames; f++)
-      f * dt < delay ? from : sim.x(f * dt - delay),
+      if (f * dt < delay) from else sim.x(f * dt - delay),
   ];
 }

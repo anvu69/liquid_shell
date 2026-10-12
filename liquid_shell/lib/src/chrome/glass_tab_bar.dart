@@ -242,7 +242,15 @@ class _GlassTabBarState extends State<GlassTabBar>
     final ticker = _ticker ??= createTicker(_onTick);
     if (ticker.isActive) return;
     _last = Duration.zero;
-    unawaited(ticker.start());
+    unawaited(_start(ticker));
+  }
+
+  // A future of our own to hand to `unawaited`: newer SDKs mark
+  // `Ticker.start` `@awaitNotRequired` (unnecessary_unawaited) while 3.44
+  // still asks for it (discarded_futures).
+  // The future ends when the ticker stops; nothing waits for it.
+  static Future<void> _start(Ticker ticker) async {
+    await ticker.start();
   }
 
   void _onTick(Duration elapsed) {

@@ -104,9 +104,10 @@ List<double> _tapReference(
   required double delay,
 }) => [
   for (final s in trace)
-    s['t']! < delay
-        ? from
-        : from + springAt(to - from, zeta, response, s['t']! - delay),
+    if (s['t']! < delay)
+      from
+    else
+      from + springAt(to - from, zeta, response, s['t']! - delay),
 ];
 
 /// The settle time of a tap trace against the reference spring ±10 %.
@@ -653,14 +654,15 @@ void main(List<String> args) {
   final mts = [for (final s in morph) s['t']! - m0];
   final mref = [
     for (final s in morph)
-      s['t']! - m0 < d(collapse, 'delay')
-          ? 0.0
-          : springAt(
-              1,
-              d(collapse, 'zeta'),
-              d(collapse, 'response'),
-              s['t']! - m0 - d(collapse, 'delay'),
-            ),
+      if (s['t']! - m0 < d(collapse, 'delay'))
+        0.0
+      else
+        springAt(
+          1,
+          d(collapse, 'zeta'),
+          d(collapse, 'response'),
+          s['t']! - m0 - d(collapse, 'delay'),
+        ),
   ];
   add(
     Kind.fit,
