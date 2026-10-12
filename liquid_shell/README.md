@@ -1026,8 +1026,8 @@ Widget _inFrame(
 
 Below `kLiquidNarrowWidth` (340pt of the shell's own width) the bottom row
 margin drops from 21 to 8. Five tabs plus a trailing action at 320pt then
-get 43.6pt slots whose overlapping tap areas are 51.6pt wide at text scale
-1, above the 44pt minimum hit target. A label that still does not fit
+get 43.6pt slots with tap areas of at least 44pt at text scale 1, the
+minimum hit target. A label that still does not fit
 takes its cell's side padding, then shrinks, never below 10pt, and only
 then ends in an ellipsis.
 

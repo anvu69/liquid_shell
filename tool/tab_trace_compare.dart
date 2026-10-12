@@ -104,9 +104,10 @@ List<double> _tapReference(
   required double delay,
 }) => [
   for (final s in trace)
-    s['t']! < delay
-        ? from
-        : from + springAt(to - from, zeta, response, s['t']! - delay),
+    if (s['t']! < delay)
+      from
+    else
+      from + springAt(to - from, zeta, response, s['t']! - delay),
 ];
 
 /// The settle time of a tap trace against the reference spring ±10 %.
@@ -353,7 +354,8 @@ void main(List<String> args) {
   void add(Kind kind, String name, Check check) =>
       rows.add((kind, name, check));
 
-  // Geometry (±1 pt).
+  // Geometry (±1 pt). The rects are TabMetrics constants typed in from
+  // the native measurement: only the layout plumbing can fail them.
   final geometry = section('geometry');
   final measured = data['geometry']! as Map<String, dynamic>;
   for (final key in ['pill3', 'minimized']) {
@@ -361,7 +363,7 @@ void main(List<String> args) {
     final got = list(measured[key]);
     for (var i = 0; i < 4; i++) {
       add(
-        Kind.native,
+        Kind.constant,
         '$key[$i]',
         within(got[i], want[i], abs: d(geometry, 'tolerance')),
       );
@@ -445,7 +447,8 @@ void main(List<String> args) {
     final worst = [
       for (var i = 0; i < 4; i++) (got[i] - want[i]).abs(),
     ].reduce(math.max);
-    add(Kind.native, 'slot$slot rect', (
+    // Slot sizes and pitch are TabMetrics constants (see Geometry above).
+    add(Kind.constant, 'slot$slot rect', (
       pass: worst <= d(geometry, 'tolerance') + 1e-9,
       detail:
           '${got.map((v) => v.toStringAsFixed(1)).join(', ')} vs '
@@ -653,14 +656,15 @@ void main(List<String> args) {
   final mts = [for (final s in morph) s['t']! - m0];
   final mref = [
     for (final s in morph)
-      s['t']! - m0 < d(collapse, 'delay')
-          ? 0.0
-          : springAt(
-              1,
-              d(collapse, 'zeta'),
-              d(collapse, 'response'),
-              s['t']! - m0 - d(collapse, 'delay'),
-            ),
+      if (s['t']! - m0 < d(collapse, 'delay'))
+        0.0
+      else
+        springAt(
+          1,
+          d(collapse, 'zeta'),
+          d(collapse, 'response'),
+          s['t']! - m0 - d(collapse, 'delay'),
+        ),
   ];
   add(
     Kind.fit,

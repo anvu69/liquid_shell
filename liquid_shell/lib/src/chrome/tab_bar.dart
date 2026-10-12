@@ -74,8 +74,10 @@ class LiquidTabBar extends StatelessWidget {
   /// nothing.
   final int selectedIndex;
 
-  /// Called with an index into [destinations] when a cell is tapped while
-  /// the bar is not minimised.
+  /// Called with an index into [destinations] when a tab is chosen while
+  /// the bar is not minimised: on release of a tap, of a drag (the tab
+  /// nearest the lens) or of a flick, and on Enter or Space when a tab has
+  /// keyboard focus.
   final ValueChanged<int> onDestinationSelected;
 
   /// Bottom (compact) or top (regular) layout.

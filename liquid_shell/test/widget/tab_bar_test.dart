@@ -288,11 +288,15 @@ void main() {
       );
       bool lit() => tester.widget<TabHoverHighlight>(overlay).hovered.value;
       expect(lit(), isFalse);
-      // The top bar's cells take focus first; the circle comes after them.
-      for (var i = 0; i < 6 && !lit(); i++) {
+      // The three tab slots take focus first, in reading order; the circle
+      // is the fourth stop.
+      for (var i = 0; i < 3; i++) {
         await tester.sendKeyEvent(LogicalKeyboardKey.tab);
         await tester.pump();
+        expect(lit(), isFalse, reason: 'stop ${i + 1} is a tab slot');
       }
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
       expect(lit(), isTrue, reason: 'focus shows the highlight');
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.pump();
@@ -302,6 +306,64 @@ void main() {
       expect(pressed, 2);
     });
   }
+
+  for (final position in LiquidTabBarPosition.values) {
+    testWidgets('tabs (${position.name}): Tab focuses each slot in order '
+        'with a visible ring; Enter and Space select it once', (tester) async {
+      final handle = tester.ensureSemantics();
+      final picked = <int>[];
+      await tester.pumpWidget(
+        _host(position: position, onSelected: picked.add),
+      );
+      final ring = find.byKey(kTabFocusKey);
+      expect(ring, findsNothing);
+      for (final label in ['Home', 'Inbox', 'Settings']) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+        expect(ring, findsOneWidget, reason: 'focus on $label shows a ring');
+        expect(tester.getRect(ring), tester.getRect(_cell(label)));
+        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+        await tester.pump();
+      }
+      // Indices in the full list: Reports (2) has no slot.
+      expect(picked, [0, 1, 3]);
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pump();
+      expect(picked, [0, 1, 3, 3]);
+      await tester.pumpAndSettle();
+      handle.dispose();
+    });
+  }
+
+  testWidgets('minimised circle: Tab focuses it with a visible highlight; '
+      'Enter and Space expand it', (tester) async {
+    final picked = <int>[];
+    var expanded = 0;
+    await tester.pumpWidget(
+      _host(
+        selectedIndex: 1,
+        minimized: true,
+        onSelected: picked.add,
+        onExpand: () => expanded++,
+      ),
+    );
+    await tester.pumpAndSettle();
+    final overlay = find.byType(TabHoverHighlight);
+    expect(overlay, findsOneWidget);
+    bool lit() => tester.widget<TabHoverHighlight>(overlay).hovered.value;
+    expect(lit(), isFalse);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    expect(lit(), isTrue, reason: 'focus shows the highlight');
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(expanded, 1);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+    expect(expanded, 2);
+    expect(picked, isEmpty);
+    tester.takeAnnouncements();
+  });
 
   testWidgets('minimised: the selected icon only, in a 48 circle; trailing '
       'kept (spec VK-503 §10)', (tester) async {
