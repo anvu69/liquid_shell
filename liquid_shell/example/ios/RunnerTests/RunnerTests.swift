@@ -1742,6 +1742,29 @@ extension NativeTabsTests {
     }
   }
 
+  /// VK-551 review I-2: Dart's activation while the chrome is hidden (a
+  /// `LiquidHideChrome` page in the search tab, a dialog above the shell)
+  /// is ignored: it would present the search in a hidden view, its field
+  /// first responder with no field shown to dismiss the keyboard.
+  func testAnActivationWhileTheChromeIsHiddenIsIgnored() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let bridge = tabs.searchBridge
+    tabs.apply(searchConfig(selected: 2, hidden: true))
+    settle()
+    XCTAssertFalse(tabs.chromeVisible, "precondition")
+    tabs.setSearchActive(true)
+    let deadline = Date().addingTimeInterval(1.5)
+    while Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.05)) }
+    XCTAssertFalse(bridge.controller.isActive, "not presented in hidden chrome")
+    XCTAssertFalse(bridge.controller.searchBar.searchTextField.isFirstResponder, "no keyboard")
+    XCTAssertFalse(events.sent.contains("searchActive true"))
+    // Shown again, the same activation works.
+    tabs.apply(searchConfig(selected: 2))
+    settle()
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    XCTAssertTrue(bridge.controller.isActive)
+  }
+
   /// Q2: the user's × clears the text and dismisses; Dart hears both.
   func testTheCancelButtonClearsTheText() throws {
     let tabs = try installedSearchShell(selected: 2)

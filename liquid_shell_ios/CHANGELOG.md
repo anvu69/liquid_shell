@@ -5,7 +5,8 @@
   animates its pushes and pops (VK-502).
 - Hidden native chrome (the dormant config of a shell that left, or a
   hidden one) ends an active search and keeps its text: its field no
-  longer keeps the keyboard up under the hidden chrome (VK-551).
+  longer keeps the keyboard up under the hidden chrome, and an activation
+  Dart asks for while the chrome is hidden is ignored (VK-551).
 
 ## 0.1.0-dev.5
 
