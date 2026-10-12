@@ -30,7 +30,7 @@ final class SegmentEnvelope extends LensEnvelope {
     required this.pressHold,
     required this.releaseSize,
     required this.releaseDelay,
-    required this.commitDelay,
+    required this.slide,
     required this.showDelay,
     required this.engageHold,
     required this.liftNear,
@@ -63,8 +63,8 @@ final class SegmentEnvelope extends LensEnvelope {
   /// Seconds after the up before the release spring starts.
   final double releaseDelay;
 
-  /// Seconds after a tap's commit before the lens x leaves.
-  final double commitDelay;
+  /// The lens x of a tap: the slide to the new segment.
+  final TapSlide slide;
 
   /// Seconds after a programmatic change before the lens x leaves.
   final double showDelay;
@@ -95,6 +95,68 @@ final class SegmentEnvelope extends LensEnvelope {
 
   /// Scale of the w500 copy at full engage.
   final double magnify;
+}
+
+/// A segment tap's slide (spec VK-550 §8.4, Q-E): two springs from the
+/// commit, blended. The primary carries the lens; a small, slow secondary
+/// share adds native's late overshoot. A slide shorter than [travel]
+/// leaves later and moves slower, in proportion: one segment (123 pt)
+/// trails two (247 pt) in the native rows, and a slide of any single
+/// shape cannot meet both (Task 4 report).
+@immutable
+final class TapSlide {
+  /// Creates a slide.
+  const TapSlide({
+    required this.ratio,
+    required this.response,
+    required this.delay,
+    required this.secondary,
+    required this.secondaryDelay,
+    required this.share,
+    required this.travel,
+    required this.shortDelay,
+    required this.shortResponse,
+  });
+
+  /// The primary spring's damping ratio.
+  final double ratio;
+
+  /// The primary spring's response (s) for a slide of [travel] or longer.
+  final double response;
+
+  /// Seconds after the commit before the primary leaves, at [travel].
+  final double delay;
+
+  /// The secondary spring.
+  final SpringDescription secondary;
+
+  /// Seconds after the commit before the secondary leaves, at [travel].
+  final double secondaryDelay;
+
+  /// The secondary's share of the lens x.
+  final double share;
+
+  /// The slide length (pt) from which the timing no longer changes.
+  final double travel;
+
+  /// Extra delay (s) of a slide of no length; less in proportion.
+  final double shortDelay;
+
+  /// Extra response, as a fraction, of a slide of no length.
+  final double shortResponse;
+
+  double _short(double distance) => (1 - distance / travel).clamp(0.0, 1.0);
+
+  /// The primary spring of a slide over [distance] points.
+  SpringDescription primaryFor(double distance) =>
+      fittedSpring(ratio, response * (1 + shortResponse * _short(distance)));
+
+  /// The primary's delay for a slide over [distance] points.
+  double delayFor(double distance) => delay + shortDelay * _short(distance);
+
+  /// The secondary's delay for a slide over [distance] points.
+  double secondaryDelayFor(double distance) =>
+      secondaryDelay + shortDelay * _short(distance);
 }
 
 /// Every spring and envelope constant a `LensMotion` reads (spec VK-550
@@ -193,8 +255,8 @@ final class LensProfile {
   /// fitted in Task 4 to the per-frame rows named on each, by least squares
   /// over w and h (sizes) or engage (holds), 1/60 s frames.
   static final LensProfile segment = LensProfile(
-    // Spike §3: three taps, least squares over 1.2 s.
-    tap: fittedSpring(0.87, 0.41),
+    // The tap slide's primary spring at two segments or more (see slide).
+    tap: fittedSpring(0.743, 0.577),
     // Spike §3: the drag lag, 6.77 pt at 82.2 pt/s, is VK-503's within 5 %.
     dragFollow: TabSprings.dragFollow,
     // A drag's release, fitted to `slow_drag.release_rows` and the `flick`
@@ -232,8 +294,26 @@ final class LensProfile {
       // Spike §3: the release in place (`fits.releaseSize`).
       releaseSize: fittedSpring(1, 0.24),
       releaseDelay: 0.016,
-      // Spike §3: the tap slide leaves 8 ms after the commit (`fits.tap`).
-      commitDelay: 0.008,
+      // `tap_1_2`, `tap_2_3`, `tap_3_1`, fitted for the spec §14.5 gate:
+      // x within 0.9 pt of every row to +0.6 s, overshoot 2.6 / 5.1 pt
+      // (native 2.5 / 5.0), within 0.5 pt of rest from +0.70 s (native
+      // +0.70 / +0.75). A slide of one shape cannot pass it: at +0.10 s the
+      // one-segment rows trail the two-segment row by 0.08 of the travel,
+      // so any fixed shape misses one of them by 6.6 pt or more. The
+      // five-segment tap (148 pt, not fitted) is within 3.3 pt of its rows
+      // (one shape: 7.3 pt).
+      slide: TapSlide(
+        ratio: 0.743,
+        response: 0.577,
+        delay: 0,
+        secondary: fittedSpring(0.556, 0.291),
+        secondaryDelay: 0.016,
+        share: 0.275,
+        // Two segments of the 370 pt control (`tap_3_1`).
+        travel: 246.67,
+        shortDelay: 0.023,
+        shortResponse: 0.075,
+      ),
       // `programmatic_2seg`: the slide starts one or two frames after the
       // write; 30 ms puts every row within 1.6 pt (rms 0.8).
       showDelay: 0.03,

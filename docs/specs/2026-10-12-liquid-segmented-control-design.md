@@ -200,7 +200,7 @@ Worked checks against spike §2 (iPhone 17 Pro, full width 370):
 
 | Use | ζ | Response | Delay | Source |
 |---|---|---|---|---|
-| Lens x after a tap | **0.87** | **0.41 s** | **8 ms** after the commit | spike §3, three taps |
+| Lens x after a tap | two springs blended (Q-E): primary **0.743 / 0.577 s**, secondary **0.556 / 0.291 s** at a 0.275 share, 16 ms late | | primary none, secondary 16 ms after the commit, both + 23 ms × (1 − travel / 246.67 pt); the primary's response × (1 + 0.075 × the same) | Task 4, fitted to `tap_1_2`, `tap_2_3`, `tap_3_1` for the §14.5 gate (every row within 0.9 pt, overshoot 2.6 / 5.1 pt, settled +0.70 s). The spike's single spring (0.87, 0.41 s, 8 ms) overshoots 0.5 / 1.0 pt; no slide of one shape meets the gate on both distances (6.6 pt at +0.10 s at best) |
 | Lens x following the finger | 0.75 | 0.33 s | none | VK-503 `dragFollow`; spike lag within −5 % |
 | Lens x after a drag release (and a flick) | **0.64** | **0.31 s** | none | Task 4: fitted to `slow_drag.release_rows` and the `flick` rows after the release, with the flick overshoot held to native's (3.9 pt) |
 | Programmatic slide | **0.82** | **0.41 s** | **30 ms** after the write | spike §3; Task 4 fits the delay to `programmatic_2seg` (every row within 1.6 pt) |

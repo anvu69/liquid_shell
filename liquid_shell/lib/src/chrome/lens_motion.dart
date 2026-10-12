@@ -149,6 +149,7 @@ class LensMotion {
        _committed = _valid(selected, geometry) {
     final rest = _restRect(_committed);
     _x = SpringValue(rest.center.dx, this.profile.tap);
+    _x2 = SpringValue(rest.center.dx, this.profile.tap);
     _w = SpringValue(rest.width, TabSprings.widthOut);
     _h = SpringValue(rest.height, TabSprings.heightOut);
   }
@@ -165,6 +166,16 @@ class LensMotion {
   LensPhase _phase = LensPhase.rest;
 
   late final SpringValue _x;
+
+  /// A segment tap slide's secondary spring (spec VK-550 §8.4): the lens x
+  /// is [_x] blended with it by [_share] until the slide rests or is
+  /// interrupted (`_fold`).
+  late final SpringValue _x2;
+  double _share = 0;
+
+  /// The slide's primary and secondary delays after the commit.
+  double _slideDelay = 0;
+  double _secondaryDelay = 0;
   late final SpringValue _w;
   late final SpringValue _h;
   final SpringValue _scale = SpringValue(1, TabSprings.scaleOut);
@@ -220,6 +231,7 @@ class LensMotion {
 
   List<SpringValue> get _springs => [
     _x,
+    _x2,
     _w,
     _h,
     _scale,
@@ -230,6 +242,18 @@ class LensMotion {
     _glowDiameter,
     _pop,
   ];
+
+  /// The lens centre x: [_x], or a running tap slide's blend.
+  double get _lensX => _x.value + _share * (_x2.value - _x.value);
+
+  /// Ends a running tap slide's blend: [_x] takes the blended position
+  /// and speed, so whatever comes next starts where the lens is.
+  void _fold() {
+    if (_share == 0) return;
+    final velocity = _x.velocity + _share * (_x2.velocity - _x.velocity);
+    _x.place(_lensX, velocity);
+    _share = 0;
+  }
 
   static int? _valid(int? slot, LensTrack g) =>
       slot != null && slot >= 0 && slot < g.slots.length ? slot : null;
@@ -242,6 +266,7 @@ class LensMotion {
   LensTrack get geometry => _geometry;
   set geometry(LensTrack value) {
     if (value == _geometry) return;
+    _fold();
     _geometry = value;
     _committed = _valid(_committed, value);
     _pending = _valid(_pending, value);
@@ -278,7 +303,9 @@ class LensMotion {
 
   void _jumpTo(int? slot) {
     final r = _restRect(slot);
+    _share = 0;
     _x.jump(r.center.dx);
+    _x2.jump(r.center.dx);
     _w.jump(r.width);
     _h.jump(r.height);
     _scale.jump(1);
@@ -300,6 +327,7 @@ class LensMotion {
   /// Finger down at [local].
   void down(Offset local) {
     if (_geometry.slots.isEmpty) return;
+    _fold();
     if (_committed == null && !interacting) {
       final r = _geometry.slots[_geometry.slotNearest(local.dx)];
       _x.jump(_geometry.clampCentre(local.dx));
@@ -376,6 +404,7 @@ class LensMotion {
   /// VK-550 §8).
   void show(int? slot) {
     _pending = null;
+    _fold();
     final committed = _committed = _valid(slot, _geometry);
     final spring = profile.programmatic;
     if (spring == null || reduceMotion || committed == null) {
@@ -405,6 +434,7 @@ class LensMotion {
   /// The app did not adopt it: snap back to [slot].
   void returnTo(int? slot) {
     _pending = null;
+    _fold();
     _committed = _valid(slot, _geometry);
     if (_committed == null) {
       _jumpTo(null);
@@ -443,6 +473,7 @@ class LensMotion {
   }
 
   void _commit(int slot, {required bool tap, bool flick = false}) {
+    _fold();
     final from = _committed;
     _committed = slot;
     _pending = slot;
@@ -529,8 +560,17 @@ class LensMotion {
     _releaseAt = tap ? math.max(0, e.pressHold - pressed) : 0;
     _since = 0;
     if (_flight == _Flight.tap) {
-      // `_steerX` sends it commitDelay after the up.
-      _x.spring = profile.tap;
+      // Two springs from where the lens is; `_steerX` and `_segmentTargets`
+      // send them after their delays.
+      final slide = e.slide;
+      final distance = (_flightTarget - _x.value).abs();
+      _x.spring = slide.primaryFor(distance);
+      _x2
+        ..place(_x.value, _x.velocity)
+        ..retarget(_x.target, slide.secondary);
+      _share = slide.share;
+      _slideDelay = slide.delayFor(distance);
+      _secondaryDelay = slide.secondaryDelayFor(distance);
     } else {
       _x.retarget(_flightTarget, flick ? profile.flickLand : profile.snap);
     }
@@ -545,7 +585,8 @@ class LensMotion {
       TabEnvelope() => [profile.tapDelay],
       final SegmentEnvelope e => [
         e.pressDelay,
-        e.commitDelay,
+        _slideDelay,
+        _secondaryDelay,
         e.showDelay,
         e.engageHold,
         e.liftUntil.$1,
@@ -599,6 +640,7 @@ class LensMotion {
       for (final s in _springs) {
         s.jump(s.target);
       }
+      _share = 0;
       _popSlot = null;
       _phase = LensPhase.rest;
     }
@@ -611,7 +653,8 @@ class LensMotion {
     if (profile.envelope case final SegmentEnvelope e) {
       final end = switch (_flight) {
         _Flight.tap => [
-          e.commitDelay,
+          _slideDelay,
+          _secondaryDelay,
           e.engageHold,
           if (_flightSlots <= 1) e.liftUntil.$1 else e.liftUntil.$2,
         ].reduce(math.max),
@@ -774,13 +817,16 @@ class LensMotion {
     // A press does not move x (`press`, `pressOther`); a drag follows.
     _steerX(
       answered: switch (flight) {
-        _Flight.tap => since >= e.commitDelay,
+        _Flight.tap => since >= _slideDelay,
         _Flight.show => since >= e.showDelay,
         _Flight.release || null => true,
       },
       pressLeans: false,
     );
-    final rest = _geometry.restLensAt(_x.value);
+    if (flight == _Flight.tap && since >= _secondaryDelay) {
+      _x2.target = _flightTarget;
+    }
+    final rest = _geometry.restLensAt(_lensX);
     final pressed = Size(
       rest.width + e.pressGrow.width,
       rest.height + e.pressGrow.height,
@@ -895,6 +941,7 @@ class LensMotion {
     if (interacting || _phase == LensPhase.flying) return true;
     if (_rippleAge != null || _ghostSlot != null || _fadeIn < 1) return true;
     return !(_x.settled(0.5) &&
+        (_share == 0 || _x2.settled(0.5)) &&
         _w.settled(0.5) &&
         _h.settled(0.5) &&
         _scale.settled(0.001) &&
@@ -912,7 +959,7 @@ class LensMotion {
     final ripple = age == null ? null : _rippleAt(age);
     return LensFrame(
       lens: Rect.fromCenter(
-        center: Offset(_x.value, cy),
+        center: Offset(_lensX, cy),
         width: _w.value,
         height: _h.value,
       ),

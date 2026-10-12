@@ -186,13 +186,8 @@ void main() {
       );
     }
 
-    test('the native fits: tap, programmatic, press and release sizes', () {
+    test('the native fits: programmatic, press and release sizes', () {
       final p = LensProfile.segment;
-      expect(
-        p.tap.stiffness,
-        closeTo(math.pow(2 * math.pi / 0.41, 2), 1e-9),
-      );
-      expectFit(p.tap, 'tap');
       expectFit(p.programmatic!, 'programmatic');
       final e = p.envelope as SegmentEnvelope;
       expectFit(e.pressSize, 'pressSize');
@@ -205,7 +200,6 @@ void main() {
         e.releaseDelay,
         (fits['releaseSize'] as Map)['delay'],
       );
-      expect(e.commitDelay, (fits['tap'] as Map)['delay']);
       final grow = (geometry['pressedGrow'] as List).cast<num>();
       expect(e.pressGrow, Size(grow[0].toDouble(), grow[1].toDouble()));
     });

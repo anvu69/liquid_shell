@@ -275,6 +275,12 @@ class SpringValue {
     if (newSpring != null) spring = newSpring;
   }
 
+  /// Moves to [value] at [velocity], keeping the target and the spring.
+  void place(double value, double velocity) {
+    _value = value;
+    _velocity = velocity;
+  }
+
   /// Stops at [value].
   void jump(double value) {
     _value = value;

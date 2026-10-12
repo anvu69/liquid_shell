@@ -41,12 +41,12 @@ List<LensFrame> record(
   return frames;
 }
 
-/// The first row time after which every row stays within 0.5 pt of the
-/// last one (rows on the fixture's 0.05 s grid).
-double settleOf(List<double> ts, List<double> xs) {
+/// The first row time after which every row stays within 0.5 pt of [rest]
+/// (rows on the fixture's 0.05 s grid).
+double settleOf(List<double> ts, List<double> xs, double rest) {
   var settled = ts.first;
   for (var i = 0; i < xs.length; i++) {
-    if ((xs[i] - xs.last).abs() > 0.5) {
+    if ((xs[i] - rest).abs() > 0.5) {
       settled = i + 1 < ts.length ? ts[i + 1] : ts[i];
     }
   }
@@ -132,9 +132,13 @@ void main() {
         for (final (key, from, to) in taps) {
           final (rows, ours, _) = tap(key, from, to);
           final ts = [for (final r in rows) r.t];
-          final native = settleOf(ts, [for (final r in rows) r.x]);
+          // Native's rest is its last row (unchanged over the last two);
+          // ours is the segment's centre.
+          final native = settleOf(ts, [for (final r in rows) r.x], rows.last.x);
           expect(
-            settleOf(ts, [for (final f in ours) f.lens.center.dx]),
+            settleOf(ts, [
+              for (final f in ours) f.lens.center.dx,
+            ], controlOf(3).centreOf(to)),
             closeTo(native, native * 0.10),
             reason: '$key settle',
           );
@@ -153,12 +157,6 @@ void main() {
           );
         }
       },
-      skip:
-          'Known gap, VK-550 Task 4 report: the spike tap spring (ζ 0.87, '
-          '0.41 s, +8 ms) overshoots 0.5 / 1.0 pt where native does 2.4 / '
-          '5.0, so it settles by +0.35 s, not +0.70 s, and it leads tap_1_2 '
-          'by up to 9 pt at +0.05 to +0.1 s; no single linear x spring '
-          'meets ±2 pt on all three taps (best 6.7).',
     );
 
     test('a tap on the selected segment grows in place and lets go '
