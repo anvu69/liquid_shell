@@ -238,11 +238,13 @@ These existing defaults change in `fromColorScheme`, for every glass surface (Q5
 
 | Field | Was | Becomes |
 |---|---|---|
-| `liquidTint` light | `surface` @ 0.40 | white @ **0.55** (the brief's cap) |
+| `liquidTint` light | `surface` @ 0.40 | white @ **0.55**, the Task 16 brief's cap. The example-page sample alone fits about 0.62 (0.55 lands at 244 against native 245, inside ±4); a later fit must not quietly raise it past the cap |
 | `liquidTint` dark | `surface` @ 0.45 | #1C1C1C @ **0.90**: #191919 over black needs tint × alpha = 25, which `surface` (≈ 20) cannot reach at any alpha; 0.90 also gives native's 27 over the example's dark page |
 | `rimHighlight` dark | white @ 0.22 | white @ **0.12**: the top rim reads 55 → 48 → 39, native 54 → 47 → 39 (0.22 drew 80) |
 
 The shadow already matches §5 analytically; `selectionFill` is unchanged (dark capsule 55 against 58, inside ±4).
+
+**The 0.55 cap is for the light tint only** *(Task 16 review, the controller's decision; the owner is told)*. The brief's "never above 0.55" protects light glass from turning into a flat white card: over white any white tint reads 255, so only the alpha decides how much page shows. In dark the colour, not the alpha, is the binding constraint: native is #191919 over black, so tint × alpha must be 25, which no alpha of the scheme's `surface` (≈ 20) reaches, and the example's dark page (25) reads 27 under native, which needs alpha ≈ 0.9. So the dark tint is #1C1C1C @ 0.90, fitted to those two native samples. It makes every dark glass surface (sidebar, dialogs, back button, search field) about 90 % opaque; only near-black backdrops were sampled. Native also carries the backdrop's hue in dark (25/25/31 over a bluish page, +6 blue), which a neutral fixed tint cannot (it would need alpha ≤ 0.72, and then the dark page reads 32 against 27): an adaptive material, deferred with Q14.
 
 ## 7. The selected lens (F3)
 
@@ -292,6 +294,8 @@ A lens shadow, `BoxShadow(black 10 %, offset (0, 2), blur 10)`, is drawn with `O
 
 **One fade.** The shader writes alpha 1, so the lens pass cannot fade itself. `GlassTabBar` draws the whole `LiquidLens` (body, rim and shadow) under `Opacity(engage)` (§7.1, §19). Inside, `LiquidLens` is engage-agnostic: its rim, shadow and fills are constants. Fading in both places would give `engage²`.
 
+*Amended in Task 16 (review item 6).* Not for the liquid tier: inside an opacity layer the backdrop pass reads the wrong backdrop. Measured under Impeller in dark, the lens reads 18 luma engaged and the rest capsule 55, but under `Opacity(0.9)` the pass drew 116 (the light-grey flash of the strips). The liquid `LiquidLens` now takes `engage` and fades itself: its optics blend from the pill's own glass (tint, rim, blur, bezel, rim width) at 0 to the lens's at 1, it draws the rest capsule's fill over itself at 1 − engage, and its shadow fades with it. At engage 0 it is the pill with its rest capsule. The frosted and solid lenses keep the one `Opacity`.
+
 ### 7.3 Other tiers
 
 | Tier | Engaged lens |
@@ -336,10 +340,11 @@ rest ──down──▶ pressed ──move>slop──▶ dragging
 
 | Event | Lens x target | Size targets | Pill scale | engage / refraction / highlight | Glow |
 |---|---|---|---|---|---|
-| **down** at x | `clampCentre(x)` on `dragFollow` | ×1.17 w, ×1.30 h | 1.052 | 1 / 1 / 0.845 | on at the finger, 0.28, 93 → 98 pt |
+| **down** at x | `clampCentre(x)` on `dragFollow` (*Task 16:* everything on this row answers **25 ms after the down**, as the research's per-frame traces show: opacityPair 0.18 at 33 ms, 1.0 at 67 ms; lens 94.7 × 54.7 at 33 ms; glow 0.06 at 33 ms. Until it is a drag the press moves on `tap`) | ×1.17 w, ×1.30 h | 1.052 | 1 / 1 / 0.845 | on at the finger, 0.28, 93 → 98 pt |
 | **move** | `clampCentre(x)` on `dragFollow` | as pressed | 1.052 | as pressed | follows the finger |
-| **up after a drag** | the nearest slot to the *lens* centre, on `snap` from the current velocity. After a flick (finger speed ≥ **600 pt/s** at release, read as UIKit does: Flutter's `IOSScrollViewFlingVelocityTracker`, a weighted mean of the last three steps, *Task 16*, **(assumption)** between research §4.2's 90 pt/s slow drag, which snapped to the lens's slot, and its 1500 pt/s flick, which shot to the finger's slot) the slot under the *finger* | rest, release springs | 1 | 0 / 0 / 0 (out springs) | ripple: ×4 and fade over 0.5 s |
-| **up after a tap** (travel ≤ `kTouchSlop`) | the slot under the *finger*, on `tap` after a 25 ms delay (*Task 16:* the lens holds where it is during the delay, though the press had aimed it at the finger; the delay ends inside a frame, not at its start) | flight envelope (§8.3) | 1.022 for 0.12 s, then 1 | engage held at 1 until 0.35 s, then out; refraction out after 0.25 s; highlight impulse 0.7, then out | ripple |
+| **up after a drag** | the nearest slot to the *lens* centre, on `snap` from the current velocity. After a flick (finger speed ≥ **600 pt/s** at release, read as UIKit does: Flutter's `IOSScrollViewFlingVelocityTracker` fed the down and the moves only, a weighted mean of the last three steps, and 0 when the finger was still for more than 40 ms before lifting, *Task 16*, **(assumption)** between research §4.2's 90 pt/s slow drag, which snapped to the lens's slot, and its 1500 pt/s flick, which shot to the finger's slot) the slot under the *finger* | rest, release springs | 1 | 0 / 0 / 0 (out springs) | ripple: ×4 and fade over about 0.55 s |
+| **up after a flick** *(Task 16, replaces the row above for a flick)* | the slot under the *finger*, on `dragFollow` from the current velocity: native covers the last 98 pt in about 0.12 s (5.1 pt short at +0.115 s) | one-slot lift: w × `stretchFloor`, h × (1 + `liftGain`), until it lands | 1 | **1 / 1 / 0 until the lens lands** (first within 1 pt of the slot), then out. Native keeps the clear lens through the flight (opacityPair 1.0 to +0.21 s) | ripple |
+| **up after a tap** (travel ≤ `kTouchSlop`) | the slot under the *finger*, on `tap` after a 25 ms delay **from the down** (*Task 16, review I2:* a lift after the delay retargets the moving lens and keeps its speed, no brake; the delay ends inside a frame, not at its start. The flight's timers (lift, hold, bulge, pop) also run from the down. The press look lasts until 25 ms after the press ends, and a quicker tap reads as a 66 ms press, as every measured native tap was; after a press longer than 0.23 s the lens stays clear 0.12 s past the lift, as native's press release) | flight envelope (§8.3) | 1.022 for 0.12 s, then 1 | engage held at 1 until 0.35 s, then out; refraction out after 0.25 s; highlight impulse 0.7, then out | ripple |
 | **cancel** | the committed slot, on `snap` | rest | 1 | out | fade |
 | **semantics tap / programmatic** | §8.7 | | | | none |
 
@@ -370,11 +375,17 @@ This reproduces the measured peaks:
 
 *Research §7.4* gives `0.9 + 0.00045·|v|` with no knee. This section supersedes it.
 
-*Task 16: no change, on purpose.* The example's frame strips (`tab-strips/idb`) show the Flutter lens 8–10 pt past the pill top and bottom in flight and white until about 400 ms, where native seems to stay inside the pill and turn gray by about 250 ms. Neither is a geometry or timing gap:
+*Amended in Task 16 review (the stretch phase).* Checked frame by frame against the per-frame UIKit traces, the shape is per slot count, not per velocity: native narrows a one-slot lens at ~600 pt/s but keeps a two-slot lens 125 pt wide at 450 pt/s.
+- **One slot:** w × `stretchFloor` (0.9 → **0.87**) and h × (1 + `liftGain`) while `since < liftUntil` (0.25 → **0.22** s from the down): 86 × 80 at 0.20 s against native 84.8 × 81.8, 90 × 70 at 0.30 s against 94.6 × 70.7.
+- **Two slots or more:** the widest `stretchFor(v)` reached is held until `liftUntil`, then the lens lifts late (h × (1 + `liftGain` · `liftGateFar`) until `farLiftUntil`, **0.34** s); `stretchMax` 1.46 → **1.425** for the native 127.4 pt peak (×1.355): 125 × 59 at 0.18 s against native 127.4 × 55.8.
+- **The swell first:** the press look before the flight (above) gives native's 96–100 pt early width (99 × 57 at 67 ms, native 95.7 × 59.8 at 69 ms).
+- Refraction keeps 0.25 s (`refractUntil`). All within ±10 % of the native frames (the §17.4 trace rows).
+
+*Task 16 part A, before the review: no change, on purpose.* The example's frame strips (`tab-strips/idb`) show the Flutter lens 8–10 pt past the pill top and bottom in flight and white until about 400 ms, where native seems to stay inside the pill and turn gray by about 250 ms. Neither is a geometry or timing gap:
 - **Height.** Over the example's plain page the clear native lens is invisible outside the pill; the Flutter lens is opaque (the 0.90 veil, Task 16 part B). Over the research's striped backdrop (`native265_tap.png`, t = 0.15 s) the native lens is ≈ 79 pt tall on the 61 pt pill, ×1.47, poking out about 8 pt each side: the ×1.55 model holds.
 - **Timing.** In the example, a native tab tap is a *propose*: `shouldSelectTab` returns false and Dart selects the tab programmatically (`NativeTabsController.swift`), so the strip shows UIKit's reaction to a refused tap followed by a programmatic selection, not the plain tap the research measured on a pure `UITabBarController` (clear until ≈ 0.35 s, gray by ≈ 0.45 s, which the model follows). The research trace is the better reference for the tap. The two-frame early start in the traces was real and is fixed (§8.2, 25 ms hold).
 
-It is a model, not UIKit's soft body. It matches peaks and timing within ±10 %, not every intermediate frame (research §8). The constants (`0.9`, `700`, `0.005`, the clamp `1.46`) and `0.55 / 0.45` live in `TabSprings` and are the only tuning knobs.
+It is a model, not UIKit's soft body. It matches peaks and timing within ±10 %, not every intermediate frame (research §8). The constants (`0.9`, `700`, `0.005`, the clamp `1.46`; *Task 16:* `0.87` and `1.425`, with `liftUntil` 0.22 and `farLiftUntil` 0.34) and `0.55 / 0.45` live in `TabSprings` and are the only tuning knobs.
 
 ### 8.4 Effects per frame (`LensFrame`)
 
@@ -384,7 +395,8 @@ It is a model, not UIKit's soft body. It matches peaks and timing within ±10 %,
 | `engage` | 0–1 (§7.1) |
 | `refraction` | 0–1, drives the lens thickness and dispersion |
 | `pillScale` | about the pill centre. Applied by inflating the pill *rect* (so the glass radii stay exact) and scaling the row content with a `Transform` |
-| `highlight` | white overlay on the pill. Light: `0.85·highlight`. Dark: `0.25·highlight` **(assumption: not captured)** |
+| `highlight` | white overlay on the pill. Light: `0.85·highlight`. Dark: **none** (*Task 16:* the dark idb strip shows the native pill at its 25 fill through a tap; the 0.25 assumption lit it to 79. The finger glow is not drawn in dark either, for the same reason) |
+| glow ripple | *Task 16:* the ripple's scale (×1 → ×4) and fade follow one critically damped spring of 0.5 s response, 25 ms after the lift: native LittleGlowView ×1.54 / 0.233 at +83 ms, ×3.34 / 0.063 at +250 ms, gone (99 %) at about 0.55 s. It starts from the full 0.28 glow, so a tap whose down and up land in one frame still ripples |
 | `glowCenter`, `glowDiameter`, `glowOpacity` | radial gradient (white at the centre → transparent at the edge), drawn above the pill and under the tinted copy |
 | `magnify` | `1 + 0.16·engage` on the tinted copy |
 | `glowCenter` … ripple | *Task 16:* the release ripple starts from the full 0.28 glow, so a tap whose down and up land in one frame still ripples |
@@ -458,7 +470,7 @@ The research could not observe tab bar haptics on the simulator (§4.4). The own
   - **The selected icon** moves from its slot's icon frame to the circle centre. It is drawn in the selected colour, with its badge.
   - **The lens fill** fades with the labels. The minimized circle shows no selection capsule.
   - **The trailing circle** lerps from its `E × E` rect to its `48 × 48` rect about the same centre.
-- **Expand.** A tap on the circle sets `minimized` false (the shell's `onExpand`). `morph` goes 1 → 0 on `expand`, with no delay. *Amended in Task 16:* ζ 0.80, not 0.70. Research §6 gives only "≈ 0.35 s, small overshoot". The native TabFid expand strip shows the right edge passing the pill by about 4 pt; ζ 0.70 gave about 12 pt (4.6 % of the 262 pt travel), and a full-width pill 8 pt from the ⌕ overlapped it for a few frames. ζ 0.80 overshoots 1.5 %, about 4 pt. The rect lerp stays unclamped: UIKit springs the frame, so the overshoot is a frame extrapolation, not a scale.
+- **Expand.** A tap on the circle sets `minimized` false (the shell's `onExpand`). `morph` goes 1 → 0 on `expand`, 25 ms after the tap (*Task 16 review item 7:* every native touch answers about 25 ms late, and the Flutter search close led native by about a row). *Amended in Task 16:* ζ 0.80, not 0.70. Research §6 gives only "≈ 0.35 s, small overshoot". The native TabFid expand strip shows the right edge passing the pill by about 4 pt; ζ 0.70 gave about 12 pt (4.6 % of the 262 pt travel), and a full-width pill 8 pt from the ⌕ overlapped it for a few frames. ζ 0.80 overshoots 1.5 %, about 4 pt. The rect lerp stays unclamped: UIKit springs the frame, so the overshoot is a frame extrapolation, not a scale.
 - **Hit test.** It is the current glass rect only.
 - **Reduce motion.** Instant: no delay, no spring, no dip.
 - **Implementation.** It is one glass shape (`LiquidGlass` positioned at the animated rect), not two cross-faded shapes. The research suggests a smooth-min SDF for a gooey merge of the pill and ⌕, but native swaps visibility during the dip, so one moving rect plus the ⌕ shrinking about its own centre reads the same (research §6).
@@ -474,7 +486,7 @@ P3b-1's `CompactSearchChrome` keeps its three phases and its single `SearchField
 | Selected / active: previous tab | the pill fades out, and a separate `kSearchCollapsedKey` circle fades in at start 28 | the bar **minimizes** with the §10 morph (`morph` → 1, no 240 ms delay). Its circle shows `previous`'s icon and is the collapsed circle: it carries `kSearchCollapsedKey`, the previous label in semantics, and tap → `_onSelect(previous)`. Native shows the same 48 circle at x = 28 (research §1.1, §6) |
 | Back to idle | the circle fades out, the pill fades in | the bar expands with the §10 morph |
 | ⌕ circle in idle | 62 square at `width − margin − E` | unchanged size; it is the drag target; `hovered` draws its highlight |
-| Field morph | 350 ms `easeOutCubic` | unchanged (P3b Q12). Only the collapsed circle moved to the bar |
+| Field morph | 350 ms `easeOutCubic` | unchanged (P3b Q12). Only the collapsed circle moved to the bar. *Task 16:* to and from idle the field runs on the bar's own springs (`SpringCurve`: `expand` with the 25 ms delay to idle, `collapse` to selected), so the two move in step as native; to active (the keyboard) it keeps the P3b ease |
 | `minimizeOnScroll` while search is selected | suspended | suspended (unchanged). The minimized look is driven by the phase, not by `_minimized` |
 
 `compactSearchRects` keeps its signature. Only its `margin` argument becomes 21. Its `circle` rect equals the bar's `minimized` rect in screen coordinates, which a test pins.
@@ -692,6 +704,8 @@ The packages are at `0.1.0-dev.5`. This item ships as `0.1.0-dev.6`, and the CHA
 | Icon pop, magnify | ×1.16 | ±0.02 |
 | Glow | 93 pt, 0.28, ×4 over 0.5 s | ±2 pt, ±0.03, ±10 % |
 | Rest colours (lens fill, labels) | #ECECEC / #3A3A3A / #191919 / #F4F4F4 | ±4 / 255 per channel at the sampled pixel, over a white or black page |
+
+*Amended in Task 16 review (item 8).* Every row is labelled by kind: **native** (independent native data, and the model can fail it), **native, constant** (the label colours: Flutter sets them to the measured values), or **fit** (Flutter against a fitted spring; a bug detector, not native evidence). The read-back rows are gone (held press size, scale and glow; the tap glow's start; the ripple's ×4 and 0.5 s; the light fill over white, which any white tint passes). They are replaced by frame-by-frame rows against the research's per-frame UIKit traces (the tap's shape, the press's size, scale and glow onset, the release's size and engage, the ripple, the flick's landing and clear lens) and by the light fill over the example's page (native 245). `native_reference.json` keeps `springs.expand` at ζ 0.70 (it never moves with the code) and adds the measured `expandOvershoot`, 4 pt; ζ 0.80 meets both. `make tab-traces` adds an 80 ms tap and fails it if the lift brakes the lens.
 
 *Amended in Task 16.* The drag-lag row compares against the fit's analytic ramp lag (7.09 pt), not the research's "about 9 pt": the 9 pt is one hand reading of the trace the fit used, and the frame strips cannot decide it (`native_reference.json` → `dragLag`). The comparison also checks the tap delay, the three slot rects, the tap glow (93 pt, 0.28, ×4, 0.5 s), that a fast flick lands on the finger's slot, the expand settle, and the rest colours (sampled by the integration test over white and black pages). The snap settle is not checked: the slow drag ends on its target, so it has no snap to measure.
 

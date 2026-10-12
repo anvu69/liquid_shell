@@ -286,7 +286,9 @@ class CompactSearchChrome extends StatelessWidget {
             key: kSearchFieldKey,
             rect: rects.field,
             // To and from idle the bar morphs too: the field takes its
-            // spring. Selected ↔ active (the keyboard) keeps the P3b ease.
+            // spring (the curve follows the phase it goes to, so active →
+            // selected, the keyboard closing, runs on collapse too). To
+            // active, the keyboard opening, keeps the P3b ease.
             duration: duration == Duration.zero
                 ? duration
                 : switch (phase) {
