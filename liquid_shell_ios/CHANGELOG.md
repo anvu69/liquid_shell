@@ -1,6 +1,8 @@
 ## 0.1.0-dev.6
 
-- No changes; versioned with `liquid_shell`.
+- A page stack applied with the config that selects or leaves a tab is a
+  restore, set without a transition; only a tab that stays selected
+  animates its pushes and pops (VK-502).
 
 ## 0.1.0-dev.5
 

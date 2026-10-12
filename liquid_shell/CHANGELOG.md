@@ -47,6 +47,10 @@
   `fromColorScheme` (the touched tab lens adds its own fringe; pass
   `dispersion: 0.3` for the previous look), `labelStyle` 10 / 1.2 / w500 /
   no tracking.
+- **Fixes (VK-491, VK-502).** The native page stack is computed after the
+  frame, so a tab switch no longer sends the stack of the tab just left;
+  a tab keeps its pages while offstage, and returning to it restores them
+  without replaying the push.
 
 ## 0.1.0-dev.5
 
