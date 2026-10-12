@@ -10,6 +10,7 @@ import 'package:liquid_shell/src/chrome/fit_label.dart';
 import 'package:liquid_shell/src/chrome/large_content_viewer.dart';
 import 'package:liquid_shell/src/chrome/lens_gesture.dart';
 import 'package:liquid_shell/src/chrome/lens_motion.dart';
+import 'package:liquid_shell/src/chrome/lens_track.dart';
 import 'package:liquid_shell/src/chrome/tab_bar.dart' show LiquidActionCircle;
 import 'package:liquid_shell/src/chrome/tab_geometry.dart';
 import 'package:liquid_shell/src/chrome/tab_springs.dart';
@@ -863,7 +864,7 @@ class _GlassTabBarState extends State<GlassTabBar>
   }
 
   /// The slot whose tap area holds bar-local [x], or null.
-  static int? _slotUnder(TabBarGeometry g, double x) {
+  static int? _slotUnder(LensTrack g, double x) {
     for (var s = 0; s < g.slots.length; s++) {
       final hit = _hitRect(g.slots, s).shift(g.slots[s].topLeft);
       if (x >= hit.left && x < hit.right) return s;

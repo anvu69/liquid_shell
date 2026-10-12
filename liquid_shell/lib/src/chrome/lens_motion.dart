@@ -3,7 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart' show kTouchSlop;
 import 'package:flutter/painting.dart';
-import 'package:liquid_shell/src/chrome/tab_geometry.dart';
+import 'package:liquid_shell/src/chrome/lens_profile.dart';
+import 'package:liquid_shell/src/chrome/lens_track.dart';
 import 'package:liquid_shell/src/chrome/tab_springs.dart';
 
 /// What the lens is doing (spec VK-503 §8.2).
@@ -116,17 +117,20 @@ class LensFrame {
 }
 
 /// The lens state machine (spec §8). Pure: the widget feeds it pointer
-/// events in bar-local coordinates and calls [advance] once per frame.
+/// events in track-local coordinates and calls [advance] once per frame.
 class LensMotion {
-  /// Starts at rest on [selected] (null: nothing highlighted).
+  /// Starts at rest on [selected] (null: nothing highlighted), moving on
+  /// [profile] ([LensProfile.tab] when null).
   LensMotion({
-    required TabBarGeometry geometry,
+    required LensTrack geometry,
     required int? selected,
+    LensProfile? profile,
     this.reduceMotion = false,
   }) : _geometry = geometry,
+       profile = profile ?? LensProfile.tab,
        _committed = _valid(selected, geometry) {
     final rest = _restRect(_committed);
-    _x = SpringValue(rest.center.dx, TabSprings.tap);
+    _x = SpringValue(rest.center.dx, this.profile.tap);
     _w = SpringValue(rest.width, TabSprings.widthOut);
     _h = SpringValue(rest.height, TabSprings.heightOut);
   }
@@ -134,7 +138,10 @@ class LensMotion {
   /// Reduce motion (spec §13.2).
   bool reduceMotion;
 
-  TabBarGeometry _geometry;
+  /// The springs and envelope the lens moves on (spec VK-550 §8.1).
+  final LensProfile profile;
+
+  LensTrack _geometry;
   int? _committed;
   int? _pending;
   LensPhase _phase = LensPhase.rest;
@@ -143,15 +150,15 @@ class LensMotion {
   late final SpringValue _w;
   late final SpringValue _h;
   final SpringValue _scale = SpringValue(1, TabSprings.scaleOut);
-  final SpringValue _engage = SpringValue(0, TabSprings.engageOut);
-  final SpringValue _refraction = SpringValue(0, TabSprings.effectOut);
-  final SpringValue _highlight = SpringValue(0, TabSprings.effectOut);
+  late final SpringValue _engage = SpringValue(0, profile.engageOut);
+  late final SpringValue _refraction = SpringValue(0, profile.effectOut);
+  late final SpringValue _highlight = SpringValue(0, profile.effectOut);
   final SpringValue _glowOpacity = SpringValue(0, TabSprings.glowIn);
   final SpringValue _glowDiameter = SpringValue(
     TabSprings.glowDiameter,
     TabSprings.glowIn,
   );
-  final SpringValue _pop = SpringValue(1, TabSprings.tap);
+  late final SpringValue _pop = SpringValue(1, profile.tap);
 
   Offset? _glowCenter;
   double? _rippleAge;
@@ -199,12 +206,12 @@ class LensMotion {
     _pop,
   ];
 
-  static int? _valid(int? slot, TabBarGeometry g) =>
+  static int? _valid(int? slot, LensTrack g) =>
       slot != null && slot >= 0 && slot < g.slots.length ? slot : null;
 
   /// The geometry; a new one at rest moves the lens without animation.
-  TabBarGeometry get geometry => _geometry;
-  set geometry(TabBarGeometry value) {
+  LensTrack get geometry => _geometry;
+  set geometry(LensTrack value) {
     if (value == _geometry) return;
     _geometry = value;
     _committed = _valid(_committed, value);
@@ -283,11 +290,11 @@ class LensMotion {
     if (reduceMotion) {
       // No slide toward the finger: a tap dissolves in place (§13.2). The
       // capsule follows only once the press turns into a drag.
-      _x.spring = TabSprings.reduced;
+      _x.spring = profile.reduced;
     } else {
       // The lens turns toward the finger 25 ms after the down, not at it
       // (research §4.1 trace: the press answers at 25-30 ms).
-      _x.spring = TabSprings.dragFollow;
+      _x.spring = profile.dragFollow;
       _glowCenter = local;
       _rippleAge = null;
       _glowDiameter.jump(TabSprings.glowDiameter);
@@ -302,7 +309,7 @@ class LensMotion {
     if (!reduceMotion) _glowCenter = local;
     if (reduceMotion && _phase == LensPhase.pressed) return;
     _aim = _geometry.clampCentre(local.dx);
-    if (reduceMotion || _since >= TabSprings.tapDelay) _x.target = _aim;
+    if (reduceMotion || _since >= profile.tapDelay) _x.target = _aim;
   }
 
   /// Finger up at [local] with horizontal [velocity]; returns the committed
@@ -310,7 +317,7 @@ class LensMotion {
   int? up(Offset local, {double velocity = 0}) {
     if (!interacting) return null;
     final tap = _phase == LensPhase.pressed;
-    final flick = velocity.abs() >= TabSprings.flickVelocity;
+    final flick = velocity.abs() >= profile.flickVelocity;
     final slot = _geometry.slotNearest(tap || flick ? local.dx : _x.value);
     _startRipple();
     _commit(slot, tap: tap, flick: flick && !tap);
@@ -331,11 +338,19 @@ class LensMotion {
     _commit(slot, tap: true);
   }
 
-  /// A programmatic selection: jump (spec §8.7, Q12).
+  /// A programmatic selection: slides on [LensProfile.programmatic], or
+  /// jumps when it is null or under reduce motion (spec §8.7, Q12; spec
+  /// VK-550 §8).
   void show(int? slot) {
     _pending = null;
-    _committed = _valid(slot, _geometry);
-    _jumpTo(_committed);
+    final committed = _committed = _valid(slot, _geometry);
+    final spring = profile.programmatic;
+    if (spring == null || reduceMotion || committed == null) {
+      _jumpTo(committed);
+      return;
+    }
+    _x.retarget(_geometry.centreOf(committed), spring);
+    _phase = LensPhase.settling;
   }
 
   /// The app adopted the pending commit.
@@ -368,7 +383,7 @@ class LensMotion {
     }
     _x.retarget(
       _geometry.centreOf(c),
-      reduceMotion ? TabSprings.reduced : TabSprings.snap,
+      reduceMotion ? profile.reduced : profile.snap,
     );
   }
 
@@ -411,7 +426,7 @@ class LensMotion {
       _flightSlots = 1;
       _releaseAt = _since;
       _flightTarget = _geometry.centreOf(slot);
-      _x.retarget(_flightTarget, TabSprings.flickLand);
+      _x.retarget(_flightTarget, profile.flickLand);
       return;
     }
     if (!tap) {
@@ -425,7 +440,7 @@ class LensMotion {
     // envelope moves up so the lens stays clear 0.12 s past the lift, as
     // native's press release does (research §4.1 trace).
     _releaseAt = math.max(_since, TabSprings.tapPress);
-    final late = _releaseAt + TabSprings.releaseHold - TabSprings.flightHold;
+    final late = _releaseAt + profile.releaseHold - TabSprings.flightHold;
     if (late > 0) {
       _since -= late;
       _releaseAt -= late;
@@ -434,13 +449,13 @@ class LensMotion {
     _flightTarget = _geometry.centreOf(slot);
     // Timed from the down: within the first 25 ms the lens still holds;
     // after that it flies on, keeping the speed the press gave it.
-    if (_since >= TabSprings.tapDelay) {
-      _x.retarget(_flightTarget, TabSprings.tap);
+    if (_since >= profile.tapDelay) {
+      _x.retarget(_flightTarget, profile.tap);
     } else {
-      _x.spring = TabSprings.tap;
+      _x.spring = profile.tap;
     }
     _popSlot = slot;
-    _pop.retarget(TabSprings.pop, TabSprings.tap);
+    _pop.retarget(TabSprings.pop, profile.tap);
   }
 
   /// Advances [dt] seconds; true while anything still moves.
@@ -454,16 +469,16 @@ class LensMotion {
     // lens answers at 25 ms, not a frame early.
     final crossing =
         !reduceMotion &&
-        before < TabSprings.tapDelay &&
-        _since >= TabSprings.tapDelay;
+        before < profile.tapDelay &&
+        _since >= profile.tapDelay;
     if (crossing) {
       _setTargets(before);
       for (final s in _springs) {
-        s.advance(TabSprings.tapDelay - before);
+        s.advance(profile.tapDelay - before);
       }
     }
     _setTargets(_since);
-    final rest = crossing ? _since - TabSprings.tapDelay : dt;
+    final rest = crossing ? _since - profile.tapDelay : dt;
     for (final s in _springs) {
       s.advance(rest);
     }
@@ -494,7 +509,7 @@ class LensMotion {
   /// flick's release.
   void _endFlight() {
     if (_flick) {
-      if (_since - _releaseAt >= TabSprings.flickHold) {
+      if (_since - _releaseAt >= profile.flickHold) {
         _phase = LensPhase.settling;
       }
       return;
@@ -505,6 +520,12 @@ class LensMotion {
 
   /// The targets of every spring at [since] seconds into the interaction.
   void _setTargets(double since) {
+    // Segment targets arrive with the segment envelope (VK-550 Task 4).
+    if (profile.envelope is TabEnvelope) _tabTargets(since);
+  }
+
+  /// The tab envelope's targets (spec VK-503 §8.3).
+  void _tabTargets(double since) {
     final rest = _geometry.restLensAt(_x.value);
     var w = rest.width;
     var h = rest.height;
@@ -512,7 +533,7 @@ class LensMotion {
     var engage = 0.0;
     var refraction = 0.0;
     var highlight = 0.0;
-    final answered = reduceMotion || since >= TabSprings.tapDelay;
+    final answered = reduceMotion || since >= profile.tapDelay;
     final pressing =
         _phase == LensPhase.pressed || _phase == LensPhase.dragging;
     if (pressing && answered && !reduceMotion) {
@@ -520,7 +541,7 @@ class LensMotion {
       // tap traces include their 66 ms press); a drag follows the finger.
       _x.retarget(
         _aim,
-        _phase == LensPhase.dragging ? TabSprings.dragFollow : TabSprings.tap,
+        _phase == LensPhase.dragging ? profile.dragFollow : profile.tap,
       );
     }
     // A tap shows the press until 25 ms after its press ends, and a tap
@@ -532,7 +553,7 @@ class LensMotion {
         (pressing ||
             (_phase == LensPhase.flying &&
                 !_flick &&
-                since < _releaseAt + TabSprings.tapDelay));
+                since < _releaseAt + profile.tapDelay));
     if (pressLook) {
       if (!pressing) _x.target = _flightTarget;
       w *= TabSprings.pressWidthFactor;
@@ -551,10 +572,11 @@ class LensMotion {
       refraction = 1;
     } else if (_phase == LensPhase.flying && answered) {
       _x.target = _flightTarget;
-      if (_geometry.form == TabBarForm.top) {
+      final inflation = _geometry.tapInflation;
+      if (inflation != null) {
         if (since < TabSprings.liftUntil) {
-          w *= TabSprings.topTapWidth;
-          h *= TabSprings.topTapHeight;
+          w *= inflation.width;
+          h *= inflation.height;
         }
       } else if (_flightSlots == 1) {
         // One slot lifts: narrow and tall until 0.20 s (research §3).
@@ -588,26 +610,24 @@ class LensMotion {
     );
     _engage.retarget(
       engage,
-      engage >= _engage.value ? TabSprings.engageIn : TabSprings.engageOut,
+      engage >= _engage.value ? profile.engageIn : profile.engageOut,
     );
     _refraction.retarget(
       refraction,
-      refraction >= _refraction.value
-          ? TabSprings.effectIn
-          : TabSprings.effectOut,
+      refraction >= _refraction.value ? profile.effectIn : profile.effectOut,
     );
     _highlight.retarget(
       highlight,
       highlight >= _highlight.value
           ? TabSprings.highlightIn
-          : TabSprings.effectOut,
+          : profile.effectOut,
     );
     // The glow, like the lens, answers 25 ms after the down (research
     // LittleGlowView trace: 0.06 at 33 ms, 0.23 at 66 ms).
     final holding = interacting && !reduceMotion && answered;
     _glowOpacity.retarget(
       holding ? TabSprings.glowOpacity : 0,
-      holding ? TabSprings.glowIn : TabSprings.effectOut,
+      holding ? TabSprings.glowIn : profile.effectOut,
     );
     if (holding) _glowDiameter.target = TabSprings.glowHeldDiameter;
   }
@@ -616,8 +636,8 @@ class LensMotion {
   /// damped spring of [TabSprings.glowFade] response, 25 ms late. It fits
   /// the native LittleGlowView trace, scale and opacity alike (×1.54 and
   /// 0.82 of the glow at +83 ms, ×3.34 and 0.22 at +250 ms).
-  static double _rippleAt(double age) {
-    final t = age - TabSprings.tapDelay;
+  double _rippleAt(double age) {
+    final t = age - profile.tapDelay;
     if (t <= 0) return 0;
     final x = 2 * math.pi / TabSprings.glowFade * t;
     return 1 - math.exp(-x) * (1 + x);
@@ -640,7 +660,7 @@ class LensMotion {
   void _advanceGhost(double dt) {
     if (_ghostSlot == null && _fadeIn >= 1) return;
     _ghostAge += dt;
-    _fadeIn = (_ghostAge / TabSprings.ghostFade).clamp(0.0, 1.0);
+    _fadeIn = (_ghostAge / profile.ghostFade).clamp(0.0, 1.0);
     if (_fadeIn >= 1) _ghostSlot = null;
   }
 
@@ -667,9 +687,7 @@ class LensMotion {
 
   /// The frame to paint now.
   LensFrame get frame {
-    final cy = _geometry.slots.isEmpty
-        ? _geometry.size.height / 2
-        : _geometry.slots.first.center.dy;
+    final cy = _geometry.slots.isEmpty ? 0.0 : _geometry.slots.first.center.dy;
     final age = _rippleAge;
     final ripple = age == null ? null : _rippleAt(age);
     return LensFrame(

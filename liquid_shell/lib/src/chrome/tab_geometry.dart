@@ -2,6 +2,8 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
+import 'package:liquid_shell/src/chrome/lens_track.dart';
+import 'package:liquid_shell/src/chrome/tab_springs.dart';
 
 /// iOS 26.5 tab bar metrics in logical points (spec VK-503 §5, research
 /// §1).
@@ -96,7 +98,7 @@ enum TabBarForm {
 
 /// Where everything in one tab bar is, in bar-local coordinates.
 @immutable
-class TabBarGeometry {
+class TabBarGeometry implements LensTrack {
   /// Creates a geometry.
   const TabBarGeometry({
     required this.form,
@@ -119,6 +121,7 @@ class TabBarGeometry {
 
   /// Selection and hit capsule per shown destination, in destination order
   /// (mirrored in RTL: slot 0 is at the right).
+  @override
   final List<Rect> slots;
 
   /// The trailing circle, or null.
@@ -131,9 +134,11 @@ class TabBarGeometry {
   final Rect? minimizedTrailing;
 
   /// Centre x of [slot].
+  @override
   double centreOf(int slot) => slots[slot].center.dx;
 
   /// The slot whose centre is nearest [x]; the first one on a tie.
+  @override
   int slotNearest(double x) {
     var best = 0;
     var distance = double.infinity;
@@ -148,6 +153,7 @@ class TabBarGeometry {
   }
 
   /// [x] clamped between the outermost slot centres.
+  @override
   double clampCentre(double x) {
     if (slots.isEmpty) return pill.center.dx;
     final a = slots.first.center.dx;
@@ -157,6 +163,7 @@ class TabBarGeometry {
 
   /// The lens size at rest with its centre at [x]: the slot size, or the
   /// two neighbouring slots' sizes interpolated (content-sized forms).
+  @override
   Size restLensAt(double x) {
     if (slots.isEmpty) return Size.zero;
     final order = [...slots]
@@ -173,6 +180,12 @@ class TabBarGeometry {
     final t = (x - a.center.dx) / (b.center.dx - a.center.dx);
     return Size.lerp(a.size, b.size, t)!;
   }
+
+  /// The regular top bar's tap inflation (research §1.3); null elsewhere.
+  @override
+  Size? get tapInflation => form == TabBarForm.top
+      ? const Size(TabSprings.topTapWidth, TabSprings.topTapHeight)
+      : null;
 
   @override
   bool operator ==(Object other) =>
