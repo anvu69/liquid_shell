@@ -104,7 +104,7 @@ Two outcomes:
 | No glow, no bulge, no highlight | no `LittleGlowView`; the control's layer never scales | §2 |
 | Haptics | not observable on the simulator | §3 |
 
-Still to capture (plan Task 1): a held press on an unselected segment, dark traces and the engaged lens's colours, label magnification under the lens, the refracting ring width, the flick landing, five segments, RTL, accessibility sizes.
+Still to capture (plan Task 1): a held press on an unselected segment, dark traces and the engaged lens's colours, label magnification under the lens, the refracting ring width, the flick landing, five segments, RTL, accessibility sizes. The spring of the lens after a drag release is not a capture: Task 4 fits it to the fixture's `slow_drag.release_rows` and `flick` rows (§8.2).
 
 ## 4. Architecture
 
@@ -202,12 +202,12 @@ Worked checks against spike §2 (iPhone 17 Pro, full width 370):
 |---|---|---|---|---|
 | Lens x after a tap | **0.87** | **0.41 s** | **8 ms** after the commit | spike §3, three taps |
 | Lens x following the finger | 0.75 | 0.33 s | none | VK-503 `dragFollow`; spike lag within −5 % |
-| Lens x after a drag release | 0.87 | 0.41 s | none | **(assumption: the tap spring)**; Task 1 fits the release |
-| Programmatic slide | **0.82** | **0.41 s** | none | spike §3 |
+| Lens x after a drag release (and a flick) | **0.64** | **0.31 s** | none | Task 4: fitted to `slow_drag.release_rows` and the `flick` rows after the release, with the flick overshoot held to native's (3.9 pt) |
+| Programmatic slide | **0.82** | **0.41 s** | **30 ms** after the write | spike §3; Task 4 fits the delay to `programmatic_2seg` (every row within 1.6 pt) |
 | Size, press (w and h) | **1.0** | **0.25 s** | **24 ms** after the down | spike §3 |
 | Size, release in place | **1.0** | **0.24 s** | 16 ms | spike §3 |
-| Size wobble after a landing | to fit (≈ 0.45) | to fit (≈ 0.40 s) | none | Task 4 fits it to the spike's per-frame rows |
-| Engage in / out | 1.0 | 0.065 / 0.20 s | as VK-503 | spike: 0 → 1 within ≈ 50 ms |
+| Size wobble after a landing | **0.42** | **0.47 s** | none | Task 4: fitted to the tap rows with the lifts (§8.4) |
+| Engage in / out | 1.0 | 0.065 / 0.20 s | as VK-503 | spike: 0 → 1 within ≈ 50 ms; held 0.335 s after a tap's commit and 0.11 s after an up (Task 4, the tap and release rows) |
 
 ### 8.3 States and events
 
@@ -218,7 +218,7 @@ The state machine is VK-503's (§8.2: rest, pressed, dragging, flying, settling)
 | **down** at x | holds. On the selected segment the lens grows (next columns). On **another** segment nothing moves until the up (measured in Task 1, `pressOther`: no lens frame changes for the whole 2.16 s hold; the pressed segment's w400 label fades to opacity 0.2 over ≈ 0.45 s); the up then takes the tap path | selected segment: thumb + (24, 16) after 24 ms on the press spring; another segment: rest | selected segment: 1 / 1 after 24 ms; another segment: 0 | none |
 | **move** beyond the slop | `clampCentre(x)` on `dragFollow` | pressed, plus the speed squash (§8.4) | 1 / 1 | none |
 | **up, tap** (travel ≤ slop) | the segment under the finger, on the tap spring, 8 ms after the up | flight shape (§8.4) | 1 until 0.30 s after the commit, then out | **at the up** |
-| **up after a drag** | the segment nearest the *lens* centre (as native and VK-503); after a flick (≥ 600 pt/s, VK-503's reading) the segment under the *finger* | release spring, then the wobble | out after VK-503's `releaseHold` / `flickHold` | **at the up** |
+| **up after a drag** | the segment nearest the *lens* centre (as native and VK-503); after a flick (≥ 600 pt/s, VK-503's reading) the segment under the *finger* | release spring (Task 4: `slow_drag` has no wobble within ±2 pt; the flick's landing wobble, w ×1.09 / h ×0.88, is not modelled) | out 0.11 s after the up (Task 4, `release`, `slow_drag`, `flick`) | **at the up** |
 | **cancel** | the committed segment, release spring | rest | out | none |
 | **semantics tap** | the tap path without a press | flight shape | as a tap | at once |
 | **programmatic** (`selectedIndex` changed by the app, no pending commit) | slides on the programmatic spring | rest | 0 | none (no `onChanged`) |
