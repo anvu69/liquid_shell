@@ -605,13 +605,17 @@ class _GlassTabBarState extends State<GlassTabBar>
                             fillOpacity: restOpacity,
                             ghost: frame.ghost?.shift(-origin),
                             ghostOpacity: frame.ghostOpacity,
-                            highlight: frame.highlight * (dark ? 0.25 : 0.85),
+                            // Dark: native's pill stays at its fill
+                            // through a press, no visible highlight or
+                            // glow (idb dark strip, Task 16 review; the
+                            // spec's 0.25 was an assumption).
+                            highlight: dark ? 0 : frame.highlight * 0.85,
                             glowCenter: frame.glowCenter?.translate(
                               -origin.dx,
                               -origin.dy,
                             ),
                             glowDiameter: frame.glowDiameter,
-                            glowOpacity: frame.glowOpacity,
+                            glowOpacity: dark ? 0 : frame.glowOpacity,
                           ),
                         ),
                       ),

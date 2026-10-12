@@ -149,4 +149,32 @@ void main() {
     final fill = _rgb(data, _fillPoint(pill));
     expect(_luma(fill), _near(27), reason: 'fill $fill');
   });
+
+  testWidgets('dark: a press and its release do not light the pill (idb '
+      'dark strip: native stays 25 beside the lens while Flutter rose to '
+      '79 under the white highlight and glow; review item 6)', (
+    tester,
+  ) async {
+    final (_, pill) = await _bar(
+      tester,
+      brightness: Brightness.dark,
+      page: const Color(0xFF000000),
+    );
+    final home = Offset(pill.left + 4 + 47, pill.center.dy);
+    final g = await tester.startGesture(home);
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await g.up();
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    final view = tester.binding.renderViews.single;
+    final layer = view.debugLayer! as OffsetLayer;
+    final image = await tester.runAsync(() => layer.toImage(view.paintBounds));
+    final data = (await tester.runAsync(() => image!.toByteData()))!;
+    image!.dispose();
+    final fill = _rgb(data, _fillPoint(pill));
+    expect(_luma(fill), _near(25), reason: 'fill $fill');
+  });
 }
