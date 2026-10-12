@@ -51,6 +51,12 @@
   frame, so a tab switch no longer sends the stack of the tab just left;
   a tab keeps its pages while offstage, and returning to it restores them
   without replaying the push.
+- **Fix (VK-551).** With native chrome an active search now blocks the
+  shell's own pop, as the Flutter field already did: system back
+  deactivates it, and the iOS edge swipe no longer pops a shell pushed
+  above another page while the keyboard is up (which left the keyboard
+  with nothing to dismiss it). On a page pushed in the search tab the
+  swipe pops that page instead of the whole shell.
 
 ## 0.1.0-dev.5
 

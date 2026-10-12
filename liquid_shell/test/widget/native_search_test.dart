@@ -1748,4 +1748,95 @@ void main() {
       }
     }
   });
+
+  group('VK-551: an edge swipe while the native search is active', () {
+    final outer = GlobalKey<NavigatorState>();
+
+    /// The shell as a page above a list, as the example's case list pushes
+    /// it: its search root has nothing to pop, so an edge swipe there
+    /// would pop the shell.
+    Widget aboveAList(Widget shell) => Navigator(
+      key: outer,
+      onGenerateInitialRoutes: (_, _) => [
+        MaterialPageRoute<void>(builder: (_) => const Text('The list')),
+        MaterialPageRoute<void>(builder: (_) => shell),
+      ],
+    );
+
+    Future<(FakeNativePlatform, LiquidSearchController)> pumpAbove(
+      WidgetTester tester, {
+      bool active = true,
+    }) async {
+      final fake = installFakeNative(state: _compact);
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      await pumpShell(
+        tester,
+        aboveAList(_searchShell(controller)),
+        padding: _compactPadding,
+      );
+      if (active) {
+        fake.emitNative(const LiquidNativeSearchActiveChanged(true));
+        await tester.pump();
+      }
+      fake.searchActives.clear();
+      return (fake, controller);
+    }
+
+    Future<void> swipeFromTheEdge(WidgetTester tester) async {
+      await tester.dragFrom(const Offset(2, 400), const Offset(300, 0));
+      await tester.pumpAndSettle();
+    }
+
+    // UIKit hides the back button of a bar whose search is active and
+    // offers no swipe back: the shell's route stays, as in the Flutter
+    // field (spec P3b §9.4). Popping it left UIKit's search active, its
+    // field first responder under the hidden chrome: the keyboard stayed
+    // with nothing to dismiss it.
+    testWidgets('off the search root: the shell stays, the search too', (
+      tester,
+    ) async {
+      final (fake, controller) = await pumpAbove(tester);
+      await swipeFromTheEdge(tester);
+      expect(find.text('The list'), findsNothing);
+      expect(fake.last.tabs, isNotEmpty, reason: 'not dormant');
+      expect(controller.isActive, isTrue);
+      expect(fake.searchActives, isEmpty);
+    });
+
+    testWidgets('system back deactivates the search, then pops', (
+      tester,
+    ) async {
+      final (fake, _) = await pumpAbove(tester);
+      await outer.currentState!.maybePop();
+      await tester.pumpAndSettle();
+      expect(find.text('The list'), findsNothing);
+      expect(fake.searchActives, [false]);
+      fake.emitNative(const LiquidNativeSearchActiveChanged(false));
+      await tester.pump();
+      await outer.currentState!.maybePop();
+      await tester.pumpAndSettle();
+      expect(find.text('The list'), findsOneWidget);
+    });
+
+    testWidgets('inactive: the edge swipe pops the shell', (tester) async {
+      final (fake, _) = await pumpAbove(tester, active: false);
+      await swipeFromTheEdge(tester);
+      expect(find.text('The list'), findsOneWidget);
+      expect(fake.last.tabs, isEmpty, reason: 'dormant');
+    });
+
+    // Apple Music: an edge swipe on a pushed page pops that page. The
+    // shell's route, hit first, took the swipe and popped the whole shell.
+    testWidgets('a page pushed in the search tab: the swipe pops that page, '
+        'the search stays active', (tester) async {
+      final (fake, controller) = await pumpAbove(tester);
+      await _pushDetail(tester);
+      await swipeFromTheEdge(tester);
+      expect(find.text('The list'), findsNothing);
+      expect(fake.last.tabs.last.pages.map((p) => p.title), ['Search']);
+      expect(controller.isActive, isTrue);
+      expect(fake.searchActives, isEmpty);
+    });
+  });
 }

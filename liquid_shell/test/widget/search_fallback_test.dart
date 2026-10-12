@@ -408,6 +408,43 @@ void main() {
     expect(find.byType(LiquidShell), findsOneWidget);
   });
 
+  // VK-551, the Flutter field's side: an iOS edge swipe while it has
+  // focus pops nothing of a shell pushed above a list (the field's back
+  // deactivates first, as UIKit's search allows no swipe back), and the
+  // keyboard stays dismissable.
+  testWidgets('an edge swipe while active keeps the shell and its keyboard '
+      'dismissable', (tester) async {
+    final controller = LiquidSearchController();
+    addTearDown(controller.dispose);
+    await pumpShell(
+      tester,
+      Navigator(
+        onGenerateInitialRoutes: (_, _) => [
+          MaterialPageRoute<void>(builder: (_) => const Text('The list')),
+          MaterialPageRoute<void>(
+            builder: (_) => TestShell(
+              destinations: _destinations,
+              initialIndex: 2,
+              search: LiquidSearch(controller: controller),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.tap(find.byType(TextField));
+    await tester.pumpAndSettle();
+    expect(tester.testTextInput.isVisible, isTrue);
+    await tester.dragFrom(const Offset(2, 400), const Offset(300, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('The list'), findsNothing);
+    expect(controller.isActive, isTrue);
+    expect(tester.testTextInput.isVisible, isTrue);
+    await tester.tap(find.bySemanticsLabel('Cancel search'));
+    await tester.pumpAndSettle();
+    expect(controller.isActive, isFalse);
+    expect(tester.testTextInput.isVisible, isFalse);
+  });
+
   testWidgets('Esc deactivates', (tester) async {
     final (controller, _, _) = await _pump(tester, initialIndex: 2);
     await tester.tap(find.byType(TextField));

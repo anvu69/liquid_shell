@@ -127,6 +127,12 @@ whatever the tabs do.
   dialog over it) unfocuses the field and keeps the text; coming back shows
   it again. UIKit empties its field when the tab is left: the shell does
   not pass that on, and restores the text when the tab is selected again.
+- **Back while the search is active.** System back deactivates the
+  search instead of popping, natively and in the Flutter field, and the
+  iOS edge swipe pops nothing of the shell's own route meanwhile: UIKit
+  offers no swipe back while a bar's search is active. On a page pushed
+  in the search tab the swipe pops that page, and the search stays
+  active.
 - **Dialogs and pages above the shell.** While a Flutter dialog, sheet or
   page covers the shell, an active search is deactivated first (the
   keyboard would sit above the barrier). The text is kept.
