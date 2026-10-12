@@ -112,13 +112,13 @@ Still to capture (plan Task 1): a held press on an unselected segment, dark trac
 lib/src/chrome/
   lens_track.dart        (new)  LensTrack: the slots a lens moves over (TabBarGeometry, SegmentGeometry)
   lens_profile.dart      (new)  LensProfile: springs + envelope; LensProfile.tab (= TabSprings), LensProfile.segment
-  lens_motion.dart              LensMotion(track:, profile:): unchanged behaviour for the tab profile; up(canCommit:) skips disabled slots
-  lens_ticker.dart       (new)  LensTicker: the Ticker loop, crossings → selectionClick, accept / return, trace hook
+  lens_motion.dart              LensMotion(track:, profile:): unchanged behaviour for the tab profile; up(canCommit:) skips disabled slots; follow(selected) accepts or shows the app's selection for both widgets
+  lens_ticker.dart       (new)  LensTicker: the Ticker loop, crossings → selectionClick, accept / return, trace hook; lensTraceSample (both widgets' trace)
   lens_clip.dart         (new)  LensClip (moved from glass_tab_bar.dart's _LensClip)
   tab_springs.dart              unchanged; LensProfile.tab reads it
   tab_geometry.dart             TabBarGeometry implements LensTrack
   glass_tab_bar.dart            uses LensTicker and LensClip (refactor, no behaviour change)
-  lens_gesture.dart             unchanged, reused
+  lens_gesture.dart             reused; + claimsDragAt (a horizontal scroller around a segmented control, §8.1)
   large_content_viewer.dart     reused; the icon becomes optional (a text segment has none)
   sized_layout_builder.dart     (new, Task 7 review) a LayoutBuilder that answers intrinsics, dry layout and the dry baseline from the geometry
 lib/src/segmented/       (new)
@@ -184,7 +184,7 @@ Worked checks against spike §2 (iPhone 17 Pro, full width 370):
 ## 7. The segment lens (S5)
 
 - **Liquid tier.** While `engage > 0`, the thumb is `LiquidLens(refraction:, engage:, restFill: segmentThumb, bezel:)` over the lens rect: the VK-503 second glass pass with its veil falloff, rim and dispersion (VK-503 §7.2, Task 16 part B). At `engage = 0` it is the rest thumb.
-  - The control opens its own `BackdropGroup` (as a standalone `GlassTabBar` does) so the lens samples the page behind the control, not the track.
+  - The control opens its own `BackdropGroup` (as a standalone `GlassTabBar` does), with one key for its life, so the lens samples the control and the page behind it, not an enclosing page's stale capture. No glass paints before the lens, so the group's one capture happens at the lens's first paint: it **includes the track** fill under the lens (and the fading rest thumb; the labels are clipped away). This is plausibly native's own look (`_UILiquidLensView` sits above the track inside `UISegmentedControl`, and UIKit glass samples what is beneath it); sampling the page without the track would need a capture layer before the track, a design change. Task 15 judges it against the strips (R8).
   - **Bezel.** VK-503's 14 pt ring is sized for a 70 pt-tall lens. The segment lens is 44 tall, so its bezel is **9 pt (assumption: 14 × 44/70 rounded)**; Task 1 measured native's ring at 8.3 (top) to 9.0 (bottom) pt, mean 8.7 (`lens.bezel`), which agrees with 9 within the spread; Task 15 tunes against the strips. `LiquidLens` gains an optional `bezel` (default `kLensBezel`); the tab bar is unchanged.
 - **Frosted and solid tiers.** `LiquidLens`'s own frosted and solid variants (VK-503 §7.3).
 - **Reduce transparency / increase contrast.** The rest thumb only, no lens pass (VK-503 §13.3 rule).
@@ -196,7 +196,8 @@ Worked checks against spike §2 (iPhone 17 Pro, full width 370):
 
 - **Track.** `LensTrack` is the interface `LensMotion` needs from geometry: `slots`, `centreOf`, `slotNearest`, `clampCentre`, `restLensAt`, and `tapInflation` (the VK-503 iPad top bar's ×1.34 / ×1.375; null elsewhere). `TabBarGeometry` implements it unchanged.
 - **Profile.** `LensProfile` holds every spring and envelope constant `LensMotion` reads today, plus the segment-only switches below. `LensProfile.tab` is built from `TabSprings` (identical values; a unit test pins each field).
-- **Gestures.** `LensGestureRecognizer` unchanged: eager on pointer down unless a vertical scroll view encloses the control or AX sizes are on, as in VK-503 §8.6.
+- **Gestures.** `LensGestureRecognizer`, reused: eager on pointer down unless a vertical scroll view encloses the control or AX sizes are on, as in VK-503 §8.6.
+- **Inside a horizontal scroller** (a `PageView`, a horizontal row of chips; Task 8 review, owner rule): native gives the control a drag that starts on the thumb, and any other drag scrolls the page. So under a horizontal `Scrollable` the recognizer claims a drag (and wins on touch-down) only when the touch comes down in the selected segment's column (`claimsDragAt`); a touch elsewhere waits for the up, so a horizontal drag goes to the scroller (the lens returns, nothing commits) and a tap still commits. With nothing selected there is no thumb: every drag scrolls. The tab bar passes no `claimsDragAt` and keeps VK-503's rule.
 
 ### 8.2 Springs (`LensProfile.segment`)
 
@@ -442,6 +443,7 @@ A screen with many segmented controls costs nothing at rest: no `BackdropFilter`
 | R5 | A 44 tall lens with a 9 pt bezel looks different from native's ring | M / L | Task 1 measures the ring; Task 15 tunes `bezel` once, against the strips |
 | R6 | The host's load (other agents) drops `idb` touches, as in the spike | M / L | XCUITest drives native; the integration test drives Flutter; idb only for spot checks |
 | R7 | The 44 pt box shifts layouts that expect a 32 pt control | L / L | Q-C; documented |
+| R8 | The lens's interior over the track reads differently from native's, light or dark: the shared capture includes the track (§7), and while engaging (≈ 50 ms) and releasing (0.11 s) the rest fill is drawn twice, under the lens (captured and refracted) and as `LiquidLens.restFill` (as the tab bar's) | M / L | Task 15 checklist: lens interior tint over the track, light and dark, against the strips, during the press, the hold and the release |
 
 ## 18. Process
 

@@ -451,6 +451,21 @@ class LensMotion {
     _phase = LensPhase.settling;
   }
 
+  /// Follows the app's [selected] on a rebuild, for every lens widget:
+  /// a pending commit it adopts is accepted (one it has not answered is
+  /// left to `LensTicker`, which returns it at rest); a change of its own,
+  /// with no finger down, is a [show]. True when the lens now moves and
+  /// the widget's ticker must run (a slide); a jump needs no tick.
+  bool follow(int? selected) {
+    if (_pending != null) {
+      if (selected == _pending) accept();
+      return false;
+    }
+    if (selected == _committed || interacting) return false;
+    show(selected);
+    return _phase != LensPhase.rest;
+  }
+
   /// The app adopted the pending commit.
   void accept() => _pending = null;
 

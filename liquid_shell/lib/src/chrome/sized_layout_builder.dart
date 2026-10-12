@@ -48,12 +48,22 @@ class SizedLayoutBuilder extends SingleChildRenderObjectWidget {
 /// does, and answers intrinsics and dry layout from [sizeFor].
 class RenderSizedLayout extends RenderProxyBox {
   /// Creates the render object.
-  RenderSizedLayout(this._sizeFor, [this.baselineFor]);
+  RenderSizedLayout(this._sizeFor, [this._baselineFor]);
 
   /// The dry baseline under some constraints (see
   /// [SizedLayoutBuilder.baselineFor]).
   double? Function(BoxConstraints constraints, TextBaseline baseline)?
-  baselineFor;
+  get baselineFor => _baselineFor;
+  double? Function(BoxConstraints constraints, TextBaseline baseline)?
+  _baselineFor;
+  set baselineFor(
+    double? Function(BoxConstraints constraints, TextBaseline baseline)? value,
+  ) {
+    if (identical(value, _baselineFor)) return;
+    _baselineFor = value;
+    // Drops the cached dry baselines.
+    markNeedsLayout();
+  }
 
   /// The size under some constraints.
   Size Function(BoxConstraints constraints) get sizeFor => _sizeFor;

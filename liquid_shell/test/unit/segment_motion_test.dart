@@ -541,6 +541,66 @@ void main() {
     expect(none.pending, null);
   });
 
+  group("follow: the app's selection, once per build (spec §8.3)", () {
+    final g = controlOf(3);
+    final y = g.size.height / 2;
+
+    test('a commit the app adopts is accepted; nothing moves anew', () {
+      final m =
+          LensMotion(
+              geometry: g,
+              selected: 0,
+              profile: LensProfile.segment,
+            )
+            ..down(Offset(g.centreOf(2), y))
+            ..up(Offset(g.centreOf(2), y));
+      expect(m.pending, 2);
+      expect(m.follow(2), isFalse);
+      expect(m.pending, isNull);
+      expect(m.committed, 2);
+    });
+
+    test('a commit the app has not answered yet is left to the ticker', () {
+      final m =
+          LensMotion(
+              geometry: g,
+              selected: 0,
+              profile: LensProfile.segment,
+            )
+            ..down(Offset(g.centreOf(2), y))
+            ..up(Offset(g.centreOf(2), y));
+      expect(m.follow(0), isFalse);
+      expect(m.pending, 2, reason: 'LensTicker returns it at rest');
+    });
+
+    test("the app's own change slides (true: tick it); the same index and "
+        'a finger down do nothing', () {
+      final m = LensMotion(
+        geometry: g,
+        selected: 0,
+        profile: LensProfile.segment,
+      );
+      expect(m.follow(0), isFalse);
+      expect(m.follow(1), isTrue);
+      expect(m.committed, 1);
+      expect(m.phase, LensPhase.flying);
+      final held = LensMotion(
+        geometry: g,
+        selected: 0,
+        profile: LensProfile.segment,
+      )..down(Offset(g.centreOf(0), y));
+      expect(held.follow(1), isFalse);
+      expect(held.committed, 0);
+    });
+
+    test('the tab profile jumps: nothing to tick', () {
+      final m = LensMotion(geometry: g, selected: 0);
+      expect(m.follow(2), isFalse);
+      expect(m.committed, 2);
+      expect(m.frame.lens.center.dx, g.centreOf(2));
+    });
+  });
+
   test('reduce motion: a tap dissolves in 150 ms, no lift (spec §12.2)', () {
     final g = controlOf(3);
     final m = LensMotion(

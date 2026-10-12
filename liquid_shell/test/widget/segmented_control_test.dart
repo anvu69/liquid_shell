@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/chrome/lens_clip.dart';
+import 'package:liquid_shell/src/chrome/sized_layout_builder.dart';
 import 'package:liquid_shell/src/segmented/segmented_control.dart';
 
 import '../helpers/native_rows.dart';
@@ -779,6 +780,87 @@ void main() {
         debugCheckIntrinsicSizes = false;
       }
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets("dry baseline edge cases: Flutter's dry-versus-real check "
+        'passes for mixed scripts, AX text, RTL, a shrunk control, no '
+        'selection and a disabled control', (tester) async {
+      Widget baselineRow(Widget c) => Center(
+        child: IntrinsicWidth(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              const Text('Scope'),
+              Flexible(child: c),
+            ],
+          ),
+        ),
+      );
+      final cases = <String, Widget>{
+        'mixed scripts': LiquidSegmentedControl(
+          segments: _segments(['Tất cả', '🎵 Bài hát', 'Ệ', '']),
+          selectedIndex: 1,
+          onChanged: (_) {},
+          expand: false,
+        ),
+        'AX text, RTL': MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(3)),
+          child: Directionality(
+            textDirection: TextDirection.rtl,
+            child: LiquidSegmentedControl(
+              segments: _segments(),
+              selectedIndex: 2,
+              onChanged: (_) {},
+              expand: false,
+            ),
+          ),
+        ),
+        'shrunk, no selection, disabled': SizedBox(
+          width: 90,
+          child: LiquidSegmentedControl(
+            segments: _segments(['Everything', 'Recently played', 'Places']),
+            selectedIndex: null,
+            onChanged: null,
+            expand: false,
+          ),
+        ),
+      };
+      for (final MapEntry(:key, :value) in cases.entries) {
+        debugCheckIntrinsicSizes = true;
+        try {
+          await tester.pumpWidget(
+            MaterialApp(home: Material(child: baselineRow(value))),
+          );
+        } finally {
+          debugCheckIntrinsicSizes = false;
+        }
+        expect(tester.takeException(), isNull, reason: key);
+      }
+    });
+
+    testWidgets('RenderSizedLayout: a new baselineFor lays out again', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        Center(
+          child: SizedLayoutBuilder(
+            sizeFor: (_) => const Size(10, 44),
+            baselineFor: (_, _) => 10,
+            builder: (_, _) => const SizedBox(width: 10, height: 44),
+          ),
+        ),
+      );
+      final box = tester.renderObject<RenderSizedLayout>(
+        find.byType(SizedLayoutBuilder),
+      );
+      const loose = BoxConstraints(maxWidth: 100, maxHeight: 100);
+      expect(box.getDryBaseline(loose, TextBaseline.alphabetic), 10);
+      expect(box.debugNeedsLayout, isFalse);
+      box.baselineFor = (_, _) => 12;
+      expect(box.debugNeedsLayout, isTrue);
+      expect(box.getDryBaseline(loose, TextBaseline.alphabetic), 12);
+      await tester.pump();
     });
 
     testWidgets('expand: true at intrinsic width also sizes to the labels', (

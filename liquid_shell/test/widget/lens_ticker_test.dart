@@ -142,4 +142,35 @@ void main() {
     expect(s.motion.frame.lens.center.dx, closeTo(s.at(0).dx, 0.5));
     expect(tester.binding.hasScheduledFrame, isFalse);
   });
+
+  testWidgets('lensTraceSample: the frame in global coordinates, for every '
+      'lens widget (spec VK-503 §17.4, VK-550 §14)', (tester) async {
+    final key = GlobalKey();
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: Padding(
+          padding: const EdgeInsets.only(left: 30, top: 50),
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(key: key, width: 200, height: 44),
+          ),
+        ),
+      ),
+    );
+    const frame = LensFrame(lens: Rect.fromLTWH(10, 8, 120, 28), engage: 0.5);
+    final sample = lensTraceSample(
+      key.currentContext!,
+      const Duration(milliseconds: 250),
+      frame,
+    );
+    expect(sample, {
+      't': 0.25,
+      'x': 30 + 70,
+      'y': 50 + 22,
+      'w': 120,
+      'h': 28,
+      'engage': 0.5,
+    });
+  });
 }

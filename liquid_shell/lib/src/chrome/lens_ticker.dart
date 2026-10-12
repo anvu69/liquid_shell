@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:liquid_shell/src/chrome/lens_motion.dart';
 import 'package:liquid_shell/src/chrome/tab_springs.dart';
 
@@ -93,4 +94,27 @@ class LensTicker {
     if (m != null) _trace?.call(elapsed, m.frame);
     _onFrame();
   }
+}
+
+/// The acceptance-trace sample every lens widget reports, once per tick
+/// (spec VK-503 §17.4, VK-550 §14): the ticker time `t` in seconds, the
+/// lens centre in global coordinates (`x`, `y`; [frame] is local to
+/// [context]'s render box), the lens size (`w`, `h`) and `engage`.
+Map<String, double> lensTraceSample(
+  BuildContext context,
+  Duration elapsed,
+  LensFrame frame,
+) {
+  final box = context.findRenderObject() as RenderBox?;
+  final centre = box == null
+      ? frame.lens.center
+      : box.localToGlobal(frame.lens.center);
+  return {
+    't': elapsed.inMicroseconds / 1e6,
+    'x': centre.dx,
+    'y': centre.dy,
+    'w': frame.lens.width,
+    'h': frame.lens.height,
+    'engage': frame.engage,
+  };
 }

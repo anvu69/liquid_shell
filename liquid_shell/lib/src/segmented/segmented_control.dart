@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:liquid_shell/src/chrome/large_content_viewer.dart';
@@ -216,6 +218,8 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl>
     // Disabled mid-touch: the recognizer goes with the touch, so no up or
     // cancel will come; the lens lets go now.
     if (!_enabled && (_motion?.interacting ?? false)) _cancel();
+    // Its focus node went with its segment, and will not report the loss.
+    if ((_focused ?? -1) >= widget.segments.length) _focused = null;
   }
 
   @override
@@ -237,12 +241,7 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl>
           ))
           ..reduceMotion = MediaQuery.disableAnimationsOf(context)
           ..geometry = g;
-    if (m.pending != null) {
-      if (selected == m.pending) m.accept();
-    } else if (selected != m.committed && !m.interacting) {
-      m.show(selected);
-      _ticker.kick();
-    }
+    if (m.follow(selected)) _ticker.kick();
     return m;
   }
 
@@ -250,18 +249,13 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl>
   void _trace(Duration elapsed, LensFrame f) {
     final trace = debugSegmentTrace;
     if (trace == null || !mounted) return;
-    final box = context.findRenderObject() as RenderBox?;
-    final centre = box == null
-        ? f.lens.center
-        : box.localToGlobal(f.lens.center);
-    trace({
-      't': elapsed.inMicroseconds / 1e6,
-      'x': centre.dx,
-      'y': centre.dy,
-      'w': f.lens.width,
-      'h': f.lens.height,
-      'engage': f.engage,
-    });
+    trace(lensTraceSample(context, elapsed, f));
+  }
+
+  /// Whether [p] (control-local) is in the selected segment's column.
+  bool _onThumb(Offset p) {
+    final selected = widget.selectedIndex;
+    return selected != null && _geometry?.segmentAt(p) == selected;
   }
 
   void _setPressed(int? i) {
@@ -388,21 +382,30 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl>
       return intrinsic.size.width > maxWidth ? fill(maxWidth) : intrinsic;
     }
 
-    // The labels' baseline: every label box has one top, and a one-line
-    // label's baseline does not depend on its width. Alphabetic for either
-    // kind, as RenderParagraph answers (flutter/flutter#22625).
+    // The labels' baseline, as the Stack answers it: the highest of every
+    // label's (a label in another script may fall back to a font with
+    // other metrics). Every label box has one top, and a one-line label's
+    // baseline does not depend on its width. Alphabetic for either kind,
+    // as RenderParagraph answers (flutter/flutter#22625). Measured once
+    // per build, only when asked.
+    double? labelBaseline;
     double? baselineFor(BoxConstraints constraints, TextBaseline _) {
-      final painter = TextPainter(
-        text: TextSpan(text: widget.segments.first.label, style: style),
-        textScaler: scaler,
-        textDirection: direction,
-        maxLines: 1,
-      )..layout();
-      final distance = painter.computeDistanceToActualBaseline(
-        TextBaseline.alphabetic,
-      );
-      painter.dispose();
-      return geometryFor(constraints).labels.first.top + distance;
+      labelBaseline ??= widget.segments
+          .map((s) {
+            final painter = TextPainter(
+              text: TextSpan(text: s.label, style: style),
+              textScaler: scaler,
+              textDirection: direction,
+              maxLines: 1,
+            )..layout();
+            final distance = painter.computeDistanceToActualBaseline(
+              TextBaseline.alphabetic,
+            );
+            painter.dispose();
+            return distance;
+          })
+          .reduce(math.min);
+      return geometryFor(constraints).labels.first.top + labelBaseline!;
     }
 
     final ax = isAxTextScale(context);
@@ -410,6 +413,11 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl>
     // content viewer) and inside a vertical scroll view (spec §8.1).
     final eager =
         !ax && Scrollable.maybeOf(context, axis: Axis.vertical) == null;
+    // Inside a horizontal scroller (a page view, a row of chips) only a
+    // drag that starts on the thumb is the lens's, as native's; any other
+    // drag scrolls, and a tap still commits (spec §8.1).
+    final horizontal =
+        Scrollable.maybeOf(context, axis: Axis.horizontal) != null;
 
     return BackdropGroup(
       backdropKey: _backdropKey,
@@ -451,7 +459,7 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl>
                   clipBehavior: Clip.none,
                   children: [
                     ..._layers(g, f, theme, style, medium, scaler),
-                    _touches(g, eager),
+                    _touches(g, eager, onThumbOnly: horizontal),
                   ],
                 ),
               ),
@@ -535,7 +543,9 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl>
           child: LiquidLens(
             refraction: f.refraction,
             engage: f.engage,
-            restFill: thumb,
+            // Fades in with the rest thumb (reduce motion), as the tab
+            // lens's.
+            restFill: thumb.withValues(alpha: thumb.a * f.restOpacity),
             bezel: _lensBezel,
           ),
         ),
@@ -554,7 +564,8 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl>
             ),
           ),
         ),
-      if (_focused case final i?)
+      // A ring whose segment is gone (fewer segments) is not drawn.
+      if (_focused case final i? when i < g.slots.length)
         Positioned.fromRect(
           key: const ValueKey<String>('focus'),
           rect: g.slots[i],
@@ -577,7 +588,7 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl>
   /// The segments' nodes: semantics, keyboard focus and the large content
   /// viewer, each over its full column. One recognizer over the whole box
   /// takes their touches (spec §8.1), as the tab bar's row does.
-  Widget _touches(SegmentGeometry g, bool eager) {
+  Widget _touches(SegmentGeometry g, bool eager, {required bool onThumbOnly}) {
     final nodes = Stack(
       children: [
         for (final (i, s) in widget.segments.indexed)
@@ -605,6 +616,7 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl>
                           context,
                         )
                         ..eager = eager
+                        ..claimsDragAt = onThumbOnly ? _onThumb : null
                         ..onDown = _down
                         ..onMove = _move
                         ..onUp = _up

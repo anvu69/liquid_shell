@@ -190,6 +190,21 @@ Map<String, double> _sampleAt(List<Map<String, double>> samples, double t) =>
       (a, b) => (a['t']! - t).abs() <= (b['t']! - t).abs() ? a : b,
     );
 
+/// The 0.5 crossing of `engage` over [samples] (`t`, `engage`), linear
+/// between samples.
+double _onset(List<Map<String, double>> samples) {
+  for (var i = 1; i < samples.length; i++) {
+    final (a, b) = (samples[i - 1], samples[i]);
+    if (a['engage']! < 0.5 && b['engage']! >= 0.5) {
+      return a['t']! +
+          (0.5 - a['engage']!) /
+              (b['engage']! - a['engage']!) *
+              (b['t']! - a['t']!);
+    }
+  }
+  throw StateError('engage never reaches 0.5');
+}
+
 void main() {
   final ref = segmentReference();
 
@@ -250,6 +265,7 @@ void main() {
   testWidgets('a programmatic change slides: the thumb is between the '
       'segments 100 ms later, and onChanged is not called', (tester) async {
     final log = <int>[];
+    final haptics = _haptics(tester);
     final key = await _pump(tester, log);
     key.currentState!.select(1);
     await tester.pump();
@@ -261,6 +277,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(_thumb(tester).center.dx, closeTo(_at(tester, 1).dx, 0.5));
     expect(log, isEmpty);
+    expect(haptics, isEmpty, reason: 'spec §9: none on a programmatic change');
   });
 
   testWidgets('reduce motion: a tap dissolves (ghost), no lift', (
@@ -400,9 +417,22 @@ void main() {
         final s = _sampleAt(samples, r.t);
         expect(s['w'], closeTo(r.w, tolerance), reason: 'w at +${r.t} s');
         expect(s['h'], closeTo(r.h, tolerance), reason: 'h at +${r.t} s');
-        if (r.engage == 1) {
-          expect(s['engage'], closeTo(1, 0.12), reason: 'e at +${r.t} s');
-        }
+        // Every row, the delay rows included. Native's engage rows are
+        // snapshots of a ≈ 50 ms fade: at +0.033 s it reads 0 (light) and
+        // 0.107 (dark) where ours is 0.23, a phase difference the onset
+        // below pins to a frame.
+        expect(s['engage'], closeTo(r.engage, 0.25), reason: 'e +${r.t} s');
+      }
+      // The 0.5 crossing of engage, light and dark, within one frame.
+      final ours = _onset(samples);
+      for (final native in [
+        rows,
+        rowsOf(ref['dark'] as Map<String, dynamic>, 'press'),
+      ]) {
+        final at = _onset([
+          for (final r in native) {'t': r.t, 'engage': r.engage},
+        ]);
+        expect(ours, closeTo(at, 1 / 60), reason: 'native onset $at');
       }
       final pressed = samples.last;
       final grow = (geometry['pressedGrow'] as List).cast<num>();
@@ -478,7 +508,8 @@ void main() {
       expect(_labelFade(tester, _titles[pressed]), 1);
     });
 
-    testWidgets('slow drag release: x, w and h per native release row', (
+    testWidgets('slow drag: the native lag while dragging, then x, w and h '
+        'per native release row', (
       tester,
     ) async {
       final drag = ref['slow_drag'] as Map<String, dynamic>;
@@ -494,12 +525,23 @@ void main() {
       await tester.pump();
       var t = 0.0;
       var x = start.dx;
+      final travel = (end.dx - start.dx) / speed;
+      final lags = <double>[];
       while (x < end.dx) {
         t += 1 / 60;
         x = math.min(end.dx, start.dx + speed * t);
         await g.moveTo(Offset(x, start.dy));
         await tester.pump(_frame);
+        // The steady part: past the slop and the follow spring's ramp. The
+        // finger is held at the frame's end value, half a frame ahead of
+        // the continuous ramp (as segment_motion_test.dart).
+        if (t >= 1 && t <= travel - 0.1) {
+          lags.add(start.dx + speed * (t + 1 / 120) - samples.last['x']!);
+        }
       }
+      final lag = ((ref['fits'] as Map)['dragLag'] as Map)['lag'] as num;
+      final mean = lags.reduce((a, b) => a + b) / lags.length;
+      expect(mean, closeTo(lag, lag * 0.10), reason: 'fits.dragLag');
       // The finger rests at the end until the lens is where native's was
       // at the up (idb lifts a moment after its last move).
       for (var i = 0; i < 60; i++) {
@@ -520,7 +562,8 @@ void main() {
       }
     });
 
-    testWidgets('flick: commits the finger segment, native overshoot ± 1 pt', (
+    testWidgets('flick: per native row, commits the finger segment, native '
+        'overshoot ± 1 pt, no click after the release', (
       tester,
     ) async {
       final flick = ref['flick'] as Map<String, dynamic>;
@@ -529,9 +572,11 @@ void main() {
       final releaseAt = (flick['release_at'] as num).toDouble();
       final samples = _trace();
       final log = <int>[];
+      final haptics = _haptics(tester);
       final key = await _pump(tester, log);
       key.currentState!.select(2);
       await tester.pumpAndSettle();
+      expect(haptics, isEmpty, reason: 'none on a programmatic change');
       samples.clear();
       final box = _box(tester);
       final start = _at(tester, 2);
@@ -549,6 +594,8 @@ void main() {
         );
         await tester.pump(_frame);
       }
+      final clicks = haptics.length;
+      expect(clicks, 2, reason: 'one per crossing while dragging');
       await g.up(timeStamp: Duration(microseconds: (t * 1e6).round()));
       // Frame by frame, as the simulator: pumpAndSettle's 100 ms steps
       // would skip the landing's lowest point.
@@ -557,6 +604,27 @@ void main() {
       }
       await tester.pumpAndSettle();
       expect(log, [flick['commit']]);
+      expect(haptics, hasLength(clicks), reason: 'none after the release');
+      // Row by row (t from the down). Tolerances per phase, each the
+      // largest gap measured plus a margin, and why it is not 2 pt:
+      // - drag: the fixture has no finger column; ours moves linearly at
+      //   the mean speed, native's idb swipe does not;
+      // - flight and landing: native's landing wobble (w ×1.09, h ×0.88)
+      //   and its slower return are not modelled (spec §8.3).
+      for (final r in rows) {
+        final s = _sampleAt(samples, r.t);
+        // Measured worst gaps: drag x 9.8, w 6.0, h 1.6, engage 0.12;
+        // flight x 5.2, w 5.6, h 1.9; landing x 3.8, w 11.7, h 3.5.
+        final (dx, dw, dh, de) = r.t < releaseAt
+            ? (11.0, 7.0, 2.0, 0.15)
+            : r.t < releaseAt + 0.15
+            ? (6.5, 6.5, 2.5, 0.1)
+            : (4.5, 13.0, 4.0, 0.05);
+        expect(s['x']! - box.left, closeTo(r.x, dx), reason: 'x +${r.t} s');
+        expect(s['w'], closeTo(r.w, dw), reason: 'w at +${r.t} s');
+        expect(s['h'], closeTo(r.h, dh), reason: 'h at +${r.t} s');
+        expect(s['engage'], closeTo(r.engage, de), reason: 'e +${r.t} s');
+      }
       final xs = [for (final s in samples) s['x']! - box.left];
       final rest = (landing['landing'] as num).toDouble();
       expect(
@@ -602,6 +670,131 @@ void main() {
     expect(tester.getRect(ring).center.dx, closeTo(_at(tester, 1).dx, 0.5));
     await tester.pumpAndSettle();
     expect(_thumb(tester).center.dx, closeTo(_at(tester, 2).dx, 0.5));
+  });
+
+  testWidgets('keyboard: the ring on the last segment, then fewer segments: '
+      'no RangeError, the ring on a segment that exists', (tester) async {
+    var titles = _titles;
+    late StateSetter rebuild;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: 370,
+            child: StatefulBuilder(
+              builder: (context, setState) {
+                rebuild = setState;
+                return LiquidSegmentedControl(
+                  segments: _segments(titles),
+                  selectedIndex: 0,
+                  onChanged: (_) {},
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    for (var i = 0; i < 3; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+    }
+    final ring = find.byKey(kSegmentFocusKey);
+    expect(tester.getRect(ring).center.dx, closeTo(_at(tester, 2).dx, 0.5));
+    rebuild(() => titles = _titles.take(2).toList());
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    // Flutter hands the focus back to the previously focused node: the
+    // ring moves to the last segment left, never to a slot that is gone.
+    expect(ring, findsOneWidget);
+    expect(
+      tester.getRect(ring).center.dx,
+      closeTo(_at(tester, 1, count: 2).dx, 0.5),
+    );
+  });
+
+  group('inside a horizontal scroller (spec §8.1: native gives the control '
+      'a drag that starts on the thumb; any other drag scrolls)', () {
+    Future<PageController> pumpPages(WidgetTester tester, List<int> log) async {
+      final pages = PageController();
+      addTearDown(pages.dispose);
+      await _pump(
+        tester,
+        log,
+        wrap: (control) => PageView(
+          controller: pages,
+          children: [
+            Center(child: control),
+            const SizedBox.expand(),
+          ],
+        ),
+      );
+      return pages;
+    }
+
+    testWidgets('PageView: a drag from the thumb moves the lens and commits; '
+        'the page stays', (tester) async {
+      final log = <int>[];
+      final pages = await pumpPages(tester, log);
+      await _slowDrag(tester, _at(tester, 0), _at(tester, 2));
+      expect(log, [2]);
+      expect(pages.page, 0);
+    });
+
+    testWidgets('PageView: a drag from another segment pages and commits '
+        'nothing', (tester) async {
+      final log = <int>[];
+      final pages = await pumpPages(tester, log);
+      final from = _at(tester, 2);
+      await tester.timedDragFrom(
+        from,
+        const Offset(-300, 0),
+        const Duration(milliseconds: 300),
+      );
+      await tester.pumpAndSettle();
+      expect(pages.page, 1);
+      expect(log, isEmpty);
+    });
+
+    testWidgets('PageView: a tap on another segment still commits', (
+      tester,
+    ) async {
+      final log = <int>[];
+      final pages = await pumpPages(tester, log);
+      await tester.tapAt(_at(tester, 1));
+      await tester.pumpAndSettle();
+      expect(log, [1]);
+      expect(pages.page, 0);
+    });
+
+    testWidgets('a horizontal scroll view: from the thumb the lens drags, '
+        'from elsewhere the row scrolls', (tester) async {
+      final log = <int>[];
+      final scroll = ScrollController();
+      addTearDown(scroll.dispose);
+      await _pump(
+        tester,
+        log,
+        wrap: (control) => SingleChildScrollView(
+          controller: scroll,
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              const SizedBox(width: 16),
+              control,
+              const SizedBox(width: 1200),
+            ],
+          ),
+        ),
+      );
+      await _slowDrag(tester, _at(tester, 0), _at(tester, 1));
+      expect(log, [1]);
+      expect(scroll.offset, 0);
+      await tester.dragFrom(_at(tester, 2), const Offset(-200, 0));
+      await tester.pumpAndSettle();
+      expect(scroll.offset, greaterThan(100));
+      expect(log, [1]);
+    });
   });
 
   testWidgets('AX text: a long press shows the label in the large content '

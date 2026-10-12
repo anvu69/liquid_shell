@@ -78,6 +78,12 @@ Future<TestGesture> _hold(WidgetTester tester) async {
   return g;
 }
 
+/// Segment [i]'s centre in a two-segment control.
+Offset _at2(WidgetTester tester, int i) {
+  final box = tester.getRect(find.byType(LiquidSegmentedControl));
+  return Offset(box.left + box.width * (i + 0.5) / 2, box.center.dy);
+}
+
 void main() {
   final ref = segmentReference();
 
@@ -220,6 +226,54 @@ void main() {
     );
     expect(samples.last['h'], (native[1] as List)[3]);
     expect(samples.last['engage'], 0);
+  });
+
+  testWidgets("the lens's rest fill fades in with the rest thumb (reduce "
+      'motion), as the tab lens', (tester) async {
+    await _liquid(tester);
+    // The only path where an engaged lens meets a fading rest thumb.
+    debugSegmentLensPress = 0;
+    addTearDown(() => debugSegmentLensPress = null);
+    tester.view
+      ..devicePixelRatio = 3
+      ..physicalSize = const Size(402, 874) * 3;
+    addTearDown(tester.view.reset);
+    var selected = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(disableAnimations: true),
+          child: Center(
+            child: SizedBox(
+              width: 370,
+              child: StatefulBuilder(
+                builder: (context, setState) => LiquidSegmentedControl(
+                  segments: const [
+                    LiquidSegment(label: 'All'),
+                    LiquidSegment(label: 'Songs'),
+                  ],
+                  selectedIndex: selected,
+                  onChanged: (i) => setState(() => selected = i),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    final thumb = LiquidGlassTheme.of(
+      tester.element(find.byType(LiquidSegmentedControl)),
+    ).segmentThumb;
+    Color fill() =>
+        tester.widget<LiquidLens>(find.byType(LiquidLens)).restFill!;
+    expect(fill(), thumb, reason: 'at rest: the full fill');
+    await tester.tapAt(_at2(tester, 1));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(fill().a, lessThan(thumb.a), reason: 'fading in');
+    expect(fill().a, greaterThan(0));
+    await tester.pumpAndSettle();
+    expect(fill(), thumb);
   });
 
   testWidgets('debugSegmentLensPress draws the lens pressed and shifted', (

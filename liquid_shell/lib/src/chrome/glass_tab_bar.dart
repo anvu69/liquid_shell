@@ -237,11 +237,8 @@ class _GlassTabBarState extends State<GlassTabBar>
     final m = (_motion ??= LensMotion(geometry: g, selected: selected))
       ..reduceMotion = MediaQuery.disableAnimationsOf(context)
       ..geometry = g;
-    if (m.pending != null) {
-      if (selected == m.pending) m.accept();
-    } else if (selected != m.committed && !m.interacting) {
-      m.show(selected);
-    }
+    // The tab profile jumps (no programmatic spring): nothing to tick.
+    if (m.follow(selected)) _ticker.kick();
     return m;
   }
 
@@ -250,17 +247,8 @@ class _GlassTabBarState extends State<GlassTabBar>
   void _trace(Duration elapsed, LensFrame f) {
     final trace = debugTabTrace;
     if (trace == null || !mounted) return;
-    final box = context.findRenderObject() as RenderBox?;
-    final centre = box == null
-        ? f.lens.center
-        : box.localToGlobal(f.lens.center);
     trace({
-      't': elapsed.inMicroseconds / 1e6,
-      'x': centre.dx,
-      'y': centre.dy,
-      'w': f.lens.width,
-      'h': f.lens.height,
-      'engage': f.engage,
+      ...lensTraceSample(context, elapsed, f),
       'scale': f.pillScale,
       'glow': f.glowOpacity,
       'glowD': f.glowDiameter,
