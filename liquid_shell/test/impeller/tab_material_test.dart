@@ -6,6 +6,7 @@
 @Tags(['impeller'])
 library;
 
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -176,5 +177,27 @@ void main() {
     image!.dispose();
     final fill = _rgb(data, _fillPoint(pill));
     expect(_luma(fill), _near(25), reason: 'fill $fill');
+  });
+
+  testWidgets('dark: the fading lens stays between the engaged lens and the '
+      'rest capsule (review item 6: engage 0.9 drew 116, the ends 18 and 55)', (
+    tester,
+  ) async {
+    final lumas = <double>[];
+    for (final e in [1.0, 0.9, 0.7, 0.5, 0.3, 0.1, 0.0]) {
+      debugTabLensOverride = (f) => f.copyWith(engage: e, refraction: 0);
+      addTearDown(() => debugTabLensOverride = null);
+      final (data, pill) = await _bar(
+        tester,
+        brightness: Brightness.dark,
+        page: const Color(0xFF000000),
+      );
+      lumas.add(_luma(_rgb(data, _capsulePoint(pill))));
+    }
+    final lo = math.min(lumas.first, lumas.last) - 4;
+    final hi = math.max(lumas.first, lumas.last) + 4;
+    for (final l in lumas) {
+      expect(l, inInclusiveRange(lo, hi), reason: 'engage 1 → 0: $lumas');
+    }
   });
 }

@@ -138,24 +138,31 @@ void main() {
     expect(lens.width, closeTo(110 * 1.052, 1));
   });
 
-  testWidgets('mid-fade the whole lens pass is at engage, once: the rim '
-      'and shadow inside stay constant (spec §7.2)', (tester) async {
+  testWidgets('mid-fade the liquid lens blends toward the pill glass, with '
+      'no Opacity over its pass (spec §7.2 as amended in Task 16)', (
+    tester,
+  ) async {
     debugTabLensOverride = (f) => f.copyWith(engage: 0.5, refraction: 0.5);
     addTearDown(() => debugTabLensOverride = null);
     await _pump(tester);
     await tester.pump();
-    expect(_lensPassOpacity(tester), closeTo(0.5, 1e-3));
+    // An Opacity over a backdrop pass reads the wrong backdrop.
+    expect(_lensPassOpacity(tester), 1);
     final lens = find.byType(LiquidLens);
-    final rim = tester
+    expect(tester.widget<LiquidLens>(lens).engage, 0.5);
+    final u = tester
         .renderObject<RenderLiquidBackdrop>(
           find.descendant(of: lens, matching: find.byType(LiquidBackdrop)),
         )
-        .debugUniforms![19];
-    expect(rim, closeTo(0.35, 1e-3));
+        .debugUniforms!;
+    // Halfway between the pill's tint (white @ 0.55) and rim (0.12) and
+    // the lens's (white @ 0.90, rim 0.35).
+    expect(u[15], closeTo((0.55 + 0.90) / 2, 1e-3));
+    expect(u[19], closeTo((0.12 + 0.35) / 2, 1e-3));
     final shadow = tester.widget<OutsideShadow>(
       find.descendant(of: lens, matching: find.byType(OutsideShadow)),
     );
-    expect(shadow.shadow, kLensShadow);
+    expect(shadow.shadow.color.a, closeTo(kLensShadow.color.a / 2, 1e-3));
   });
 
   testWidgets('after a tap the lens pass fades out over frames, no snap', (
@@ -167,7 +174,7 @@ void main() {
     for (var i = 0; i < 90; i++) {
       await tester.pump(const Duration(milliseconds: 16));
       if (find.byType(LiquidLens).evaluate().isNotEmpty) {
-        seen.add(_lensPassOpacity(tester));
+        seen.add(tester.widget<LiquidLens>(find.byType(LiquidLens)).engage);
       } else if (seen.isNotEmpty) {
         break;
       }

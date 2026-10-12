@@ -34,14 +34,30 @@ const double kLensBlurSigma = 2;
 /// tier it shares the nearest `BackdropGroup`'s backdrop with the pill, so
 /// it samples the page, not the pill.
 ///
-/// It draws at full strength: the shader writes alpha 1, so the bar fades
-/// the whole lens once with `Opacity(engage)` (spec §7.2).
+/// It fades with [engage] (spec §7.2). The liquid pass cannot sit under an
+/// `Opacity`: inside the opacity layer its backdrop read is wrong, and a
+/// dark lens at engage 0.9 drew 116 luma between its 18 and the rest
+/// capsule's 55 (VK-503 Task 16 review, the grey flash). So the liquid
+/// lens blends its optics toward the pill's own glass and draws
+/// [restFill] over itself at 1 − [engage]: at 0 it is the pill with its
+/// rest capsule. The frosted and solid lenses fade with one `Opacity`.
 class LiquidLens extends StatefulWidget {
   /// Creates a lens; [refraction] scales the thickness and dispersion.
-  const LiquidLens({required this.refraction, super.key});
+  const LiquidLens({
+    required this.refraction,
+    this.engage = 1,
+    this.restFill,
+    super.key,
+  });
 
   /// 0–1.
   final double refraction;
+
+  /// 0 (the pill at rest) to 1 (the engaged lens).
+  final double engage;
+
+  /// The rest capsule's fill, drawn over the liquid lens at 1 − [engage].
+  final Color? restFill;
 
   @override
   State<LiquidLens> createState() => _LiquidLensState();
@@ -77,7 +93,9 @@ class _LiquidLensState extends State<LiquidLens> {
         final theme = LiquidGlassTheme.of(context);
         final renderer = resolveGlassFor(context);
         final refraction = widget.refraction.clamp(0.0, 1.0);
+        final engage = widget.engage.clamp(0.0, 1.0);
         final rim = const Color(0xFFFFFFFF).withValues(alpha: 0.35);
+        final pill = LiquidOpticsParams.fromTheme(theme);
         final scheme = Theme.of(context).colorScheme;
         final veil = scheme.brightness == Brightness.light
             ? const Color(0xFFFFFFFF)
@@ -91,13 +109,21 @@ class _LiquidLensState extends State<LiquidLens> {
               program: program,
               borderRadius: radius,
               params: LiquidOpticsParams(
-                tint: veil.withValues(alpha: kLensVeil),
-                rim: rim,
+                tint: Color.lerp(
+                  pill.tint,
+                  veil.withValues(alpha: kLensVeil),
+                  engage,
+                )!,
+                rim: Color.lerp(pill.rim, rim, engage)!,
                 refraction: 1.6 * refraction,
                 dispersion: 0.6 * refraction,
-                blurSigma: kLensBlurSigma,
-                bezel: kLensBezel,
-                rimWidth: 1,
+                blurSigma: ui.lerpDouble(
+                  pill.blurSigma,
+                  kLensBlurSigma,
+                  engage,
+                )!,
+                bezel: ui.lerpDouble(LiquidOptics.bezel, kLensBezel, engage),
+                rimWidth: ui.lerpDouble(LiquidOptics.rimWidth, 1, engage),
               ),
             ),
           );
@@ -126,14 +152,33 @@ class _LiquidLensState extends State<LiquidLens> {
             ),
           );
         }
-        return Stack(
+        final liquid = renderer is LiquidShaderRenderer && program != null;
+        final fill = widget.restFill;
+        final lens = Stack(
           fit: StackFit.expand,
           children: [
             body,
+            if (liquid && fill != null && engage < 1)
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: fill.withValues(alpha: fill.a * (1 - engage)),
+                  borderRadius: radius,
+                ),
+              ),
             // Above the lens, so the lens never samples its own shadow.
-            OutsideShadow(borderRadius: radius, shadow: kLensShadow),
+            OutsideShadow(
+              borderRadius: radius,
+              shadow: liquid
+                  ? kLensShadow.copyWith(
+                      color: kLensShadow.color.withValues(
+                        alpha: kLensShadow.color.a * engage,
+                      ),
+                    )
+                  : kLensShadow,
+            ),
           ],
         );
+        return liquid ? lens : Opacity(opacity: engage, child: lens);
       },
     ),
   );
