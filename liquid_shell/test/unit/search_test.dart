@@ -17,6 +17,9 @@ class _Driver implements SearchDriver {
 
   @override
   void textSetByApp(String text) => calls.add('text $text');
+
+  @override
+  void dismissKeyboard() => calls.add('dismissKeyboard');
 }
 
 void main() {
@@ -77,6 +80,22 @@ void main() {
       detachSearchDriver(controller, driver);
       controller.activate();
       expect(driver.calls, ['activate', 'deactivate']);
+    });
+
+    test('dismissKeyboard reaches the driver and changes no value '
+        '(VK-571)', () {
+      final controller = LiquidSearchController(text: 'hồ');
+      addTearDown(controller.dispose);
+      controller.dismissKeyboard();
+      final driver = _Driver();
+      attachSearchDriver(controller, driver);
+      var heard = 0;
+      controller
+        ..addListener(() => heard++)
+        ..dismissKeyboard();
+      expect(driver.calls, ['dismissKeyboard']);
+      expect(heard, 0);
+      expect(controller.text, 'hồ');
     });
 
     test('a platform edit changes the value without reaching the driver', () {
@@ -233,6 +252,26 @@ void main() {
       expect(
         LiquidSearch(controller: controller),
         isNot(LiquidSearch(controller: controller, placeholder: 'x')),
+      );
+      expect(
+        LiquidSearch(controller: controller).dismissKeyboardOnDrag,
+        isTrue,
+      );
+      expect(
+        LiquidSearch(controller: controller),
+        isNot(
+          LiquidSearch(controller: controller, dismissKeyboardOnDrag: false),
+        ),
+      );
+      expect(
+        LiquidSearch(
+          controller: controller,
+          dismissKeyboardOnDrag: false,
+        ).hashCode,
+        LiquidSearch(
+          controller: controller,
+          dismissKeyboardOnDrag: false,
+        ).hashCode,
       );
     });
   });

@@ -365,9 +365,7 @@ void main() {
 
   testWidgets(
     'regular: the field below the bar; active, it takes the bar row',
-    (
-      tester,
-    ) async {
+    (tester) async {
       final (controller, _, _) = await _pump(
         tester,
         size: kTabletPortrait,
@@ -571,9 +569,7 @@ void main() {
       _expectReleased(tester, controller, editing);
     });
 
-    testWidgets('the app selects another tab at compact width', (
-      tester,
-    ) async {
+    testWidgets('the app selects another tab at compact width', (tester) async {
       final (controller, _, _) = await _pump(tester, initialIndex: 2);
       final editing = await _composeWithHeldWrite(tester, controller);
       tester.state<TestShellState>(find.byType(TestShell)).select(1);
@@ -606,9 +602,7 @@ void main() {
       expect(controller.text, 'phố', reason: 'the held write is applied');
     });
 
-    testWidgets('the app selects another tab at compact width', (
-      tester,
-    ) async {
+    testWidgets('the app selects another tab at compact width', (tester) async {
       final (controller, _, _) = await _pump(tester, initialIndex: 2);
       await _composeFromImeWithHeldWrite(tester, controller);
       tester.state<TestShellState>(find.byType(TestShell)).select(1);
@@ -631,9 +625,7 @@ void main() {
   });
 
   group('minimize on scroll', () {
-    testWidgets('idle: the pill minimizes, the ⌕ circle stays', (
-      tester,
-    ) async {
+    testWidgets('idle: the pill minimizes, the ⌕ circle stays', (tester) async {
       await _pump(tester);
       final circle = _rect(tester, kSearchFieldKey);
       await tester.drag(
@@ -746,4 +738,256 @@ void main() {
       ),
     );
   });
+
+  // VK-571: a drag on the results, or a scope tap, puts the keyboard
+  // away and keeps the search up (Apple Music, Settings): the query, the
+  // active phase and its × stay; the field just has no focus.
+  group('VK-571: the keyboard goes, the search stays', () {
+    /// The search page of [controller], a scope bar on top of its results.
+    Widget Function(int) scopedPage(LiquidSearchController controller) =>
+        (index) => index == 2
+        ? Builder(
+            builder: (context) => ListView(
+              key: const ValueKey('list-Search'),
+              padding: LiquidShellScope.contentPaddingOf(context),
+              children: [
+                LiquidSearchScopeBar(
+                  controller: controller,
+                  scopes: const ['All', 'Songs', 'Places'],
+                ),
+                for (var i = 0; i < 60; i++)
+                  SizedBox(height: 40, child: Text('row $i')),
+              ],
+            ),
+          )
+        : TestPage(label: _destinations[index].label);
+
+    /// Focuses the field and types [text]; [scoped] puts a scope bar on
+    /// the search page.
+    Future<LiquidSearchController> typed(
+      WidgetTester tester, {
+      String text = 'hồ',
+      bool scoped = false,
+    }) async {
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      await pumpShell(
+        tester,
+        TestShell(
+          destinations: _destinations,
+          initialIndex: 2,
+          pageBuilder: scoped ? scopedPage(controller) : null,
+          search: LiquidSearch(controller: controller),
+        ),
+      );
+      await tester.tap(find.byType(TextField));
+      await tester.enterText(find.byType(TextField), text);
+      await tester.pumpAndSettle();
+      expect(tester.testTextInput.isVisible, isTrue);
+      return controller;
+    }
+
+    void expectKeyboardDownSearchUp(
+      WidgetTester tester,
+      LiquidSearchController controller, {
+      String text = 'hồ',
+    }) {
+      expect(tester.testTextInput.isVisible, isFalse, reason: 'keyboard');
+      expect(
+        FocusManager.instance.primaryFocus?.debugLabel,
+        isNot('LiquidShell search'),
+      );
+      expect(controller.text, text);
+      expect(controller.isActive, isTrue, reason: 'the search stays up');
+      expect(scopeOf(tester, 'Search').searchPhase, LiquidSearchPhase.active);
+      expect(find.bySemanticsLabel('Cancel search'), findsOneWidget);
+    }
+
+    testWidgets('dismissKeyboard: no focus, the query and × stay', (
+      tester,
+    ) async {
+      final controller = await typed(tester);
+      controller.dismissKeyboard();
+      await tester.pumpAndSettle();
+      expectKeyboardDownSearchUp(tester, controller);
+      // Down to the bottom row, with its ×, as UIKit's field goes.
+      expect(_rect(tester, kSearchFieldKey).bottom, _rowBottom - 7);
+    });
+
+    testWidgets('a user drag on the results dismisses the keyboard', (
+      tester,
+    ) async {
+      final controller = await typed(tester);
+      await tester.drag(
+        find.byKey(const ValueKey('list-Search')),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+      expectKeyboardDownSearchUp(tester, controller);
+    });
+
+    testWidgets('a programmatic scroll keeps the keyboard', (tester) async {
+      final controller = await typed(tester);
+      final position =
+          tester
+              .state<ScrollableState>(
+                find.descendant(
+                  of: find.byKey(const ValueKey('list-Search')),
+                  matching: find.byType(Scrollable),
+                ),
+              )
+              .position
+            ..jumpTo(120);
+      await tester.pump();
+      _animateToTop(position);
+      await tester.pumpAndSettle();
+      expect(position.pixels, 0);
+      expect(tester.testTextInput.isVisible, isTrue);
+      expect(controller.isActive, isTrue);
+    });
+
+    testWidgets('a scope tap selects it and dismisses the keyboard', (
+      tester,
+    ) async {
+      final controller = await typed(tester, scoped: true);
+      await tester.tap(find.text('Songs'));
+      await tester.pumpAndSettle();
+      expect(controller.scopeIndex, 1);
+      expectKeyboardDownSearchUp(tester, controller);
+    });
+
+    testWidgets('dismissKeyboardOnDrag: false keeps the keyboard on a drag', (
+      tester,
+    ) async {
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      await pumpShell(
+        tester,
+        TestShell(
+          destinations: _destinations,
+          initialIndex: 2,
+          search: LiquidSearch(
+            controller: controller,
+            dismissKeyboardOnDrag: false,
+          ),
+        ),
+      );
+      await tester.tap(find.byType(TextField));
+      await tester.pumpAndSettle();
+      await tester.drag(
+        find.byKey(const ValueKey('list-Search')),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.testTextInput.isVisible, isTrue);
+    });
+
+    testWidgets('mid-composition: the composed text stays, diacritics '
+        'included, and nothing is written into the IME', (tester) async {
+      final (controller, _, changes) = await _pump(tester, initialIndex: 2);
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: 'phố',
+          selection: TextSelection.collapsed(offset: 3),
+          composing: TextRange(start: 0, end: 3),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(controller.value.composing, isTrue);
+      tester.testTextInput.log.clear();
+      controller.dismissKeyboard();
+      await tester.pumpAndSettle();
+      _expectClosedBeforeAnyWrite(tester);
+      expect(controller.text, 'phố');
+      expect(controller.value.composing, isFalse);
+      expect(changes.last, 'phố');
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'phố',
+      );
+      expect(controller.isActive, isTrue);
+    });
+
+    testWidgets('then: a tap on the field brings the keyboard back', (
+      tester,
+    ) async {
+      final controller = await typed(tester);
+      controller.dismissKeyboard();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(TextField));
+      await tester.pumpAndSettle();
+      expect(tester.testTextInput.isVisible, isTrue);
+      expect(controller.isActive, isTrue);
+      expect(controller.text, 'hồ');
+    });
+
+    testWidgets('then: × clears and ends the search', (tester) async {
+      final controller = await typed(tester);
+      controller.dismissKeyboard();
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('Cancel search'));
+      await tester.pumpAndSettle();
+      expect(controller.text, '');
+      expect(controller.isActive, isFalse);
+      expect(scopeOf(tester, 'Search').searchPhase, LiquidSearchPhase.selected);
+    });
+
+    testWidgets('then: deactivate, back and another tab end the search', (
+      tester,
+    ) async {
+      final controller = await typed(tester);
+      controller.dismissKeyboard();
+      await tester.pumpAndSettle();
+      controller.deactivate();
+      await tester.pumpAndSettle();
+      expect(controller.isActive, isFalse);
+      expect(controller.text, 'hồ');
+
+      await tester.tap(find.byType(TextField));
+      await tester.pumpAndSettle();
+      controller.dismissKeyboard();
+      await tester.pumpAndSettle();
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(controller.isActive, isFalse, reason: 'back deactivates');
+      expect(find.byType(LiquidShell), findsOneWidget);
+
+      await tester.tap(find.byType(TextField));
+      await tester.pumpAndSettle();
+      controller.dismissKeyboard();
+      await tester.pumpAndSettle();
+      tester.state<TestShellState>(find.byType(TestShell)).select(1);
+      await tester.pumpAndSettle();
+      expect(controller.isActive, isFalse, reason: 'another tab');
+      tester.state<TestShellState>(find.byType(TestShell)).select(2);
+      await tester.pumpAndSettle();
+      expect(scopeOf(tester, 'Search').searchPhase, LiquidSearchPhase.selected);
+      expect(controller.text, 'hồ');
+    });
+
+    testWidgets('inactive: a drag and dismissKeyboard change nothing', (
+      tester,
+    ) async {
+      final (controller, _, _) = await _pump(tester, initialIndex: 2);
+      controller.dismissKeyboard();
+      await tester.drag(
+        find.byKey(const ValueKey('list-Search')),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+      expect(controller.isActive, isFalse);
+      expect(scopeOf(tester, 'Search').searchPhase, LiquidSearchPhase.selected);
+    });
+  });
 }
+
+/// Animates [position] back to the top, a programmatic scroll.
+void _animateToTop(ScrollPosition position) => position
+    .animateTo(
+      0,
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.linear,
+    )
+    .ignore();

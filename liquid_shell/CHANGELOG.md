@@ -69,6 +69,18 @@
   page still loses the swipe on any tab's pushed page to its own route,
   which pops the whole shell (VK-567). Hidden native chrome
   (`LiquidHideChrome`) ends an active search and keeps its text.
+- **The search keyboard goes on a drag or a scope tap (VK-571).** As in
+  Apple Music and Settings, a user drag that scrolls the shell's body (the
+  results), or a tap on `LiquidSearchScopeBar`, puts the keyboard away and
+  keeps the search: the query, the results, the active phase and its ×
+  stay. Natively the field resigns first responder (UIKit's search stays
+  presented); the Flutter field unfocuses and the search stays active
+  until the field is tapped again, × or `deactivate()`. A programmatic
+  scroll, or a sideways swipe that scrolls nothing (the iOS edge swipe),
+  keeps the keyboard. New `LiquidSearchController.dismissKeyboard()`, and
+  `LiquidSearch.dismissKeyboardOnDrag` (default true) to opt out of the
+  drag. `LiquidSearchValue.active` now means the search is active, with
+  or without the keyboard, in the Flutter field as natively.
 
 ## 0.1.0-dev.5
 

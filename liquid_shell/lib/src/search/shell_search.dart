@@ -51,6 +51,13 @@ final class ShellSearch implements SearchDriver {
   // a reconnect (the new field starts inactive).
   bool _syncInactive = true;
   bool _native = false;
+  // The Flutter field let go of its focus for `dismissKeyboard` (VK-571):
+  // the search stays active without it, as UIKit's does, until the field
+  // takes the focus back, × or `deactivate` end it, or the shell releases
+  // the field.
+  bool _keyboardDown = false;
+  // A user drag started on the body and has not scrolled yet.
+  bool _dragArmed = false;
   bool _writing = false;
   bool _disposed = false;
   String? _pendingFieldText;
@@ -80,6 +87,11 @@ final class ShellSearch implements SearchDriver {
 
   /// The native field's frame in the Flutter view; zero when not shown.
   Rect field = Rect.zero;
+
+  /// Whether the Flutter field holds the search: it has focus, or it let
+  /// the keyboard go and the search stayed active (VK-571). The shell
+  /// releases a field it no longer shows.
+  bool get holdsField => focus.hasFocus || _keyboardDown;
 
   /// The controller in use; null without a search destination.
   LiquidSearchController? get controller => _controller;
@@ -254,6 +266,47 @@ final class ShellSearch implements SearchDriver {
       claim()?.setSearchActive(active: false);
     } else {
       focus.unfocus();
+      _endKeyboardDown();
+    }
+  }
+
+  /// Puts the keyboard away and keeps the search active (VK-571), only
+  /// while it is active, so a drag on an inactive page changes nothing.
+  /// Natively the field resigns first responder: UIKit's search stays
+  /// presented with its text and Cancel, and commits marked text. The
+  /// Flutter field lets go of its focus, which ends a composition with its
+  /// text as composed (diacritics included). Neither writes any text.
+  @override
+  void dismissKeyboard() {
+    final controller = _controller;
+    if (controller == null || !controller.isActive || !selected) return;
+    if (native) {
+      claim()?.dismissSearchKeyboard();
+      return;
+    }
+    if (!focus.hasFocus) return;
+    _keyboardDown = true;
+    focus.unfocus();
+  }
+
+  /// The shell body's scroll notifications (VK-571): the first scroll of
+  /// a user drag puts the keyboard away, once per drag, unless the app
+  /// opted out (`LiquidSearch.dismissKeyboardOnDrag`). As Flutter's
+  /// `ScrollViewKeyboardDismissBehavior.onDrag`, it waits for the drag to
+  /// move the content: a sideways swipe over a vertical list (the iOS edge
+  /// swipe, VK-551) starts a drag there that scrolls nothing. A
+  /// programmatic scroll has no drag details.
+  void onBodyScroll(ScrollNotification notification) {
+    switch (notification) {
+      case ScrollStartNotification(dragDetails: _?):
+        _dragArmed = true;
+      case ScrollUpdateNotification(dragDetails: _?) ||
+              OverscrollNotification(dragDetails: _?)
+          when _dragArmed:
+        _dragArmed = false;
+        if (_config?.dismissKeyboardOnDrag ?? true) dismissKeyboard();
+      default:
+        break;
     }
   }
 
@@ -282,6 +335,7 @@ final class ShellSearch implements SearchDriver {
     }
     _writeField('');
     focus.unfocus();
+    _endKeyboardDown();
   }
 
   /// The shell will not show the Flutter field in this frame (hidden
@@ -291,6 +345,7 @@ final class ShellSearch implements SearchDriver {
   /// manager drops a detached node silently), so this does not wait for
   /// the listener. The microtask runs after the focus manager's.
   void releaseField() {
+    _keyboardDown = false;
     focus.unfocus();
     scheduleMicrotask(() {
       if (!_disposed) _onFocus();
@@ -368,13 +423,22 @@ final class ShellSearch implements SearchDriver {
         editing.value = editing.value.copyWith(composing: TextRange.empty);
       });
     }
+    if (focus.hasFocus) _keyboardDown = false;
     if (native) return;
     final controller = _controller;
     if (controller == null) return;
-    final active = focus.hasFocus && selected;
+    final active = (focus.hasFocus || _keyboardDown) && selected;
     if (controller.isActive != active) {
       applySearchEdit(controller, controller.value.copyWith(active: active));
     }
+  }
+
+  /// Ends a search kept active without the keyboard (VK-571): the field
+  /// has no focus, so no focus change would report it.
+  void _endKeyboardDown() {
+    if (!_keyboardDown) return;
+    _keyboardDown = false;
+    _onFocus();
   }
 
   /// Releases the controller and the field's resources.

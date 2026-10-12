@@ -201,6 +201,13 @@ final class NativeChromeClaim {
     );
   }
 
+  /// Puts the native search keyboard away and keeps the search active,
+  /// when this claim owns the chrome (VK-571).
+  void dismissSearchKeyboard() {
+    if (!isOwner) return;
+    unawaited(LiquidShellPlatform.instance.dismissNativeSearchKeyboard());
+  }
+
   /// Sends the top page's scroll offset of [tab], when this claim owns it.
   void setPageScroll({required int tab, required double offset}) {
     if (!isOwner) return;

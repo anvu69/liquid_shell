@@ -11,6 +11,7 @@ class LiquidSearch {
     this.placeholder,
     this.onChanged,
     this.onSubmitted,
+    this.dismissKeyboardOnDrag = true,
   });
 
   /// The query, the active state and the scope. Owned by the app: the app
@@ -30,6 +31,13 @@ class LiquidSearch {
   /// The user pressed the keyboard's Search key.
   final ValueChanged<String>? onSubmitted;
 
+  /// Whether a user drag that scrolls the shell's body (the results, a
+  /// page pushed in the search tab) puts the keyboard away while the search
+  /// is active, keeping the search, as Apple Music does. A programmatic
+  /// scroll never does. Default true. See
+  /// `LiquidSearchController.dismissKeyboard`.
+  final bool dismissKeyboardOnDrag;
+
   /// Field by field; callbacks by identity.
   @override
   bool operator ==(Object other) =>
@@ -37,9 +45,15 @@ class LiquidSearch {
       identical(other.controller, controller) &&
       other.placeholder == placeholder &&
       other.onChanged == onChanged &&
-      other.onSubmitted == onSubmitted;
+      other.onSubmitted == onSubmitted &&
+      other.dismissKeyboardOnDrag == dismissKeyboardOnDrag;
 
   @override
-  int get hashCode =>
-      Object.hash(controller, placeholder, onChanged, onSubmitted);
+  int get hashCode => Object.hash(
+    controller,
+    placeholder,
+    onChanged,
+    onSubmitted,
+    dismissKeyboardOnDrag,
+  );
 }

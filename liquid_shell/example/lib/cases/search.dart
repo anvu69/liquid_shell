@@ -180,6 +180,9 @@ class _SearchPage extends StatelessWidget {
         final results = value.text.trim().isEmpty
             ? null
             : searchResults(value.text, scope: value.scopeIndex);
+        // A drag on this list, or a scope tap, puts the keyboard away and
+        // keeps the search with its query (the shell and the scope bar
+        // call `controller.dismissKeyboard()`, VK-571).
         return ListView(
           padding: padding,
           children: [

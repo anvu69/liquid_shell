@@ -750,6 +750,17 @@ class _LiquidShellState extends State<LiquidShell>
     if (index != null) _onSelect(index);
   }
 
+  /// The body's scrolling: a user drag puts the search keyboard away
+  /// (VK-571, [ShellSearch.onBodyScroll]); a user scroll minimizes the
+  /// Flutter bar ([kind] null: native chrome, which minimizes itself).
+  bool _onBodyScroll(ScrollNotification notification, LiquidChromeKind? kind) {
+    _search.onBodyScroll(notification);
+    if (notification is UserScrollNotification && kind != null) {
+      _onScroll(notification, kind);
+    }
+    return false;
+  }
+
   bool _onScroll(UserScrollNotification notification, LiquidChromeKind kind) {
     // Only vertical scrolling reads as "moving through content"; a carousel
     // or PageView swipe leaves the bar alone.
@@ -897,7 +908,7 @@ class _LiquidShellState extends State<LiquidShell>
     final native = _resolveNative(context, presentation);
     if (native != null) {
       // Native chrome draws no Flutter field.
-      if (_search.focus.hasFocus) _search.releaseField();
+      if (_search.holdsField) _search.releaseField();
       return native;
     }
     final previousPresentation = _presentation;
@@ -954,7 +965,7 @@ class _LiquidShellState extends State<LiquidShell>
         phase != null &&
         phase != LiquidSearchPhase.idle &&
         kind != LiquidChromeKind.hidden;
-    if (_search.focus.hasFocus && (!fieldShown || sizeClassChanged)) {
+    if (_search.holdsField && (!fieldShown || sizeClassChanged)) {
       _search.releaseField();
     }
     final bottomGap = bottomGapFor(
@@ -1051,8 +1062,8 @@ class _LiquidShellState extends State<LiquidShell>
           data: bodyMedia,
           child: KeyedSubtree(
             key: _bodyKey,
-            child: NotificationListener<UserScrollNotification>(
-              onNotification: (n) => _onScroll(n, kind),
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (n) => _onBodyScroll(n, kind),
               child: widget.body,
             ),
           ),
@@ -1707,8 +1718,8 @@ class _LiquidShellState extends State<LiquidShell>
                   data: bodyMedia,
                   child: KeyedSubtree(
                     key: _bodyKey,
-                    child: NotificationListener<UserScrollNotification>(
-                      onNotification: (n) => false,
+                    child: NotificationListener<ScrollNotification>(
+                      onNotification: (n) => _onBodyScroll(n, null),
                       child: widget.body,
                     ),
                   ),
