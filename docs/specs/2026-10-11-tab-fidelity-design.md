@@ -268,7 +268,8 @@ Parameters, where `r` is the refraction spring value (§8.4) and `h` the lens he
 | thickness | `48 · 1.6 · r` pt (native `inputAmount` peaks at −17.5, against the pill's equivalent ≈ −11) |
 | index | 1.5 (unchanged) |
 | dispersion | `0.6 · r`: the rainbow rim on the active lens only |
-| tint | white @ **0.90** (light). Dark: `colorScheme.surface` @ 0.90 *(assumption: the dark press was not captured; it reads as a near-black disc, to be checked on a device in Task 16)* |
+| veil falloff | **1** at full engage (`engage` while it fades): the veil thins toward the rim (*Task 16 part B*, below) |
+| tint | white @ **0.90** (light). Dark: **#414141** @ 0.90 (*Task 16 part B:* native's held dark lens reads 61 luma in its core over the example's dark page, idb dark press strip; `colorScheme.surface` made a near-black disc of 23) |
 | rim | white @ **0.35**, rim width **1 pt** (new `LiquidOpticsParams.rimWidth` override) |
 | saturation | 1.1 (unchanged) |
 | blur before the shader | **σ 2 pt** |
@@ -289,6 +290,21 @@ Parameters, where `r` is the refraction spring value (§8.4) and `h` the lens he
 Native measures interior L 241–248, 1.1 % and p99 62.
 
 The shader file does not change. Only the Dart side gains two optional overrides in `LiquidOpticsParams` (`bezel`, `rimWidth`). Null keeps the internal constants, so every existing glass and its goldens are unaffected.
+
+*Amended in Task 16 part B (the owner approved the shader change: "Sửa shader đi").* A uniform veil cannot be native: native's held lens is milky in its core and clear at the rim, where the bent page and its rainbow show. `liquid_glass.frag` gains one uniform, **`uVeil`** (float 26, the liquid tier spec §4.2), and `LiquidOpticsParams` the matching `veilFalloff` (default 0). The veil becomes `tint.a · mix(1, smoothstep(0.2, 1, x), veilFalloff)` across the bezel coordinate `x`: at 0 it is the old uniform veil exactly (`mix(1, s, 0)` is 1), so the pill and every other surface render as before and their goldens are byte-identical; the engaged lens passes 1 (its `engage` while fading), so its outer 2.8 pt is fully clear and the veil reaches 0.90 at the 14 pt bezel's inner end. The shader still reads its premultiplied input as is and writes alpha 1 (§4.1 step 12).
+
+Acceptance, the same measures on native's held lens (idb press strips, over the example's page) and on the `tab_lens_pressed` / `tab_lens_pressed_dark` bands (Impeller):
+
+| measure | native light | Flutter light | native dark | Flutter dark | gate |
+|---|---|---|---|---|---|
+| core luma std (page text hidden) | 4.5 | 4.2 | 9.3 | 4.8 | ≤ 6 light, ≤ 12 dark |
+| core luma mean (milky) | 243 | 251 | 61 | 62 | ±10 |
+| ring luma std (clear, the bent page shows) | 24 | 22 | 24 | 20 | ≥ 12 |
+| chroma > 60 | 1.3–1.8 % | 1.7 % | 0.9 % | 1.3 % | ≤ 3 % |
+| p99 chroma | 65–76 | 64 | 58 | 64 | 45–90 |
+| colour (> 30) in the ring, not the core | 97–98 % | 99 % | 100 % | 99 % | ≥ 90 % |
+
+The earlier "≤ 3 % of the lens above chroma 60" gate stays: native is 0.9–1.8 %, so it does not contradict native. The earlier "p99 ≤ 80" gate becomes a range (45–90): a colourless lens passed it (p99 6). The dispersion stays `0.6 · r`: with the ring clear, 0.8 overshot native's share above 60 in dark, and the clear zone's start (0.2) was chosen over 0 and 0.35 the same way (0: ring std 18; 0.35: chroma > 60 above 3 %). Native's dark lens also carries the backdrop's blue (+6); the fixed grey veil cannot (Q14, adaptive material).
 
 A lens shadow, `BoxShadow(black 10 %, offset (0, 2), blur 10)`, is drawn with `OutsideShadow` while `engage > 0`.
 

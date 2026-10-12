@@ -96,7 +96,17 @@ Future<void> _expectBand(WidgetTester tester, String name) async {
 /// of lens pixels with chroma above 60 and `p99` the 99th-percentile
 /// chroma, the icon column excluded. Chroma is max − min of RGB; luminance
 /// is ITU-R 601.
-Future<({double coreStd, double vivid, int p99})> _lensMetrics(
+Future<
+  ({
+    double coreStd,
+    double coreMean,
+    double ringStd,
+    double ringColour,
+    double vivid,
+    int p99,
+  })
+>
+_lensMetrics(
   WidgetTester tester,
 ) async {
   final lens = tester.getRect(
@@ -122,6 +132,9 @@ Future<({double coreStd, double vivid, int p99})> _lensMetrics(
 
   final chroma = <int>[];
   final luma = <double>[];
+  final ringLuma = <double>[];
+  var coloured = 0;
+  var colouredInRing = 0;
   for (var py = (lens.top * k).floor(); py < (lens.bottom * k).ceil(); py++) {
     for (var px = (lens.left * k).floor(); px < (lens.right * k).ceil(); px++) {
       final x = (px + 0.5) / k;
@@ -133,19 +146,31 @@ Future<({double coreStd, double vivid, int p99})> _lensMetrics(
         data.getUint8(i + 1),
         data.getUint8(i + 2),
       ];
-      chroma.add(rgb.reduce(math.max) - rgb.reduce(math.min));
-      if (lens.deflate(ring).contains(Offset(x, y))) {
-        luma.add(0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]);
+      final c = rgb.reduce(math.max) - rgb.reduce(math.min);
+      chroma.add(c);
+      final l = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2];
+      final inCore = lens.deflate(ring).contains(Offset(x, y));
+      (inCore ? luma : ringLuma).add(l);
+      if (c > 30) {
+        coloured++;
+        if (!inCore) colouredInRing++;
       }
     }
   }
   chroma.sort();
-  final mean = luma.reduce((a, b) => a + b) / luma.length;
-  final variance =
-      luma.map((l) => (l - mean) * (l - mean)).reduce((a, b) => a + b) /
-      luma.length;
+  double meanOf(List<double> v) => v.reduce((a, b) => a + b) / v.length;
+  double stdOf(List<double> v) {
+    final m = meanOf(v);
+    return math.sqrt(
+      v.map((l) => (l - m) * (l - m)).reduce((a, b) => a + b) / v.length,
+    );
+  }
+
   return (
-    coreStd: math.sqrt(variance),
+    coreStd: stdOf(luma),
+    coreMean: meanOf(luma),
+    ringStd: stdOf(ringLuma),
+    ringColour: coloured == 0 ? 0.0 : colouredInRing / coloured,
     vivid: chroma.where((c) => c > 60).length / chroma.length,
     p99: chroma[(0.99 * (chroma.length - 1)).floor()],
   );
@@ -199,24 +224,45 @@ void main() {
   });
 
   // The engaged tab lens, frozen pressed: on Home, and straddling Home and
-  // Explore (research native265_slowdrag.png).
-  for (final (name, shift) in [
-    ('tab_lens_pressed', 0.0),
-    ('tab_lens_straddle', 43.0),
+  // Explore (research native265_slowdrag.png), in light and dark.
+  for (final (name, shift, brightness) in [
+    ('tab_lens_pressed', 0.0, Brightness.light),
+    ('tab_lens_straddle', 43.0, Brightness.light),
+    ('tab_lens_pressed_dark', 0.0, Brightness.dark),
   ]) {
     testWidgets(name, (tester) async {
       debugTabLensPress = shift;
       addTearDown(() => debugTabLensPress = null);
       await tester.runAsync(LiquidGlass.precache);
-      await pumpGolden(tester, const BasicTabsCase(), device: iphone);
+      await pumpGolden(
+        tester,
+        const BasicTabsCase(),
+        device: iphone,
+        brightness: brightness,
+      );
       await _expectBand(tester, name);
       if (shift != 0) return;
-      // A milky core with a faint fringe, as native (spec §7.2).
+      // Native's held lens over the example's page (spec §7.2; Task 16
+      // part B, the idb press strips, the same measure): a milky, flat
+      // core with the page text hidden; a clear ring that shows the page
+      // bent (its luma spread); colour in the ring, p99 chroma 58-76.
+      //
+      // | measure | native light | native dark |
+      // |---|---|---|
+      // | core std / mean | 4.5 / 243 | 9.3 / 61 |
+      // | ring std | 24 | 24 |
+      // | chroma > 60 | 1.3-1.8 % | 0.9 % |
+      // | p99 chroma | 65-76 | 58 |
+      // | colour (> 30) in the ring | 97-98 % | 100 % |
       final m = await _lensMetrics(tester);
       final seen = 'measured $m';
-      expect(m.coreStd, lessThanOrEqualTo(4), reason: seen);
+      final dark = brightness == Brightness.dark;
+      expect(m.coreStd, lessThanOrEqualTo(dark ? 12 : 6), reason: seen);
+      expect(m.coreMean, closeTo(dark ? 61 : 243, 10), reason: seen);
+      expect(m.ringStd, greaterThanOrEqualTo(12), reason: seen);
+      expect(m.ringColour, greaterThanOrEqualTo(0.9), reason: seen);
       expect(m.vivid, lessThanOrEqualTo(0.03), reason: seen);
-      expect(m.p99, lessThanOrEqualTo(80), reason: seen);
+      expect(m.p99, inInclusiveRange(45, 90), reason: seen);
     });
   }
 

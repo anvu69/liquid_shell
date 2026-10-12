@@ -1383,10 +1383,9 @@ content viewer (see [Custom chrome](#custom-chrome)).
   matched by measurement and does not re-tint by the brightness behind
   it; corners are circular, not continuous; icons are your icon font, not
   SF Symbols; colours are solid, not vibrant; the lens's squash and
-  stretch matches the peaks and timing but not every frame, and its
-  rainbow fringe is fainter; the pocket is three blur bands. In dark mode
-  the touched lens's veil is an assumption (no dark iOS capture), so it
-  may read darker than iOS's. Glass cannot see a platform view (map, web
+  stretch matches the peaks and timing but not every frame; the pocket is
+  three blur bands. In dark mode the touched lens's grey veil does not
+  take the page's hue, as iOS's does. Glass cannot see a platform view (map, web
   view): force `frosted` or `solid` on such pages. A narrow iPad window
   uses the iPhone measurements, and there is no iPad tab customization on
   long press. Details in

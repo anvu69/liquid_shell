@@ -2,7 +2,8 @@
 
 - **Tab bar fidelity (VK-503).** The Flutter tab bar matches iOS 26.5:
   native slot geometry (86 pt slots, 21 pt margins, the pill pinned at
-  the start beside a trailing circle), a liquid lens that engages on touch,
+  the start beside a trailing circle), a liquid lens that engages on touch
+  (milky in its core, clear and refracting at its rim, with the rainbow),
   follows a drag and snaps on release (the measured springs), tinted and
   magnified icons under the lens, a pill swell, a highlight and a finger
   glow, an icon pop on tap, and selection clicks while dragging. See

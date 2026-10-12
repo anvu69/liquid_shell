@@ -31,7 +31,7 @@ abstract final class LiquidOptics {
   static const int firstIndex = 2;
 
   /// Number of floats [liquidUniforms] returns.
-  static const int floatCount = 24;
+  static const int floatCount = 25;
 }
 
 /// What the shader needs besides the geometry, from `LiquidGlassTheme`.
@@ -46,6 +46,7 @@ class LiquidOpticsParams {
     required this.blurSigma,
     this.bezel,
     this.rimWidth,
+    this.veilFalloff = 0,
   });
 
   /// The liquid fields of [theme]; the rim uses `rimHighlight`.
@@ -82,6 +83,13 @@ class LiquidOpticsParams {
   /// [LiquidOptics.rimWidth].
   final double? rimWidth;
 
+  /// How much the [tint] veil thins toward the edge across the bezel, 0–1.
+  /// 0 (the default, every surface but the engaged tab lens) is a uniform
+  /// veil, as before. 1 is native's held lens: milky in the core, clear at
+  /// the rim, so the bent page and the fringe show in the ring (spec
+  /// VK-503 §7.2, Task 16 part B).
+  final double veilFalloff;
+
   @override
   bool operator ==(Object other) =>
       other is LiquidOpticsParams &&
@@ -91,7 +99,8 @@ class LiquidOpticsParams {
       other.dispersion == dispersion &&
       other.blurSigma == blurSigma &&
       other.bezel == bezel &&
-      other.rimWidth == rimWidth;
+      other.rimWidth == rimWidth &&
+      other.veilFalloff == veilFalloff;
 
   @override
   int get hashCode => Object.hash(
@@ -102,10 +111,11 @@ class LiquidOpticsParams {
     blurSigma,
     bezel,
     rimWidth,
+    veilFalloff,
   );
 }
 
-/// The floats for shader indices 2–25 (spec §4.2), in pass pixels.
+/// The floats for shader indices 2–26 (spec §4.2), in pass pixels.
 ///
 /// [rect] is the glass in pass pixels and [radii] its drawn corners in
 /// logical pixels. [scale] is pass pixels per logical pixel, and [pass] the
@@ -164,6 +174,7 @@ Float32List liquidUniforms({
     LiquidOptics.light.dy,
     (params.rimWidth ?? LiquidOptics.rimWidth) * scale,
     LiquidOptics.saturation,
+    params.veilFalloff.clamp(0.0, 1.0),
   ]);
 }
 

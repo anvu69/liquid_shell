@@ -78,18 +78,31 @@ void main() {
     expect(_sigma, 2); // blur σ 2 pt before the shader
   });
 
-  testWidgets('dark: the veil is colorScheme.surface at 0.90', (tester) async {
+  testWidgets('dark: the veil is native-fitted #414141 at 0.90 (Task 16 '
+      'part B: native core 61 luma; surface made a near-black disc)', (
+    tester,
+  ) async {
     await _liquid(tester);
     await tester.pumpWidget(_lens(brightness: Brightness.dark));
     await tester.pump();
     final u = tester
         .renderObject<RenderLiquidBackdrop>(find.byType(LiquidBackdrop))
         .debugUniforms!;
-    final surface = ThemeData(brightness: Brightness.dark).colorScheme.surface;
-    expect(u[12], closeTo(surface.r, 1e-6));
-    expect(u[13], closeTo(surface.g, 1e-6));
-    expect(u[14], closeTo(surface.b, 1e-6));
+    expect(u[12], closeTo(kLensVeilDark.r, 1e-6));
+    expect(u[13], closeTo(kLensVeilDark.g, 1e-6));
+    expect(u[14], closeTo(kLensVeilDark.b, 1e-6));
     expect(u[15], closeTo(0.90, 1e-6));
+  });
+
+  testWidgets('the engaged liquid lens thins its veil toward the rim; the '
+      'pill does not (Task 16 part B)', (tester) async {
+    await _liquid(tester);
+    await tester.pumpWidget(_lens());
+    await tester.pump();
+    final u = tester
+        .renderObject<RenderLiquidBackdrop>(find.byType(LiquidBackdrop))
+        .debugUniforms!;
+    expect(u[24], 1); // shader float 26: the veil falloff
   });
 
   testWidgets('refraction 0.5 halves thickness and dispersion; the rim '

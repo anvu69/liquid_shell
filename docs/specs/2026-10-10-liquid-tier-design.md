@@ -186,7 +186,7 @@ All quantities are in **physical pixels of the pass**, and y points down.
 7. **Displacement.** `δ = R.xy · (T · η(x)) / max(−R.z, 0.2)`. It is 0 at the very edge, where the height is 0, peaks just inside the edge and falls to 0 where the bezel flattens. At the default `T = 48 pt`, `b = 20 pt` and `n = 1.5` (tuned in §3.6.1; the plan's Task 1 worked numbers used 18 / 12), the peak is about **27 pt** (27.3) at `x ≈ 0.06`, 26.1 pt at `x = 0.1` and 13.7 pt at `x = 0.3`. Between about `x = 0.1` and `0.55` the shift falls faster than the depth grows, so the band mirrors what lies inside. Dispersion at the default 0.3 moves red and blue by about ±1 pt at `x = 0.1`.
 8. **Dispersion.** Inside the bezel only (`x < 1`), the red, green and blue channels are sampled with `n − 0.1·k`, `n` and `n + 0.1·k`, where `k` = `dispersion` (0–1, default 0.3, so ±0.03). Outside the bezel there is one tap.
 9. **Sample.** `uv = (p + δ) / uSize`, clamped to [0, 1]. The y-flip applies only under `IMPELLER_TARGET_OPENGLES` (spike).
-10. **Tint and vibrancy.** `rgb = mix(sample, tint.rgb, tint.a)`. Then `rgb = mix(vec3(luma(rgb)), rgb, sat)`, with `sat` = 1.1 (an internal constant). `luma` uses Rec. 709 weights.
+10. **Tint and vibrancy.** `rgb = mix(sample, tint.rgb, a)`, where the veil `a = tint.a · mix(1, smoothstep(0.2, 1, x), v)` and `v` is the veil falloff (0–1, float 26). With `v = 0`, every surface but the engaged tab lens, `mix(1, s, 0)` is exactly 1 and the veil is the uniform `tint.a` as before (the goldens of every other surface stay byte-identical). With `v = 1` the veil thins from the flat core to nothing across the bezel, fully clear in its outer 20 %: the engaged tab lens's milky core and clear, refracting rim (VK-503 Task 16 part B, measured against native's held lens). Then `rgb = mix(vec3(luma(rgb)), rgb, sat)`, with `sat` = 1.1 (an internal constant). `luma` uses Rec. 709 weights.
 11. **Specular rim.** `L = normalize(lightDir)`, with the light at the top-left `(−0.5, −0.85)`. The rim mask is `ρ = 1 − smoothstep(0, w, t)`, where `w` is the rim width (1.5 pt). Then `spec = ρ · (max(n₂·L, 0) + 0.4 · max(−n₂·L, 0))`, which gives a strong highlight on the lit edge and a weaker one opposite, as light passing through. The bezel glow is `g = 0.25 · (1 − η(x))`. Finally `rgb += rim.rgb · rim.a · (spec + g)`.
 12. **Output.** `fragColor = vec4(rgb, 1)`. The `ClipRRect` around the filter cuts the shape with anti-aliasing, so the shader never handles the outside. The owner kept this opaque output after the final review (premultiplied input read as is, alpha 1). Measured on Impeller: under `Opacity`, `FadeTransition` and other save-layer fades the glass fades like frosted; over a transparent or translucent backdrop (a transparent `FlutterView` in add-to-app, Android `TransparencyMode.transparent`, an overlay window, `RepaintBoundary.toImage` of a subtree) it is an opaque slab of the tint over black. README and `doc/liquid.md` document it and tell apps to force `frosted` (`LiquidGlassPolicy(forcedTier:)`) there.
 
@@ -203,9 +203,10 @@ Floats are listed by index. Indices 0–1 are set by the engine. `setFloat` indi
 | 14–17 | `uTint` | Tint r, g, b, a (straight alpha, 0–1) |
 | 18–21 | `uRim` | Rim r, g, b, a |
 | 22–25 | `uLight` | Light x, y, rim width `w`, saturation `sat` |
+| 26 | `uVeil` | Veil falloff `v`, 0 (uniform, the default) to 1 (thins to clear at the edge). Added in VK-503 Task 16 part B |
 | sampler 0 | `uBackdrop` | The filter input (engine) |
 
-`liquidUniforms(...)` is a pure Dart function. It returns these 24 floats, for indices 2–25, from logical inputs and a pixel scale, and is unit-tested with exact values (§10.1). It applies four rules:
+`liquidUniforms(...)` is a pure Dart function. It returns these 25 floats, for indices 2–26 (24 floats, 2–25, before VK-503 Task 16 part B), from logical inputs and a pixel scale, and is unit-tested with exact values (§10.1). It applies four rules:
 
 - `b` is clamped to `[1 px, 0.5 · min(width, height)]`.
 - Each radius is clamped to `0.5 · min(width, height)` (a pill with 999 pt radii becomes a stadium).

@@ -129,11 +129,9 @@ drag. Plain taps are silent.
   colourful page they do not take on its hue.
 - The lens's squash and stretch is a two-spring model: the peaks and timing
   match, some in-between frames do not.
-- The touched lens's rainbow fringe is fainter than iOS's at the ends of
-  the lens.
-- **Dark mode lens (unverified).** The touched lens in dark mode is a
-  `colorScheme.surface` veil, an assumption: no dark iOS capture was
-  available, so it may read darker than iOS's.
+- The touched lens is matched by measurement (a milky core, a clear
+  refracting ring with its fringe); in dark mode its grey veil does not
+  take the blue of the page behind it, as iOS's does.
 - The scroll-edge pocket is three blur bands, not a continuous blur.
 - Glass over a platform view (map, web view) cannot see it. Force
   `frosted` or `solid` on such pages.

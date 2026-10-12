@@ -23,6 +23,11 @@ const BoxShadow kLensShadow = BoxShadow(
 /// §7.2, about 10 % of the backdrop passes).
 const double kLensVeil = 0.90;
 
+/// The dark engaged lens's veil colour: native's held lens reads 61 luma
+/// in its core over the example's dark page (idb dark press strip), where
+/// `colorScheme.surface` made a near-black disc (23). Task 16 part B.
+const Color kLensVeilDark = Color(0xFF414141);
+
 /// The engaged lens's refracting ring, in points (spec §7.2).
 const double kLensBezel = 14;
 
@@ -99,7 +104,7 @@ class _LiquidLensState extends State<LiquidLens> {
         final scheme = Theme.of(context).colorScheme;
         final veil = scheme.brightness == Brightness.light
             ? const Color(0xFFFFFFFF)
-            : scheme.surface;
+            : kLensVeilDark;
         final program = LiquidShaderProgram.instance.value;
         final Widget body;
         if (renderer is LiquidShaderRenderer && program != null) {
@@ -124,6 +129,8 @@ class _LiquidLensState extends State<LiquidLens> {
                 )!,
                 bezel: ui.lerpDouble(LiquidOptics.bezel, kLensBezel, engage),
                 rimWidth: ui.lerpDouble(LiquidOptics.rimWidth, 1, engage),
+                // Milky core, clear ring (spec §7.2, Task 16 part B).
+                veilFalloff: engage,
               ),
             ),
           );

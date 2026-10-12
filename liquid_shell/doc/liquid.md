@@ -50,11 +50,12 @@ The same screen with one field changed at a time:
 a flat `selectionFill` capsule, with no extra pass. A touch engages a
 second liquid pass at the capsule: a `LiquidLens` that reads the same
 backdrop as the pill, so it bends the page behind the bar rather than the
-pill. It has a 14 pt refracting ring around a flat core, a milky veil
-(white at 0.90 in light, `colorScheme.surface` at 0.90 in dark), a σ 2
-blur, a 1 pt rim, a soft shadow, and a rainbow fringe that grows with the
-press (dispersion up to 0.6), the only fringe the default theme draws.
-It fades in and out as one layer. On the frosted tier the lens is a
+pill. It has a 14 pt refracting ring around a flat core and a veil that
+is milky in the core (white at 0.90 in light, #414141 at 0.90 in dark)
+and thins to clear at the rim, as iOS's: the bent page and a rainbow
+fringe (dispersion up to 0.6) show in the ring, the only fringe the
+default theme draws. Add a σ 2 blur, a 1 pt rim and a soft shadow. It
+fades by blending into the pill's own glass. On the frosted tier the lens is a
 lightly blurred white capsule with a rim; on solid, an opaque capsule.
 More in [tab_bar.md](tab_bar.md).
 
