@@ -28,6 +28,9 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
     this.tabForeground = const Color(0xFF191919),
     this.badgeColor = const Color(0xFFFF383C),
     this.tabIconSize = 26,
+    this.segmentTrack = const Color(0x1F767680),
+    this.segmentThumb = const Color(0xFFFFFFFF),
+    this.segmentLabelStyle = _segmentLabelLight,
   });
 
   /// Defaults for light and dark, derived from [scheme] (spec §5.9).
@@ -56,6 +59,10 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
       selectionFill: light ? const Color(0x14000000) : const Color(0x21FFFFFF),
       tabForeground: light ? const Color(0xFF191919) : const Color(0xFFF4F4F4),
       badgeColor: light ? const Color(0xFFFF383C) : const Color(0xFFFF4245),
+      // Measured from UISegmentedControl, iOS 26.5 (spec VK-550 §6).
+      segmentTrack: light ? const Color(0x1F767680) : const Color(0x3D767680),
+      segmentThumb: light ? const Color(0xFFFFFFFF) : const Color(0x4DEBEBF5),
+      segmentLabelStyle: light ? _segmentLabelLight : _segmentLabelDark,
     );
   }
 
@@ -149,6 +156,28 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
   /// Tab bar icon size at text scale 1.
   final double tabIconSize;
 
+  /// `LiquidSegmentedControl` track fill, drawn over the page.
+  final Color segmentTrack;
+
+  /// `LiquidSegmentedControl` thumb at rest, drawn over the track.
+  final Color segmentThumb;
+
+  /// `LiquidSegmentedControl` labels at text scale 1.
+  final TextStyle segmentLabelStyle;
+
+  static const TextStyle _segmentLabelLight = TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.w400,
+    color: Color(0xFF000000),
+    height: 15.67 / 13,
+  );
+  static const TextStyle _segmentLabelDark = TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.w400,
+    color: Color(0xFFFFFFFF),
+    height: 15.67 / 13,
+  );
+
   @override
   LiquidGlassTheme copyWith({
     Color? tint,
@@ -168,6 +197,9 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
     Color? tabForeground,
     Color? badgeColor,
     double? tabIconSize,
+    Color? segmentTrack,
+    Color? segmentThumb,
+    TextStyle? segmentLabelStyle,
   }) => LiquidGlassTheme(
     tint: tint ?? this.tint,
     solid: solid ?? this.solid,
@@ -186,6 +218,9 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
     tabForeground: tabForeground ?? this.tabForeground,
     badgeColor: badgeColor ?? this.badgeColor,
     tabIconSize: tabIconSize ?? this.tabIconSize,
+    segmentTrack: segmentTrack ?? this.segmentTrack,
+    segmentThumb: segmentThumb ?? this.segmentThumb,
+    segmentLabelStyle: segmentLabelStyle ?? this.segmentLabelStyle,
   );
 
   @override
@@ -209,6 +244,13 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
       tabForeground: Color.lerp(tabForeground, other.tabForeground, t)!,
       badgeColor: Color.lerp(badgeColor, other.badgeColor, t)!,
       tabIconSize: lerpDouble(tabIconSize, other.tabIconSize, t)!,
+      segmentTrack: Color.lerp(segmentTrack, other.segmentTrack, t)!,
+      segmentThumb: Color.lerp(segmentThumb, other.segmentThumb, t)!,
+      segmentLabelStyle: TextStyle.lerp(
+        segmentLabelStyle,
+        other.segmentLabelStyle,
+        t,
+      )!,
     );
   }
 
@@ -231,7 +273,10 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
       other.selectionFill == selectionFill &&
       other.tabForeground == tabForeground &&
       other.badgeColor == badgeColor &&
-      other.tabIconSize == tabIconSize;
+      other.tabIconSize == tabIconSize &&
+      other.segmentTrack == segmentTrack &&
+      other.segmentThumb == segmentThumb &&
+      other.segmentLabelStyle == segmentLabelStyle;
 
   @override
   int get hashCode => Object.hashAll([
@@ -252,5 +297,8 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
     tabForeground,
     badgeColor,
     tabIconSize,
+    segmentTrack,
+    segmentThumb,
+    segmentLabelStyle,
   ]);
 }
