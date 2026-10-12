@@ -8,28 +8,39 @@ import 'package:flutter/widgets.dart';
 /// (`IntrinsicWidth`, `IntrinsicHeight`, an `AlertDialog`'s content). As
 /// `FitLabelBox` does for a tab label, the render object answers them
 /// itself; here from the same pure geometry the builder lays out, so the
-/// answer and the layout cannot disagree.
+/// answer and the layout cannot disagree. The dry baseline comes from
+/// [baselineFor] the same way (a `LayoutBuilder` throws there too, in
+/// debug).
 class SizedLayoutBuilder extends SingleChildRenderObjectWidget {
   /// Creates the builder; [sizeFor] must be pure and match [builder]'s size.
   SizedLayoutBuilder({
     required this.sizeFor,
     required LayoutWidgetBuilder builder,
+    this.baselineFor,
     super.key,
   }) : super(child: LayoutBuilder(builder: builder));
 
   /// The size under some constraints, before [BoxConstraints.constrain].
   final Size Function(BoxConstraints constraints) sizeFor;
 
+  /// The distance to [TextBaseline] under some constraints, as the
+  /// builder's widget lays it out; null when it has none. Without it the dry
+  /// baseline is null.
+  final double? Function(BoxConstraints constraints, TextBaseline baseline)?
+  baselineFor;
+
   @override
   RenderSizedLayout createRenderObject(BuildContext context) =>
-      RenderSizedLayout(sizeFor);
+      RenderSizedLayout(sizeFor, baselineFor);
 
   @override
   void updateRenderObject(
     BuildContext context,
     RenderSizedLayout renderObject,
   ) {
-    renderObject.sizeFor = sizeFor;
+    renderObject
+      ..sizeFor = sizeFor
+      ..baselineFor = baselineFor;
   }
 }
 
@@ -37,7 +48,12 @@ class SizedLayoutBuilder extends SingleChildRenderObjectWidget {
 /// does, and answers intrinsics and dry layout from [sizeFor].
 class RenderSizedLayout extends RenderProxyBox {
   /// Creates the render object.
-  RenderSizedLayout(this._sizeFor);
+  RenderSizedLayout(this._sizeFor, [this.baselineFor]);
+
+  /// The dry baseline under some constraints (see
+  /// [SizedLayoutBuilder.baselineFor]).
+  double? Function(BoxConstraints constraints, TextBaseline baseline)?
+  baselineFor;
 
   /// The size under some constraints.
   Size Function(BoxConstraints constraints) get sizeFor => _sizeFor;
@@ -67,4 +83,10 @@ class RenderSizedLayout extends RenderProxyBox {
   @override
   Size computeDryLayout(covariant BoxConstraints constraints) =>
       constraints.constrain(sizeFor(constraints));
+
+  @override
+  double? computeDryBaseline(
+    covariant BoxConstraints constraints,
+    TextBaseline baseline,
+  ) => baselineFor?.call(constraints, baseline);
 }

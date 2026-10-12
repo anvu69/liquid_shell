@@ -101,7 +101,7 @@ Two outcomes:
 | Fast drag | squash: h ×1.13 of pressed, w −12 % at ≈ 800 pt/s | §3 |
 | Drag release | commits the segment under the lens at release; overshoot then wobble | §3 |
 | Programmatic | slides (ζ 0.82, 0.41 s), no engage, no resize, no `valueChanged` | §3 |
-| No glow, no bulge, no highlight | no `LittleGlowView`; the control's layer never scales | §2 |
+| No glow, no bulge, no lens highlight | no `LittleGlowView`; the control's layer never scales (a held unselected label fades, §8.3) | §2, Task 1 |
 | Haptics | not observable on the simulator | §3 |
 
 Still to capture (plan Task 1): a held press on an unselected segment, dark traces and the engaged lens's colours, label magnification under the lens, the refracting ring width, the flick landing, five segments, RTL, accessibility sizes. The spring of the lens after a drag release is not a capture: Task 4 fits it to the fixture's `slow_drag.release_rows` and `flick` rows (§8.2).
@@ -112,18 +112,18 @@ Still to capture (plan Task 1): a held press on an unselected segment, dark trac
 lib/src/chrome/
   lens_track.dart        (new)  LensTrack: the slots a lens moves over (TabBarGeometry, SegmentGeometry)
   lens_profile.dart      (new)  LensProfile: springs + envelope; LensProfile.tab (= TabSprings), LensProfile.segment
-  lens_motion.dart              LensMotion(track:, profile:): unchanged behaviour for the tab profile
+  lens_motion.dart              LensMotion(track:, profile:): unchanged behaviour for the tab profile; up(canCommit:) skips disabled slots
   lens_ticker.dart       (new)  LensTicker: the Ticker loop, crossings → selectionClick, accept / return, trace hook
   lens_clip.dart         (new)  LensClip (moved from glass_tab_bar.dart's _LensClip)
   tab_springs.dart              unchanged; LensProfile.tab reads it
   tab_geometry.dart             TabBarGeometry implements LensTrack
   glass_tab_bar.dart            uses LensTicker and LensClip (refactor, no behaviour change)
   lens_gesture.dart             unchanged, reused
+  large_content_viewer.dart     reused; the icon becomes optional (a text segment has none)
+  sized_layout_builder.dart     (new, Task 7 review) a LayoutBuilder that answers intrinsics, dry layout and the dry baseline from the geometry
 lib/src/segmented/       (new)
   segment_geometry.dart         pure: SegmentMetrics, SegmentGeometry (implements LensTrack), segmentGeometry()
   segmented_control.dart        LiquidSegment, LiquidSegmentedControl (public); painters
-lib/src/chrome/
-  sized_layout_builder.dart     (Task 7 review) a LayoutBuilder that answers intrinsics and dry layout from the geometry
 lib/src/glass/
   liquid_lens.dart              + optional bezel (default kLensBezel); reused as is otherwise
   glass_theme.dart              + segmentTrack, segmentThumb, segmentLabelStyle
@@ -228,7 +228,8 @@ The state machine is VK-503's (§8.2: rest, pressed, dragging, flying, settling)
 
 - **Commit and guard** (VK-503 §8.7). The control is controlled: `onChanged(i)` fires at the commit, and the app is expected to rebuild with `selectedIndex: i`. When the lens settles and `selectedIndex` is still another value, the lens returns to it on the release spring (a refused change). A tap on the selected segment lifts and lands in place and calls nothing (native sends no `valueChanged`, measured in Task 1, `tapOnSelected`: the lens grows to ≈ 143 × 44 in place and is back at rest by ≈ 0.5 s).
 - **Disabled segments.** A tap on one does nothing; a drag never commits it (the release picks the nearest enabled segment); the lens may pass over it.
-- **No glow, no pill scale, no highlight, no pop** for the segment profile (spike §2): the profile's switches turn them off; `LensFrame` reports 0 / 1 for them.
+- **No glow, no pill scale, no lens highlight, no pop** for the segment profile (spike §2): the profile's switches turn them off; `LensFrame` reports 0 / 1 for them.
+- **The held label fades** (Task 1, `pressOther`; the one press feedback native shows outside the lens): while a finger holds an enabled, unselected segment and the lens stays at rest, that segment's w400 label fades to opacity **0.2** over **0.45 s** (ease in-out, assumption: the curve was not measured). It is back at 1 at once on the up, on a cancel, or when the press turns into a drag (assumption: native's return was not captured).
 
 ### 8.4 Flight shape, squash and wobble (model)
 
@@ -244,6 +245,7 @@ These are the only tuning knobs (as VK-503 §8.3); every one is fitted in Task 4
 
 - Each segment is a node: `button: true`, `inMutuallyExclusiveGroup: true`, `selected: i == selectedIndex`, `enabled` per segment and control, `label: segment.semanticLabel ?? segment.label`, `onTap` (the semantics tap path) when enabled.
 - The control is a container with an optional `semanticLabel`; the order is visual order in LTR and RTL.
+- **Keyboard** (as the VK-503 tab bar after its keyboard fix): each enabled segment takes focus (Tab, Shift-Tab and the arrow keys, in visual order) and shows a 2 pt ring in the theme's primary colour around its thumb; Enter or Space activates it once, on the semantics tap path (nothing for the selected segment). Touches never reach these actions: they go to the control's one recognizer, and no touch moves the focus (a text field elsewhere keeps it).
 
 ## 9. Haptics (S7)
 
@@ -321,7 +323,7 @@ As VK-503 Q11: a tap dissolves the rest thumb from the old segment to the new on
 
 ### 12.4 Hit targets
 
-Every segment's tap area is its full width × the 44 pt box (§5), and `expand: false` keeps segments ≥ 44 wide. `expand: true` fills the width it is given and never overflows: below 44 pt per segment, hit targets follow the segment width (owner decision, Task 7). `test/widget` checks it with `meetsGuideline(iOSTapTargetGuideline)` (44 × 44). Android's 48 dp guideline is not claimed (Q-C).
+Every segment's tap area is its full width × the 44 pt box (§5). Neither mode overflows: `expand: true` fills the width it is given, and `expand: false` sizes segments to the labels (≥ 44 wide) but, in a parent narrower than that, also shrinks every segment equally to fit (owner decision, Task 7). Below 44 pt per segment, in either mode, hit targets follow the segment width. `test/widget` checks it with `meetsGuideline(iOSTapTargetGuideline)` (44 × 44). Android's 48 dp guideline is not claimed (Q-C).
 
 ### 12.5 Tiers
 

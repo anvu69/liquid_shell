@@ -370,15 +370,42 @@ class LensMotion {
   }
 
   /// Finger up at [local] with horizontal [velocity]; returns the committed
-  /// slot (spec §8.2).
-  int? up(Offset local, {double velocity = 0}) {
+  /// slot (spec §8.2). A slot [canCommit] refuses is never committed: the
+  /// nearest one it allows is (spec VK-550 §8.3, disabled segments); with
+  /// none allowed the up is a [cancel] and returns null.
+  int? up(
+    Offset local, {
+    double velocity = 0,
+    bool Function(int slot)? canCommit,
+  }) {
     if (!interacting) return null;
     final tap = _phase == LensPhase.pressed;
     final flick = velocity.abs() >= profile.flickVelocity;
-    final slot = _geometry.slotNearest(tap || flick ? local.dx : _x.value);
+    final x = tap || flick ? local.dx : _x.value;
+    final slot = canCommit == null
+        ? _geometry.slotNearest(x)
+        : _nearestAllowed(x, canCommit);
+    if (slot == null) {
+      cancel();
+      return null;
+    }
     _startRipple();
     _commit(slot, tap: tap, flick: flick && !tap);
     return slot;
+  }
+
+  /// The slot [allowed] accepts whose centre is nearest [x], or null.
+  int? _nearestAllowed(double x, bool Function(int slot) allowed) {
+    int? best;
+    var distance = double.infinity;
+    for (var s = 0; s < _geometry.slots.length; s++) {
+      final d = (_geometry.centreOf(s) - x).abs();
+      if (allowed(s) && d < distance) {
+        best = s;
+        distance = d;
+      }
+    }
+    return best;
   }
 
   /// The touch was taken away: back to the committed slot, no commit.

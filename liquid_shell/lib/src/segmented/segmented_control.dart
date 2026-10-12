@@ -1,8 +1,15 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
+import 'package:liquid_shell/src/chrome/large_content_viewer.dart';
 import 'package:liquid_shell/src/chrome/lens_clip.dart';
+import 'package:liquid_shell/src/chrome/lens_gesture.dart';
+import 'package:liquid_shell/src/chrome/lens_motion.dart';
+import 'package:liquid_shell/src/chrome/lens_profile.dart';
+import 'package:liquid_shell/src/chrome/lens_ticker.dart';
 import 'package:liquid_shell/src/chrome/sized_layout_builder.dart';
+import 'package:liquid_shell/src/chrome/text_scale.dart';
 import 'package:liquid_shell/src/glass/glass_theme.dart';
+import 'package:liquid_shell/src/glass/liquid_lens.dart';
 import 'package:liquid_shell/src/segmented/segment_geometry.dart';
 
 /// The track, for tests.
@@ -21,7 +28,38 @@ const kSegmentNormalKey = ValueKey<String>('liquid-segment-normal');
 @visibleForTesting
 const kSegmentSelectedKey = ValueKey<String>('liquid-segment-selected');
 
+/// Reduce motion: the outgoing rest thumb, for tests.
+@visibleForTesting
+const kSegmentGhostKey = ValueKey<String>('liquid-segment-ghost');
+
+/// The keyboard focus ring around a segment, for tests.
+@visibleForTesting
+const kSegmentFocusKey = ValueKey<String>('liquid-segment-focus');
+
+/// Acceptance traces (spec VK-550 §14): called once per control tick with
+/// the global lens centre (`x`, `y`), the lens size (`w`, `h`), `engage`
+/// and the ticker time `t` in seconds. Reset it to null after use.
+@visibleForTesting
+void Function(Map<String, double> sample)? debugSegmentTrace;
+
+/// Goldens: when non-null, every segmented control draws its lens pressed
+/// (the press growth, engaged) and shifted by this many points in x. Reset
+/// it to null after use.
+@visibleForTesting
+double? debugSegmentLensPress;
+
 const BorderRadius _capsule = BorderRadius.all(Radius.circular(999));
+
+/// The segment lens's refracting ring (spec §7: 9 pt; Task 1 measured
+/// native's at 8.3 to 9.0).
+const double _lensBezel = 9;
+
+/// A held unselected segment's label fades to this opacity over
+/// [_pressedLabelFade] (Task 1, `pressOther`).
+const double _pressedLabelOpacity = 0.2;
+
+/// See [_pressedLabelOpacity].
+const Duration _pressedLabelFade = Duration(milliseconds: 450);
 
 /// One segment of a [LiquidSegmentedControl].
 @immutable
@@ -139,15 +177,165 @@ class LiquidSegmentedControl extends StatefulWidget {
   State<LiquidSegmentedControl> createState() => _LiquidSegmentedControlState();
 }
 
-class _LiquidSegmentedControlState extends State<LiquidSegmentedControl> {
+class _LiquidSegmentedControlState extends State<LiquidSegmentedControl>
+    with SingleTickerProviderStateMixin {
+  LensMotion? _motion;
+
+  /// The frame loop shared with the tab bar: haptics per crossing, a
+  /// refused commit handed back, the trace. Its ticker is made on the
+  /// first kick, so a control nobody touches never makes one.
+  late final LensTicker _ticker = LensTicker(
+    vsync: this,
+    motion: () => _motion,
+    selected: () => widget.selectedIndex,
+    onFrame: () => setState(() {}),
+    trace: _trace,
+  );
+
+  /// The group the control opens, so the lens samples what lies behind
+  /// it (spec §7). One key for the control's life, as `GlassTabBar`'s.
+  final BackdropKey _backdropKey = BackdropKey();
+
+  /// The last laid-out geometry: the gesture handlers read it.
+  SegmentGeometry? _geometry;
+
+  /// The unselected segment held down: its w400 label fades (native
+  /// `pressOther`).
+  int? _pressed;
+
+  /// The segment that shows the keyboard focus ring, if any.
+  int? _focused;
+
   bool get _enabled => widget.onChanged != null;
 
-  void _choose(int i) {
-    if (!_enabled || !widget.segments[i].enabled) return;
-    // Native sends no valueChanged for the selected segment (Task 1,
-    // `tapOnSelected`).
-    if (i == widget.selectedIndex) return;
+  bool _canCommit(int i) => widget.segments[i].enabled;
+
+  @override
+  void didUpdateWidget(LiquidSegmentedControl oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Disabled mid-touch: the recognizer goes with the touch, so no up or
+    // cancel will come; the lens lets go now.
+    if (!_enabled && (_motion?.interacting ?? false)) _cancel();
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    super.dispose();
+  }
+
+  /// Keeps the motion on the laid-out track, and follows the app: a
+  /// commit it adopts is accepted; a selection it changes on its own
+  /// slides there (spec §8.3, programmatic).
+  LensMotion _sync(SegmentGeometry g) {
+    final selected = widget.selectedIndex;
+    final m =
+        (_motion ??= LensMotion(
+            geometry: g,
+            selected: selected,
+            profile: LensProfile.segment,
+          ))
+          ..reduceMotion = MediaQuery.disableAnimationsOf(context)
+          ..geometry = g;
+    if (m.pending != null) {
+      if (selected == m.pending) m.accept();
+    } else if (selected != m.committed && !m.interacting) {
+      m.show(selected);
+      _ticker.kick();
+    }
+    return m;
+  }
+
+  /// [debugSegmentTrace]'s sample: the global lens centre and size.
+  void _trace(Duration elapsed, LensFrame f) {
+    final trace = debugSegmentTrace;
+    if (trace == null || !mounted) return;
+    final box = context.findRenderObject() as RenderBox?;
+    final centre = box == null
+        ? f.lens.center
+        : box.localToGlobal(f.lens.center);
+    trace({
+      't': elapsed.inMicroseconds / 1e6,
+      'x': centre.dx,
+      'y': centre.dy,
+      'w': f.lens.width,
+      'h': f.lens.height,
+      'engage': f.engage,
+    });
+  }
+
+  void _setPressed(int? i) {
+    if (_pressed != i) setState(() => _pressed = i);
+  }
+
+  void _down(Offset p) {
+    final m = _motion;
+    final g = _geometry;
+    if (m == null || g == null) return;
+    m.down(p);
+    final i = g.segmentAt(p);
+    final selected = widget.selectedIndex;
+    // With nothing selected the lens grows under the finger instead.
+    _setPressed(
+      i != null && selected != null && i != selected && _canCommit(i)
+          ? i
+          : null,
+    );
+    _ticker.kick();
+  }
+
+  void _move(Offset p) {
+    final m = _motion;
+    if (m == null) return;
+    m.move(p);
+    // A drag is not a press: the label comes back as the lens follows.
+    if (m.phase == LensPhase.dragging) _setPressed(null);
+  }
+
+  void _up(Offset p, double velocity) {
+    final m = _motion;
+    final g = _geometry;
+    _setPressed(null);
+    if (m == null || g == null) return;
+    // The segment whose column holds the finger: its centre is the tap's
+    // release point. A drag ignores it (the lens decides).
+    final under = g.segmentAt(Offset(p.dx, g.size.height / 2));
+    if (m.phase == LensPhase.pressed && (under == null || !_canCommit(under))) {
+      // A tap on a disabled segment does nothing.
+      m.cancel();
+      _ticker.kick();
+      return;
+    }
+    final at = under == null ? p : Offset(g.centreOf(under), p.dy);
+    final slot = m.up(at, velocity: velocity, canCommit: _canCommit);
+    _ticker.kick();
+    if (slot != null && slot != widget.selectedIndex) {
+      widget.onChanged?.call(slot);
+    }
+  }
+
+  void _cancel() {
+    _setPressed(null);
+    _motion?.cancel();
+    _ticker.kick();
+  }
+
+  /// A semantics tap, Enter or Space: the tap path without a press. The
+  /// selected segment calls nothing, as a touch on it (Task 1,
+  /// `tapOnSelected`).
+  void _activate(int i) {
+    if (!_enabled || !_canCommit(i) || i == widget.selectedIndex) return;
+    _motion?.tapSlot(i);
+    _ticker.kick();
     widget.onChanged!(i);
+  }
+
+  void _focus(int i, bool on) {
+    if (on) {
+      if (_focused != i) setState(() => _focused = i);
+    } else if (_focused == i) {
+      setState(() => _focused = null);
+    }
   }
 
   @override
@@ -200,83 +388,269 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl> {
       return intrinsic.size.width > maxWidth ? fill(maxWidth) : intrinsic;
     }
 
-    return Semantics(
-      container: true,
-      explicitChildNodes: true,
-      label: widget.semanticLabel,
-      // Orders the segments' nodes visually, right to left in RTL.
-      textDirection: direction,
-      // Answers intrinsic sizes, which a LayoutBuilder cannot (an
-      // IntrinsicWidth, an AlertDialog's content).
-      child: SizedLayoutBuilder(
-        sizeFor: (constraints) => geometryFor(constraints).size,
-        builder: (context, constraints) {
-          final g = geometryFor(constraints);
-          final thumb = selected == null ? null : g.slots[selected];
-          return SizedBox.fromSize(
-            size: g.size,
-            child: Opacity(
-              opacity: _enabled ? 1 : 0.5,
-              child: Stack(
-                children: [
-                  Positioned.fromRect(
-                    rect: g.track,
-                    child: DecoratedBox(
-                      key: kSegmentTrackKey,
-                      decoration: BoxDecoration(
-                        color: theme.segmentTrack,
-                        borderRadius: _capsule,
-                      ),
-                    ),
-                  ),
-                  if (thumb != null)
-                    Positioned.fromRect(
-                      rect: thumb,
-                      child: DecoratedBox(
-                        key: kSegmentThumbKey,
-                        decoration: BoxDecoration(
-                          color: theme.segmentThumb,
-                          borderRadius: _capsule,
-                        ),
-                      ),
-                    ),
-                  Positioned.fill(
-                    child: ClipPath(
-                      key: kSegmentNormalKey,
-                      clipper: LensClip(thumb ?? Rect.zero, inside: false),
-                      child: _row(g, style, scaler),
-                    ),
-                  ),
-                  if (thumb != null)
-                    Positioned.fill(
-                      child: ClipPath(
-                        key: kSegmentSelectedKey,
-                        clipper: LensClip(thumb, inside: true),
-                        child: _row(g, medium, scaler),
-                      ),
-                    ),
-                  for (final (i, s) in widget.segments.indexed)
-                    Positioned(
-                      left: g.segments[i].left,
-                      width: g.segments[i].width,
-                      top: 0,
-                      bottom: 0,
-                      child: Semantics(
-                        container: true,
-                        button: true,
-                        inMutuallyExclusiveGroup: true,
-                        selected: i == selected,
-                        enabled: _enabled && s.enabled,
-                        label: s.semanticLabel ?? s.label,
-                        onTap: _enabled && s.enabled ? () => _choose(i) : null,
-                        child: const SizedBox.expand(),
-                      ),
-                    ),
-                ],
+    // The labels' baseline: every label box has one top, and a one-line
+    // label's baseline does not depend on its width. Alphabetic for either
+    // kind, as RenderParagraph answers (flutter/flutter#22625).
+    double? baselineFor(BoxConstraints constraints, TextBaseline _) {
+      final painter = TextPainter(
+        text: TextSpan(text: widget.segments.first.label, style: style),
+        textScaler: scaler,
+        textDirection: direction,
+        maxLines: 1,
+      )..layout();
+      final distance = painter.computeDistanceToActualBaseline(
+        TextBaseline.alphabetic,
+      );
+      painter.dispose();
+      return geometryFor(constraints).labels.first.top + distance;
+    }
+
+    final ax = isAxTextScale(context);
+    // Waits instead of winning on touch-down at AX sizes (the large
+    // content viewer) and inside a vertical scroll view (spec §8.1).
+    final eager =
+        !ax && Scrollable.maybeOf(context, axis: Axis.vertical) == null;
+
+    return BackdropGroup(
+      backdropKey: _backdropKey,
+      child: Semantics(
+        container: true,
+        explicitChildNodes: true,
+        label: widget.semanticLabel,
+        // Orders the segments' nodes visually, right to left in RTL.
+        textDirection: direction,
+        // Answers intrinsic sizes, which a LayoutBuilder cannot (an
+        // IntrinsicWidth, an AlertDialog's content).
+        child: SizedLayoutBuilder(
+          sizeFor: (constraints) => geometryFor(constraints).size,
+          baselineFor: baselineFor,
+          builder: (context, constraints) {
+            final g = _geometry = geometryFor(constraints);
+            final m = _sync(g);
+            var f = m.frame;
+            final press = debugSegmentLensPress;
+            if (press != null) {
+              final grow = (m.profile.envelope as SegmentEnvelope).pressGrow;
+              f = f.copyWith(
+                engage: 1,
+                refraction: 1,
+                lens: Rect.fromCenter(
+                  center: f.lens.center.translate(press, 0),
+                  width: f.lens.width + grow.width,
+                  height: f.lens.height + grow.height,
+                ),
+              );
+            }
+            return SizedBox.fromSize(
+              size: g.size,
+              child: Opacity(
+                opacity: _enabled ? 1 : 0.5,
+                child: Stack(
+                  // The pressed and lifted lens overflows the track, and
+                  // in flight the 44 pt box (spec §7).
+                  clipBehavior: Clip.none,
+                  children: [
+                    ..._layers(g, f, theme, style, medium, scaler),
+                    _touches(g, eager),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  /// Track, thumbs, both label rows and the lens, control-local (spec §6,
+  /// §7): the lens above the normal row, below the w500 row. Keyed: the
+  /// layers that come and go never shift the others' state (the touch
+  /// recognizer, the focus nodes, the label fade) to a new element.
+  List<Widget> _layers(
+    SegmentGeometry g,
+    LensFrame f,
+    LiquidGlassTheme theme,
+    TextStyle style,
+    TextStyle medium,
+    TextScaler scaler,
+  ) {
+    final lens = f.lens;
+    final thumb = theme.segmentThumb;
+    final ghost = f.ghost;
+    // The rest thumb gives way to the lens as it engages, and fades in
+    // under reduce motion.
+    final rest = f.restOpacity * (1 - f.engage);
+    return [
+      Positioned.fromRect(
+        key: const ValueKey<String>('track'),
+        rect: g.track,
+        child: DecoratedBox(
+          key: kSegmentTrackKey,
+          decoration: BoxDecoration(
+            color: theme.segmentTrack,
+            borderRadius: _capsule,
+          ),
+        ),
+      ),
+      if (ghost != null && f.ghostOpacity > 0)
+        Positioned.fromRect(
+          key: const ValueKey<String>('ghost'),
+          rect: ghost,
+          child: DecoratedBox(
+            key: kSegmentGhostKey,
+            decoration: BoxDecoration(
+              color: thumb.withValues(alpha: thumb.a * f.ghostOpacity),
+              borderRadius: _capsule,
+            ),
+          ),
+        ),
+      if (f.visible)
+        Positioned.fromRect(
+          key: const ValueKey<String>('thumb'),
+          rect: lens,
+          child: DecoratedBox(
+            key: kSegmentThumbKey,
+            decoration: BoxDecoration(
+              color: rest == 1
+                  ? thumb
+                  : thumb.withValues(alpha: thumb.a * rest),
+              borderRadius: _capsule,
+            ),
+          ),
+        ),
+      Positioned.fill(
+        key: const ValueKey<String>('normal'),
+        child: ClipPath(
+          key: kSegmentNormalKey,
+          clipper: LensClip(f.visible ? lens : Rect.zero, inside: false),
+          child: _row(g, style, scaler, pressed: _pressed),
+        ),
+      ),
+      if (f.visible && f.engage > 0.001)
+        Positioned.fromRect(
+          key: const ValueKey<String>('lens'),
+          rect: lens,
+          // The lens fades itself: an Opacity over the liquid pass reads
+          // the wrong backdrop (VK-503 §7.2).
+          child: LiquidLens(
+            refraction: f.refraction,
+            engage: f.engage,
+            restFill: thumb,
+            bezel: _lensBezel,
+          ),
+        ),
+      if (f.visible)
+        Positioned.fill(
+          key: const ValueKey<String>('selected'),
+          child: ClipPath(
+            key: kSegmentSelectedKey,
+            clipper: LensClip(lens, inside: true),
+            child: Transform(
+              transform: Matrix4.identity()
+                ..translateByDouble(lens.center.dx, lens.center.dy, 0, 1)
+                ..scaleByDouble(f.magnify, f.magnify, 1, 1)
+                ..translateByDouble(-lens.center.dx, -lens.center.dy, 0, 1),
+              child: _row(g, medium, scaler),
+            ),
+          ),
+        ),
+      if (_focused case final i?)
+        Positioned.fromRect(
+          key: const ValueKey<String>('focus'),
+          rect: g.slots[i],
+          child: IgnorePointer(
+            child: DecoratedBox(
+              key: kSegmentFocusKey,
+              decoration: BoxDecoration(
+                borderRadius: _capsule,
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.primary,
+                  width: 2,
+                ),
               ),
             ),
-          );
+          ),
+        ),
+    ];
+  }
+
+  /// The segments' nodes: semantics, keyboard focus and the large content
+  /// viewer, each over its full column. One recognizer over the whole box
+  /// takes their touches (spec §8.1), as the tab bar's row does.
+  Widget _touches(SegmentGeometry g, bool eager) {
+    final nodes = Stack(
+      children: [
+        for (final (i, s) in widget.segments.indexed)
+          Positioned(
+            left: g.segments[i].left,
+            width: g.segments[i].width,
+            top: 0,
+            bottom: 0,
+            child: _node(i, s),
+          ),
+      ],
+    );
+    return Positioned.fill(
+      key: const ValueKey<String>('touches'),
+      child: !_enabled
+          ? nodes
+          : RawGestureDetector(
+              gestures: {
+                LensGestureRecognizer:
+                    GestureRecognizerFactoryWithHandlers<LensGestureRecognizer>(
+                      () => LensGestureRecognizer(debugOwner: this),
+                      (r) => r
+                        // The screen's slop, as the scroll views around use.
+                        ..gestureSettings = MediaQuery.maybeGestureSettingsOf(
+                          context,
+                        )
+                        ..eager = eager
+                        ..onDown = _down
+                        ..onMove = _move
+                        ..onUp = _up
+                        ..onCancel = _cancel,
+                    ),
+              },
+              child: nodes,
+            ),
+    );
+  }
+
+  Widget _node(int i, LiquidSegment s) {
+    final active = _enabled && s.enabled;
+    return Semantics(
+      container: true,
+      button: true,
+      inMutuallyExclusiveGroup: true,
+      selected: i == widget.selectedIndex,
+      enabled: active,
+      label: s.semanticLabel ?? s.label,
+      onTap: active ? () => _activate(i) : null,
+      // The focus node's own flags stay out of the segment's node.
+      excludeSemantics: true,
+      child: FocusableActionDetector(
+        enabled: active,
+        mouseCursor: active ? SystemMouseCursors.click : MouseCursor.defer,
+        // Enter and Space on a focused segment. Touches never reach these
+        // actions: they go to the recognizer, so a segment commits once
+        // whichever way it is chosen.
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) => _activate(i),
+          ),
+          ButtonActivateIntent: CallbackAction<ButtonActivateIntent>(
+            onInvoke: (_) => _activate(i),
+          ),
         },
+        onShowFocusHighlight: (on) => _focus(i, on),
+        child: LargeContentViewer(
+          label: s.label,
+          // Takes the touch for the recognizer above.
+          child: const MetaData(
+            behavior: HitTestBehavior.opaque,
+            child: SizedBox.expand(),
+          ),
+        ),
       ),
     );
   }
@@ -285,34 +659,45 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl> {
   /// draw only: the segment nodes carry the semantics. The DefaultTextStyle
   /// keeps the ambient one out: under a MaterialApp with no Material above,
   /// it is the yellow-underlined error style, and [style] inherits.
-  Widget _row(SegmentGeometry g, TextStyle style, TextScaler scaler) =>
-      IgnorePointer(
-        child: ExcludeSemantics(
-          child: DefaultTextStyle(
-            style: style,
-            child: Stack(
-              children: [
-                for (final (i, s) in widget.segments.indexed)
-                  Positioned.fromRect(
-                    rect: g.labels[i],
-                    child: Opacity(
-                      opacity: s.enabled ? 1 : 0.5,
-                      child: Text(
-                        s.label,
-                        style: style,
-                        textScaler: scaler,
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        softWrap: false,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+  /// [pressed]: that label fades as native's held segment does.
+  Widget _row(
+    SegmentGeometry g,
+    TextStyle style,
+    TextScaler scaler, {
+    int? pressed,
+  }) => IgnorePointer(
+    child: ExcludeSemantics(
+      child: DefaultTextStyle(
+        style: style,
+        child: Stack(
+          children: [
+            for (final (i, s) in widget.segments.indexed)
+              Positioned.fromRect(
+                rect: g.labels[i],
+                child: AnimatedOpacity(
+                  opacity: i == pressed ? _pressedLabelOpacity : 1,
+                  // In over native's fade; back at once on the up.
+                  duration: i == pressed ? _pressedLabelFade : Duration.zero,
+                  curve: Curves.easeInOut,
+                  child: Opacity(
+                    opacity: s.enabled ? 1 : 0.5,
+                    child: Text(
+                      s.label,
+                      style: style,
+                      textScaler: scaler,
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-              ],
-            ),
-          ),
+                ),
+              ),
+          ],
         ),
-      );
+      ),
+    ),
+  );
 
   static double _width(
     String label,

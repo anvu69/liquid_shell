@@ -128,6 +128,8 @@ void main() {
     final tolerance = geometry['tolerance'] as num;
     for (var i = 0; i < 3; i++) {
       await _pump(tester, selected: i);
+      // A new selectedIndex slides there (spec §8.3, programmatic).
+      await tester.pumpAndSettle();
       final thumb = tester
           .getRect(find.byKey(kSegmentThumbKey))
           .shift(-_box(tester).topLeft);
@@ -745,6 +747,38 @@ void main() {
       );
       expect(box.getMinIntrinsicWidth(44), 3 * s);
       expect(box.getMaxIntrinsicHeight(100), 44);
+    });
+
+    testWidgets('dry baseline: no throw in debug, and the laid-out '
+        "labels' baseline", (tester) async {
+      await pumpIn(tester, (c) => Center(child: c));
+      final box = tester.renderObject<RenderBox>(
+        find.byType(LiquidSegmentedControl),
+      );
+      for (final baseline in TextBaseline.values) {
+        expect(box.getDryBaseline(box.constraints, baseline), isNotNull);
+      }
+      // The laid-out one: Flutter's own check compares the dry and the
+      // real baseline of every box. A baseline Row asks for it during its
+      // own dry layout.
+      debugCheckIntrinsicSizes = true;
+      try {
+        await pumpIn(
+          tester,
+          (c) => Center(
+            child: IntrinsicWidth(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [const Text('Scope'), c],
+              ),
+            ),
+          ),
+        );
+      } finally {
+        debugCheckIntrinsicSizes = false;
+      }
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('expand: true at intrinsic width also sizes to the labels', (

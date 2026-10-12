@@ -494,6 +494,53 @@ void main() {
     }
   });
 
+  test('an up never commits a slot canCommit refuses: the nearest allowed '
+      'one wins, after a drag and after a flick (spec §8.3)', () {
+    final g = controlOf(3);
+    final y = g.size.height / 2;
+    bool notTwo(int slot) => slot != 2;
+    // A slow drag that leaves the lens on slot 2: slot 1 is nearer than 0.
+    final drag = LensMotion(
+      geometry: g,
+      selected: 0,
+      profile: LensProfile.segment,
+    )..down(Offset(g.centreOf(0), y));
+    record(
+      drag,
+      2,
+      input: (t) => drag.move(
+        Offset(math.min(g.centreOf(2), g.centreOf(0) + 300 * t), y),
+      ),
+    );
+    expect(drag.frame.lens.center.dx, closeTo(g.centreOf(2), 1));
+    expect(drag.up(Offset(g.centreOf(2), y), canCommit: notTwo), 1);
+    expect(drag.committed, 1);
+    // A flick lands on the finger's slot, or the nearest allowed to it.
+    final flick = LensMotion(
+      geometry: g,
+      selected: 0,
+      profile: LensProfile.segment,
+    )..down(Offset(g.centreOf(0), y));
+    for (var i = 1; i <= 8; i++) {
+      flick
+        ..move(Offset(g.centreOf(0) + 30.0 * i, y))
+        ..advance(dt);
+    }
+    expect(
+      flick.up(Offset(g.centreOf(2), y), velocity: 1500, canCommit: notTwo),
+      1,
+    );
+    // Nothing allowed: no commit, the lens goes back.
+    final none = LensMotion(
+      geometry: g,
+      selected: 0,
+      profile: LensProfile.segment,
+    )..down(Offset(g.centreOf(1), y));
+    expect(none.up(Offset(g.centreOf(1), y), canCommit: (_) => false), null);
+    expect(none.committed, 0);
+    expect(none.pending, null);
+  });
+
   test('reduce motion: a tap dissolves in 150 ms, no lift (spec §12.2)', () {
     final g = controlOf(3);
     final m = LensMotion(
