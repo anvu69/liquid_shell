@@ -144,18 +144,24 @@ void main() {
       expect(widest / 94, closeTo(1.33, 0.133));
     });
 
-    test('two slots: the peak is the native ×1.331 (stretchMax 1.46)', () {
-      final m = LensMotion(geometry: g3, selected: 0)..tapSlot(2);
+    test('two slots: the peak is native ×1.355 (127.4 pt, research trace; '
+        'stretchMax 1.425)', () {
+      // As the research run: a 66 ms press on Settings, from Home.
+      final m = LensMotion(geometry: g3, selected: 0)
+        ..down(const Offset(266, 31));
       var widest = 0.0;
       run(
         m,
         0.6,
+        input: (t) {
+          if ((t * 60).round() == 5) m.up(const Offset(266, 31));
+        },
         each: (_) {
           if (m.frame.lens.width > widest) widest = m.frame.lens.width;
         },
       );
-      expect(TabSprings.stretchMax, 1.46);
-      expect(widest / 94, closeTo(1.331, 0.005));
+      expect(TabSprings.stretchMax, 1.425);
+      expect(widest / 94, closeTo(127.4 / 94, 0.01));
     });
 
     test('top bar: inflates ×1.34 by ×1.375, no lift, no stretch', () {
@@ -509,6 +515,168 @@ void main() {
       run(m, 1);
       expect(m.frame.lens.center.dx, closeTo(200, 0.5));
       expect(m.frame.lens.size, const Size(94, 54));
+    });
+  });
+
+  // VK-503 Task 16 review. Native numbers from the research's per-frame
+  // layer traces (scratchpad tabfid/runs/n265_basic3.log, iPhone 17 Pro iOS
+  // 26.5, pure UITabBarController), bar-local (screen x − 21). Each native
+  // tap there was a 65–66 ms press.
+  group('native timeline (review)', () {
+    /// Frames of [m] at 60 fps for [seconds]; [input] runs before frame f.
+    List<LensFrame> frames(
+      LensMotion m,
+      double seconds, [
+      void Function(int f)? input,
+    ]) {
+      final out = <LensFrame>[];
+      for (var f = 1; f <= (seconds * 60).round(); f++) {
+        input?.call(f);
+        m.advance(dt);
+        out.add(m.frame);
+      }
+      return out;
+    }
+
+    test('a tap pressed 80 ms flies on without braking (review I2)', () {
+      // The same press, held or lifted at 80 ms: lifting must not brake the
+      // lens it already set moving (the speed within 10 % of the held one
+      // over the next 50 ms).
+      List<double> speeds({required bool lift}) {
+        final m = LensMotion(geometry: g3, selected: 0)
+          ..down(const Offset(180, 31));
+        final xs = [
+          for (final f in frames(m, 0.15, (f) {
+            if (lift && f == 6) m.up(const Offset(180, 31));
+          }))
+            f.lens.center.dx,
+        ];
+        return [for (var i = 1; i < xs.length; i++) (xs[i] - xs[i - 1]) / dt];
+      }
+
+      final held = speeds(lift: false);
+      final lifted = speeds(lift: true);
+      for (var i = 4; i < 8; i++) {
+        expect(
+          lifted[i],
+          closeTo(held[i], held[i].abs() * 0.10),
+          reason: 'frame ${i + 1}: held $held, lifted $lifted',
+        );
+      }
+    });
+
+    test('the press answers 25 ms after the down (research §4.1 trace)', () {
+      final m = LensMotion(geometry: g3, selected: 0)
+        ..down(const Offset(94, 31));
+      final f = frames(m, 0.2);
+      // Native, pill-local: frame → (w, h).
+      const native = {2: (94.7, 54.7), 4: (99.2, 59.3), 6: (103.4, 63.6)};
+      // ±2 pt (spec §17.4 press size); the height spring runs up to 2.5 pt
+      // behind native in its first frames, one 60 fps frame of its rise.
+      for (final MapEntry(key: k, value: (w, h)) in native.entries) {
+        expect(f[k - 1].lens.width, closeTo(w, 2), reason: 'w frame $k');
+        expect(f[k - 1].lens.height, closeTo(h, 2.5), reason: 'h frame $k');
+      }
+      // opacityPair 0.18 at 33 ms, 1.0 at 67 ms.
+      expect(f[1].engage, closeTo(0.18, 0.15));
+      expect(f[3].engage, greaterThan(0.9));
+    });
+
+    test('a press held 1 s, released in place: clear for about 0.12 s, '
+        'then the release springs (research §4.1 trace)', () {
+      final m = LensMotion(geometry: g3, selected: 0)
+        ..down(const Offset(94, 31));
+      frames(m, 1);
+      m.up(const Offset(94, 31));
+      final f = frames(m, 0.25);
+      // Native after the lift: frame → (w, h, opacityPair).
+      const native = {
+        2: (109.5, 69.5, 1.0),
+        4: (105.1, 65.1, 1.0),
+        6: (100.7, 60.7, 1.0),
+        8: (97.9, 57.6, 0.93),
+        10: (96.3, 55.7, 0.49),
+        12: (95.5, 54.6, 0.25),
+      };
+      for (final MapEntry(key: k, value: (w, h, op)) in native.entries) {
+        final fr = f[k - 1];
+        // ±2.5 pt: one 60 fps frame of the release springs.
+        expect(fr.lens.width, closeTo(w, 2.5), reason: 'w frame $k');
+        expect(fr.lens.height, closeTo(h, 2.5), reason: 'h frame $k');
+        expect(fr.engage, closeTo(op, 0.12), reason: 'engage frame $k');
+      }
+    });
+
+    void flight(
+      int from,
+      double finger,
+      Map<int, (double, double, double)> native,
+    ) {
+      final m = LensMotion(geometry: g3, selected: from)
+        ..down(Offset(finger, 31));
+      final f = frames(m, 0.4, (f) {
+        if (f == 5) m.up(Offset(finger, 31));
+      });
+      for (final MapEntry(key: k, value: (x, w, h)) in native.entries) {
+        final l = f[k - 1].lens;
+        expect(l.center.dx, closeTo(x, 4), reason: 'x frame $k');
+        expect(l.width, closeTo(w, w * 0.10), reason: 'w frame $k');
+        expect(l.height, closeTo(h, h * 0.10), reason: 'h frame $k');
+      }
+    }
+
+    test('a one-slot tap swells first, then lifts (research §3 trace)', () {
+      flight(0, 180, const {
+        4: (104.5, 95.7, 59.8),
+        10: (157.2, 87.0, 80.0),
+        12: (168.3, 84.8, 81.8),
+        16: (179.0, 91.9, 77.9),
+        20: (181.1, 95.3, 63.0),
+      });
+    });
+
+    test('a two-slot tap stretches wide and low (research §3 trace)', () {
+      flight(2, 94, const {
+        4: (236.1, 102.6, 58.5),
+        9: (147.5, 124.7, 57.2),
+        11: (124.0, 127.4, 55.8),
+        15: (101.1, 120.7, 61.5),
+        19: (95.0, 106.6, 66.4),
+      });
+    });
+
+    test('after a flick the lens stays clear until it lands, about 0.12 s '
+        'after the release (spec §8.2 as amended; research trace)', () {
+      // As the research run: a 0.33 s hold on Settings, then the finger
+      // crosses 172 pt in 0.1 s and lifts on Home.
+      final m = LensMotion(geometry: g3, selected: 2)
+        ..down(const Offset(266, 31));
+      frames(m, 1 / 3);
+      // The native finger samples: 244, 190, 134, 94 at 0, 33, 67, 102 ms
+      // (pill-local), 1470 pt/s from about 15 ms before the first.
+      final f = frames(m, 0.1, (f) {
+        m.move(Offset(math.max(94, 266 - 1470 * (f * dt + 0.015)), 31));
+      });
+      // Native: the lens at 191.8 when the finger lifts (ours lags about
+      // 8 pt more: the fitted follow spring, spec §8.1).
+      expect(f.last.lens.center.dx, closeTo(191.8, 10), reason: 'lagging');
+      m.up(const Offset(94, 31), velocity: -1500);
+      var landed = -1;
+      final after = frames(m, 0.5);
+      for (final (i, fr) in after.indexed) {
+        if ((fr.lens.center.dx - 94).abs() <= 1) {
+          landed = i;
+          break;
+        }
+        expect(fr.engage, greaterThan(0.99), reason: 'frame $i in flight');
+      }
+      expect(landed, isNonNegative);
+      // Native, pill-local: 8.4 pt short of Home 0.100 s after the release
+      // and 5.1 pt at 0.115 s. ±6 pt is about one frame of this flight
+      // (ours leaves from 8 pt further back).
+      expect((after[5].lens.center.dx - 94).abs(), closeTo(8.4, 6));
+      expect((after[6].lens.center.dx - 94).abs(), closeTo(5.1, 6));
+      expect(m.committed, 0);
     });
   });
 

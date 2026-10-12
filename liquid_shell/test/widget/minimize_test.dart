@@ -229,7 +229,10 @@ void main() {
 
       g = await tester.startGesture(const Offset(115, _top + 31));
       await g.moveTo(const Offset(350, _top + 31));
-      await g.moveTo(const Offset(201, _top + 31));
+      // Explore's centre with the ⌕ reserved (bar-local 137): 201 was the
+      // midpoint of two slots, a tie decided by which side the lens came
+      // from.
+      await g.moveTo(const Offset(158, _top + 31));
       // A drag commits where the lens is: let it catch up, frame by frame.
       for (var i = 0; i < 60; i++) {
         await tester.pump(const Duration(milliseconds: 16));

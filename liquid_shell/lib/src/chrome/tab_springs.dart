@@ -75,11 +75,33 @@ abstract final class TabSprings {
   /// Delay between a tap and the lens leaving (research §3).
   static const double tapDelay = 0.025;
 
+  /// A tap shows the press (swell, engage) for at least this long from the
+  /// down, then its flight envelope. Every measured native tap was a
+  /// 65-66 ms press (research §3 trace), and the native lens swells to
+  /// about 96 × 60 before it lifts, even for idb taps shorter than that.
+  static const double tapPress = 0.066;
+
+  /// After a press is lifted in place, the lens stays clear this long
+  /// (research §4.1 trace: opacityPair 1.0 to +0.10 s, 0.93 at +0.13 s).
+  static const double releaseHold = 0.12;
+
   /// The lens stays engaged this long after a tap.
   static const double flightHold = 0.35;
 
-  /// Lift (one slot) and refraction last this long after a tap.
-  static const double liftUntil = 0.25;
+  /// The flight's shape (a one-slot lift, a two-slot stretch) is held this
+  /// long from the down. Fitted to the native per-frame traces: the
+  /// one-slot height peaks near 0.20 s (81.8 pt) and is back to 70.7 by
+  /// 0.30 s; the two-slot width holds about 125 pt to 0.22 s (research §3;
+  /// Task 16 review, was 0.25 for both the shape and the refraction).
+  static const double liftUntil = 0.22;
+
+  /// Two slots or more lift late, after the stretch, until this long from
+  /// the down (research §3 trace: 107 × 67 at 0.30 s).
+  static const double farLiftUntil = 0.34;
+
+  /// Refraction lasts this long after a tap (research §3: the displacement
+  /// peaks at about 0.25 s).
+  static const double refractUntil = 0.25;
 
   /// The target icon pops this long.
   static const double popUntil = 0.22;
@@ -129,8 +151,11 @@ abstract final class TabSprings {
   /// Magnification of the tinted copy at full engage.
   static const double magnify = 0.16;
 
-  /// Flight width floor (one slot).
-  static const double stretchFloor = 0.9;
+  /// Flight width floor (one slot). The native one-slot lens narrows to
+  /// 84.8 pt (×0.902) at 0.20 s; behind the `widthOut` spring a ×0.87
+  /// target reaches ×0.909 in the shorter shape window (Task 16 review,
+  /// was 0.9).
+  static const double stretchFloor = 0.87;
 
   /// Lens speed above which the flight width stretches.
   static const double stretchKnee = 700;
@@ -140,10 +165,11 @@ abstract final class TabSprings {
   /// knee (spec §8.3).
   static const double stretchGain = 0.005;
 
-  /// Flight width ceiling. Above the native ×1.33 peak because the
-  /// `widthIn` spring lags the target: 1.46 gives a ×1.331 two-slot peak
-  /// (spec §8.3).
-  static const double stretchMax = 1.46;
+  /// Flight width ceiling. Above the native peak because the `widthIn`
+  /// spring lags the target: with the stretch held to [liftUntil], 1.425
+  /// gives the native two-slot peak, 127.4 pt (×1.355) at 0.18–0.22 s
+  /// (research §3 trace; Task 16 review, was 1.46 for ×1.331).
+  static const double stretchMax = 1.425;
 
   /// Flight height gain.
   static const double liftGain = 0.55;

@@ -160,7 +160,24 @@ class LensMotion {
   double _rippleDiameter = TabSprings.glowDiameter;
   double _downX = 0;
   double _travel = 0;
-  double _age = 0;
+
+  /// Time since the touch-down (or the semantics tap) that started this
+  /// interaction: native answers 25 ms after the down, and a tap's flight
+  /// envelope is timed from it (research §3, §4.1).
+  double _since = 0;
+
+  /// Where the press aims the lens: the finger, clamped to the slots.
+  double _aim = 0;
+
+  /// The flight follows a flick to the finger's slot (spec §8.2).
+  bool _flick = false;
+
+  /// The widest stretch of this flight so far (two slots or more).
+  double _stretch = 1;
+
+  /// When the tap's press ends on the [_since] clock: the lift, or 66 ms
+  /// for a quicker tap. The lens keeps the press look 25 ms past it.
+  double _releaseAt = 0;
   int _flightSlots = 1;
   double _flightTarget = 0;
   int? _popSlot;
@@ -203,6 +220,7 @@ class LensMotion {
         if (committed != null) _x.target = value.centreOf(committed);
       case LensPhase.pressed || LensPhase.dragging:
         _x.target = value.clampCentre(_x.target);
+        _aim = value.clampCentre(_aim);
     }
   }
 
@@ -240,6 +258,7 @@ class LensMotion {
     _ghostSlot = null;
     _fadeIn = 1;
     _popSlot = null;
+    _flick = false;
     _phase = LensPhase.rest;
   }
 
@@ -259,12 +278,17 @@ class LensMotion {
     _crossings.clear();
     // A new press ends any tap pop still running (fast tab hopping).
     _pop.target = 1;
+    _since = 0;
+    _flick = false;
+    _aim = _geometry.clampCentre(local.dx);
     if (reduceMotion) {
       // No slide toward the finger: a tap dissolves in place (§13.2). The
       // capsule follows only once the press turns into a drag.
       _x.spring = TabSprings.reduced;
     } else {
-      _x.retarget(_geometry.clampCentre(local.dx), TabSprings.dragFollow);
+      // The lens turns toward the finger 25 ms after the down, not at it
+      // (research §4.1 trace: the press answers at 25-30 ms).
+      _x.spring = TabSprings.dragFollow;
       _glowCenter = local;
       _rippleAge = null;
       _glowDiameter.jump(TabSprings.glowDiameter);
@@ -278,7 +302,8 @@ class LensMotion {
     if (_travel > kTouchSlop) _phase = LensPhase.dragging;
     if (!reduceMotion) _glowCenter = local;
     if (reduceMotion && _phase == LensPhase.pressed) return;
-    _x.target = _geometry.clampCentre(local.dx);
+    _aim = _geometry.clampCentre(local.dx);
+    if (reduceMotion || _since >= TabSprings.tapDelay) _x.target = _aim;
   }
 
   /// Finger up at [local] with horizontal [velocity]; returns the committed
@@ -289,7 +314,7 @@ class LensMotion {
     final flick = velocity.abs() >= TabSprings.flickVelocity;
     final slot = _geometry.slotNearest(tap || flick ? local.dx : _x.value);
     _startRipple();
-    _commit(slot, tap: tap);
+    _commit(slot, tap: tap, flick: flick && !tap);
     return slot;
   }
 
@@ -303,6 +328,7 @@ class LensMotion {
   /// A tap from semantics (or a test): the tap path without a press.
   void tapSlot(int slot) {
     if (slot < 0 || slot >= _geometry.slots.length) return;
+    _since = 0;
     _commit(slot, tap: true);
   }
 
@@ -356,7 +382,7 @@ class LensMotion {
     _rippleDiameter = _glowDiameter.value;
   }
 
-  void _commit(int slot, {required bool tap}) {
+  void _commit(int slot, {required bool tap, bool flick = false}) {
     final from = _committed;
     _committed = slot;
     _pending = slot;
@@ -377,23 +403,106 @@ class LensMotion {
       }
       return;
     }
+    if (flick) {
+      // Native keeps the clear lens through the flight to the finger's slot
+      // and lands it on the follow spring (research trace: 0.12 s from
+      // release, engaged until it lands). Spec §8.2, Task 16.
+      _phase = LensPhase.flying;
+      _flick = true;
+      _flightSlots = 1;
+      _flightTarget = _geometry.centreOf(slot);
+      _x.retarget(_flightTarget, TabSprings.dragFollow);
+      return;
+    }
     if (!tap) {
       _settleBack();
       return;
     }
     _phase = LensPhase.flying;
-    _age = 0;
+    _flick = false;
+    _stretch = 1;
+    // A tap reads as a press of at least 66 ms. After a long press the
+    // envelope moves up so the lens stays clear 0.12 s past the lift, as
+    // native's press release does (research §4.1 trace).
+    _releaseAt = math.max(_since, TabSprings.tapPress);
+    final late = _releaseAt + TabSprings.releaseHold - TabSprings.flightHold;
+    if (late > 0) {
+      _since -= late;
+      _releaseAt -= late;
+    }
     _flightSlots = from == null ? 1 : math.max(1, (slot - from).abs());
     _flightTarget = _geometry.centreOf(slot);
-    // The press aimed the lens at the finger: hold it where it is for the
-    // 25 ms delay, then fly (research §3; it left at touch-down before).
-    _x.retarget(_x.value, TabSprings.tap);
+    // Timed from the down: within the first 25 ms the lens still holds;
+    // after that it flies on, keeping the speed the press gave it.
+    if (_since >= TabSprings.tapDelay) {
+      _x.retarget(_flightTarget, TabSprings.tap);
+    } else {
+      _x.spring = TabSprings.tap;
+    }
     _popSlot = slot;
     _pop.retarget(TabSprings.pop, TabSprings.tap);
   }
 
   /// Advances [dt] seconds; true while anything still moves.
   bool advance(double dt) {
+    final before = _since;
+    if (_phase != LensPhase.settling && _phase != LensPhase.rest) {
+      _since += dt;
+    }
+    // The 25 ms delay ends inside this frame: every spring runs to it on
+    // the old targets, then the rest of the frame on the new ones, so the
+    // lens answers at 25 ms, not a frame early.
+    final crossing =
+        !reduceMotion &&
+        before < TabSprings.tapDelay &&
+        _since >= TabSprings.tapDelay;
+    if (crossing) {
+      _setTargets(before);
+      for (final s in _springs) {
+        s.advance(TabSprings.tapDelay - before);
+      }
+    }
+    _setTargets(_since);
+    final rest = crossing ? _since - TabSprings.tapDelay : dt;
+    for (final s in _springs) {
+      s.advance(rest);
+    }
+    if (_phase == LensPhase.flying) _endFlight();
+    _advanceRipple(dt);
+    _advanceGhost(dt);
+    switch (_phase) {
+      // Travel during the press is not a crossing (Q6): track it silently.
+      case LensPhase.pressed:
+        _lastSlot = _geometry.slotNearest(_x.value);
+      case LensPhase.dragging:
+        _queueCrossing();
+      case LensPhase.flying || LensPhase.settling || LensPhase.rest:
+        break;
+    }
+    final moving = _isMoving();
+    if (!moving && _phase == LensPhase.settling) {
+      for (final s in _springs) {
+        s.jump(s.target);
+      }
+      _popSlot = null;
+      _phase = LensPhase.rest;
+    }
+    return moving;
+  }
+
+  /// A flight ends when its envelope is over (a tap) or when it lands (a
+  /// flick: the lens first within 1 pt of the finger's slot).
+  void _endFlight() {
+    if (_flick) {
+      if ((_x.value - _flightTarget).abs() <= 1) _phase = LensPhase.settling;
+      return;
+    }
+    if (_since >= TabSprings.popUntil) _pop.target = 1;
+    if (_since >= TabSprings.flightHold) _phase = LensPhase.settling;
+  }
+
+  /// The targets of every spring at [since] seconds into the interaction.
+  void _setTargets(double since) {
     final rest = _geometry.restLensAt(_x.value);
     var w = rest.width;
     var h = rest.height;
@@ -401,51 +510,73 @@ class LensMotion {
     var engage = 0.0;
     var refraction = 0.0;
     var highlight = 0.0;
-    // Of this frame, the part the lens x already moves toward the tap
-    // target: all of it, except in the frame where the 25 ms delay ends.
-    var flightDt = dt;
-    switch (_phase) {
-      case LensPhase.pressed || LensPhase.dragging:
-        if (!reduceMotion) {
-          w *= TabSprings.pressWidthFactor;
-          h *= TabSprings.pressHeightFactor;
-          scale = TabSprings.pressScale;
-          engage = 1;
-          refraction = 1;
-          highlight = TabSprings.highlightPress;
+    final answered = reduceMotion || since >= TabSprings.tapDelay;
+    final pressing =
+        _phase == LensPhase.pressed || _phase == LensPhase.dragging;
+    if (pressing && answered && !reduceMotion) {
+      // A press that may still be a tap moves on the tap spring (the native
+      // tap traces include their 66 ms press); a drag follows the finger.
+      _x.retarget(
+        _aim,
+        _phase == LensPhase.dragging ? TabSprings.dragFollow : TabSprings.tap,
+      );
+    }
+    // A tap shows the press until 25 ms after its press ends, and a tap
+    // quicker than 66 ms reads as a 66 ms press: every measured native tap
+    // was one, and the lens swells before it lifts (research §3 trace).
+    final pressLook =
+        answered &&
+        !reduceMotion &&
+        (pressing ||
+            (_phase == LensPhase.flying &&
+                !_flick &&
+                since < _releaseAt + TabSprings.tapDelay));
+    if (pressLook) {
+      if (!pressing) _x.target = _flightTarget;
+      w *= TabSprings.pressWidthFactor;
+      h *= TabSprings.pressHeightFactor;
+      scale = pressing ? TabSprings.pressScale : TabSprings.bulge;
+      engage = 1;
+      refraction = 1;
+      highlight = pressing
+          ? TabSprings.highlightPress
+          : TabSprings.highlightTap;
+    } else if (_phase == LensPhase.flying && _flick) {
+      _x.target = _flightTarget;
+      w *= TabSprings.stretchFloor;
+      h *= 1 + TabSprings.liftGain;
+      engage = 1;
+      refraction = 1;
+    } else if (_phase == LensPhase.flying && answered) {
+      _x.target = _flightTarget;
+      if (_geometry.form == TabBarForm.top) {
+        if (since < TabSprings.liftUntil) {
+          w *= TabSprings.topTapWidth;
+          h *= TabSprings.topTapHeight;
         }
-      case LensPhase.flying:
-        final before = _age;
-        _age += dt;
-        if (before < TabSprings.tapDelay && _age >= TabSprings.tapDelay) {
-          // The delay ends inside this frame: up to then the lens keeps
-          // its old target, so it leaves at 25 ms, not a frame early.
-          _x.advance(TabSprings.tapDelay - before);
-          flightDt = _age - TabSprings.tapDelay;
+      } else if (_flightSlots == 1) {
+        // One slot lifts: narrow and tall until 0.20 s (research §3).
+        if (since < TabSprings.liftUntil) {
+          w *= TabSprings.stretchFloor;
+          h *= 1 + TabSprings.liftGain;
         }
-        if (_age >= TabSprings.tapDelay) _x.target = _flightTarget;
-        if (_geometry.form == TabBarForm.top) {
-          if (_age < TabSprings.liftUntil) {
-            w *= TabSprings.topTapWidth;
-            h *= TabSprings.topTapHeight;
-          }
-        } else {
-          w *= TabSprings.stretchFor(_x.velocity);
-          if (_age < TabSprings.liftUntil) {
-            final gate = _flightSlots == 1 ? 1.0 : TabSprings.liftGateFar;
-            h *= 1 + TabSprings.liftGain * gate;
-          }
+      } else {
+        // Two slots or more stretch wide and low with the lens's speed and
+        // hold the widest stretch until 0.20 s, then lift late (research
+        // §3 trace: 127 × 56 at 0.18 s, 115 × 66 at 0.28 s).
+        if (since < TabSprings.liftUntil) {
+          _stretch = math.max(_stretch, TabSprings.stretchFor(_x.velocity));
+          w *= _stretch;
+        } else if (since < TabSprings.farLiftUntil) {
+          h *= 1 + TabSprings.liftGain * TabSprings.liftGateFar;
         }
-        scale = _age < TabSprings.bulgeUntil ? TabSprings.bulge : 1;
-        engage = _age < TabSprings.flightHold ? 1 : 0;
-        refraction = _age < TabSprings.liftUntil ? 1 : 0;
-        highlight = _age < TabSprings.highlightUntil
-            ? TabSprings.highlightTap
-            : 0;
-        if (_age >= TabSprings.popUntil) _pop.target = 1;
-        if (_age >= TabSprings.flightHold) _phase = LensPhase.settling;
-      case LensPhase.settling || LensPhase.rest:
-        break;
+      }
+      scale = since < TabSprings.bulgeUntil ? TabSprings.bulge : 1;
+      engage = since < TabSprings.flightHold ? 1 : 0;
+      refraction = since < TabSprings.refractUntil ? 1 : 0;
+      highlight = since < TabSprings.highlightUntil
+          ? TabSprings.highlightTap
+          : 0;
     }
     _w.retarget(w, w >= _w.value ? TabSprings.widthIn : TabSprings.widthOut);
     _h.retarget(h, h >= _h.value ? TabSprings.heightIn : TabSprings.heightOut);
@@ -475,29 +606,6 @@ class LensMotion {
       holding ? TabSprings.glowIn : TabSprings.effectOut,
     );
     if (holding) _glowDiameter.target = TabSprings.glowHeldDiameter;
-    for (final s in _springs) {
-      s.advance(identical(s, _x) ? flightDt : dt);
-    }
-    _advanceRipple(dt);
-    _advanceGhost(dt);
-    switch (_phase) {
-      // Travel during the press is not a crossing (Q6): track it silently.
-      case LensPhase.pressed:
-        _lastSlot = _geometry.slotNearest(_x.value);
-      case LensPhase.dragging:
-        _queueCrossing();
-      case LensPhase.flying || LensPhase.settling || LensPhase.rest:
-        break;
-    }
-    final moving = _isMoving();
-    if (!moving && _phase == LensPhase.settling) {
-      for (final s in _springs) {
-        s.jump(s.target);
-      }
-      _popSlot = null;
-      _phase = LensPhase.rest;
-    }
-    return moving;
   }
 
   void _advanceRipple(double dt) {
