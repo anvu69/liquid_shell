@@ -267,6 +267,12 @@ final class ShellSearch implements SearchDriver {
     }
   }
 
+  @override
+  void scopeSetByApp(int index) {
+    // Nothing to send: the Flutter scope bar rebuilds from the controller
+    // (spec VK-550 §10.2).
+  }
+
   // --- the Flutter field (fallback) --------------------------------------
 
   /// The ×: clears (a user edit, so onChanged hears it) and unfocuses.

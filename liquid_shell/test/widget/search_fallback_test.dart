@@ -732,8 +732,10 @@ void main() {
         ),
       ),
     );
-    await tester.tap(find.text('Places'));
-    await tester.pump();
+    // The segmented control draws each title twice (one per weight): tap
+    // the segment's node.
+    await tester.tap(find.bySemanticsLabel('Places'));
+    await tester.pumpAndSettle();
     expect(controller.scopeIndex, 2);
     expect(
       tester.getSemantics(find.bySemanticsLabel('Places')),

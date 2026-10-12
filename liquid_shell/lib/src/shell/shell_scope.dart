@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:liquid_shell/src/native/window_controls.dart';
 import 'package:liquid_shell/src/pages/page_registry.dart';
@@ -23,6 +24,8 @@ class LiquidShellScopeData {
     this.windowControls = LiquidWindowControls.zero,
     this.searchPhase,
     this.nativePageBar = false,
+    this.nativeSearchScopes = false,
+    this.searchScopes,
   });
 
   /// No shell: compact, hidden chrome, zero insets, no sidebar. Window
@@ -81,6 +84,14 @@ class LiquidShellScopeData {
   /// `LiquidPage` draws no Flutter bar, and [windowControls] is zero.
   final bool nativePageBar;
 
+  /// Native chrome draws the search scopes (iOS 26+, spec VK-550 §10.3):
+  /// `LiquidSearchScopeBar` builds nothing.
+  final bool nativeSearchScopes;
+
+  /// The shell's `LiquidSearch.scopes`; null without scopes or a shell
+  /// search.
+  final List<String>? searchScopes;
+
   /// Field by field, except [setSidebarVisible] (spec §4.4). The setter is an
   /// action, not state: pages depend on what the shell shows, so equality
   /// covers the values only. Two scopes that show the same thing are
@@ -96,7 +107,9 @@ class LiquidShellScopeData {
       other.nativeChrome == nativeChrome &&
       other.windowControls == windowControls &&
       other.searchPhase == searchPhase &&
-      other.nativePageBar == nativePageBar;
+      other.nativePageBar == nativePageBar &&
+      other.nativeSearchScopes == nativeSearchScopes &&
+      listEquals(other.searchScopes, searchScopes);
 
   @override
   int get hashCode => Object.hash(
@@ -108,6 +121,8 @@ class LiquidShellScopeData {
     windowControls,
     searchPhase,
     nativePageBar,
+    nativeSearchScopes,
+    searchScopes == null ? null : Object.hashAll(searchScopes!),
   );
 }
 

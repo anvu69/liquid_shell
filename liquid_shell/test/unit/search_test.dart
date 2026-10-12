@@ -17,6 +17,9 @@ class _Driver implements SearchDriver {
 
   @override
   void textSetByApp(String text) => calls.add('text $text');
+
+  @override
+  void scopeSetByApp(int index) => calls.add('scope $index');
 }
 
 void main() {
@@ -104,6 +107,30 @@ void main() {
       expect(heard, 1);
     });
 
+    test('the app changing the scope tells the driver once (spec VK-550 '
+        '§10.2)', () {
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      final driver = _Driver();
+      attachSearchDriver(controller, driver);
+      controller.scopeIndex = 2;
+      expect(driver.calls, ['scope 2']);
+      controller.scopeIndex = 2;
+      expect(driver.calls, ['scope 2'], reason: 'same scope: nothing');
+      controller.value = controller.value.copyWith(text: 'a', scopeIndex: 1);
+      expect(driver.calls, ['scope 2', 'text a', 'scope 1']);
+    });
+
+    test("the field's own scope edit never reaches the driver", () {
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      final driver = _Driver();
+      attachSearchDriver(controller, driver);
+      applySearchEdit(controller, const LiquidSearchValue(scopeIndex: 2));
+      expect(controller.scopeIndex, 2);
+      expect(driver.calls, isEmpty);
+    });
+
     test('a user edit is never echoed back, even when the app listens and '
         'writes the same text (Telex: no marked text)', () {
       final controller = LiquidSearchController();
@@ -188,12 +215,12 @@ void main() {
           scopeIndex: 1,
         ),
       );
-      expect(driver.calls, isEmpty, reason: 'same text: no setText');
+      expect(driver.calls, ['scope 1'], reason: 'same text: no setText');
 
       controller.value = controller.value.copyWith(text: 'き');
       expect(controller.value.composing, isFalse);
       expect(controller.isActive, isTrue);
-      expect(driver.calls, ['text き']);
+      expect(driver.calls, ['scope 1', 'text き']);
     });
 
     test('a negative scopeIndex asserts (review M-3)', () {
@@ -233,6 +260,40 @@ void main() {
       expect(
         LiquidSearch(controller: controller),
         isNot(LiquidSearch(controller: controller, placeholder: 'x')),
+      );
+      // A new list with the same titles is equal (spec VK-550 §11).
+      LiquidSearch scoped(List<String> titles) =>
+          LiquidSearch(controller: controller, scopes: List.of(titles));
+      expect(scoped(const ['A', 'B']), scoped(const ['A', 'B']));
+      expect(
+        scoped(const ['A', 'B']).hashCode,
+        scoped(const ['A', 'B']).hashCode,
+      );
+      expect(scoped(const ['A', 'B']), isNot(scoped(const ['A', 'C'])));
+      expect(
+        scoped(const ['A', 'B']),
+        isNot(LiquidSearch(controller: controller)),
+      );
+    });
+
+    test('scopes: two titles or more, or null', () {
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      expect(
+        () => LiquidSearch(controller: controller, scopes: const ['All']),
+        throwsAssertionError,
+      );
+      expect(
+        () => LiquidSearch(controller: controller, scopes: const []),
+        throwsAssertionError,
+      );
+      expect(LiquidSearch(controller: controller).scopes, isNull);
+      expect(
+        LiquidSearch(
+          controller: controller,
+          scopes: const ['All', 'Songs'],
+        ).scopes,
+        ['All', 'Songs'],
       );
     });
   });

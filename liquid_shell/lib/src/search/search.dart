@@ -9,9 +9,13 @@ class LiquidSearch {
   const LiquidSearch({
     required this.controller,
     this.placeholder,
+    this.scopes,
     this.onChanged,
     this.onSubmitted,
-  });
+  }) : assert(
+         scopes == null || scopes.length >= 2,
+         'LiquidSearch.scopes needs two titles or more, or null.',
+       );
 
   /// The query, the active state and the scope. Owned by the app: the app
   /// creates and disposes it and keeps it alive as long as the shell; the
@@ -23,6 +27,12 @@ class LiquidSearch {
   /// the Flutter field).
   final String? placeholder;
 
+  /// Scope titles ("All", "Songs", "Places"), two or more, or null for none
+  /// (spec VK-550 §11). Native chrome on iOS 26+ shows them in UIKit's scope
+  /// bar while the search is active; elsewhere `LiquidSearchScopeBar` shows
+  /// them. Bound to [LiquidSearchController.scopeIndex].
+  final List<String>? scopes;
+
   /// Every text change the user makes, IME composition included. Not called
   /// for text the app sets through [controller].
   final ValueChanged<String>? onChanged;
@@ -30,16 +40,22 @@ class LiquidSearch {
   /// The user pressed the keyboard's Search key.
   final ValueChanged<String>? onSubmitted;
 
-  /// Field by field; callbacks by identity.
+  /// Field by field, [scopes] by value; callbacks by identity.
   @override
   bool operator ==(Object other) =>
       other is LiquidSearch &&
       identical(other.controller, controller) &&
       other.placeholder == placeholder &&
+      listEquals(other.scopes, scopes) &&
       other.onChanged == onChanged &&
       other.onSubmitted == onSubmitted;
 
   @override
-  int get hashCode =>
-      Object.hash(controller, placeholder, onChanged, onSubmitted);
+  int get hashCode => Object.hash(
+    controller,
+    placeholder,
+    scopes == null ? null : Object.hashAll(scopes!),
+    onChanged,
+    onSubmitted,
+  );
 }

@@ -1453,6 +1453,7 @@ class _LiquidShellState extends State<LiquidShell>
           setSidebarVisible: _setSidebarVisible,
           windowControls: _windowControls.value.value,
           searchPhase: phase,
+          searchScopes: widget.search?.scopes,
         ),
         registry: this,
         pages: this,
@@ -1679,6 +1680,7 @@ class _LiquidShellState extends State<LiquidShell>
           nativeChrome: engaged,
           searchPhase: phase,
           nativePageBar: _nativePageBar,
+          searchScopes: widget.search?.scopes,
           // UIKit's top bar, sidebar and navigation bars make room for the
           // cluster; the body starts below or beside them (spec P2 §8.3,
           // P3b §7.9). The compact bar is at the bottom: the top is the

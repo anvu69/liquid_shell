@@ -38,7 +38,7 @@ class LiquidSearchValue {
   /// The field has focus.
   final bool active;
 
-  /// Index into the app's scope titles (`LiquidSearchScopeBar`).
+  /// Index into the scope titles (`LiquidSearch.scopes`).
   final int scopeIndex;
 
   /// A copy with the given fields replaced.
@@ -82,6 +82,9 @@ abstract interface class SearchDriver {
 
   /// The app replaced the text.
   void textSetByApp(String text);
+
+  /// The app changed the scope (spec VK-550 §10.2).
+  void scopeSetByApp(int index);
 }
 
 /// The search query as a [ValueListenable] (Flutter's stream of values),
@@ -125,12 +128,14 @@ class LiquidSearchController extends ValueNotifier<LiquidSearchValue> {
   set text(String text) => value = value.copyWith(text: text);
 
   /// The app's write. A new [LiquidSearchValue.text] goes to the field and
-  /// ends the composition; the same text changes nothing. `active` and
-  /// `composing` stay the field's: the ones in [next] are ignored.
+  /// ends the composition; the same text changes nothing. A new
+  /// [LiquidSearchValue.scopeIndex] goes to the native scope bar. `active`
+  /// and `composing` stay the field's: the ones in [next] are ignored.
   @override
   set value(LiquidSearchValue next) {
     final current = value;
     final textChanged = next.text != current.text;
+    final scopeChanged = next.scopeIndex != current.scopeIndex;
     super.value = LiquidSearchValue(
       text: next.text,
       composing: !textChanged && current.composing,
@@ -138,6 +143,7 @@ class LiquidSearchController extends ValueNotifier<LiquidSearchValue> {
       scopeIndex: next.scopeIndex,
     );
     if (textChanged) _driver?.textSetByApp(next.text);
+    if (scopeChanged) _driver?.scopeSetByApp(next.scopeIndex);
   }
 
   /// The field's own edit: never goes back to the field.
