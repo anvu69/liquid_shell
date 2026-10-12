@@ -156,9 +156,16 @@ ios-unit: ## XCTest of liquid_shell_ios (example RunnerTests) on an iPad or iPho
 	  || { status=$$?; [ ! -d $(IOS_UNIT_RESULT) ] || \
 	    xcrun xcresulttool get test-results summary --path $(IOS_UNIT_RESULT); exit $$status; }
 
+# The UI suite's own cap, build included. Measured on CI's iPhone 17
+# (iOS 26.5): 12 tests took 436-840 s by runner (PR #9); with VK-551's
+# three edge-swipe tests (15) a slow runner hit 900 s with four still to
+# run, about 1100 s in all; locally 477 s. 1500 s keeps ~400 s in hand,
+# inside the job's 40 minutes; a stalled test still stops at its 300 s.
+IOS_UI_TIMEOUT ?= 1500
+
 ios-ui: ## XCUITest: real taps on native dialogs and the search tab (example RunnerUITests) on a simulator; IOS_UNIT_DEVICE=<udid>
 	cd $(EXAMPLE) && $(FLUTTER) build ios --config-only --simulator --debug
-	cd $(EXAMPLE)/ios && $(CURDIR)/tool/with_timeout.sh $(IOS_UNIT_TIMEOUT) \
+	cd $(EXAMPLE)/ios && $(CURDIR)/tool/with_timeout.sh $(IOS_UI_TIMEOUT) \
 	  xcodebuild test -workspace Runner.xcworkspace -scheme Runner \
 	  -destination "id=$${IOS_UNIT_DEVICE:?set IOS_UNIT_DEVICE to a simulator UDID}" \
 	  -only-testing:RunnerUITests -parallel-testing-enabled NO \
