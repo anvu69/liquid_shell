@@ -96,10 +96,15 @@ class SegmentGeometry implements LensTrack {
     return x.clamp(centres.reduce(math.min), centres.reduce(math.max));
   }
 
-  /// Every thumb has one size, so the lens size does not depend on [x]. The
-  /// last slot is read: its edges are the sums' end, the fixture's value.
+  /// Every thumb has one size, (W/n − 4) × (H − 4), so the lens size does
+  /// not depend on [x] (spec §5).
   @override
-  Size restLensAt(double x) => slots.isEmpty ? Size.zero : slots.last.size;
+  Size restLensAt(double x) => slots.isEmpty
+      ? Size.zero
+      : Size(
+          size.width / slots.length - 2 * SegmentMetrics.thumbInset,
+          track.height - 2 * SegmentMetrics.thumbInset,
+        );
 
   @override
   Size? get tapInflation => null;
@@ -124,7 +129,9 @@ class SegmentGeometry implements LensTrack {
 }
 
 /// Lays out [count] segments (spec VK-550 §5). With [mediumLabelWidths] the
-/// width is intrinsic, else [maxWidth] is filled.
+/// width is intrinsic, else [maxWidth] is filled. Either way no segment is
+/// narrower than [SegmentMetrics.minSegment] (Q-C): a [maxWidth] below
+/// `count · 44` gives a wider geometry than asked for.
 SegmentGeometry segmentGeometry({
   required int count,
   required double maxWidth,
@@ -145,9 +152,13 @@ SegmentGeometry segmentGeometry({
       widest.ceilToDouble() + 2 * SegmentMetrics.labelPadding,
     );
   } else {
-    segmentWidth = maxWidth / count;
+    segmentWidth = math.max(SegmentMetrics.minSegment, maxWidth / count);
   }
-  final width = mediumLabelWidths == null ? maxWidth : segmentWidth * count;
+  // Filling: maxWidth itself (not n · W/n), so the rects end on it exactly.
+  final width =
+      mediumLabelWidths == null && maxWidth / count >= SegmentMetrics.minSegment
+      ? maxWidth
+      : segmentWidth * count;
   final trackTop = (boxHeight - height) / 2;
   const inset = SegmentMetrics.thumbInset;
   final segments = <Rect>[];

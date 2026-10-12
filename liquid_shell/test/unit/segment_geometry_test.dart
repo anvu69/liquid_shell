@@ -44,6 +44,19 @@ void main() {
     expect(intrinsic(const [9.3, 8.7, 9]).size.width, 132);
   });
 
+  test('expand never cuts a segment below 44 (Q-C): 5 in 200 need 220', () {
+    final g = segmentGeometry(
+      count: 5,
+      maxWidth: 200,
+      lineHeight: line,
+      direction: TextDirection.ltr,
+    );
+    expect(g.size, const Size(220, 44));
+    for (final s in g.segments) {
+      expect(s.width, closeTo(44, 1e-9));
+    }
+  });
+
   test('RTL mirrors: segment 0 is at the right', () {
     final g = full(3, d: TextDirection.rtl);
     expect(g.segments[0].right, 370);
@@ -71,7 +84,12 @@ void main() {
     expect(g.segmentAt(const Offset(200, 1)), 1);
     expect(g.segmentAt(const Offset(200, 43)), 1);
     expect(g.segmentAt(const Offset(200, 45)), isNull);
-    expect(g.restLensAt(200), const Size(119.33333333333334, 28));
+    // Spec §5: (W/n − 4) × (H − 4); native 119 × 28 (spike §2, ±1).
+    final lens = g.restLensAt(200);
+    expect(lens.width, closeTo(370 / 3 - 4, 1e-9));
+    expect(lens.height, closeTo(32 - 4, 1e-9));
+    expect(lens.width, closeTo(119, 1));
+    expect(g.restLensAt(0), lens);
     expect(g.tapInflation, isNull);
   });
 }

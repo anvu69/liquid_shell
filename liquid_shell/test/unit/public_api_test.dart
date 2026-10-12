@@ -37,4 +37,26 @@ void main() {
       isEmpty,
     );
   });
+
+  test('segmented_control.dart exports only the control and its segment', () {
+    const export =
+        "export 'src/segmented/segmented_control.dart' "
+        'show LiquidSegment, LiquidSegmentedControl';
+    expect(
+      _exports().where((e) => e.contains('segmented_control.dart')),
+      [export],
+    );
+  });
+
+  test('the lens engine stays internal', () {
+    for (final f in [
+      'lens_track.dart',
+      'lens_profile.dart',
+      'lens_ticker.dart',
+      'lens_clip.dart',
+      'segment_geometry.dart',
+    ]) {
+      expect(_exports().where((e) => e.contains(f)), isEmpty, reason: f);
+    }
+  });
 }

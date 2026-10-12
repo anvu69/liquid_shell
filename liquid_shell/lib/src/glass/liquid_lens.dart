@@ -58,6 +58,7 @@ class LiquidLens extends StatefulWidget {
     required this.refraction,
     this.engage = 1,
     this.restFill,
+    this.bezel = kLensBezel,
     super.key,
   });
 
@@ -69,6 +70,10 @@ class LiquidLens extends StatefulWidget {
 
   /// The rest capsule's fill, drawn over the liquid lens at 1 − [engage].
   final Color? restFill;
+
+  /// The engaged lens's refracting ring, in points: [kLensBezel] for a tab
+  /// lens, 9 for a segment lens (spec VK-550 §7).
+  final double bezel;
 
   @override
   State<LiquidLens> createState() => _LiquidLensState();
@@ -133,7 +138,7 @@ class _LiquidLensState extends State<LiquidLens> {
                   kLensBlurSigma,
                   engage,
                 )!,
-                bezel: ui.lerpDouble(LiquidOptics.bezel, kLensBezel, engage),
+                bezel: ui.lerpDouble(LiquidOptics.bezel, widget.bezel, engage),
                 rimWidth: ui.lerpDouble(LiquidOptics.rimWidth, 1, engage),
                 // Milky core, clear ring (spec §7.2, Task 16 part B).
                 veilFalloff:

@@ -1,3 +1,6 @@
+/// @docImport 'package:liquid_shell/src/segmented/segmented_control.dart';
+library;
+
 import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/material.dart';
@@ -156,13 +159,13 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
   /// Tab bar icon size at text scale 1.
   final double tabIconSize;
 
-  /// `LiquidSegmentedControl` track fill, drawn over the page.
+  /// [LiquidSegmentedControl] track fill, drawn over the page.
   final Color segmentTrack;
 
-  /// `LiquidSegmentedControl` thumb at rest, drawn over the track.
+  /// [LiquidSegmentedControl] thumb at rest, drawn over the track.
   final Color segmentThumb;
 
-  /// `LiquidSegmentedControl` labels at text scale 1.
+  /// [LiquidSegmentedControl] labels at text scale 1.
   final TextStyle segmentLabelStyle;
 
   static const TextStyle _segmentLabelLight = TextStyle(

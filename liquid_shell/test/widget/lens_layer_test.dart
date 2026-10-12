@@ -23,6 +23,7 @@ Future<void> _liquid(WidgetTester tester) async {
 
 Widget _lens({
   double refraction = 1,
+  double? bezel,
   Brightness brightness = Brightness.light,
   LiquidGlassTier? forced,
   bool highContrast = false,
@@ -41,7 +42,9 @@ Widget _lens({
               child: SizedBox(
                 width: 110,
                 height: 70,
-                child: LiquidLens(refraction: refraction),
+                child: bezel == null
+                    ? LiquidLens(refraction: refraction)
+                    : LiquidLens(refraction: refraction, bezel: bezel),
               ),
             );
           },
@@ -76,6 +79,19 @@ void main() {
     expect(u[19], closeTo(0.35, 1e-3)); // rim alpha
     expect(u[22], closeTo(3, 1e-6)); // rim width 1 pt
     expect(_sigma, 2); // blur σ 2 pt before the shader
+  });
+
+  testWidgets('bezel: a segment lens rings 9 pt (spec VK-550 §7: native '
+      '8.3–9.0)', (tester) async {
+    await _liquid(tester);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(_lens(bezel: 9));
+    await tester.pump();
+    final u = tester
+        .renderObject<RenderLiquidBackdrop>(find.byType(LiquidBackdrop))
+        .debugUniforms!;
+    expect(u[8], closeTo(9 * 3, 1e-3));
   });
 
   testWidgets('dark: the veil is native-fitted #414141 at 0.90 (Task 16 '
