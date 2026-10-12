@@ -484,8 +484,12 @@ void main() {
       onChanged: calls.add,
     );
     double opacityOf(Key row, String label) {
+      // The paragraph: the lens copy is not a Text.
+      final paragraph = find.byWidgetPredicate(
+        (w) => w is RichText && w.text.toPlainText() == label,
+      );
       final o = find.ancestor(
-        of: find.descendant(of: find.byKey(row), matching: find.text(label)),
+        of: find.descendant(of: find.byKey(row), matching: paragraph),
         matching: find.byType(Opacity),
       );
       return tester.widgetList<Opacity>(o).fold(1, (a, w) => a * w.opacity);
@@ -933,10 +937,93 @@ void main() {
         ),
       ),
     );
+    // The error style's monospace stays out; the family is the theme's.
+    final family = ThemeData().textTheme.labelLarge!.fontFamily;
     for (final p in _paragraphs(tester, kSegmentNormalKey)) {
       expect(p.text.style!.decoration, isNot(TextDecoration.underline));
-      expect(p.text.style!.fontFamily, isNull);
+      expect(p.text.style!.fontFamily, family);
+      expect(p.text.style!.fontFamily, isNot('monospace'));
     }
+  });
+
+  group("labels use the app's font family (review I-1)", () {
+    Future<void> pumpThemed(WidgetTester tester, ThemeData theme) =>
+        tester.pumpWidget(
+          MaterialApp(
+            theme: theme,
+            home: Center(
+              child: SizedBox(
+                width: 370,
+                child: LiquidSegmentedControl(
+                  segments: _segments(),
+                  selectedIndex: 0,
+                  onChanged: (_) {},
+                ),
+              ),
+            ),
+          ),
+        );
+
+    List<TextStyle> styles(WidgetTester tester) => [
+      for (final row in [kSegmentNormalKey, kSegmentSelectedKey])
+        for (final p in _paragraphs(tester, row)) p.text.style!,
+    ];
+
+    testWidgets("by default: ThemeData.fontFamily, the spec's metrics", (
+      tester,
+    ) async {
+      await pumpThemed(
+        tester,
+        ThemeData(fontFamily: 'AppFont', fontFamilyFallback: const ['Alt']),
+      );
+      final all = styles(tester);
+      expect(all, hasLength(6));
+      for (final style in all) {
+        expect(style.fontFamily, 'AppFont');
+        expect(style.fontFamilyFallback, ['Alt']);
+        expect(style.fontSize, 13);
+        expect(style.height, closeTo(_line / 13, 1e-9));
+      }
+      expect(all.map((s) => s.fontWeight).toSet(), {
+        FontWeight.w400,
+        FontWeight.w500,
+      });
+    });
+
+    testWidgets('segmentLabelStyle.fontFamily wins', (tester) async {
+      final base = ThemeData(fontFamily: 'AppFont');
+      final glass = LiquidGlassTheme.fromColorScheme(base.colorScheme);
+      await pumpThemed(
+        tester,
+        base.copyWith(
+          extensions: [
+            glass.copyWith(
+              segmentLabelStyle: glass.segmentLabelStyle.copyWith(
+                fontFamily: 'Own',
+              ),
+            ),
+          ],
+        ),
+      );
+      for (final style in styles(tester)) {
+        expect(style.fontFamily, 'Own');
+      }
+    });
+  });
+
+  testWidgets('find.text sees each title once: the lens copy is not a Text', (
+    tester,
+  ) async {
+    await _pump(tester);
+    expect(find.text('Songs'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(kSegmentNormalKey),
+        matching: find.text('Songs'),
+      ),
+      findsOneWidget,
+    );
+    expect(_paragraphs(tester, kSegmentSelectedKey), hasLength(3));
   });
 
   test('LiquidSegment: a value with diagnostics', () {

@@ -347,13 +347,21 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl>
       context,
     ).clamp(maxScaleFactor: SegmentMetrics.maxTextScale);
     // An override without a size or a line height keeps the spec's 13 pt
-    // on 15.67, so the drawn line and the geometry's agree.
+    // on 15.67, so the drawn line and the geometry's agree. Without its own
+    // family it takes the app's, as the tab bar's labels do; size, weights
+    // and colour stay native's. The theme's, not the ambient style's: under
+    // a MaterialApp with no Material above, that is the monospace error one.
     final themed = theme.segmentLabelStyle;
+    final app = themed.fontFamily == null
+        ? Theme.of(context).textTheme.labelLarge
+        : null;
     final fontSize = themed.fontSize ?? SegmentMetrics.labelSize;
     final style = themed.copyWith(
       fontSize: fontSize,
       height:
           themed.height ?? SegmentMetrics.labelLine / SegmentMetrics.labelSize,
+      fontFamily: app?.fontFamily,
+      fontFamilyFallback: themed.fontFamilyFallback ?? app?.fontFamilyFallback,
     );
     final medium = style.copyWith(fontWeight: FontWeight.w500);
     final lineHeight = scaler.scale(fontSize) * style.height!;
@@ -560,7 +568,7 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl>
                 ..translateByDouble(lens.center.dx, lens.center.dy, 0, 1)
                 ..scaleByDouble(f.magnify, f.magnify, 1, 1)
                 ..translateByDouble(-lens.center.dx, -lens.center.dy, 0, 1),
-              child: _row(g, medium, scaler),
+              child: _row(g, medium, scaler, lensCopy: true),
             ),
           ),
         ),
@@ -672,11 +680,14 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl>
   /// keeps the ambient one out: under a MaterialApp with no Material above,
   /// it is the yellow-underlined error style, and [style] inherits.
   /// [pressed]: that label fades as native's held segment does.
+  /// [lensCopy]: the selected row, drawn by [_LensLabel] so that
+  /// `find.text` sees each title once.
   Widget _row(
     SegmentGeometry g,
     TextStyle style,
     TextScaler scaler, {
     int? pressed,
+    bool lensCopy = false,
   }) => IgnorePointer(
     child: ExcludeSemantics(
       child: DefaultTextStyle(
@@ -693,15 +704,17 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl>
                   curve: Curves.easeInOut,
                   child: Opacity(
                     opacity: s.enabled ? 1 : 0.5,
-                    child: Text(
-                      s.label,
-                      style: style,
-                      textScaler: scaler,
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      softWrap: false,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    child: lensCopy
+                        ? _LensLabel(s.label, style: style, scaler: scaler)
+                        : Text(
+                            s.label,
+                            style: style,
+                            textScaler: scaler,
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            softWrap: false,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                   ),
                 ),
               ),
@@ -726,5 +739,39 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl>
     final width = painter.width;
     painter.dispose();
     return width;
+  }
+}
+
+/// The lens copy of a label: the [RichText] that `Text(label, style: style,
+/// textScaler: scaler, …)` in [_LiquidSegmentedControlState._row] builds,
+/// same pixels, but not a `Text`. A finder's `find.text` (and an app's
+/// widget tests) then see each title once, in the normal row. It never
+/// registers with a `SelectionArea`, so a title is not selected twice.
+class _LensLabel extends StatelessWidget {
+  const _LensLabel(this.label, {required this.style, required this.scaler});
+
+  final String label;
+  final TextStyle style;
+  final TextScaler scaler;
+
+  @override
+  Widget build(BuildContext context) {
+    final ambient = DefaultTextStyle.of(context);
+    var effective = ambient.style.merge(style);
+    if (MediaQuery.boldTextOf(context)) {
+      effective = effective.merge(const TextStyle(fontWeight: FontWeight.bold));
+    }
+    return RichText(
+      textAlign: TextAlign.center,
+      softWrap: false,
+      overflow: TextOverflow.ellipsis,
+      textScaler: scaler,
+      maxLines: 1,
+      textWidthBasis: ambient.textWidthBasis,
+      textHeightBehavior:
+          ambient.textHeightBehavior ??
+          DefaultTextHeightBehavior.maybeOf(context),
+      text: TextSpan(style: effective, text: label),
+    );
   }
 }

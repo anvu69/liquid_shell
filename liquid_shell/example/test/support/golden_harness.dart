@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell_example/main.dart';
 
 /// A golden device: logical size, safe area, gesture area and platform.
@@ -83,27 +82,14 @@ Future<void> loadGoldenFonts() async {
 Future<ByteData> _bytes(String path) async =>
     ByteData.sublistView(await File(path).readAsBytes());
 
-/// The example theme with the Inter font. The segmented control's labels
-/// keep out the ambient style (they draw the platform font, as native's),
-/// so they get Inter through the glass theme.
-ThemeData goldenTheme(Brightness brightness, TargetPlatform platform) {
-  final theme = ThemeData(
-    colorSchemeSeed: kExampleSeed,
-    brightness: brightness,
-    fontFamily: 'Inter',
-    platform: platform,
-  );
-  final glass = LiquidGlassTheme.fromColorScheme(theme.colorScheme);
-  return theme.copyWith(
-    extensions: [
-      glass.copyWith(
-        segmentLabelStyle: glass.segmentLabelStyle.copyWith(
-          fontFamily: 'Inter',
-        ),
-      ),
-    ],
-  );
-}
+/// The example theme with the Inter font.
+ThemeData goldenTheme(Brightness brightness, TargetPlatform platform) =>
+    ThemeData(
+      colorSchemeSeed: kExampleSeed,
+      brightness: brightness,
+      fontFamily: 'Inter',
+      platform: platform,
+    );
 
 /// Sets up [device] and pumps [child] as the home of a MaterialApp.
 Future<void> pumpGolden(

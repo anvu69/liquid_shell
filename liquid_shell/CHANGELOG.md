@@ -1,3 +1,30 @@
+## 0.1.0-dev.7 (unreleased)
+
+- **Search scopes (VK-550).** `LiquidSearch.scopes` takes the scope titles
+  (two or more, or null). `LiquidSearchScopeBar.scopes` is now optional:
+  null reads the shell's `LiquidSearch.scopes`; when both are given they
+  must be equal (debug assert). An app write of
+  `LiquidSearchController.scopeIndex` now reaches the shell, so the native
+  scope bar can follow it.
+- **Behaviour changes.**
+  - `LiquidSearchScopeBar` is drawn by `LiquidSegmentedControl`: a flat
+    track with a white thumb and a liquid lens, as iOS 26's
+    `UISegmentedControl`, instead of a glass pill with a
+    `primaryContainer` chip and an ink ripple. Its height is unchanged
+    (44 pt).
+  - Segment labels keep your app's font family (`ThemeData.fontFamily`,
+    read from `textTheme.labelLarge`); size and weights follow
+    `UISegmentedControl` (13 pt, w400 / w500 when selected). Set
+    `LiquidGlassTheme.segmentLabelStyle.fontFamily` to choose another.
+  - `LiquidSearchScopeBar.scopes` changed from `List<String>` to
+    `List<String>?`. Every constructor call still compiles; only code that
+    reads `bar.scopes` as non-null needs a `!`. Allowed before 1.0.
+  - **Widget tests:** each segment's title is painted twice (the normal
+    label and the copy under the lens), but only the normal one is a
+    `Text`, so `find.text('Songs')` still finds one widget. Prefer
+    tapping a segment through its node, `find.bySemanticsLabel('Songs')`:
+    the labels themselves ignore pointers.
+
 ## 0.1.0-dev.6
 
 - **Tab bar fidelity (VK-503).** The Flutter tab bar matches iOS 26.5:
