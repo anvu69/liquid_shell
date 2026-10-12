@@ -200,7 +200,7 @@ Worked checks against spike §2 (iPhone 17 Pro, full width 370):
 
 | Use | ζ | Response | Delay | Source |
 |---|---|---|---|---|
-| Lens x after a tap | two springs blended (Q-E): primary **0.743 / 0.577 s**, secondary **0.556 / 0.291 s** at a 0.275 share, 16 ms late | | primary none, secondary 16 ms after the commit, both + 23 ms × (1 − travel / 246.67 pt); the primary's response × (1 + 0.075 × the same) | Task 4, fitted to `tap_1_2`, `tap_2_3`, `tap_3_1` for the §14.5 gate (every row within 0.9 pt, overshoot 2.6 / 5.1 pt, settled +0.70 s). The spike's single spring (0.87, 0.41 s, 8 ms) overshoots 0.5 / 1.0 pt; no slide of one shape meets the gate on both distances (6.6 pt at +0.10 s at best) |
+| Lens x after a tap | two springs blended (Q-E): primary **0.751 / 0.577 s**, secondary **0.623 / 0.285 s** at a 0.286 share | | primary 14.4 ms, secondary 32 ms after the commit | Task 4, fitted to all five tap captures on the engage-aligned clock (§14.5): every row within 1.8 pt, overshoot within 0.55 pt, settled +0.70 s. The spike's single spring (0.87, 0.41 s, 8 ms) overshoots 0.5 / 1.0 pt where native does 2.5 / 5.0 |
 | Lens x following the finger | 0.75 | 0.33 s | none | VK-503 `dragFollow`; spike lag within −5 % |
 | Lens x after a drag release (and a flick) | **0.64** | **0.31 s** | none | Task 4: fitted to `slow_drag.release_rows` and the `flick` rows after the release, with the flick overshoot held to native's (3.9 pt) |
 | Programmatic slide | **0.82** | **0.41 s** | **30 ms** after the write | spike §3; Task 4 fits the delay to `programmatic_2seg` (every row within 1.6 pt) |
@@ -389,8 +389,8 @@ The packages are at `0.1.0-dev.6`. This item ships as **`0.1.0-dev.7`** for all 
 | Quantity | Reference | Tolerance | Kind |
 |---|---|---|---|
 | Track, segment and thumb rects (2, 3, 5 segments at 370; intrinsic 177) | spike §2 | ±1 pt | native |
-| Tap x (three taps), from the commit | the native per-frame rows | ±2 pt per row at 0.05 s steps to 0.6 s; settle ±10 % | native |
-| Tap shape: one-segment peak h, two-segment peak h, wobble extremes | the native rows | ±10 % | native |
+| Tap x (five captures: `tap_1_2`, `tap_2_3`, `tap_3_1`, `dark.tap_1_2`, `tap_1_3_5seg`), from the commit on the engage-aligned clock (below) | the native per-frame rows | ±2 pt per row at 0.05 s steps to 0.6 s; settle ±10 % | native |
+| Tap shape: one-segment peak h, two-segment peak h, wobble extremes | the native rows | ±10 % | native (`tap_3_1`'s late w swell, ×1.14, is −12 % in Task 4's model: Task 15 decides it) |
 | Overshoot (one, two segments) | 2.5 / 4.9 pt | ±1 pt | native |
 | Press size at +0.033 / 0.067 / 0.1 / 0.133 / 0.2 / 0.25 s | the native rows | ±2 pt | native |
 | Release size and engage at +0.033 … +0.2 s | the native rows | ±2 pt, ±0.12 | native |
@@ -401,6 +401,8 @@ The packages are at `0.1.0-dev.6`. This item ships as **`0.1.0-dev.7`** for all 
 | Engage in | ≈ 50 ms to 1 | ±1 frame | native |
 
 Read-back rows (Flutter's own constants compared with themselves) are not allowed (Q3).
+
+**Tap clock alignment (Task 4 review).** A tap capture's t0 is native's `valueChanged`, which lands up to a frame off the display link that samples the rows. At the rows' speed (up to ≈ 740 pt/s) a frame is 12 pt, so ±2 pt asks for ±2.7 ms, finer than the captures resolve: the light one-segment taps sit ≈ 15 ms late on x and engage alike, and `dark.tap_1_2` (the same travel) tracks `tap_3_1`. Rule: each tap capture's rows are compared at `t − shift`, where `shift` is the capture's engage onset (the 0.5 crossing, linear between rows) minus the engine's own (measured on 1 ms samples), and `|shift|` must be at most one frame (1/60 s; the test asserts it). Engage is the channel that does not depend on the travel. The native rows themselves are never edited. Shifts in Task 4: −0.7 ms (`tap_1_2`, `tap_2_3`), −16.4 ms (`tap_3_1`, `dark.tap_1_2`), −9.8 ms (`tap_1_3_5seg`).
 
 **Flutter traces.** `integration_test/segment_fidelity_test.dart` (iPhone 17 Pro, iOS 26.5, Flutter liquid forced) drives the spike's sequence on the example's segments case (tap 1→2, 2→3, 3→1, press-hold 2 s, slow drag 77 → 324 at ≈ 82 pt/s, flick 324 → 77, a programmatic change) and records each frame through `debugSegmentTrace` (lens rect, engage, the engine's frame time). `tool/segment_trace_compare.dart` compares it with `docs/qa/vk550/native_reference.json` and prints the table above.
 

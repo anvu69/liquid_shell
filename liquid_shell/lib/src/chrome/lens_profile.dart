@@ -40,7 +40,7 @@ final class SegmentEnvelope extends LensEnvelope {
     required this.squashKnee,
     required this.squashGain,
     required this.squashMax,
-    required this.magnify,
+    required this.magnifyGain,
   });
 
   /// How much a press grows the lens, width and height.
@@ -93,70 +93,35 @@ final class SegmentEnvelope extends LensEnvelope {
   /// The squash limits: width and height factors.
   final Size squashMax;
 
-  /// Scale of the w500 copy at full engage.
-  final double magnify;
+  /// Magnification gain of the w500 copy at full engage (scale − 1, as
+  /// `TabSprings.magnify`).
+  final double magnifyGain;
 }
 
 /// A segment tap's slide (spec VK-550 §8.4, Q-E): two springs from the
-/// commit, blended. The primary carries the lens; a small, slow secondary
-/// share adds native's late overshoot. A slide shorter than [travel]
-/// leaves later and moves slower, in proportion: one segment (123 pt)
-/// trails two (247 pt) in the native rows, and a slide of any single
-/// shape cannot meet both (Task 4 report).
+/// commit, blended. The primary is the profile's `tap` spring; a secondary
+/// share adds native's overshoot and its late return.
 @immutable
 final class TapSlide {
   /// Creates a slide.
   const TapSlide({
-    required this.ratio,
-    required this.response,
     required this.delay,
     required this.secondary,
     required this.secondaryDelay,
     required this.share,
-    required this.travel,
-    required this.shortDelay,
-    required this.shortResponse,
   });
 
-  /// The primary spring's damping ratio.
-  final double ratio;
-
-  /// The primary spring's response (s) for a slide of [travel] or longer.
-  final double response;
-
-  /// Seconds after the commit before the primary leaves, at [travel].
+  /// Seconds after the commit before the primary leaves.
   final double delay;
 
   /// The secondary spring.
   final SpringDescription secondary;
 
-  /// Seconds after the commit before the secondary leaves, at [travel].
+  /// Seconds after the commit before the secondary leaves.
   final double secondaryDelay;
 
   /// The secondary's share of the lens x.
   final double share;
-
-  /// The slide length (pt) from which the timing no longer changes.
-  final double travel;
-
-  /// Extra delay (s) of a slide of no length; less in proportion.
-  final double shortDelay;
-
-  /// Extra response, as a fraction, of a slide of no length.
-  final double shortResponse;
-
-  double _short(double distance) => (1 - distance / travel).clamp(0.0, 1.0);
-
-  /// The primary spring of a slide over [distance] points.
-  SpringDescription primaryFor(double distance) =>
-      fittedSpring(ratio, response * (1 + shortResponse * _short(distance)));
-
-  /// The primary's delay for a slide over [distance] points.
-  double delayFor(double distance) => delay + shortDelay * _short(distance);
-
-  /// The secondary's delay for a slide over [distance] points.
-  double secondaryDelayFor(double distance) =>
-      secondaryDelay + shortDelay * _short(distance);
 }
 
 /// Every spring and envelope constant a `LensMotion` reads (spec VK-550
@@ -250,13 +215,13 @@ final class LensProfile {
     envelope: const TabEnvelope(),
   );
 
-  /// VK-550's segmented control (spec VK-550 §8.2). The springs are the
-  /// spike's fits (`native_reference.json` `fits`); the envelope knobs are
-  /// fitted in Task 4 to the per-frame rows named on each, by least squares
-  /// over w and h (sizes) or engage (holds), 1/60 s frames.
+  /// VK-550's segmented control (spec VK-550 §8.2). The press, release
+  /// and programmatic springs are the spike's fits (`native_reference.json`
+  /// `fits`); the tap slide and the envelope knobs are fitted in Task 4 to
+  /// the per-frame rows named on each.
   static final LensProfile segment = LensProfile(
-    // The tap slide's primary spring at two segments or more (see slide).
-    tap: fittedSpring(0.743, 0.577),
+    // The tap slide's primary (see `slide`).
+    tap: fittedSpring(0.751, 0.577),
     // Spike §3: the drag lag, 6.77 pt at 82.2 pt/s, is VK-503's within 5 %.
     dragFollow: TabSprings.dragFollow,
     // A drag's release, fitted to `slow_drag.release_rows` and the `flick`
@@ -294,25 +259,17 @@ final class LensProfile {
       // Spike §3: the release in place (`fits.releaseSize`).
       releaseSize: fittedSpring(1, 0.24),
       releaseDelay: 0.016,
-      // `tap_1_2`, `tap_2_3`, `tap_3_1`, fitted for the spec §14.5 gate:
-      // x within 0.9 pt of every row to +0.6 s, overshoot 2.6 / 5.1 pt
-      // (native 2.5 / 5.0), within 0.5 pt of rest from +0.70 s (native
-      // +0.70 / +0.75). A slide of one shape cannot pass it: at +0.10 s the
-      // one-segment rows trail the two-segment row by 0.08 of the travel,
-      // so any fixed shape misses one of them by 6.6 pt or more. The
-      // five-segment tap (148 pt, not fitted) is within 3.3 pt of its rows
-      // (one shape: 7.3 pt).
+      // All five native tap captures (`tap_1_2`, `tap_2_3`, `tap_3_1`,
+      // `dark.tap_1_2`, `tap_1_3_5seg`: 123 to 247 pt), each on its
+      // engage-aligned clock (spec §14.5): x within 1.8 pt of every row to
+      // +0.6 s, overshoot 2.35 / 4.7 / 2.8 pt (native 2.5-2.6 / 5.0 /
+      // 2.3), within 0.5 pt of rest from +0.70 s (native +0.70 / +0.75).
+      // With the primary `tap` spring above.
       slide: TapSlide(
-        ratio: 0.743,
-        response: 0.577,
-        delay: 0,
-        secondary: fittedSpring(0.556, 0.291),
-        secondaryDelay: 0.016,
-        share: 0.275,
-        // Two segments of the 370 pt control (`tap_3_1`).
-        travel: 246.67,
-        shortDelay: 0.023,
-        shortResponse: 0.075,
+        delay: 0.0144,
+        secondary: fittedSpring(0.623, 0.285),
+        secondaryDelay: 0.032,
+        share: 0.286,
       ),
       // `programmatic_2seg`: the slide starts one or two frames after the
       // write; 30 ms puts every row within 1.6 pt (rms 0.8).
@@ -337,8 +294,8 @@ final class LensProfile {
       squashGain: const Size(0.00024, 0.00028),
       // Spike §3: h ×1.13 of pressed, w −12 % at about 800 pt/s.
       squashMax: const Size(0.88, 1.13),
-      // `lens.labelMagnify`: the w500 copy is not magnified.
-      magnify: 1,
+      // `lens.labelMagnify` 1.0: the w500 copy is not magnified.
+      magnifyGain: 0,
     ),
   );
 }

@@ -172,10 +172,6 @@ class LensMotion {
   /// interrupted (`_fold`).
   late final SpringValue _x2;
   double _share = 0;
-
-  /// The slide's primary and secondary delays after the commit.
-  double _slideDelay = 0;
-  double _secondaryDelay = 0;
   late final SpringValue _w;
   late final SpringValue _h;
   final SpringValue _scale = SpringValue(1, TabSprings.scaleOut);
@@ -562,40 +558,39 @@ class LensMotion {
     if (_flight == _Flight.tap) {
       // Two springs from where the lens is; `_steerX` and `_segmentTargets`
       // send them after their delays.
-      final slide = e.slide;
-      final distance = (_flightTarget - _x.value).abs();
-      _x.spring = slide.primaryFor(distance);
+      _x.spring = profile.tap;
       _x2
         ..place(_x.value, _x.velocity)
-        ..retarget(_x.target, slide.secondary);
-      _share = slide.share;
-      _slideDelay = slide.delayFor(distance);
-      _secondaryDelay = slide.secondaryDelayFor(distance);
+        ..retarget(_x.target, e.slide.secondary);
+      _share = e.slide.share;
     } else {
       _x.retarget(_flightTarget, flick ? profile.flickLand : profile.snap);
     }
   }
 
   /// The times on the interaction clock at which the envelope's targets
-  /// change: the tab's 25 ms answer; a segment's press, commit, release
-  /// and hold ends (ascending).
+  /// change in the current phase: the tab's 25 ms answer; a segment's
+  /// press, slide, release and hold ends (ascending).
   List<double> _delays() {
     if (reduceMotion) return const [];
-    return switch (profile.envelope) {
-      TabEnvelope() => [profile.tapDelay],
-      final SegmentEnvelope e => [
+    final e = profile.envelope;
+    if (e is! SegmentEnvelope) return [profile.tapDelay];
+    if (interacting) return [e.pressDelay];
+    if (_phase != LensPhase.flying) return const [];
+    return switch (_flight) {
+      _Flight.tap => [
+        e.slide.delay,
+        e.slide.secondaryDelay,
         e.pressDelay,
-        _slideDelay,
-        _secondaryDelay,
-        e.showDelay,
+        if (_flightSlots <= 1) e.liftUntil.$1 else e.liftUntil.$2,
         e.engageHold,
-        e.liftUntil.$1,
-        e.liftUntil.$2,
+      ]..sort(),
+      _Flight.release => [
         _releaseAt,
         _releaseAt + e.releaseDelay,
-        _releaseAt + profile.releaseHold,
-        _releaseAt + profile.flickHold,
+        _releaseAt + (_flick ? profile.flickHold : profile.releaseHold),
       ]..sort(),
+      _Flight.show => [e.showDelay],
     };
   }
 
@@ -653,8 +648,8 @@ class LensMotion {
     if (profile.envelope case final SegmentEnvelope e) {
       final end = switch (_flight) {
         _Flight.tap => [
-          _slideDelay,
-          _secondaryDelay,
+          e.slide.delay,
+          e.slide.secondaryDelay,
           e.engageHold,
           if (_flightSlots <= 1) e.liftUntil.$1 else e.liftUntil.$2,
         ].reduce(math.max),
@@ -817,13 +812,13 @@ class LensMotion {
     // A press does not move x (`press`, `pressOther`); a drag follows.
     _steerX(
       answered: switch (flight) {
-        _Flight.tap => since >= _slideDelay,
+        _Flight.tap => since >= e.slide.delay,
         _Flight.show => since >= e.showDelay,
         _Flight.release || null => true,
       },
       pressLeans: false,
     );
-    if (flight == _Flight.tap && since >= _secondaryDelay) {
+    if (flight == _Flight.tap && since >= e.slide.secondaryDelay) {
       _x2.target = _flightTarget;
     }
     final rest = _geometry.restLensAt(_lensX);
@@ -982,7 +977,7 @@ class LensMotion {
       restOpacity: _fadeIn,
       magnifyGain: switch (profile.envelope) {
         TabEnvelope() => TabSprings.magnify,
-        SegmentEnvelope(:final magnify) => magnify - 1,
+        SegmentEnvelope(:final magnifyGain) => magnifyGain,
       },
     );
   }

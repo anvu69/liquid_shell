@@ -53,6 +53,19 @@ double settleOf(List<double> ts, List<double> xs, double rest) {
   return settled;
 }
 
+/// The 0.5 crossing of [engage] over [ts], linear between samples.
+double onsetOf(List<double> ts, List<double> engage) {
+  for (var i = 1; i < ts.length; i++) {
+    if (engage[i - 1] < 0.5 && engage[i] >= 0.5) {
+      return ts[i - 1] +
+          (0.5 - engage[i - 1]) /
+              (engage[i] - engage[i - 1]) *
+              (ts[i] - ts[i - 1]);
+    }
+  }
+  throw StateError('engage never reaches 0.5');
+}
+
 void main() {
   final ref = segmentReference();
 
@@ -82,11 +95,8 @@ void main() {
       return (rows, [for (final r in rows) at(frames, r.t)], m);
     }
 
-    double overshoot(List<double> xs, double sign) =>
-        xs.map((x) => sign * (x - xs.last)).reduce(math.max);
-
     for (final (key, from, to) in taps) {
-      test('$key: peak h, landing and late x against the native rows', () {
+      test('$key: peak h, landing and rest against the native rows', () {
         final (rows, ours, m) = tap(key, from, to);
         final nativeMaxH = rows.map((r) => r.h).reduce(math.max);
         final maxH = ours.map((f) => f.lens.height).reduce(math.max);
@@ -105,16 +115,6 @@ void main() {
             closeTo(nativeMinW, nativeMinW * 0.10),
             reason: 'min w after the landing',
           );
-          // From +0.35 s, where native's own repeats agree within 1 pt
-          // (spike §4), x is within 2 pt of every row to +0.6 s.
-          for (var i = 0; i < rows.length; i++) {
-            if (rows[i].t < 0.35 || rows[i].t > 0.6) continue;
-            expect(
-              ours[i].lens.center.dx,
-              closeTo(rows[i].x, 2),
-              reason: 'x at +${rows[i].t} s',
-            );
-          }
         }
         // At native's last row (+0.9 s) the wobble is over: w and h within
         // the 2 pt row tolerance of it.
@@ -125,39 +125,97 @@ void main() {
       });
     }
 
-    test(
-      'the tap gate (spec §14.5): x ±2 pt per row to +0.6 s, overshoot ±1 '
-      'pt, settle ±10 %',
-      () {
-        for (final (key, from, to) in taps) {
-          final (rows, ours, _) = tap(key, from, to);
-          final ts = [for (final r in rows) r.t];
-          // Native's rest is its last row (unchanged over the last two);
-          // ours is the segment's centre.
-          final native = settleOf(ts, [for (final r in rows) r.x], rows.last.x);
-          expect(
-            settleOf(ts, [
-              for (final f in ours) f.lens.center.dx,
-            ], controlOf(3).centreOf(to)),
-            closeTo(native, native * 0.10),
-            reason: '$key settle',
+    /// Every native tap capture: light and dark, two and five segments.
+    final captures = [
+      ('tap_1_2', rowsOf(ref, 'tap_1_2'), 3, 0, 1),
+      ('tap_2_3', rowsOf(ref, 'tap_2_3'), 3, 1, 2),
+      ('tap_3_1', rowsOf(ref, 'tap_3_1'), 3, 2, 0),
+      (
+        'dark.tap_1_2',
+        rowsOf(ref['dark'] as Map<String, dynamic>, 'tap_1_2'),
+        3,
+        0,
+        1,
+      ),
+      ('tap_1_3_5seg', rowsOf(ref, 'tap_1_3_5seg'), 5, 0, 2),
+    ];
+
+    for (final (key, rows, count, from, to) in captures) {
+      test('the tap gate (spec §14.5), $key: x ±2 pt per row to +0.6 s, '
+          'overshoot ±1 pt, settle ±10 %, on the engage-aligned clock', () {
+        final g = controlOf(count);
+        final y = g.size.height / 2;
+        LensMotion tapped() {
+          final m = LensMotion(
+            geometry: g,
+            selected: from,
+            profile: LensProfile.segment,
           );
-          for (var i = 0; i < rows.length && rows[i].t <= 0.6; i++) {
-            expect(
-              ours[i].lens.center.dx,
-              closeTo(rows[i].x, 2),
-              reason: '$key x at +${rows[i].t} s',
-            );
-          }
-          final sign = (to - from).sign.toDouble();
+          final finger = Offset(g.centreOf(to), y);
+          m
+            ..down(finger)
+            ..advance(dt);
+          expect(m.up(finger), to);
+          return m;
+        }
+
+        // Our clock: 1 ms samples from the commit to +1.5 s.
+        const ms = 0.001;
+        final m = tapped();
+        final ourTs = <double>[0];
+        final ourXs = [m.frame.lens.center.dx];
+        final ourEngage = [m.frame.engage];
+        for (var i = 1; i <= 1500; i++) {
+          m.advance(ms);
+          ourTs.add(i * ms);
+          ourXs.add(m.frame.lens.center.dx);
+          ourEngage.add(m.frame.engage);
+        }
+
+        // Spec §14.5 alignment: a capture's t0 (valueChanged) sits up to a
+        // frame off the display link, which engage shows whatever the
+        // travel. Its rows move by its engage onset minus ours, at most
+        // one frame.
+        final shift =
+            onsetOf(
+              [for (final r in rows) r.t],
+              [
+                for (final r in rows) r.engage,
+              ],
+            ) -
+            onsetOf(ourTs, ourEngage);
+        expect(shift.abs(), lessThanOrEqualTo(dt), reason: 'shift $shift');
+        double ourAt(double t) {
+          final i = ((t - shift) / ms).round().clamp(0, ourXs.length - 1);
+          return ourXs[i];
+        }
+
+        for (final r in rows.where((r) => r.t <= 0.6)) {
           expect(
-            overshoot([for (final f in ours) f.lens.center.dx], sign),
-            closeTo(overshoot([for (final r in rows) r.x], sign), 1),
-            reason: '$key overshoot',
+            ourAt(r.t),
+            closeTo(r.x, 2),
+            reason: 'x at +${r.t} s (shift ${shift.toStringAsFixed(4)})',
           );
         }
-      },
-    );
+        final sign = (to - from).sign.toDouble();
+        final rest = g.centreOf(to);
+        final ours = ourXs.map((x) => sign * (x - rest)).reduce(math.max);
+        final native = rows
+            .map((r) => sign * (r.x - rows.last.x))
+            .reduce(math.max);
+        expect(ours, closeTo(native, 1), reason: 'overshoot');
+        final ts = [for (final r in rows) r.t];
+        // Native's rest is its last row (unchanged over the last two).
+        final nativeSettle = settleOf(ts, [
+          for (final r in rows) r.x,
+        ], rows.last.x);
+        expect(
+          settleOf(ts, [for (final t in ts) ourAt(t)], rest),
+          closeTo(nativeSettle, nativeSettle * 0.10),
+          reason: 'settle',
+        );
+      });
+    }
 
     test('a tap on the selected segment grows in place and lets go '
         '(tapOnSelected)', () {
@@ -211,6 +269,36 @@ void main() {
       expect(f.pillScale, 1);
       expect(f.highlight, 0);
       expect(f.popScale, 1);
+    }
+  });
+
+  test('press engage onset (0.5) within one frame of native, light and '
+      'dark (spec §14.5 "Engage in")', () {
+    final g = controlOf(3);
+    final m = LensMotion(
+      geometry: g,
+      selected: 0,
+      profile: LensProfile.segment,
+    )..down(Offset(g.centreOf(0), g.size.height / 2));
+    final ts = <double>[0];
+    final engage = [m.frame.engage];
+    for (var i = 1; i <= 150; i++) {
+      m.advance(0.001);
+      ts.add(i * 0.001);
+      engage.add(m.frame.engage);
+    }
+    final ours = onsetOf(ts, engage);
+    for (final rows in [
+      rowsOf(ref, 'press'),
+      rowsOf(ref['dark'] as Map<String, dynamic>, 'press'),
+    ]) {
+      final native = onsetOf(
+        [for (final r in rows) r.t],
+        [
+          for (final r in rows) r.engage,
+        ],
+      );
+      expect(ours, closeTo(native, dt), reason: 'native onset $native');
     }
   });
 
