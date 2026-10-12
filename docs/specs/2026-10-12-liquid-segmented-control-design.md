@@ -147,11 +147,11 @@ All values are logical points; "control-local" means the `LiquidSegmentedControl
 |---|---|
 | Track height `H` | **32** at text scale 1; `max(32, lineHeight + 16.33)` above it (§12.3) |
 | Box height | **max(44, H)**: the track is centred in a 44 pt box, so every segment keeps a 44 pt target (owner rule; Q-C) |
-| Track width `W` | `expand: true` (default): the incoming max width. `expand: false`: `n · s` with `s = max(44, ceil(widestMediumLabel) + 18)` (native min is 32; Q-C) |
+| Track width `W` | `expand: true` (default): the incoming max width, always; below 44 pt per segment every segment shrinks equally to fit, as native's (owner decision, Task 7): no overflow, no clipping, labels ellipsize. `expand: false`: `n · s` with `s = max(44, ceil(widestMediumLabel) + 18)` (native min is 32; Q-C) |
 | Segment `i` (visual) | `Rect(i · W/n, (box − H)/2, W/n, H)`, mirrored in RTL |
 | Thumb `i` at rest (the lens track's slot) | segment `i` deflated by **2**: `(W/n − 4) × (H − 4)`, radius `(H − 4)/2` |
 | Label box | centred in the segment, `lineHeight` tall, max width `W/n − 2·9` **(assumption: the 18 pt intrinsic padding)**, one line, ellipsis |
-| Hit area of segment `i` | the full 44 pt box height × the segment's width; no gaps |
+| Hit area of segment `i` | the full 44 pt box height × the segment's width; no gaps. Below 44 pt per segment (`expand: true` in a narrow width), hit targets follow the segment width |
 | Pressed lens | thumb + **(24, 16)**, centred on the lens x (spike: 119 × 28 → 143 × 44; 181 → ≈ 205) |
 
 Worked checks against spike §2 (iPhone 17 Pro, full width 370):
@@ -159,7 +159,7 @@ Worked checks against spike §2 (iPhone 17 Pro, full width 370):
 - 3 segments: segments at 0 / 123.33 / 246.67, thumbs 119.33 × 28 at x 2 / 125.33 / 248.67. Native rounds to 123 / 123 / 124 (thumbs 119 / 119 / 120): inside ±1.
 - 2 segments: thumb 181 × 28. Native 181.
 - 5 segments: thumb 70 × 28. Native 70.
-- Intrinsic "All | Songs | Places": `s = max(44, ceil(40.67) + 18) = 59`, `W = 177`. Native 177. "All | Recently played": `ceil(97.7) + 18 = 116` against native 117 (±1). "A | B | C": 44 against native's 32 (the 44 pt rule, documented).
+- Intrinsic "All | Songs | Places": `s = max(44, ceil(40.67) + 18) = 59`, `W = 177`. Native 177. "All | Recently played": `ceil(97.7) + 18 = 116` against native 117 (±1). "A | B | C": 44 against native's 32 (the 44 pt rule, documented): the control is 132 wide where native's is 96 (`native_reference.json` `geometry.intrinsicABC`), an **intended difference** (Q-C, owner-approved).
 
 `SegmentGeometry` implements `LensTrack` (§8): `slots` are the rest thumbs, `centreOf`, `slotNearest`, `clampCentre` (first to last thumb centre), `restLensAt(x)` (the thumb size; constant, since segments are equal).
 
@@ -319,7 +319,7 @@ As VK-503 Q11: a tap dissolves the rest thumb from the old segment to the new on
 
 ### 12.4 Hit targets
 
-Every segment's tap area is its full width × the 44 pt box (§5), and `expand: false` keeps segments ≥ 44 wide. `test/widget` checks it with `meetsGuideline(iOSTapTargetGuideline)` (44 × 44). Android's 48 dp guideline is not claimed (Q-C).
+Every segment's tap area is its full width × the 44 pt box (§5), and `expand: false` keeps segments ≥ 44 wide. `expand: true` fills the width it is given and never overflows: below 44 pt per segment, hit targets follow the segment width (owner decision, Task 7). `test/widget` checks it with `meetsGuideline(iOSTapTargetGuideline)` (44 × 44). Android's 48 dp guideline is not claimed (Q-C).
 
 ### 12.5 Tiers
 

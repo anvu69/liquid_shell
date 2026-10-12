@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:liquid_shell/src/chrome/lens_clip.dart';
 import 'package:liquid_shell/src/glass/glass_theme.dart';
@@ -47,8 +46,10 @@ class LiquidSegment {
 /// liquid lens for its selection (spec VK-550). Controlled: rebuild it with
 /// the index [onChanged] reports.
 ///
-/// The visible track is 32 pt tall, centred in a 44 pt box so every segment
-/// is a 44 pt target; no segment is narrower than 44 pt.
+/// The visible track is 32 pt tall, centred in a 44 pt box, so every
+/// segment's hit target is the full box height × its width. Segments are at
+/// least 44 pt wide, except when [expand] fills a width below 44 pt per
+/// segment (see there).
 class LiquidSegmentedControl extends StatefulWidget {
   /// Creates a segmented control of at least two [segments].
   const LiquidSegmentedControl({
@@ -73,9 +74,10 @@ class LiquidSegmentedControl extends StatefulWidget {
   /// Fill the incoming width (true) or size to the labels: every segment as
   /// wide as the widest label plus 18 pt (false).
   ///
-  /// When filling, a width below 44 pt per segment is a layout error: the
-  /// control keeps 44 pt segments, reports it in debug builds and is clipped
-  /// to the width it was given.
+  /// When filling, the control never overflows: below 44 pt per segment,
+  /// every segment shrinks equally to fit (as native's), hit targets follow
+  /// the segment width and labels ellipsize. Sized to the labels, every
+  /// segment is at least 44 pt wide.
   final bool expand;
 
   /// What a screen reader says for the control as a whole.
@@ -87,8 +89,6 @@ class LiquidSegmentedControl extends StatefulWidget {
 
 class _LiquidSegmentedControlState extends State<LiquidSegmentedControl> {
   bool get _enabled => widget.onChanged != null;
-
-  bool _overflowReported = false;
 
   void _choose(int i) {
     if (!_enabled || !widget.segments[i].enabled) return;
@@ -138,22 +138,6 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl> {
                       _width(s.label, medium, scaler, direction),
                   ],
           );
-          // A layout error, reported once, as a RenderFlex overflow is.
-          if (kDebugMode &&
-              !_overflowReported &&
-              g.size.width > constraints.maxWidth) {
-            _overflowReported = true;
-            FlutterError.reportError(
-              FlutterErrorDetails(
-                exception: FlutterError(
-                  'LiquidSegmentedControl needs ${g.size.width} pt for '
-                  '$count segments (each at least 44 pt, Q-C) but was given '
-                  '${constraints.maxWidth}.',
-                ),
-                library: 'liquid_shell',
-              ),
-            );
-          }
           final thumb = selected == null ? null : g.slots[selected];
           return SizedBox.fromSize(
             size: g.size,

@@ -129,9 +129,9 @@ class SegmentGeometry implements LensTrack {
 }
 
 /// Lays out [count] segments (spec VK-550 §5). With [mediumLabelWidths] the
-/// width is intrinsic, else [maxWidth] is filled. Either way no segment is
-/// narrower than [SegmentMetrics.minSegment] (Q-C): a [maxWidth] below
-/// `count · 44` gives a wider geometry than asked for.
+/// width is intrinsic (each segment at least [SegmentMetrics.minSegment],
+/// Q-C), else [maxWidth] is filled: below 44 pt per segment the segments
+/// shrink equally to fit, as native's do.
 SegmentGeometry segmentGeometry({
   required int count,
   required double maxWidth,
@@ -152,13 +152,9 @@ SegmentGeometry segmentGeometry({
       widest.ceilToDouble() + 2 * SegmentMetrics.labelPadding,
     );
   } else {
-    segmentWidth = math.max(SegmentMetrics.minSegment, maxWidth / count);
+    segmentWidth = maxWidth / count;
   }
-  // Filling: maxWidth itself (not n · W/n), so the rects end on it exactly.
-  final width =
-      mediumLabelWidths == null && maxWidth / count >= SegmentMetrics.minSegment
-      ? maxWidth
-      : segmentWidth * count;
+  final width = mediumLabelWidths == null ? maxWidth : segmentWidth * count;
   final trackTop = (boxHeight - height) / 2;
   const inset = SegmentMetrics.thumbInset;
   final segments = <Rect>[];

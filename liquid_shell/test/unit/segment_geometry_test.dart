@@ -44,17 +44,20 @@ void main() {
     expect(intrinsic(const [9.3, 8.7, 9]).size.width, 132);
   });
 
-  test('expand never cuts a segment below 44 (Q-C): 5 in 200 need 220', () {
+  test('expand below 44 per segment shrinks every segment equally to fit '
+      '(native; owner decision on Q-C): 5 in 180 are 36 each', () {
     final g = segmentGeometry(
       count: 5,
-      maxWidth: 200,
+      maxWidth: 180,
       lineHeight: line,
       direction: TextDirection.ltr,
     );
-    expect(g.size, const Size(220, 44));
+    expect(g.size, const Size(180, 44));
     for (final s in g.segments) {
-      expect(s.width, closeTo(44, 1e-9));
+      expect(s.width, closeTo(180 / 5, 1e-9));
+      expect(s.height, 32);
     }
+    expect(g.segments.last.right, 180);
   });
 
   test('RTL mirrors: segment 0 is at the right', () {

@@ -395,26 +395,46 @@ void main() {
     handle.dispose();
   });
 
-  testWidgets('tap targets: expand in a slot narrower than 44 per segment '
-      'keeps 44 pt segments and reports the overflow (Q-C)', (tester) async {
+  testWidgets('tap targets: expand below 44 per segment shrinks the '
+      'segments to fit, no overflow, every segment tappable (n = 5 at '
+      '180)', (tester) async {
+    final handle = tester.ensureSemantics();
+    final calls = <int>[];
+    const titles = ['One', 'Two', 'Three', 'Four', 'Five'];
     await _pump(
       tester,
-      segments: _segments(['1', '2', '3', '4', '5']),
-      width: 200,
+      segments: _segments(titles),
+      width: 180,
+      onChanged: calls.add,
     );
-    final error = tester.takeException();
-    expect(error, isA<FlutterError>());
-    expect('$error', contains('220'));
-    // Every segment's hit area is still 44 wide; the control is clipped to
-    // the 200 pt slot.
-    for (final t in ['1', '2', '3', '4']) {
+    expect(tester.takeException(), isNull);
+    final box = _box(tester);
+    expect(box.size, const Size(180, 44));
+    // Each hit box is its whole segment: equal, tiled, inside the control.
+    var left = box.left;
+    for (final t in titles) {
       final r = tester.getRect(
         find.byWidgetPredicate(
           (w) => w is Semantics && w.properties.label == t,
         ),
       );
-      expect(r.width, closeTo(44, 1e-9), reason: t);
+      expect(r.left, closeTo(left, 1e-9), reason: t);
+      expect(r.width, closeTo(180 / 5, 1e-9), reason: t);
+      expect(r.height, 44, reason: t);
+      left = r.right;
     }
+    expect(left, closeTo(box.right, 1e-9));
+    for (final t in titles.skip(1)) {
+      tester.semantics.tap(find.semantics.byLabel(t));
+    }
+    expect(calls, [1, 2, 3, 4]);
+    // Labels wider than their segment ellipsize.
+    final three = _paragraphs(
+      tester,
+      kSegmentNormalKey,
+    ).firstWhere((p) => p.text.toPlainText() == 'Three');
+    expect(three.didExceedMaxLines, isTrue);
+    handle.dispose();
   });
 
   testWidgets('disabled: onChanged null → opacity 0.5, no tap action', (
