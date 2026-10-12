@@ -18,14 +18,14 @@
 
 | check | kind | result | detail |
 |---|---|---|---|
-| pill3[0] | native | pass | 64.000 vs 64.000 (±1.000) |
-| pill3[1] | native | pass | 791.000 vs 791.000 (±1.000) |
-| pill3[2] | native | pass | 274.000 vs 274.000 (±1.000) |
-| pill3[3] | native | pass | 62.000 vs 62.000 (±1.000) |
-| minimized[0] | native | pass | 28.000 vs 28.000 (±1.000) |
-| minimized[1] | native | pass | 798.000 vs 798.000 (±1.000) |
-| minimized[2] | native | pass | 48.000 vs 48.000 (±1.000) |
-| minimized[3] | native | pass | 48.000 vs 48.000 (±1.000) |
+| pill3[0] | native, constant | pass | 64.000 vs 64.000 (±1.000) |
+| pill3[1] | native, constant | pass | 791.000 vs 791.000 (±1.000) |
+| pill3[2] | native, constant | pass | 274.000 vs 274.000 (±1.000) |
+| pill3[3] | native, constant | pass | 62.000 vs 62.000 (±1.000) |
+| minimized[0] | native, constant | pass | 28.000 vs 28.000 (±1.000) |
+| minimized[1] | native, constant | pass | 798.000 vs 798.000 (±1.000) |
+| minimized[2] | native, constant | pass | 48.000 vs 48.000 (±1.000) |
+| minimized[3] | native, constant | pass | 48.000 vs 48.000 (±1.000) |
 | tap_1_2 settle | fit | pass | 0.467 vs 0.467 (±0.047) |
 | tap_1_2 overshoot | fit | pass | 1.492 vs 1.492 (±1.000) |
 | tap_1_2 delay | fit | pass | 0.025 vs 0.025 (±0.017) |
@@ -36,9 +36,9 @@
 | tap_3_1 overshoot | fit | pass | 2.985 vs 2.985 (±1.000) |
 | tap_3_1 delay | fit | pass | 0.025 vs 0.025 (±0.017) |
 | tap_held no brake | fit | pass | 0 speed dips |
-| slot0 rect | native | pass | 68.0, 795.0, 94.0, 54.0 vs 68, 795, 94, 54 (±1.0) |
-| slot1 rect | native | pass | 154.0, 795.0, 94.0, 54.0 vs 154, 795, 94, 54 (±1.0) |
-| slot2 rect | native | pass | 240.0, 795.0, 94.0, 54.0 vs 240, 795, 94, 54 (±1.0) |
+| slot0 rect | native, constant | pass | 68.0, 795.0, 94.0, 54.0 vs 68, 795, 94, 54 (±1.0) |
+| slot1 rect | native, constant | pass | 154.0, 795.0, 94.0, 54.0 vs 154, 795, 94, 54 (±1.0) |
+| slot2 rect | native, constant | pass | 240.0, 795.0, 94.0, 54.0 vs 240, 795, 94, 54 (±1.0) |
 | one-slot lift | native | pass | 1.516 vs 1.550 (±0.155) |
 | two-slot stretch | native | pass | 1.334 vs 1.330 (±0.133) |
 | icon pop | native, constant | pass | 1.158 vs 1.160 (±0.020) |
@@ -118,7 +118,7 @@
 | colour darkFill | native | pass | 25/25/25 vs 25/25/25 (±4) |
 | colour darkCapsule | native | pass | 55/55/55 vs 58/58/58 (±4) |
 | colour darkLabel | native, constant | pass | 244/244/244 vs 244/244/244 (±4) |
-84 native, 3 native but constant, 13 against fitted springs
+73 native, 14 native but constant, 13 against fitted springs
 ✗ 1 of 100 failed
 
 The one failure is real, and it is a known gap:
