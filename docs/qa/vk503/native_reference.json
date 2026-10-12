@@ -55,8 +55,9 @@
     "lightFillPage": "native over the example's search page, extra/search_close.png (page 225/223/240 under the field)"
   },
   "tapShape": {
-    "oneSlot": [[0.069, 95.7, 59.8], [0.165, 87.0, 80.0], [0.198, 84.8, 81.8], [0.265, 91.9, 77.9], [0.298, 94.6, 70.7]],
-    "twoSlot": [[0.068, 102.6, 58.5], [0.149, 124.7, 57.2], [0.182, 127.4, 55.8], [0.249, 120.7, 61.5], [0.282, 114.6, 66.0]]
+    "units": "pill-local: the trace's lens size over the platter scale at that frame",
+    "oneSlot": [[0.069, 94.7, 59.2], [0.165, 85.1, 78.3], [0.198, 83.6, 80.6], [0.265, 91.7, 77.8], [0.298, 94.7, 70.8]],
+    "twoSlot": [[0.068, 101.1, 57.7], [0.149, 121.3, 55.6], [0.182, 124.9, 54.7], [0.249, 120.2, 61.2], [0.282, 114.6, 66.0]]
   },
   "pressCourse": {
     "t": [0.033, 0.067, 0.1, 0.133, 0.2, 0.25],
@@ -80,7 +81,9 @@
   },
   "flick": {
     "t": 0.115,
-    "short": 5.1
+    "short": 5.1,
+    "clearUntil": 0.215,
+    "overshoot": 0
   },
   "expandOvershoot": {
     "pt": 4

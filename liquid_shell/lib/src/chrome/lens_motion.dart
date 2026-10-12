@@ -403,14 +403,15 @@ class LensMotion {
       return;
     }
     if (flick) {
-      // Native keeps the clear lens through the flight to the finger's slot
-      // and lands it on the follow spring (research trace: 0.12 s from
-      // release, engaged until it lands). Spec §8.2, Task 16.
+      // Native keeps the clear lens 0.215 s past the release and lands it
+      // on Home within about 0.12 s without passing it (research trace,
+      // spec §8.2, Task 16 re-review).
       _phase = LensPhase.flying;
       _flick = true;
       _flightSlots = 1;
+      _releaseAt = _since;
       _flightTarget = _geometry.centreOf(slot);
-      _x.retarget(_flightTarget, TabSprings.dragFollow);
+      _x.retarget(_flightTarget, TabSprings.flickLand);
       return;
     }
     if (!tap) {
@@ -489,11 +490,13 @@ class LensMotion {
     return moving;
   }
 
-  /// A flight ends when its envelope is over (a tap) or when it lands (a
-  /// flick: the lens first within 1 pt of the finger's slot).
+  /// A flight ends when its envelope is over: a tap's, or 0.215 s after a
+  /// flick's release.
   void _endFlight() {
     if (_flick) {
-      if ((_x.value - _flightTarget).abs() <= 1) _phase = LensPhase.settling;
+      if (_since - _releaseAt >= TabSprings.flickHold) {
+        _phase = LensPhase.settling;
+      }
       return;
     }
     if (_since >= TabSprings.popUntil) _pop.target = 1;

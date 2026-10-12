@@ -476,8 +476,10 @@ void main(List<String> args) {
       rel: 0.10,
     ),
   );
+  // The pop's target is the research's ×1.16, a constant: only the spring
+  // overshoot around it is the model's.
   add(
-    Kind.native,
+    Kind.constant,
     'icon pop',
     within(
       oneSlot.map((s) => s['pop']!).reduce(math.max),
@@ -627,14 +629,21 @@ void main(List<String> args) {
       abs: 6,
     ),
   );
-  final landed = flickUp.indexWhere((s) => (s['x']! - 115).abs() <= 1);
-  final clear = landed <= 0
-      ? 0.0
-      : flickUp.sublist(0, landed).map((s) => s['engage']!).reduce(math.min);
-  add(Kind.native, 'flick clear until it lands', (
-    pass: landed > 0 && clear > 0.95,
-    detail: 'engage ≥ ${clear.toStringAsFixed(2)} for $landed samples',
-  ));
+  // Native stays clear to +0.215 s and never passes Home (re-review).
+  add(
+    Kind.native,
+    'flick clear @+200ms',
+    within(valueAt(flickUp, 0.2, 'engage', zero: flickAt), 1, abs: 0.05),
+  );
+  final past = flickUp
+      .map((s) => 115 - s['x']!)
+      .reduce(math.max)
+      .clamp(0.0, double.infinity);
+  add(
+    Kind.native,
+    'flick overshoot',
+    within(past, d(fl, 'overshoot'), abs: 1),
+  );
 
   // Minimize (settle ±10 %).
   final collapse = spring('collapse');
@@ -710,15 +719,10 @@ void main(List<String> args) {
   ]) {
     final got = list(sampled[name]);
     final want = list(colours[name]);
-    double luma(List<double> c) => (c[0] + c[1] + c[2]) / 3;
     add(
       kind,
       'colour $name',
-      // Over the example's page the page hue under the native field is
-      // not known to the channel: compare the luma there.
-      name == 'lightFillPage'
-          ? within(luma(got), luma(want), abs: d(colours, 'tolerance'))
-          : colourCheck(got, want, d(colours, 'tolerance')),
+      colourCheck(got, want, d(colours, 'tolerance')),
     );
   }
 

@@ -60,6 +60,12 @@ abstract final class TabSprings {
   /// Finger glow in (≈ 0.08 s).
   static final SpringDescription glowIn = fittedSpring(1, 0.08);
 
+  /// A flick's landing on the finger's slot: critically damped, 0.175 s.
+  /// Fitted to the native flick trace (pill-local, from the release: 8.4,
+  /// 5.1, 3.4 and 2.7 pt short at +0.100, +0.115, +0.131, +0.148 s; it
+  /// never passes the slot). VK-503 Task 16 re-review.
+  static final SpringDescription flickLand = fittedSpring(1, 0.175);
+
   /// Minimize collapse.
   static final SpringDescription collapse = fittedSpring(0.8, 0.30);
 
@@ -80,6 +86,10 @@ abstract final class TabSprings {
   /// 65-66 ms press (research §3 trace), and the native lens swells to
   /// about 96 × 60 before it lifts, even for idb taps shorter than that.
   static const double tapPress = 0.066;
+
+  /// After a flick the lens stays clear this long past the release
+  /// (native opacityPair 1.0 to +0.215 s, 0.61 at +0.248 s).
+  static const double flickHold = 0.215;
 
   /// After a press is lifted in place, the lens stays clear this long
   /// (research §4.1 trace: opacityPair 1.0 to +0.10 s, 0.93 at +0.13 s).
@@ -168,10 +178,11 @@ abstract final class TabSprings {
   static const double stretchGain = 0.005;
 
   /// Flight width ceiling. Above the native peak because the `widthIn`
-  /// spring lags the target: with the stretch held to [liftUntil], 1.425
-  /// gives the native two-slot peak, 127.4 pt (×1.355) at 0.18–0.22 s
-  /// (research §3 trace; Task 16 review, was 1.46 for ×1.331).
-  static const double stretchMax = 1.425;
+  /// spring lags the target: with the stretch held to [liftUntil], 1.39
+  /// gives the native two-slot peak, 124.9 pt pill-local (×1.329) at
+  /// 0.18 s (research §3 trace over its platter scale; Task 16 re-review,
+  /// was 1.46, then 1.425 against the screen-space 127.4).
+  static const double stretchMax = 1.39;
 
   /// Flight height gain.
   static const double liftGain = 0.55;

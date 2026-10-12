@@ -144,8 +144,9 @@ void main() {
       expect(widest / 94, closeTo(1.33, 0.133));
     });
 
-    test('two slots: the peak is native ×1.355 (127.4 pt, research trace; '
-        'stretchMax 1.425)', () {
+    test('two slots: the peak is native ×1.329 (124.9 pt pill-local, '
+        'research trace; '
+        'stretchMax 1.39)', () {
       // As the research run: a 66 ms press on Settings, from Home.
       final m = LensMotion(geometry: g3, selected: 0)
         ..down(const Offset(266, 31));
@@ -160,8 +161,8 @@ void main() {
           if (m.frame.lens.width > widest) widest = m.frame.lens.width;
         },
       );
-      expect(TabSprings.stretchMax, 1.425);
-      expect(widest / 94, closeTo(127.4 / 94, 0.01));
+      expect(TabSprings.stretchMax, 1.39);
+      expect(widest / 94, closeTo(124.9 / 94, 0.01));
     });
 
     test('top bar: inflates ×1.34 by ×1.375, no lift, no stretch', () {
@@ -653,27 +654,28 @@ void main() {
     }
 
     test('a one-slot tap swells first, then lifts (research §3 trace)', () {
+      // Pill-local: the native sizes over its platter scale (re-review).
       flight(0, 180, const {
-        4: (104.5, 95.7, 59.8),
-        10: (157.2, 87.0, 80.0),
-        12: (168.3, 84.8, 81.8),
-        16: (179.0, 91.9, 77.9),
-        20: (181.1, 95.3, 63.0),
+        4: (104.5, 94.7, 59.2),
+        10: (157.2, 85.1, 78.3),
+        12: (168.3, 83.6, 80.6),
+        16: (179.0, 91.7, 77.8),
+        18: (180.7, 94.7, 70.8),
       });
     });
 
     test('a two-slot tap stretches wide and low (research §3 trace)', () {
       flight(2, 94, const {
-        4: (236.1, 102.6, 58.5),
-        9: (147.5, 124.7, 57.2),
-        11: (124.0, 127.4, 55.8),
-        15: (101.1, 120.7, 61.5),
-        19: (95.0, 106.6, 66.4),
+        4: (236.1, 101.1, 57.7),
+        9: (147.5, 121.3, 55.6),
+        11: (124.0, 124.9, 54.7),
+        15: (101.1, 120.2, 61.2),
+        17: (96.9, 114.6, 66.0),
       });
     });
 
-    test('after a flick the lens stays clear until it lands, about 0.12 s '
-        'after the release (spec §8.2 as amended; research trace)', () {
+    test('after a flick the lens stays clear to +0.215 s and lands on Home '
+        'without passing it, as native (research trace; re-review)', () {
       // As the research run: a 0.33 s hold on Settings, then the finger
       // crosses 172 pt in 0.1 s and lifts on Home.
       final m = LensMotion(geometry: g3, selected: 2)
@@ -688,16 +690,18 @@ void main() {
       // 8 pt more: the fitted follow spring, spec §8.1).
       expect(f.last.lens.center.dx, closeTo(191.8, 10), reason: 'lagging');
       m.up(const Offset(94, 31), velocity: -1500);
-      var landed = -1;
       final after = frames(m, 0.5);
+      // Native (re-review): opacityPair 1.0 to +0.215 s, 0.61 at +0.248 s;
+      // the lens never passes Home (it stops about 2.5 pt short and
+      // creeps in).
       for (final (i, fr) in after.indexed) {
-        if ((fr.lens.center.dx - 94).abs() <= 1) {
-          landed = i;
-          break;
+        final t = (i + 1) * dt;
+        if (t <= 0.2) {
+          expect(fr.engage, greaterThan(0.99), reason: 'clear at +$t s');
         }
-        expect(fr.engage, greaterThan(0.99), reason: 'frame $i in flight');
+        expect(fr.lens.center.dx, greaterThan(94 - 0.5), reason: '+$t s');
       }
-      expect(landed, isNonNegative);
+      expect(after[(0.25 / dt).round() - 1].engage, lessThan(0.9));
       // Native, pill-local: 8.4 pt short of Home 0.100 s after the release
       // and 5.1 pt at 0.115 s. ±6 pt is about one frame of this flight
       // (ours leaves from 8 pt further back).
