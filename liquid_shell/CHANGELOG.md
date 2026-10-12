@@ -54,9 +54,13 @@
 - **Fix (VK-551).** With native chrome an active search now blocks the
   shell's own pop, as the Flutter field already did: system back
   deactivates it, and the iOS edge swipe no longer pops a shell pushed
-  above another page while the keyboard is up (which left the keyboard
-  with nothing to dismiss it). On a page pushed in the search tab the
-  swipe pops that page instead of the whole shell.
+  above another page while the search is active (which left the
+  keyboard with nothing to dismiss it). Only an active search does this:
+  while it is active, the swipe on a page pushed in the search tab pops
+  that page; with the search inactive, a shell that is itself a pushed
+  page still loses the swipe on any tab's pushed page to its own route,
+  which pops the whole shell (VK-567). Hidden native chrome
+  (`LiquidHideChrome`) ends an active search and keeps its text.
 
 ## 0.1.0-dev.5
 

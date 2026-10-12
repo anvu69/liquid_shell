@@ -410,8 +410,8 @@ void main() {
 
   // VK-551, the Flutter field's side: an iOS edge swipe while it has
   // focus pops nothing of a shell pushed above a list (the field's back
-  // deactivates first, as UIKit's search allows no swipe back), and the
-  // keyboard stays dismissable.
+  // deactivates first, spec P3b §9.4), and the keyboard stays
+  // dismissable.
   testWidgets('an edge swipe while active keeps the shell and its keyboard '
       'dismissable', (tester) async {
     final controller = LiquidSearchController();

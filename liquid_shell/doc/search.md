@@ -129,13 +129,19 @@ whatever the tabs do.
   not pass that on, and restores the text when the tab is selected again.
 - **Back while the search is active.** System back deactivates the
   search instead of popping, natively and in the Flutter field, and the
-  iOS edge swipe pops nothing of the shell's own route meanwhile: UIKit
-  offers no swipe back while a bar's search is active. On a page pushed
-  in the search tab the swipe pops that page, and the search stays
-  active.
+  iOS edge swipe pops nothing of the shell's own route meanwhile. While
+  the search is active, the swipe on a page pushed in the search tab pops
+  that page, and the search stays active. With the search inactive, a
+  shell that is itself a pushed page still loses the swipe to its own
+  route: the swipe pops the whole shell (VK-567).
 - **Dialogs and pages above the shell.** While a Flutter dialog, sheet or
   page covers the shell, an active search is deactivated first (the
   keyboard would sit above the barrier). The text is kept.
+- **Hidden chrome.** While the chrome is hidden (`LiquidHideChrome`, a
+  covering page), the search is not active: hiding it ends an active
+  search and keeps its text, and `activate()` is ignored natively until
+  the chrome shows again. Coming back shows the search selected, not
+  active, as the Flutter field does.
 
 ## Vietnamese and other IMEs
 

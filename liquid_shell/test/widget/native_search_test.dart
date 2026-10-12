@@ -1788,11 +1788,10 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    // UIKit hides the back button of a bar whose search is active and
-    // offers no swipe back: the shell's route stays, as in the Flutter
-    // field (spec P3b §9.4). Popping it left UIKit's search active, its
-    // field first responder under the hidden chrome: the keyboard stayed
-    // with nothing to dismiss it.
+    // While the search is active the shell's route stays, as in the
+    // Flutter field (spec P3b §9.4). Popping it left UIKit's search
+    // active, its field first responder under the hidden chrome: the
+    // keyboard stayed with nothing to dismiss it.
     testWidgets('off the search root: the shell stays, the search too', (
       tester,
     ) async {

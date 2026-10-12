@@ -1652,12 +1652,11 @@ class _LiquidShellState extends State<LiquidShell>
             active: searchActive,
           );
     // Then an active search, as in the Flutter layout (spec P3b §9.4):
-    // back deactivates it, and the iOS edge swipe pops nothing, as UIKit
-    // offers no swipe back while a bar's search is active. Popping this
-    // route left UIKit's search active under the hidden chrome, its
-    // keyboard with nothing to dismiss it (VK-551); the swipe on a page
-    // pushed in the search tab, which this route's took first, now pops
-    // that page.
+    // back deactivates it, and the iOS edge swipe pops nothing of this
+    // route. Popping it left UIKit's search active under the hidden
+    // chrome, its keyboard with nothing to dismiss it (VK-551); the swipe
+    // on a page pushed in the search tab, which this route's took first,
+    // now pops that page.
     final searchUp = phase == LiquidSearchPhase.active;
     return PopScope(
       // System back closes an overlay sidebar first (P1 Q10, natively too).
