@@ -154,12 +154,15 @@ void main() {
 
     // Rest colours (spec §17.4): the bar over a white page in light and a
     // black one in dark, read back from the engine at the device scale.
+    // Traces only: the scene changes would be extra onsets in the strips.
     final colors = <String, List<double>>{};
     for (final (name, brightness, page) in [
-      ('light', Brightness.light, const Color(0xFFFFFFFF)),
-      // The example's search page under the native field (225/223/240).
-      ('lightPage', Brightness.light, const Color(0xFFE1DFF0)),
-      ('dark', Brightness.dark, const Color(0xFF000000)),
+      if (_tracesOnly) ...[
+        ('light', Brightness.light, const Color(0xFFFFFFFF)),
+        // The example's search page under the native field (225/223/240).
+        ('lightPage', Brightness.light, const Color(0xFFE1DFF0)),
+        ('dark', Brightness.dark, const Color(0xFF000000)),
+      ],
     ]) {
       final boundary = GlobalKey();
       await tester.pumpWidget(
