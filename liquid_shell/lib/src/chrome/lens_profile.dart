@@ -40,6 +40,8 @@ final class SegmentEnvelope extends LensEnvelope {
     required this.squashKnee,
     required this.squashGain,
     required this.squashMax,
+    required this.landing,
+    required this.landingHold,
     required this.magnifyGain,
   });
 
@@ -92,6 +94,16 @@ final class SegmentEnvelope extends LensEnvelope {
 
   /// The squash limits: width and height factors.
   final Size squashMax;
+
+  /// A fast drag release's landing (spec §8.4): once the lens x passes its
+  /// target, the size heads for rest scaled by these gains (wider, flatter)
+  /// on [pressSize], then [wobble] takes it back. Full where the drag
+  /// squash saturates, none below [squashKnee].
+  final Size landing;
+
+  /// Seconds after the lens x passes its target that the landing gains
+  /// hold, before the wobble.
+  final double landingHold;
 
   /// Magnification gain of the w500 copy at full engage (scale − 1, as
   /// `TabSprings.magnify`).
@@ -224,9 +236,11 @@ final class LensProfile {
     tap: fittedSpring(0.751, 0.577),
     // Spike §3: the drag lag, 6.77 pt at 82.2 pt/s, is VK-503's within 5 %.
     dragFollow: TabSprings.dragFollow,
-    // A drag's release, fitted to `slow_drag.release_rows` and the `flick`
-    // rows after its release (x): least squares, with the flick's overshoot
-    // held to native's 3.9-4.2 pt (`flickLanding`, `flick`): 3.9 pt.
+    // A drag's release (Task 8 review, Q-E): fitted to the `flick` landing
+    // after its release, overshoot 4.10 pt (native 4.04), lowest point
+    // +0.232 s (0.221), within 0.5 pt from +0.499 s (0.503); the
+    // `slow_drag.release_rows` stay within 2 pt (x, w, h). Task 4's
+    // 0.64 / 0.31 s bottomed out 31 % and settled 47 % early.
     snap: _segmentRelease,
     // One release spring: native's flick lands as its slow drag does.
     flickLand: _segmentRelease,
@@ -294,6 +308,8 @@ final class LensProfile {
       squashGain: const Size(0.00024, 0.00028),
       // Spike §3: h ×1.13 of pressed, w −12 % at about 800 pt/s.
       squashMax: const Size(0.88, 1.13),
+      landing: const Size(_landingW, _landingH),
+      landingHold: _landingHold,
       // `lens.labelMagnify` 1.0: the w500 copy is not magnified.
       magnifyGain: 0,
     ),
@@ -301,4 +317,13 @@ final class LensProfile {
 }
 
 /// The segment lens after a drag's release (see [LensProfile.segment]).
-final SpringDescription _segmentRelease = fittedSpring(0.64, 0.31);
+final SpringDescription _segmentRelease = fittedSpring(0.8, 0.59);
+
+// The `flick` landing (Task 8 review, Q-E), with [_segmentRelease] and the
+// tap's wobble: w swells ×1.099 (native ×1.103) and h dips ×0.872 (×0.877)
+// at +0.335 / +0.339 s after the up (native +0.335 / +0.335). At the
+// flick's lens speed these gains apply at about two thirds; a slow drag
+// (below the squash knee) has none, as `slow_drag`.
+const double _landingW = 0.16;
+const double _landingH = -0.21;
+const double _landingHold = 0.2;

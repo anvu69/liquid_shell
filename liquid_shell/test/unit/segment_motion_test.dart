@@ -601,6 +601,50 @@ void main() {
     });
   });
 
+  test('the landing (spec §8.4): a fast release dips only after the lens '
+      'passes its target; a slow release never dips', () {
+    final g = controlOf(3);
+    final y = g.size.height / 2;
+    final rest = g.slots[0].height;
+    List<LensFrame> release(double speed) {
+      final m = LensMotion(
+        geometry: g,
+        selected: 2,
+        profile: LensProfile.segment,
+      )..down(Offset(g.centreOf(2), y));
+      final travel = (g.centreOf(2) - g.centreOf(0)) / speed;
+      record(
+        m,
+        travel,
+        input: (t) => m.move(
+          Offset(math.max(g.centreOf(0), g.centreOf(2) - speed * t), y),
+        ),
+      );
+      m.up(Offset(g.centreOf(0), y), velocity: -speed);
+      return record(m, 1.2);
+    }
+
+    final fast = release(530);
+    final crossed = fast.indexWhere(
+      (f) => f.lens.center.dx < g.centreOf(0),
+    );
+    expect(crossed, greaterThan(0));
+    for (final f in fast.take(crossed)) {
+      expect(f.lens.height, greaterThanOrEqualTo(rest), reason: 'no dip yet');
+    }
+    expect(
+      fast.map((f) => f.lens.height).reduce(math.min),
+      lessThan(rest * 0.9),
+      reason: 'the landing dip',
+    );
+    final slow = release(82.2);
+    expect(
+      slow.map((f) => f.lens.height).reduce(math.min),
+      greaterThan(rest - 0.5),
+      reason: 'slow_drag: no landing',
+    );
+  });
+
   test('reduce motion: a tap dissolves in 150 ms, no lift (spec §12.2)', () {
     final g = controlOf(3);
     final m = LensMotion(

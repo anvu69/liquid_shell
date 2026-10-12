@@ -205,6 +205,69 @@ double _onset(List<Map<String, double>> samples) {
   throw StateError('engage never reaches 0.5');
 }
 
+/// The extreme of [vs] over [ts] ([max] or min), refined by the parabola
+/// through it and its neighbours: (time, value).
+(double, double) _extreme(
+  List<double> ts,
+  List<double> vs, {
+  bool max = false,
+}) {
+  var i = 0;
+  for (var k = 1; k < vs.length; k++) {
+    if (max ? vs[k] > vs[i] : vs[k] < vs[i]) i = k;
+  }
+  if (i == 0 || i == vs.length - 1) return (ts[i], vs[i]);
+  final (a, b, c) = (vs[i - 1], vs[i], vs[i + 1]);
+  final curve = (a + c - 2 * b) / 2;
+  if (curve == 0) return (ts[i], b);
+  final slope = (c - a) / 2;
+  final u = -slope / (2 * curve);
+  final dt = (ts[i + 1] - ts[i - 1]) / 2;
+  return (ts[i] + u * dt, b - slope * slope / (4 * curve));
+}
+
+/// The Q-E measures of a flick's landing (spec §8.4), times from the up:
+/// the x overshoot past [rest] and when it bottoms out, when x stays
+/// within 0.5 pt of rest, and the landing's w swell and h dip as fractions
+/// of the rest size (from 0.15 s after the up, past the release's own
+/// shrink).
+({
+  double overshoot,
+  double lowestAt,
+  double settledAt,
+  double swell,
+  double dip,
+})
+_landing(
+  List<double> ts,
+  List<double> xs,
+  List<double> ws,
+  List<double> hs, {
+  required ({double x, num w, num h}) rest,
+}) {
+  final from = ts.indexWhere((t) => t >= 0);
+  final (lowestAt, lowest) = _extreme(ts.sublist(from), xs.sublist(from));
+  var last = from;
+  for (var i = from; i < xs.length; i++) {
+    if ((xs[i] - rest.x).abs() > 0.5) last = i;
+  }
+  // The 0.5 pt crossing after the last sample outside, linear.
+  final (x0, x1) = (xs[last] - rest.x, xs[last + 1] - rest.x);
+  final edge = x0.sign * 0.5;
+  final settledAt =
+      ts[last] + (edge - x0) / (x1 - x0) * (ts[last + 1] - ts[last]);
+  final late = ts.indexWhere((t) => t >= 0.15);
+  final (_, peakW) = _extreme(ts.sublist(late), ws.sublist(late), max: true);
+  final (_, lowH) = _extreme(ts.sublist(late), hs.sublist(late));
+  return (
+    overshoot: rest.x - lowest,
+    lowestAt: lowestAt,
+    settledAt: settledAt,
+    swell: peakW / rest.w - 1,
+    dip: lowH / rest.h - 1,
+  );
+}
+
 void main() {
   final ref = segmentReference();
 
@@ -562,14 +625,14 @@ void main() {
       }
     });
 
-    testWidgets('flick: per native row, commits the finger segment, native '
-        'overshoot ± 1 pt, no click after the release', (
-      tester,
-    ) async {
+    testWidgets('flick (Q-E): the drag trails the finger, the flight '
+        'commits the finger segment, the landing overshoots, bottoms out, '
+        'swells and settles within ±10 % of native', (tester) async {
       final flick = ref['flick'] as Map<String, dynamic>;
-      final landing = ref['flickLanding'] as Map<String, dynamic>;
       final rows = rowsOf(ref, 'flick');
       final releaseAt = (flick['release_at'] as num).toDouble();
+      final lag = (ref['fits'] as Map)['dragLag'] as Map;
+      final thumbs = (geometry['thumbs3'] as List).cast<List<dynamic>>();
       final samples = _trace();
       final log = <int>[];
       final haptics = _haptics(tester);
@@ -586,14 +649,19 @@ void main() {
       await g.down(start);
       await tester.pump();
       var t = 0.0;
+      final fingers = <double>[];
       while (t < releaseAt) {
         t += 1 / 60;
+        final finger = start.dx + velocity * math.min(t, releaseAt);
         await g.moveTo(
-          Offset(start.dx + velocity * math.min(t, releaseAt), start.dy),
+          Offset(finger, start.dy),
           timeStamp: Duration(microseconds: (t * 1e6).round()),
         );
         await tester.pump(_frame);
+        fingers.add(finger);
       }
+      final drag = List.of(samples);
+      final upAt = samples.last['t']!;
       final clicks = haptics.length;
       expect(clicks, 2, reason: 'one per crossing while dragging');
       await g.up(timeStamp: Duration(microseconds: (t * 1e6).round()));
@@ -603,39 +671,70 @@ void main() {
         await tester.pump(_frame);
       }
       await tester.pumpAndSettle();
-      expect(log, [flick['commit']]);
       expect(haptics, hasLength(clicks), reason: 'none after the release');
-      // Row by row (t from the down). Tolerances per phase, each the
-      // largest gap measured plus a margin, and why it is not 2 pt:
-      // - drag: the fixture has no finger column; ours moves linearly at
-      //   the mean speed, native's idb swipe does not;
-      // - flight and landing: native's landing wobble (w ×1.09, h ×0.88)
-      //   and its slower return are not modelled (spec §8.3).
-      for (final r in rows) {
-        final s = _sampleAt(samples, r.t);
-        // Measured worst gaps: drag x 9.8, w 6.0, h 1.6, engage 0.12;
-        // flight x 5.2, w 5.6, h 1.9; landing x 3.8, w 11.7, h 3.5.
-        final (dx, dw, dh, de) = r.t < releaseAt
-            ? (11.0, 7.0, 2.0, 0.15)
-            : r.t < releaseAt + 0.15
-            ? (6.5, 6.5, 2.5, 0.1)
-            : (4.5, 13.0, 4.0, 0.05);
-        expect(s['x']! - box.left, closeTo(r.x, dx), reason: 'x +${r.t} s');
-        expect(s['w'], closeTo(r.w, dw), reason: 'w at +${r.t} s');
-        expect(s['h'], closeTo(r.h, dh), reason: 'h at +${r.t} s');
-        expect(s['engage'], closeTo(r.engage, de), reason: 'e +${r.t} s');
+
+      // Drag. The fixture has no finger column, so x is checked against our
+      // own finger: the lens trails it, by no more than native's lag at
+      // this speed (fits.dragLag) + 10 %. w, h peaks and engage per row are
+      // the native ones.
+      final maxLag =
+          velocity.abs() * (lag['lag'] as num) / (lag['speed'] as num) * 1.1;
+      for (var i = 0; i < fingers.length; i++) {
+        final x = drag[i + 1]['x']!;
+        expect(x, greaterThanOrEqualTo(fingers[i] - 1e-6), reason: 'trails');
+        expect(x - fingers[i], lessThanOrEqualTo(maxLag), reason: 'lag');
       }
-      final xs = [for (final s in samples) s['x']! - box.left];
-      final rest = (landing['landing'] as num).toDouble();
-      expect(
-        rest - xs.reduce(math.min),
-        closeTo((landing['overshoot'] as num).toDouble(), 1),
-      );
-      expect(xs.last, closeTo(rows.last.x, tolerance));
-      // In flight the lens rises as native's (peak h within 10 %).
+      final nativeDrag = rows.where((r) => r.t < releaseAt).toList();
+      for (final r in nativeDrag) {
+        final s = _sampleAt(samples, r.t);
+        expect(s['engage'], closeTo(r.engage, 0.15), reason: 'e +${r.t} s');
+      }
+      for (final (name, of) in [
+        ('w', (NativeRow r) => r.w),
+        ('h', (NativeRow r) => r.h),
+      ]) {
+        final native = nativeDrag.map(of).reduce(math.max);
+        final ours = drag.map((s) => s[name]!).reduce(math.max);
+        expect(ours, closeTo(native, native * 0.10), reason: 'drag peak $name');
+      }
+
+      // Flight: the finger's segment, the peak height.
+      expect(log, [flick['commit']]);
       final nativeMaxH = rows.map((r) => r.h).reduce(math.max);
       final maxH = samples.map((s) => s['h']!).reduce(math.max);
-      expect(maxH, closeTo(nativeMaxH, nativeMaxH * 0.10));
+      expect(maxH, closeTo(nativeMaxH, nativeMaxH * 0.10), reason: 'peak h');
+
+      // Landing (spec Q-E): each measure within ±10 % of native's.
+      final landing = (ref['flickLanding'] as Map)['landing'] as num;
+      final ourRest = _at(tester, 0).dx - box.left;
+      final after = samples.where((s) => s['t']! >= upAt).toList();
+      final native = _landing(
+        [for (final r in rows) r.t - releaseAt],
+        [for (final r in rows) r.x],
+        [for (final r in rows) r.w],
+        [for (final r in rows) r.h],
+        rest: (x: landing.toDouble(), w: thumbs[0][2] as num, h: 28),
+      );
+      final ours = _landing(
+        [for (final s in after) s['t']! - upAt],
+        [for (final s in after) s['x']! - box.left],
+        [for (final s in after) s['w']!],
+        [for (final s in after) s['h']!],
+        rest: (x: ourRest, w: samples.last['w']!, h: samples.last['h']!),
+      );
+      for (final (name, n, o) in [
+        ('overshoot', native.overshoot, ours.overshoot),
+        ('lowest point at', native.lowestAt, ours.lowestAt),
+        ('settled at', native.settledAt, ours.settledAt),
+        ('w swell', native.swell, ours.swell),
+        ('h dip', native.dip, ours.dip),
+      ]) {
+        expect(o, closeTo(n, n.abs() * 0.10), reason: '$name (native $n)');
+      }
+      for (final r in rows.where((r) => r.t >= releaseAt + 0.15)) {
+        final s = _sampleAt(samples, upAt + r.t - releaseAt);
+        expect(s['engage'], closeTo(r.engage, 0.05), reason: 'e +${r.t} s');
+      }
     });
   });
 

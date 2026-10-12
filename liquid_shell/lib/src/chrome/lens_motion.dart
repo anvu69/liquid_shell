@@ -206,6 +206,13 @@ class LensMotion {
   /// The segment flight's kind (spec VK-550 §8.3).
   _Flight _flight = _Flight.tap;
 
+  /// A fast drag release's landing (spec VK-550 §8.4): its size gains
+  /// (zero for a slow release), the side of the target the lens left
+  /// from, and when the lens x passed the target (null until it does).
+  Size _landing = Size.zero;
+  double _landSide = 0;
+  double? _landAt;
+
   /// The press is on the lens's own slot: a segment lens grows only there
   /// (spec VK-550 §8.3, `pressOther`).
   bool _pressOnLens = false;
@@ -597,6 +604,11 @@ class LensMotion {
     // pressHold (`tapOnSelected`); a longer press releases at once.
     _releaseAt = tap ? math.max(0, e.pressHold - pressed) : 0;
     _since = 0;
+    // A drag released fast lands: the drag squash rebounds, wider and
+    // flatter, once the lens passes its target (spec §8.4).
+    _landing = tap ? Size.zero : _landingFor(e, _x.velocity);
+    _landSide = (_x.value - _flightTarget).sign;
+    _landAt = null;
     if (_flight == _Flight.tap) {
       // Two springs from where the lens is; `_steerX` and `_segmentTargets`
       // send them after their delays.
@@ -631,6 +643,7 @@ class LensMotion {
         _releaseAt,
         _releaseAt + e.releaseDelay,
         _releaseAt + (_flick ? profile.flickHold : profile.releaseHold),
+        if (_landAt case final at?) at + e.landingHold,
       ]..sort(),
       _Flight.show => [e.showDelay],
     };
@@ -659,6 +672,13 @@ class LensMotion {
     final rest = at == before ? dt : _since - at;
     for (final s in _springs) {
       s.advance(rest);
+    }
+    if (_phase == LensPhase.flying &&
+        _flight == _Flight.release &&
+        _landAt == null &&
+        _landing != Size.zero &&
+        (_x.value - _flightTarget).sign != _landSide) {
+      _landAt = _since;
     }
     if (_phase == LensPhase.flying) _endFlight();
     _advanceRipple(dt);
@@ -695,12 +715,14 @@ class LensMotion {
           e.engageHold,
           if (_flightSlots <= 1) e.liftUntil.$1 else e.liftUntil.$2,
         ].reduce(math.max),
-        _Flight.release =>
+        _Flight.release => math.max(
           _releaseAt +
               math.max(
                 e.releaseDelay,
                 _flick ? profile.flickHold : profile.releaseHold,
               ),
+          _landingEnd(e),
+        ),
         _Flight.show => e.showDelay,
       };
       if (_since >= end) _phase = LensPhase.settling;
@@ -714,6 +736,15 @@ class LensMotion {
     }
     if (_since >= TabSprings.popUntil) _pop.target = 1;
     if (_since >= TabSprings.flightHold) _phase = LensPhase.settling;
+  }
+
+  /// When a landing's lift ends: 0 without one; never before the lens
+  /// has passed its target (unless it comes to rest short of it).
+  double _landingEnd(SegmentEnvelope e) {
+    if (_landing == Size.zero) return 0;
+    final at = _landAt;
+    if (at != null) return at + e.landingHold;
+    return _x.settled(0.5) ? 0 : double.infinity;
   }
 
   /// The targets of every spring at [since] seconds into the interaction.
@@ -884,18 +915,13 @@ class LensMotion {
     } else if (flight == _Flight.tap) {
       final near = _flightSlots <= 1;
       final answered = since >= e.pressDelay;
-      if (since < (near ? e.liftUntil.$1 : e.liftUntil.$2)) {
-        spring = e.pressSize;
-        final lift = near ? e.liftNear : e.liftFar;
-        if (answered) {
-          size = Size(
-            rest.width * (1 + lift.width),
-            rest.height * (1 + lift.height),
-          );
-        }
-      } else {
-        spring = e.wobble;
-      }
+      (size, spring) = _liftThenWobble(
+        e,
+        rest,
+        near ? e.liftNear : e.liftFar,
+        lifting: since < (near ? e.liftUntil.$1 : e.liftUntil.$2),
+        answered: answered,
+      );
       engage = answered && since < e.engageHold ? 1 : 0;
     } else if (flight == _Flight.release) {
       if (since < _releaseAt) {
@@ -903,6 +929,14 @@ class LensMotion {
         size = pressed;
       } else if (since < _releaseAt + e.releaseDelay) {
         size = null;
+      } else if (_landAt case final at?) {
+        (size, spring) = _liftThenWobble(
+          e,
+          rest,
+          _landing,
+          lifting: since < at + e.landingHold,
+          answered: true,
+        );
       } else {
         spring = e.releaseSize;
       }
@@ -932,6 +966,38 @@ class LensMotion {
           math.max(e.squashMax.width, 1 - e.squashGain.width * over),
       pressed.height *
           math.min(e.squashMax.height, 1 + e.squashGain.height * over),
+    );
+  }
+
+  /// A drag release's landing gains at lens speed [velocity]:
+  /// [SegmentEnvelope.landing] scaled as the drag squash is, from nothing
+  /// at the knee to all of it where the squash saturates.
+  static Size _landingFor(SegmentEnvelope e, double velocity) {
+    final over = math.max(0, velocity.abs() - e.squashKnee);
+    final scale = math.min(
+      1,
+      over * e.squashGain.width / (1 - e.squashMax.width),
+    );
+    return Size(e.landing.width * scale, e.landing.height * scale);
+  }
+
+  /// The §8.4 hand-off a tap's lift and a fast release's landing share:
+  /// while [lifting], the size heads on the press spring for [rest] scaled
+  /// by [gain] (once [answered]); after, the wobble spring takes it back
+  /// to rest.
+  static (Size, SpringDescription) _liftThenWobble(
+    SegmentEnvelope e,
+    Size rest,
+    Size gain, {
+    required bool lifting,
+    required bool answered,
+  }) {
+    if (!lifting) return (rest, e.wobble);
+    return (
+      answered
+          ? Size(rest.width * (1 + gain.width), rest.height * (1 + gain.height))
+          : rest,
+      e.pressSize,
     );
   }
 
