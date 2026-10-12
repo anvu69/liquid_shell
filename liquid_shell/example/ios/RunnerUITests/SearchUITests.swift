@@ -292,10 +292,16 @@ extension SearchUITests {
     let tab = searchTabButton(app)
     XCTAssertTrue(tab.waitForExistence(timeout: timeout))
     tab.tap()
+    // One wait for either field: the Flutter case has no native one, and
+    // waiting that out first cost every Flutter run the whole 10 s.
     let native = app.searchFields.firstMatch
     let flutter = app.textFields.firstMatch
-    XCTAssertTrue(
-      native.waitForExistence(timeout: 10) || flutter.waitForExistence(timeout: 10), "a field")
+    let either = app.descendants(matching: .any).matching(
+      NSPredicate(
+        format: "elementType IN %@",
+        [XCUIElement.ElementType.searchField, .textField].map(\.rawValue))
+    ).firstMatch
+    XCTAssertTrue(either.waitForExistence(timeout: 10), "a field")
     let field = native.exists ? native : flutter
     field.tap()
     XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 30), "the keyboard")
