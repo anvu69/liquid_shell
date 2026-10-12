@@ -284,13 +284,17 @@ class SpringValue {
 /// clock as a [SpringValue] on [spring] that starts at rest: the compact
 /// search field and the tab bar's minimize morph (VK-503 Task 16).
 class SpringCurve extends Curve {
-  /// The step response of [spring].
-  SpringCurve(this.spring)
+  /// The step response of [spring], held at 0 for [delay] seconds first.
+  SpringCurve(this.spring, {this.delay = 0})
     : _simulation = SpringSimulation(spring, 0, 1, 0),
-      duration = _settle(spring);
+      duration =
+          _settle(spring) + Duration(microseconds: (delay * 1e6).round());
 
   /// The spring.
   final SpringDescription spring;
+
+  /// Seconds at 0 before the response starts (a touch answers 25 ms late).
+  final double delay;
 
   /// How long the curve lasts.
   final Duration duration;
@@ -307,6 +311,8 @@ class SpringCurve extends Curve {
   }
 
   @override
-  double transformInternal(double t) =>
-      _simulation.x(t * duration.inMicroseconds / 1e6);
+  double transformInternal(double t) {
+    final seconds = t * duration.inMicroseconds / 1e6 - delay;
+    return seconds <= 0 ? 0 : _simulation.x(seconds);
+  }
 }

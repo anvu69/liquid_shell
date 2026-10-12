@@ -769,6 +769,26 @@ void main() {
       expect(-lowest * travel, closeTo(4, 1));
     });
 
+    test('expand answers 25 ms after the tap, then runs the expand spring '
+        '(review item 7: the search close led native by about a row)', () {
+      final m = MinimizeMotion(minimized: true)..set(false);
+      final values = <double>[];
+      for (var f = 0; f < 30; f++) {
+        m.advance(dt);
+        values.add(m.value);
+      }
+      final reference = referenceTrace(
+        TabSprings.expand,
+        1,
+        0,
+        delay: TabSprings.tapDelay,
+        seconds: 0.5,
+      );
+      for (var i = 0; i < values.length; i++) {
+        expect(values[i], closeTo(reference[i], 1e-3), reason: 'frame $i');
+      }
+    });
+
     test('a quick reverse during the delay never collapses', () {
       final m = MinimizeMotion(minimized: false)
         ..set(true)

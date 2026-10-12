@@ -23,7 +23,10 @@ const _capsule = BorderRadius.all(Radius.circular(999));
 /// The field morphs on the bar's clock (VK-503 Task 16): it shrinks into
 /// the ⌕ as the bar expands, and grows out of it as the bar collapses into
 /// the previous tab's circle, as native does in step.
-final SpringCurve _toIdle = SpringCurve(TabSprings.expand);
+final SpringCurve _toIdle = SpringCurve(
+  TabSprings.expand,
+  delay: TabSprings.tapDelay,
+);
 final SpringCurve _toSelected = SpringCurve(TabSprings.collapse);
 
 /// The fallback search field on glass (spec P3b §9.4). The `TextField` is

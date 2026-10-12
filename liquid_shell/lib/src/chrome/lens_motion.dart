@@ -730,18 +730,26 @@ class MinimizeMotion {
       return;
     }
     _value.spring = minimized ? TabSprings.collapse : TabSprings.expand;
-    _wait = minimized && delayed ? TabSprings.minimizeDelay : 0;
+    // An expand is a tap (the circle, or a selection change): it answers
+    // 25 ms later, as every native touch does (Task 16 review item 7).
+    _wait = minimized
+        ? (delayed ? TabSprings.minimizeDelay : 0)
+        : TabSprings.tapDelay;
     if (_wait == 0) _value.target = end;
   }
 
   /// Advances [dt]; true while moving or waiting.
   bool advance(double dt) {
+    var run = dt;
     if (_wait > 0) {
       _wait -= dt;
       if (_wait > 0) return true;
+      // The wait ends inside this frame: only the rest of it moves.
+      run = -_wait;
+      _wait = 0;
       _value.target = _target ? 1 : 0;
     }
-    _value.advance(dt);
+    _value.advance(run);
     if (_value.settled(0.005)) {
       _value.jump(_value.target);
       return false;

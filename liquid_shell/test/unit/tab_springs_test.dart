@@ -117,6 +117,23 @@ void main() {
       expect((sim.x(settle - 0.001) - 1).abs(), greaterThan(0.002));
     });
 
+    test('a delay holds 0, then the same response, and lasts longer', () {
+      final late = SpringCurve(TabSprings.expand, delay: 0.025);
+      final sim = SpringSimulation(TabSprings.expand, 0, 1, 0);
+      final seconds = late.duration.inMicroseconds / 1e6;
+      expect(
+        seconds,
+        closeTo(curve.duration.inMicroseconds / 1e6 + 0.025, 2e-3),
+      );
+      for (var i = 1; i < 100; i++) {
+        final t = i / 100 * seconds;
+        expect(
+          late.transform(i / 100),
+          closeTo(t < 0.025 ? 0 : sim.x(t - 0.025), 1e-9),
+        );
+      }
+    });
+
     test('follows the spring step response, overshoot included', () {
       final sim = SpringSimulation(TabSprings.expand, 0, 1, 0);
       final seconds = curve.duration.inMicroseconds / 1e6;
