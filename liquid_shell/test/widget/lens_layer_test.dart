@@ -94,6 +94,18 @@ void main() {
     expect(u[15], closeTo(0.90, 1e-6));
   });
 
+  testWidgets('dark: the veil thins less, 0.8 (simulator p99 chroma 85 '
+      'against native 64; 102 at 1)', (tester) async {
+    await _liquid(tester);
+    await tester.pumpWidget(_lens(brightness: Brightness.dark));
+    await tester.pump();
+    final u = tester
+        .renderObject<RenderLiquidBackdrop>(find.byType(LiquidBackdrop))
+        .debugUniforms!;
+    expect(u[24], closeTo(kLensVeilFalloffDark, 1e-6));
+    expect(kLensVeilFalloffDark, 0.8);
+  });
+
   testWidgets('the engaged liquid lens thins its veil toward the rim; the '
       'pill does not (Task 16 part B)', (tester) async {
     await _liquid(tester);

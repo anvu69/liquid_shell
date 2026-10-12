@@ -28,6 +28,12 @@ const double kLensVeil = 0.90;
 /// `colorScheme.surface` made a near-black disc (23). Task 16 part B.
 const Color kLensVeilDark = Color(0xFF414141);
 
+/// How far the dark lens's veil thins in its ring. Native's dark ring keeps
+/// some veil (ring luma 57 against the core's 60); at 1 the Flutter ring
+/// read p99 chroma 102 on the simulator against native's 64, at 0.8 it
+/// reads 85 (idb dark press strip). Task 16 part B.
+const double kLensVeilFalloffDark = 0.8;
+
 /// The engaged lens's refracting ring, in points (spec §7.2).
 const double kLensBezel = 14;
 
@@ -130,7 +136,11 @@ class _LiquidLensState extends State<LiquidLens> {
                 bezel: ui.lerpDouble(LiquidOptics.bezel, kLensBezel, engage),
                 rimWidth: ui.lerpDouble(LiquidOptics.rimWidth, 1, engage),
                 // Milky core, clear ring (spec §7.2, Task 16 part B).
-                veilFalloff: engage,
+                veilFalloff:
+                    engage *
+                    (scheme.brightness == Brightness.light
+                        ? 1
+                        : kLensVeilFalloffDark),
               ),
             ),
           );
