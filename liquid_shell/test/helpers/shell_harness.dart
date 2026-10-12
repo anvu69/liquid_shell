@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
+import 'package:liquid_shell/src/chrome/glass_tab_bar.dart';
 
 /// Home · Inbox (count 3) · Reports (sidebar only) · Settings (dot).
 const kDestinations = [
@@ -47,6 +48,7 @@ class TestShell extends StatefulWidget {
     this.nativeChrome = LiquidNativeChrome.auto,
     this.nativeSidebarFooter,
     this.search,
+    this.breakpoints = const LiquidShellBreakpoints(),
     super.key,
   });
 
@@ -73,6 +75,7 @@ class TestShell extends StatefulWidget {
   final LiquidNativeChrome nativeChrome;
   final LiquidNativeSidebarFooter? nativeSidebarFooter;
   final LiquidSearch? search;
+  final LiquidShellBreakpoints breakpoints;
 
   @override
   State<TestShell> createState() => TestShellState();
@@ -102,6 +105,7 @@ class TestShellState extends State<TestShell> {
     nativeChrome: widget.nativeChrome,
     nativeSidebarFooter: widget.nativeSidebarFooter,
     search: widget.search,
+    breakpoints: widget.breakpoints,
     body: widget.offstageBranches
         ? Stack(
             fit: StackFit.expand,
@@ -222,6 +226,36 @@ void expectNoFallbackText(WidgetTester tester) {
 bool _isFallback(TextStyle style) =>
     style == const TextStyle() ||
     (style.debugLabel?.contains('fallback style') ?? false);
+
+/// The touch and semantics node of the bottom bar slot labelled [label]
+/// (or of its minimized circle). The row content above it ignores pointers
+/// and draws every label twice (spec VK-503 §6.3), so tap this instead.
+Finder tabSlot(String label) => find.descendant(
+  of: find.byType(GlassTabBar),
+  matching: find.byWidgetPredicate(
+    (w) =>
+        w is Semantics &&
+        w.properties.button == true &&
+        (w.properties.label?.startsWith(label) ?? false),
+  ),
+);
+
+/// The colour the bottom bar's [label] is seen in: the tinted copy's where
+/// the lens clip covers the label's centre, otherwise the normal copy's
+/// (spec VK-503 §6.3).
+Color? visibleTabLabelColor(WidgetTester tester, String label) {
+  for (final copy in [kTabTintedKey, kTabNormalKey]) {
+    final clip = find.byKey(copy);
+    final text = find.descendant(of: clip, matching: find.text(label));
+    final path = tester
+        .widget<ClipPath>(clip)
+        .clipper!
+        .getClip(tester.getSize(clip));
+    final centre = tester.getCenter(text) - tester.getTopLeft(clip);
+    if (path.contains(centre)) return tester.widget<Text>(text).style!.color;
+  }
+  return null;
+}
 
 /// The scope data seen by the page of [label].
 LiquidShellScopeData scopeOf(WidgetTester tester, [String label = 'Home']) =>

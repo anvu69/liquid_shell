@@ -13,23 +13,33 @@ All glass reads one `ThemeExtension`, `LiquidGlassTheme`. Without one,
 | `solid` | `surface` | `surface` | fill, solid tier only |
 | `border` | `outline` @ 0.28 | `onSurface` @ 0.18 | 1px outline, frosted and solid tiers |
 | `borderWidth` | 1 | 1 | outline width, frosted and solid tiers |
-| `rimHighlight` | white @ 0.50 | white @ 0.18 | frosted top-edge highlight; liquid specular rim |
-| `shadow` | `#24000000`, offset (0, 6), blur 20, spread −2 | same | drawn outside the shape only |
+| `rimHighlight` | white @ 0.12 | white @ 0.12 | frosted top-edge highlight; liquid specular rim |
+| `shadow` | `#12000000` (7 %), offset (0, 3), blur 20 | same | drawn outside the shape only |
 | `blurSigma` | 10 | 10 | blur, frosted tier only |
 | `borderRadius` | pill (999) | pill | bars, circles |
-| `labelStyle` | 10/14, w600, letter spacing 0.4, theme font | same | compact tab labels |
-| `liquidTint` | `surface` @ 0.40 | `surface` @ 0.45 | colour over liquid glass, inside the lens shader, liquid tier only |
+| `labelStyle` | 10/12, w500, no letter spacing, theme font | same | tab labels: the bottom bar as is, the landscape bar at 12pt w400, the top bar at 17pt; w600 on the selected tab |
+| `liquidTint` | white @ 0.55 | #1C1C1C @ 0.90 | colour over liquid glass, inside the lens shader, liquid tier only |
 | `refraction` | 1 | 1 | liquid lens strength: 0 is flat glass, 2 doubles it |
-| `dispersion` | 0.3 | 0.3 | liquid colour fringe in the lens band, 0–1; 0 turns it off |
-| `liquidBlurSigma` | 2 | 2 | liquid blur under the lens; 0 for none |
+| `dispersion` | 0 | 0 | liquid colour fringe in the lens band, 0–1; 0 turns it off (the touched tab lens draws its own) |
+| `liquidBlurSigma` | 2 | 2 | liquid blur under the lens; 0 for none (and no scroll-edge pocket) |
+| `selectionFill` | black @ 0.08 (`#14000000`) | white @ 0.13 (`#21FFFFFF`) | the selected tab's capsule at rest, over the pill |
+| `tabForeground` | `#191919` | `#F4F4F4` | unselected tab icons and labels, the trailing circle's icon, unselected sidebar rows |
+| `badgeColor` | `#FF383C` | `#FF4245` | badge capsules in the tab bar and the sidebar |
+| `tabIconSize` | 26 | 26 | tab and trailing-circle icons at text scale 1 (the landscape bar uses 22) |
 
-Tab colours come from the `ColorScheme`: the selected cell is `primary` on
-a `primaryContainer` chip, others `onSurfaceVariant`. The selected label
-keeps the same style; only its colour changes. Top-bar labels use
-`textTheme.labelMedium`; sidebar rows use `textTheme.bodyLarge`
-(`onPrimaryContainer` on `primaryContainer` when selected).
+Tab colours: the selected tab is `ColorScheme.primary` (the tint the
+native chrome uses too) over a `selectionFill` capsule, and the others are
+`tabForeground`. Every tab draws `selectedIcon ?? icon` (see
+[tab_bar.md](tab_bar.md#icons)). Sidebar rows use `textTheme.bodyLarge`:
+`onPrimaryContainer` on `primaryContainer` when selected, `tabForeground`
+otherwise.
 
-`labelStyle` sets the compact (bottom) tab labels. In a narrow bottom bar
+`tabIconSize` is 26 because Material icons draw their ink at about 20/24
+of their box, which gives the 21–22pt glyphs of iOS's tab bar. Tune it for
+another icon font. From text scale 1.6 the icons grow with the text and
+the tabs become icon-only.
+
+`labelStyle` is the base of every tab label. In a narrow bottom bar
 (the shell narrower than `kLiquidNarrowWidth`, 340) a label that does not
 fit its cell first takes the cell's side padding, then shrinks, never below
 10pt (or its own size when that is smaller), and only then ends in an
@@ -69,8 +79,9 @@ MaterialApp(
 ```
 
 Built directly with `LiquidGlassTheme(...)`, a theme without `liquidTint`
-gets `solid` @ 0.40 (0.45 when `solid` is dark). For a stronger or flatter
-brand lens, set `refraction` (0 flat, 2 double).
+gets the same neutral tint: white @ 0.55, or #1C1C1C @ 0.90 when `solid`
+is dark. For a stronger or flatter brand lens, set `refraction` (0 flat, 2
+double).
 
 `LiquidGlassTheme` implements `lerp`, so theme animations interpolate the
 glass too.

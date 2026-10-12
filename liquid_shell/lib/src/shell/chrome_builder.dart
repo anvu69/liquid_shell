@@ -115,10 +115,13 @@ class LiquidChromeDetails {
   /// The tab bar trailing action, if any.
   final LiquidTabAction? trailing;
 
-  /// Tab bar slot, compact only: the bar is minimised.
+  /// Tab bar slot, compact only: the bar is minimised, by a scroll
+  /// (`minimizeOnScroll`) or while the search tab is selected (the bar
+  /// collapses beside the search field).
   final bool minimized;
 
-  /// Tab bar slot: leaves the minimised state.
+  /// Tab bar slot: leaves the scroll minimised state. It does not expand
+  /// the bar while the search tab is selected.
   final VoidCallback expand;
 
   /// Whether the sidebar is shown.

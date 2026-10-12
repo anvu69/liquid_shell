@@ -1,11 +1,7 @@
-import 'dart:async';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
-import 'package:liquid_shell/src/chrome/fit_label.dart';
-import 'package:liquid_shell/src/chrome/large_content_viewer.dart';
-import 'package:liquid_shell/src/chrome/text_scale.dart';
-import 'package:liquid_shell/src/destinations/badge.dart';
+import 'package:liquid_shell/src/chrome/glass_tab_bar.dart';
+import 'package:liquid_shell/src/chrome/tab_geometry.dart';
 import 'package:liquid_shell/src/destinations/destination.dart';
 import 'package:liquid_shell/src/destinations/tab_action.dart';
 import 'package:liquid_shell/src/glass/glass_theme.dart';
@@ -17,23 +13,26 @@ enum LiquidTabBarPosition {
   /// Compact: floating at the bottom, icon over label, 62pt pill.
   bottom,
 
-  /// Regular: floating at the top, icon beside label, 52pt pill.
+  /// Regular: floating at the top, label-only cells, 48 pt pill.
   top,
 }
+
+/// A landscape window lower than this gets the landscape bottom bar (the
+/// `LiquidShellBreakpoints.compactHeight` default, spec VK-503 §12.1).
+const double kLiquidCompactHeight = 500;
 
 /// The gap between the pill and the trailing circle.
 const double kLiquidTabBarTrailingGap = 8;
 
-/// Below this width (logical pixels) the bottom tab bar is *narrow*: its
-/// pill padding drops from 8 to 4, and `LiquidShell` shrinks the row margin
-/// from 16 to 8, so 5 tabs plus a trailing action keep 44pt-wide cells down
-/// to 320 at text scale 1 (iPad Slide Over, ⅓ Split View, small phones).
+/// Below this width (logical pixels) the bottom tab bar is *narrow*:
+/// `LiquidShell` shrinks the row margin to 8, so 5 tabs plus a trailing
+/// action keep hit targets of at least 44pt down to 320 at text scale 1
+/// (iPad Slide Over, ⅓ Split View, small phones).
 /// Larger text grows the pill, and the square trailing circle with it, so
 /// cells can drop below 44pt there.
 ///
 /// A narrow bar also fits its labels (Q18): a label that does not fit its
-/// cell first takes the cell's side padding, then shrinks down to 10pt, and
-/// only then ellipsizes.
+/// label box first shrinks down to 10pt, and only then ellipsizes.
 const double kLiquidNarrowWidth = 340;
 
 /// A floating glass pill of destinations, with an optional separate glass
@@ -41,6 +40,11 @@ const double kLiquidNarrowWidth = 340;
 ///
 /// `LiquidShell` places it for you. Use it directly to build your own
 /// chrome. It draws the row only: the caller adds the outer margins.
+///
+/// The bottom bar fills the width it is given and places a native-sized pill
+/// in it (spec VK-503 §5): centred, or pinned to the start with the trailing
+/// circle at the end. The gaps pass touches through. Selection commits on
+/// release, and every slot draws `selectedIcon ?? icon`.
 ///
 /// Standalone use needs a [Directionality] and an [Overlay] above it: the
 /// trailing tooltip and the large content viewer (long press at accessibility
@@ -70,8 +74,10 @@ class LiquidTabBar extends StatelessWidget {
   /// nothing.
   final int selectedIndex;
 
-  /// Called with an index into [destinations] when a cell is tapped while
-  /// the bar is not minimised.
+  /// Called with an index into [destinations] when a tab is chosen while
+  /// the bar is not minimised: on release of a tap, of a drag (the tab
+  /// nearest the lens) or of a flick, and on Enter or Space when a tab has
+  /// keyboard focus.
   final ValueChanged<int> onDestinationSelected;
 
   /// Bottom (compact) or top (regular) layout.
@@ -80,8 +86,8 @@ class LiquidTabBar extends StatelessWidget {
   /// Optional action in a separate circle at the trailing end.
   final LiquidTabAction? trailing;
 
-  /// Shows only the selected cell. A tap then calls [onExpand] and does not
-  /// change the destination.
+  /// Collapses the bottom bar to a 48pt circle with the selected icon. A tap
+  /// then calls [onExpand] and does not change the destination.
   final bool minimized;
 
   /// Called when the minimised bar is tapped. When null, the minimised bar
@@ -91,9 +97,8 @@ class LiquidTabBar extends StatelessWidget {
   /// Strings for the minimised hint, the expand announcement and badges.
   final LiquidShellStrings strings;
 
-  /// Whether to use the narrow pill padding (4 instead of 8 at each end of
-  /// the bottom pill) and fit the bottom labels (they take the cell's side
-  /// padding, then shrink to 10pt, before they ellipsize). Null: narrow when
+  /// Whether to fit the bottom labels (they shrink to 10pt before they
+  /// ellipsize). Null: narrow when
   /// `MediaQuery.sizeOf(context).width` is below [kLiquidNarrowWidth]. The
   /// top bar is the same either way.
   ///
@@ -116,302 +121,174 @@ class LiquidTabBar extends StatelessWidget {
       debugCheckHasOverlay(context),
       'LiquidTabBar needs an Overlay ancestor.',
     );
-    final visible = [
-      for (final (i, destination) in destinations.indexed)
-        if (destination.placement == LiquidPlacement.everywhere) i,
-    ];
-    final shown = !minimized || visible.isEmpty
-        ? visible
-        : [
-            if (visible.contains(selectedIndex))
-              selectedIndex
-            else
-              visible.first,
-          ];
-    final top = position == LiquidTabBarPosition.top;
-    final ax = isAxTextScale(context);
-
-    void handleTap(int index) {
-      if (!minimized) {
-        onDestinationSelected(index);
-        return;
-      }
-      final expand = onExpand;
-      // Nothing opens without onExpand, so there is nothing to announce.
-      if (expand == null) return;
-      expand();
-      unawaited(
-        SemanticsService.sendAnnouncement(
-          View.of(context),
-          strings.tabBarExpanded,
-          Directionality.of(context),
-        ),
-      );
-    }
-
-    final narrow =
-        this.narrow ?? MediaQuery.sizeOf(context).width < kLiquidNarrowWidth;
-    final cells = Padding(
-      padding: top
-          ? const EdgeInsets.all(4)
-          : EdgeInsets.symmetric(horizontal: narrow ? 4 : 8, vertical: 4),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final i in shown)
-            Flexible(
-              child: _Cell(
-                destination: destinations[i],
-                selected: i == selectedIndex,
-                minimized: minimized,
-                expandable: onExpand != null,
-                top: top,
-                narrow: narrow && !top,
-                ax: ax,
-                strings: strings,
-                onTap: () => handleTap(i),
-              ),
-            ),
-        ],
-      ),
-    );
-    // The size animates INSIDE the glass, so the glass background (its
-    // rounded shape and outside shadow) follows the animated size instead of
-    // being laid out at full size and clipped square by AnimatedSize.
-    final pill = LiquidGlass(
-      child: MediaQuery.disableAnimationsOf(context)
-          ? cells
-          : AnimatedSize(
-              duration: const Duration(milliseconds: 200),
-              child: cells,
-            ),
-    );
-
-    final action = trailing;
-    return Material(
-      type: MaterialType.transparency,
-      child: IntrinsicHeight(
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Flexible(child: pill),
-            if (action != null) ...[
-              const SizedBox(width: kLiquidTabBarTrailingGap),
-              LiquidActionCircle(action: action),
-            ],
-          ],
-        ),
-      ),
+    final size = MediaQuery.sizeOf(context);
+    final landscape =
+        TabBarLandscapeScope.maybeOf(context) ??
+        size.width > size.height && size.height < kLiquidCompactHeight;
+    final form = position == LiquidTabBarPosition.top
+        ? TabBarForm.top
+        : landscape
+        ? TabBarForm.landscape
+        : TabBarForm.compact;
+    return GlassTabBar(
+      form: form,
+      destinations: destinations,
+      selectedIndex: selectedIndex,
+      onSelect: onDestinationSelected,
+      trailing: trailing,
+      minimized: minimized && form != TabBarForm.top,
+      onCollapsedTap: onExpand,
+      strings: strings,
+      narrow: narrow ?? size.width < kLiquidNarrowWidth,
     );
   }
 }
 
-/// Side padding of a bottom cell.
-const double _cellSidePadding = 8;
-
-class _Cell extends StatelessWidget {
-  const _Cell({
-    required this.destination,
-    required this.selected,
-    required this.minimized,
-    required this.expandable,
-    required this.top,
-    required this.narrow,
-    required this.ax,
-    required this.strings,
-    required this.onTap,
+/// Whether the bottom [LiquidTabBar]s under it take the landscape form.
+/// Internal: `LiquidShell` decides it from its own size and breakpoints
+/// (spec VK-503 §5.2, §12.1), which a bar reading the window cannot, and
+/// a `chromeBuilder`'s own bar follows it too.
+class TabBarLandscapeScope extends InheritedWidget {
+  /// Creates the scope.
+  const TabBarLandscapeScope({
+    required this.landscape,
+    required super.child,
+    super.key,
   });
 
-  final LiquidDestination destination;
-  final bool selected;
-  final bool minimized;
+  /// The landscape form, or the compact one.
+  final bool landscape;
 
-  /// Whether a tap on the minimised cell opens the bar ([LiquidTabBar.onExpand]
-  /// is set). Without it the cell carries no expand hint.
-  final bool expandable;
-  final bool top;
-
-  /// Narrow bottom cell: the label fits itself (Q18).
-  final bool narrow;
-  final bool ax;
-  final LiquidShellStrings strings;
-  final VoidCallback onTap;
+  /// The nearest scope's value, or null outside a shell.
+  static bool? maybeOf(BuildContext context) => context
+      .dependOnInheritedWidgetOfExactType<TabBarLandscapeScope>()
+      ?.landscape;
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final color = selected ? scheme.primary : scheme.onSurfaceVariant;
-    final base = top ? 22.0 : 28.0;
-    final iconSize = ax ? axIconSize(context, base) : base;
-    final icon = _BadgedIcon(
-      icon: selected
-          ? destination.selectedIcon ?? destination.icon
-          : destination.icon,
-      badge: destination.badge,
-      size: iconSize,
-      color: color,
-    );
-    final labelStyle = top
-        ? theme.textTheme.labelMedium?.copyWith(color: color)
-        : LiquidGlassTheme.of(context).labelStyle.copyWith(color: color);
-    final label = ax
-        ? null
-        : narrow
-        // The label may take the cell's side padding before it shrinks.
-        ? FitLabel(
-            destination.label,
-            style: labelStyle,
-            slack: 2 * _cellSidePadding,
-          )
-        : Text(
-            destination.label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: labelStyle,
-          );
-    final decoration = BoxDecoration(
-      color: selected ? scheme.primaryContainer : Colors.transparent,
-      borderRadius: const BorderRadius.all(Radius.circular(999)),
-    );
-
-    final content = top
-        ? Container(
-            constraints: const BoxConstraints(minHeight: 44),
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: decoration,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                icon,
-                if (label != null) ...[
-                  const SizedBox(width: 8),
-                  Flexible(child: label),
-                ],
-              ],
-            ),
-          )
-        : Container(
-            constraints: const BoxConstraints(maxWidth: 88),
-            // Narrow: the side padding moves onto the icon, so the cell keeps
-            // its width while the label may use the padding.
-            padding: EdgeInsets.symmetric(
-              horizontal: narrow ? 0 : _cellSidePadding,
-              vertical: 4,
-            ),
-            decoration: decoration,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (narrow)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: _cellSidePadding,
-                    ),
-                    child: icon,
-                  )
-                else
-                  icon,
-                if (label != null) ...[const SizedBox(height: 4), label],
-              ],
-            ),
-          );
-
-    return Semantics(
-      container: true,
-      button: true,
-      // While minimised a tap expands the bar instead of selecting, so the
-      // node must not claim a selected state at all.
-      selected: minimized ? null : selected,
-      label: badgeSemanticsLabel(destination.label, destination.badge, strings),
-      hint: minimized && expandable ? strings.expandTabBarHint : null,
-      onTap: onTap,
-      excludeSemantics: true,
-      child: LargeContentViewer(
-        icon: destination.icon,
-        label: destination.label,
-        child: InkWell(
-          borderRadius: const BorderRadius.all(Radius.circular(999)),
-          onTap: onTap,
-          child: content,
-        ),
-      ),
-    );
-  }
+  bool updateShouldNotify(TabBarLandscapeScope oldWidget) =>
+      oldWidget.landscape != landscape;
 }
 
-class _BadgedIcon extends StatelessWidget {
-  const _BadgedIcon({
-    required this.icon,
-    required this.badge,
-    required this.size,
-    required this.color,
-  });
-
-  final Widget icon;
-  final LiquidBadge? badge;
-  final double size;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final themed = IconTheme.merge(
-      data: IconThemeData(size: size, color: color),
-      child: icon,
-    );
-    final badge = this.badge;
-    if (!badgeVisible(badge)) return themed;
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        themed,
-        PositionedDirectional(
-          top: -4,
-          end: -8,
-          child: LiquidBadgeView(badge: badge!),
-        ),
-      ],
-    );
-  }
-}
-
-/// A glass circle for a [LiquidTabAction]: square, as tall as its row.
-class LiquidActionCircle extends StatelessWidget {
+/// A glass circle for a [LiquidTabAction]: square, as tall as its row. A
+/// press shows the white highlight (spec VK-503 §8.8), not ink; so do
+/// keyboard focus, a pointer hovering it and [highlight].
+///
+/// It takes keyboard focus; Enter and Space activate it.
+class LiquidActionCircle extends StatefulWidget {
   /// Creates the circle.
-  const LiquidActionCircle({required this.action, super.key});
+  const LiquidActionCircle({required this.action, this.highlight, super.key});
 
   /// The action.
   final LiquidTabAction action;
 
+  /// Lights the circle from outside: the tab lens dragged over it.
+  final ValueListenable<bool>? highlight;
+
   @override
-  Widget build(BuildContext context) => Semantics(
-    container: true,
-    button: true,
-    label: action.semanticLabel,
-    onTap: action.onPressed,
-    excludeSemantics: true,
-    child: Tooltip(
-      message: action.semanticLabel,
-      excludeFromSemantics: true,
-      child: LiquidGlass(
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: action.onPressed,
-          child: AspectRatio(
-            aspectRatio: 1,
-            child: Center(
-              child: IconTheme.merge(
-                data: IconThemeData(
-                  size: 26,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+  State<LiquidActionCircle> createState() => _LiquidActionCircleState();
+}
+
+class _LiquidActionCircleState extends State<LiquidActionCircle> {
+  /// The one overlay: pressed, focused, hovered or the outside highlight.
+  final ValueNotifier<bool> _lit = ValueNotifier(false);
+  bool _pressed = false;
+  bool _focused = false;
+  bool _hovered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.highlight?.addListener(_update);
+    _update();
+  }
+
+  @override
+  void didUpdateWidget(LiquidActionCircle oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.highlight != widget.highlight) {
+      oldWidget.highlight?.removeListener(_update);
+      widget.highlight?.addListener(_update);
+      _update();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.highlight?.removeListener(_update);
+    _lit.dispose();
+    super.dispose();
+  }
+
+  void _update() => _lit.value =
+      _pressed || _focused || _hovered || (widget.highlight?.value ?? false);
+
+  void _press(bool down) {
+    _pressed = down;
+    _update();
+  }
+
+  void _activate() => widget.action.onPressed();
+
+  @override
+  Widget build(BuildContext context) {
+    final action = widget.action;
+    final theme = LiquidGlassTheme.of(context);
+    return Semantics(
+      container: true,
+      button: true,
+      label: action.semanticLabel,
+      onTap: action.onPressed,
+      excludeSemantics: true,
+      child: Tooltip(
+        message: action.semanticLabel,
+        excludeFromSemantics: true,
+        child: FocusableActionDetector(
+          mouseCursor: SystemMouseCursors.click,
+          actions: <Type, Action<Intent>>{
+            ActivateIntent: CallbackAction<ActivateIntent>(
+              onInvoke: (_) => _activate(),
+            ),
+            ButtonActivateIntent: CallbackAction<ButtonActivateIntent>(
+              onInvoke: (_) => _activate(),
+            ),
+          },
+          onShowFocusHighlight: (on) {
+            _focused = on;
+            _update();
+          },
+          onShowHoverHighlight: (on) {
+            _hovered = on;
+            _update();
+          },
+          // On touch-down, as native: no wait for the gesture arena.
+          child: Listener(
+            onPointerDown: (_) => _press(true),
+            onPointerUp: (_) => _press(false),
+            onPointerCancel: (_) => _press(false),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: action.onPressed,
+              child: AspectRatio(
+                aspectRatio: 1,
+                child: TabHoverHighlight(
+                  hovered: _lit,
+                  child: LiquidGlass(
+                    child: Center(
+                      child: IconTheme.merge(
+                        data: IconThemeData(
+                          size: theme.tabIconSize,
+                          color: theme.tabForeground,
+                        ),
+                        child: action.icon,
+                      ),
+                    ),
+                  ),
                 ),
-                child: action.icon,
               ),
             ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }

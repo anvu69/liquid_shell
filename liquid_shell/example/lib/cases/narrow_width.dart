@@ -4,8 +4,8 @@ import 'package:liquid_shell_example/support/demo_page.dart';
 
 /// Five tabs plus a trailing action in a 320pt-wide shell, as in iPad Slide
 /// Over or ⅓ Split View. Below [kLiquidNarrowWidth] the shell trims the row
-/// margin to 8 and the pill padding to 4, so every cell stays at least
-/// 44pt wide at text scale 1 (Q17), and the labels fit untruncated (Q18).
+/// margin from 21 to 8, so every tab keeps a tap area at least 44pt wide at
+/// text scale 1 (Q17), and the labels fit untruncated (Q18).
 /// The shell decides from its own width, not the screen's.
 class NarrowWidthCase extends StatefulWidget {
   /// Creates the case.
@@ -22,11 +22,31 @@ class _NarrowWidthCaseState extends State<NarrowWidthCase> {
   @override
   Widget build(BuildContext context) {
     const destinations = [
-      LiquidDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
-      LiquidDestination(icon: Icon(Icons.explore_outlined), label: 'Explore'),
-      LiquidDestination(icon: Icon(Icons.inbox_outlined), label: 'Inbox'),
-      LiquidDestination(icon: Icon(Icons.bookmark_outline), label: 'Saved'),
-      LiquidDestination(icon: Icon(Icons.settings_outlined), label: 'Settings'),
+      LiquidDestination(
+        icon: Icon(Icons.home_outlined),
+        selectedIcon: Icon(Icons.home),
+        label: 'Home',
+      ),
+      LiquidDestination(
+        icon: Icon(Icons.map_outlined),
+        selectedIcon: Icon(Icons.map),
+        label: 'Explore',
+      ),
+      LiquidDestination(
+        icon: Icon(Icons.inbox_outlined),
+        selectedIcon: Icon(Icons.inbox),
+        label: 'Inbox',
+      ),
+      LiquidDestination(
+        icon: Icon(Icons.bookmark_outline),
+        selectedIcon: Icon(Icons.bookmark),
+        label: 'Saved',
+      ),
+      LiquidDestination(
+        icon: Icon(Icons.settings_outlined),
+        selectedIcon: Icon(Icons.settings),
+        label: 'Settings',
+      ),
     ];
     return ColoredBox(
       color: Theme.of(context).colorScheme.surfaceContainerLowest,
@@ -67,7 +87,7 @@ class _NarrowWidthCaseState extends State<NarrowWidthCase> {
                 children: const [
                   Text(
                     'This shell is 320pt wide, below kLiquidNarrowWidth '
-                    '(340): row margin 8, pill padding 4, 45.2pt cells.',
+                    '(340): row margin 8, 51.6pt tap areas.',
                   ),
                   SizedBox(height: 12),
                 ],

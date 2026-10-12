@@ -21,8 +21,13 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
     this.blurSigma = 10,
     this.borderRadius = const BorderRadius.all(Radius.circular(999)),
     this.refraction = 1,
-    this.dispersion = 0.3,
+    // Native shows a fringe only on the touched lens (research §5).
+    this.dispersion = 0,
     this.liquidBlurSigma = 2,
+    this.selectionFill = const Color(0x14000000),
+    this.tabForeground = const Color(0xFF191919),
+    this.badgeColor = const Color(0xFFFF383C),
+    this.tabIconSize = 26,
   });
 
   /// Defaults for light and dark, derived from [scheme] (spec §5.9).
@@ -31,25 +36,26 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
     return LiquidGlassTheme(
       tint: scheme.surface.withValues(alpha: light ? 0.72 : 0.90),
       solid: scheme.surface,
-      liquidTint: scheme.surface.withValues(alpha: light ? 0.40 : 0.45),
       border: light
           ? scheme.outline.withValues(alpha: 0.28)
           : scheme.onSurface.withValues(alpha: 0.18),
-      rimHighlight: const Color(
-        0xFFFFFFFF,
-      ).withValues(alpha: light ? 0.50 : 0.18),
+      // iOS 26.5: a barely visible top edge in light; in dark a ~1 pt rim
+      // of 54 → 39 over the #191919 fill (spec VK-503 §6.4, research §5).
+      rimHighlight: const Color(0xFFFFFFFF).withValues(alpha: 0.12),
       shadow: const BoxShadow(
-        color: Color(0x24000000),
-        offset: Offset(0, 6),
+        color: Color(0x12000000),
+        offset: Offset(0, 3),
         blurRadius: 20,
-        spreadRadius: -2,
       ),
       labelStyle: const TextStyle(
         fontSize: 10,
-        height: 1.4,
-        fontWeight: FontWeight.w600,
-        letterSpacing: 0.4,
+        height: 1.2,
+        fontWeight: FontWeight.w500,
+        letterSpacing: 0,
       ),
+      selectionFill: light ? const Color(0x14000000) : const Color(0x21FFFFFF),
+      tabForeground: light ? const Color(0xFF191919) : const Color(0xFFF4F4F4),
+      badgeColor: light ? const Color(0xFFFF383C) : const Color(0xFFFF4245),
     );
   }
 
@@ -90,29 +96,58 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
   /// Compact tab labels.
   final TextStyle labelStyle;
 
-  /// Tint inside the liquid lens; lighter than [tint]. The liquid tier
-  /// reads this, not [tint].
+  /// Tint inside the liquid lens. The liquid tier reads this, not [tint].
   ///
-  /// When not given, it is [solid] at 0.40 alpha, or 0.45 when [solid] is
-  /// dark: the same as [LiquidGlassTheme.fromColorScheme], and it follows
-  /// `copyWith(solid: …)`.
+  /// When not given, it is a neutral milky fill picked by the brightness of
+  /// [solid]: white @ 0.55 over a light [solid], #1C1C1C @ 0.90 over a dark
+  /// one. That is native iOS 26.5 glass, which does not take the app's hue
+  /// (spec VK-503 §6.4, Q14). [LiquidGlassTheme.fromColorScheme] uses the
+  /// same default, and it follows `copyWith(solid: …)`.
   Color get liquidTint =>
       _liquidTint ??
-      solid.withValues(
-        alpha: ThemeData.estimateBrightnessForColor(solid) == Brightness.dark
-            ? 0.45
-            : 0.40,
-      );
+      (ThemeData.estimateBrightnessForColor(solid) == Brightness.dark
+          ? _liquidTintDark
+          : _liquidTintLight);
   final Color? _liquidTint;
+
+  // Fitted to native pixels (test/impeller/tab_material_test.dart): the
+  // pill reads #FEFEFE over white and #191919 over black, and as milky as
+  // native over the example's pages.
+  static const Color _liquidTintLight = Color.from(
+    alpha: 0.55,
+    red: 1,
+    green: 1,
+    blue: 1,
+  );
+  static const Color _liquidTintDark = Color.from(
+    alpha: 0.90,
+    red: 28 / 255,
+    green: 28 / 255,
+    blue: 28 / 255,
+  );
 
   /// Liquid lens thickness multiplier: 0 is flat glass, 1 the default.
   final double refraction;
 
-  /// Liquid colour fringe in the bezel, 0 (off) to 1. Default 0.3.
+  /// Liquid colour fringe in the bezel, 0 (off) to 1. Default 0: native
+  /// shows a fringe only on the active tab lens, which sets its own.
   final double dispersion;
 
   /// Logical sigma of the blur under the liquid lens. 0 turns it off.
   final double liquidBlurSigma;
+
+  /// The selected tab lens at rest: a neutral fill over the pill (spec
+  /// VK-503 §6.2).
+  final Color selectionFill;
+
+  /// Unselected tab icons and labels.
+  final Color tabForeground;
+
+  /// Tab bar badge capsule.
+  final Color badgeColor;
+
+  /// Tab bar icon size at text scale 1.
+  final double tabIconSize;
 
   @override
   LiquidGlassTheme copyWith({
@@ -129,6 +164,10 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
     double? refraction,
     double? dispersion,
     double? liquidBlurSigma,
+    Color? selectionFill,
+    Color? tabForeground,
+    Color? badgeColor,
+    double? tabIconSize,
   }) => LiquidGlassTheme(
     tint: tint ?? this.tint,
     solid: solid ?? this.solid,
@@ -143,6 +182,10 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
     refraction: refraction ?? this.refraction,
     dispersion: dispersion ?? this.dispersion,
     liquidBlurSigma: liquidBlurSigma ?? this.liquidBlurSigma,
+    selectionFill: selectionFill ?? this.selectionFill,
+    tabForeground: tabForeground ?? this.tabForeground,
+    badgeColor: badgeColor ?? this.badgeColor,
+    tabIconSize: tabIconSize ?? this.tabIconSize,
   );
 
   @override
@@ -162,6 +205,10 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
       refraction: lerpDouble(refraction, other.refraction, t)!,
       dispersion: lerpDouble(dispersion, other.dispersion, t)!,
       liquidBlurSigma: lerpDouble(liquidBlurSigma, other.liquidBlurSigma, t)!,
+      selectionFill: Color.lerp(selectionFill, other.selectionFill, t)!,
+      tabForeground: Color.lerp(tabForeground, other.tabForeground, t)!,
+      badgeColor: Color.lerp(badgeColor, other.badgeColor, t)!,
+      tabIconSize: lerpDouble(tabIconSize, other.tabIconSize, t)!,
     );
   }
 
@@ -180,10 +227,14 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
       other.liquidTint == liquidTint &&
       other.refraction == refraction &&
       other.dispersion == dispersion &&
-      other.liquidBlurSigma == liquidBlurSigma;
+      other.liquidBlurSigma == liquidBlurSigma &&
+      other.selectionFill == selectionFill &&
+      other.tabForeground == tabForeground &&
+      other.badgeColor == badgeColor &&
+      other.tabIconSize == tabIconSize;
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     tint,
     solid,
     border,
@@ -197,5 +248,9 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
     refraction,
     dispersion,
     liquidBlurSigma,
-  );
+    selectionFill,
+    tabForeground,
+    badgeColor,
+    tabIconSize,
+  ]);
 }

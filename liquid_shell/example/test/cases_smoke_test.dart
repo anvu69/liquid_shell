@@ -71,7 +71,7 @@ void main() {
 
   testWidgets('the guard asks before leaving dirty edits', (tester) async {
     await _openCase(tester, 'guard');
-    await tester.tap(find.text('Explore'));
+    await tester.tap(_slot('Explore', within: find.byType(LiquidTabBar)));
     await tester.pumpAndSettle();
     expect(find.text('Discard changes?'), findsOneWidget);
     await tester.tap(find.text('Keep editing'));
@@ -83,7 +83,7 @@ void main() {
     tester,
   ) async {
     await _openCase(tester, 'guard');
-    await tester.tap(find.text('Explore'));
+    await tester.tap(_slot('Explore', within: find.byType(LiquidTabBar)));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Discard'));
     await tester.pumpAndSettle();
@@ -94,7 +94,7 @@ void main() {
     // The edits are gone, so the next change does not ask again.
     final dirty = tester.widget<SwitchListTile>(find.byType(SwitchListTile));
     expect(dirty.value, isFalse);
-    await tester.tap(find.text('Home'));
+    await tester.tap(_slot('Home', within: find.byType(LiquidTabBar)));
     await tester.pumpAndSettle();
     expect(find.text('Discard changes?'), findsNothing);
     expect(find.text('Home item 1'), findsOneWidget);
@@ -181,19 +181,16 @@ void main() {
     final shell = tester.getRect(find.byType(LiquidShell));
     expect(shell.width, 320);
     final bar = find.byType(LiquidTabBar);
+    // The slots' touch and semantics nodes.
     final cells = [
       for (final label in shellLabels(tester))
-        tester.getRect(
-          find.ancestor(
-            of: find.descendant(of: bar, matching: find.text(label)),
-            matching: find.byType(InkWell),
-          ),
-        ),
+        tester.getRect(_slot(label, within: bar)),
     ];
     expect(cells, hasLength(5));
-    // (320 − 2×8 margin − 62 circle − 8 gap − 2×4 pill padding) / 5.
+    // Native slots (spec VK-503 §5.1): pitch (320 − 2×8 margin − 62 circle −
+    // 8 gap − 2×4 inset − 8 overlap) / 5 = 43.6, hit capsule 43.6 + 8.
     for (final cell in cells) {
-      expect(cell.width, moreOrLessEquals(45.2, epsilon: 0.01));
+      expect(cell.width, moreOrLessEquals(51.6, epsilon: 0.01));
       expect(cell.width, greaterThanOrEqualTo(44));
     }
     // The narrow row margin is 8 on both sides of the shell, not the screen.
@@ -221,7 +218,7 @@ void main() {
     expect(find.byType(LiquidShell), findsNothing);
     expect(find.byType(LiquidSidebar), findsNothing);
     expect(find.byType(LiquidTabBar), findsOneWidget);
-    await tester.tap(find.text('Explore'));
+    await tester.tap(_slot('Explore', within: find.byType(LiquidTabBar)));
     await tester.pumpAndSettle();
     expect(find.text('Explore item 1'), findsOneWidget);
   });
@@ -393,6 +390,25 @@ void main() {
     expect(find.text('Result: cancel'), findsOneWidget);
   });
 
+  testWidgets('every case destination has a filled selectedIcon (spec '
+      'VK-503 §14)', (tester) async {
+    for (final entry in kCases) {
+      await tester.pumpWidget(MaterialApp(home: entry.page));
+      await tester.pump();
+      final shells = tester.widgetList<LiquidShell>(find.byType(LiquidShell));
+      for (final shell in shells) {
+        for (final d in shell.destinations) {
+          if (d.role == LiquidDestinationRole.search) continue;
+          expect(
+            d.selectedIcon,
+            isNotNull,
+            reason: '${entry.id}: ${d.label} needs a filled selectedIcon',
+          );
+        }
+      }
+    }
+  });
+
   testWidgets('autorun shows the alert by itself, then the result', (
     tester,
   ) async {
@@ -404,3 +420,16 @@ void main() {
     expect(find.text('Result: keep'), findsWidgets);
   });
 }
+
+/// The touch and semantics node of the tab labelled [label] in [within]:
+/// the drawn row ignores pointers and draws each label twice (spec VK-503
+/// §6.3).
+Finder _slot(String label, {required Finder within}) => find.descendant(
+  of: within,
+  matching: find.byWidgetPredicate(
+    (w) =>
+        w is Semantics &&
+        w.properties.button == true &&
+        (w.properties.label?.startsWith(label) ?? false),
+  ),
+);

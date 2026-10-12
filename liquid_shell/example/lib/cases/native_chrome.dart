@@ -24,23 +24,27 @@ class _NativeChromeCaseState extends State<NativeChromeCase> {
   static const _destinations = [
     LiquidDestination(
       icon: Icon(Icons.home_outlined),
+      selectedIcon: Icon(Icons.home),
       label: 'Home',
       sfSymbol: 'house',
     ),
     LiquidDestination(
       icon: Icon(Icons.inbox_outlined),
+      selectedIcon: Icon(Icons.inbox),
       label: 'Inbox',
       badge: LiquidBadge.count(3),
       sfSymbol: 'tray',
     ),
     LiquidDestination(
       icon: Icon(Icons.bar_chart),
+      selectedIcon: Icon(Icons.bar_chart),
       label: 'Reports',
       placement: LiquidPlacement.sidebarOnly,
       sfSymbol: 'chart.bar',
     ),
     LiquidDestination(
       icon: Icon(Icons.settings_outlined),
+      selectedIcon: Icon(Icons.settings),
       label: 'Settings',
       sfSymbol: 'gear',
     ),

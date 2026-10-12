@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/search/search_controller.dart';
 import 'package:liquid_shell/src/search/search_layout.dart';
+import 'package:liquid_shell/src/shell/shell_layout.dart'
+    show kTopBarGap, kTopPillExtent;
 
 class _Driver implements SearchDriver {
   final calls = <String>[];
@@ -353,7 +355,7 @@ void main() {
       size: size,
       rowBottom: rowBottom,
       rowExtent: 62,
-      margin: 16,
+      margin: 21,
       keyboard: keyboard,
       direction: direction,
     );
@@ -361,7 +363,7 @@ void main() {
     test('idle: the ⌕ circle at the trailing end of the row', () {
       expect(
         rects(LiquidSearchPhase.idle).field,
-        const Rect.fromLTWH(393 - 16 - 62, rowBottom - 62, 62, 62),
+        const Rect.fromLTWH(393 - 21 - 62, rowBottom - 62, 62, 62),
       );
     });
 
@@ -411,25 +413,25 @@ void main() {
           regularSearchFieldTop(
             phase: LiquidSearchPhase.selected,
             paddingTop: 24,
-            barExtent: 52,
+            barExtent: kTopPillExtent,
             tiled: false,
           ),
-          24 + 20 + 52 + 8,
+          24 + kTopBarGap + kTopPillExtent + 8,
         );
         expect(
           regularSearchFieldTop(
             phase: LiquidSearchPhase.active,
             paddingTop: 24,
-            barExtent: 52,
+            barExtent: kTopPillExtent,
             tiled: false,
           ),
-          24 + 20,
+          24 + kTopBarGap,
         );
         expect(
           regularSearchFieldTop(
             phase: LiquidSearchPhase.selected,
             paddingTop: 24,
-            barExtent: 52,
+            barExtent: kTopPillExtent,
             tiled: true,
           ),
           24 + 54,
@@ -438,7 +440,7 @@ void main() {
           regularSearchFieldTop(
             phase: LiquidSearchPhase.active,
             paddingTop: 24,
-            barExtent: 52,
+            barExtent: kTopPillExtent,
             tiled: true,
           ),
           24 + 5,

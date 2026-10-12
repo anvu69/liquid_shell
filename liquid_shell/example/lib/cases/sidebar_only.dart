@@ -22,12 +22,14 @@ class _SidebarOnlyCaseState extends State<SidebarOnlyCase> {
         ...kDemoDestinations,
         LiquidDestination(
           icon: Icon(Icons.bar_chart),
+          selectedIcon: Icon(Icons.bar_chart),
           label: 'Reports',
           placement: LiquidPlacement.sidebarOnly,
           sfSymbol: 'chart.bar',
         ),
         LiquidDestination(
           icon: Icon(Icons.archive_outlined),
+          selectedIcon: Icon(Icons.archive),
           label: 'Archive',
           placement: LiquidPlacement.sidebarOnly,
           sfSymbol: 'archivebox',

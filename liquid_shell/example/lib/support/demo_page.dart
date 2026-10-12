@@ -94,8 +94,8 @@ const kDemoDestinations = [
     sfSymbol: 'house',
   ),
   LiquidDestination(
-    icon: Icon(Icons.explore_outlined),
-    selectedIcon: Icon(Icons.explore),
+    icon: Icon(Icons.map_outlined),
+    selectedIcon: Icon(Icons.map),
     label: 'Explore',
     sfSymbol: 'map',
   ),

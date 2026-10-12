@@ -15,9 +15,13 @@ dependency.
 
 ## Features
 
-- **One shell, every width.** A bottom glass pill below 700pt; a glass
-  sidebar from 700pt, over the content in portrait and beside it in
-  landscape from 1024pt, with a top pill and a toggle while it is hidden.
+- **One shell, every width.** A bottom glass pill below 700pt and on
+  landscape phones; a glass sidebar from 700pt, over the content in
+  portrait and beside it in landscape from 1024pt, with a top pill and a
+  toggle while it is hidden.
+- **A floating glass tab bar measured against iOS 26**: native slot
+  geometry, a liquid lens that follows your finger, minimize on scroll
+  ([doc/tab_bar.md](doc/tab_bar.md)).
 - **Router-agnostic.** You pass `selectedIndex`, `onDestinationSelected` and
   a `body`. Works with `IndexedStack`, `Navigator` or any router.
 - **Badges**, **sidebar-only destinations**, **sidebar header and footer**,
@@ -101,6 +105,12 @@ class _TabsState extends State<_Tabs> {
 Pad your pages with `LiquidShellScope.contentPaddingOf(context)` so content
 scrolls under the glass but starts and ends clear of it.
 
+**Icons.** The tab bar draws `selectedIcon ?? icon` in every tab, as iOS
+draws a filled symbol in every tab. Give each destination an outline
+`icon` and a filled `selectedIcon` (`Icons.home_outlined` /
+`Icons.home`); the sidebar switches between them by selection. See
+[doc/tab_bar.md](doc/tab_bar.md#icons).
+
 Destination labels must be unique (a debug assert names any repeats). Put
 the shell inside a route, for example `MaterialApp.home` or a router's shell
 route, not in `MaterialApp.builder`: its tooltips need an `Overlay`.
@@ -146,16 +156,19 @@ Widget build(BuildContext context) {
     destinations: const [
       LiquidDestination(
         icon: Icon(Icons.home_outlined),
+        selectedIcon: Icon(Icons.home),
         label: 'Home',
         sfSymbol: 'house',
       ),
       LiquidDestination(
-        icon: Icon(Icons.explore_outlined),
+        icon: Icon(Icons.map_outlined),
+        selectedIcon: Icon(Icons.map),
         label: 'Explore',
         sfSymbol: 'map',
       ),
       LiquidDestination(
         icon: Icon(Icons.settings_outlined),
+        selectedIcon: Icon(Icons.settings),
         label: 'Settings',
         sfSymbol: 'gear',
       ),
@@ -187,18 +200,21 @@ Widget build(BuildContext context) {
   const destinations = [
     LiquidDestination(
       icon: Icon(Icons.inbox_outlined),
+      selectedIcon: Icon(Icons.inbox),
       label: 'Inbox',
       badge: LiquidBadge.count(3),
       sfSymbol: 'tray',
     ),
     LiquidDestination(
       icon: Icon(Icons.forum_outlined),
+      selectedIcon: Icon(Icons.forum),
       label: 'Chats',
       badge: LiquidBadge.count(120), // shows "99+"
       sfSymbol: 'bubble.left.and.bubble.right',
     ),
     LiquidDestination(
       icon: Icon(Icons.notifications_outlined),
+      selectedIcon: Icon(Icons.notifications),
       label: 'Alerts',
       badge: LiquidBadge.dot(),
       sfSymbol: 'bell',
@@ -232,12 +248,14 @@ Widget build(BuildContext context) {
       ...kDemoDestinations,
       LiquidDestination(
         icon: Icon(Icons.bar_chart),
+        selectedIcon: Icon(Icons.bar_chart),
         label: 'Reports',
         placement: LiquidPlacement.sidebarOnly,
         sfSymbol: 'chart.bar',
       ),
       LiquidDestination(
         icon: Icon(Icons.archive_outlined),
+        selectedIcon: Icon(Icons.archive),
         label: 'Archive',
         placement: LiquidPlacement.sidebarOnly,
         sfSymbol: 'archivebox',
@@ -902,6 +920,26 @@ iOS 26 native iPhone (left) and Flutter liquid on Android (right):
 What the lens draws, its theme fields, when it falls back and what it
 costs: [doc/liquid.md](doc/liquid.md).
 
+### The Flutter tab bar
+
+Where the system does not draw the chrome (Android, iOS 15–25, a forced
+tier), the tab bar is Flutter's, measured against iOS 26.5:
+
+- 86pt slots in a 62pt pill, 21pt from the screen edges, the pill at the
+  start beside the trailing circle or the ⌕;
+- a selected tab that rests in a soft capsule and turns into a liquid lens
+  on touch: it follows a drag, tints and magnifies the icons under it, and
+  snaps to a tab when the finger lifts;
+- selection on release, as on iOS, and a selection click as the lens
+  crosses into another tab;
+- a 44pt bar on landscape phones and a 48pt label-only bar on top on iPad;
+- a 48pt circle while minimized on scroll, which a tap expands;
+- a scroll-edge pocket under the bar on the liquid tier.
+
+Reduce Motion cross-fades the selection instead. The geometry, the lens,
+the icons and what is not identical to iOS:
+[doc/tab_bar.md](doc/tab_bar.md).
+
 ### Forced tier
 
 <?code-excerpt "forced_tier.dart (readme)"?>
@@ -987,11 +1025,11 @@ Widget _inFrame(
 ### Narrow width
 
 Below `kLiquidNarrowWidth` (340pt of the shell's own width) the bottom row
-margin drops from 16 to 8 and the pill padding from 8 to 4. Five tabs plus a
-trailing action at 320pt then get 45.2pt cells at text scale 1, above the
-44pt minimum hit target. A label that still does not fit takes its cell's
-side padding, then shrinks, never below 10pt, and only then ends in an
-ellipsis.
+margin drops from 21 to 8. Five tabs plus a trailing action at 320pt then
+get 43.6pt slots with tap areas of at least 44pt at text scale 1, the
+minimum hit target. A label that still does not fit
+takes its cell's side padding, then shrinks, never below 10pt, and only
+then ends in an ellipsis.
 
 <?code-excerpt "narrow_width.dart (readme)"?>
 ```dart
@@ -1000,11 +1038,31 @@ int _index = 0;
 @override
 Widget build(BuildContext context) {
   const destinations = [
-    LiquidDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
-    LiquidDestination(icon: Icon(Icons.explore_outlined), label: 'Explore'),
-    LiquidDestination(icon: Icon(Icons.inbox_outlined), label: 'Inbox'),
-    LiquidDestination(icon: Icon(Icons.bookmark_outline), label: 'Saved'),
-    LiquidDestination(icon: Icon(Icons.settings_outlined), label: 'Settings'),
+    LiquidDestination(
+      icon: Icon(Icons.home_outlined),
+      selectedIcon: Icon(Icons.home),
+      label: 'Home',
+    ),
+    LiquidDestination(
+      icon: Icon(Icons.map_outlined),
+      selectedIcon: Icon(Icons.map),
+      label: 'Explore',
+    ),
+    LiquidDestination(
+      icon: Icon(Icons.inbox_outlined),
+      selectedIcon: Icon(Icons.inbox),
+      label: 'Inbox',
+    ),
+    LiquidDestination(
+      icon: Icon(Icons.bookmark_outline),
+      selectedIcon: Icon(Icons.bookmark),
+      label: 'Saved',
+    ),
+    LiquidDestination(
+      icon: Icon(Icons.settings_outlined),
+      selectedIcon: Icon(Icons.settings),
+      label: 'Settings',
+    ),
   ];
   return ColoredBox(
     color: Theme.of(context).colorScheme.surfaceContainerLowest,
@@ -1045,7 +1103,7 @@ Widget build(BuildContext context) {
               children: const [
                 Text(
                   'This shell is 320pt wide, below kLiquidNarrowWidth '
-                  '(340): row margin 8, pill padding 4, 45.2pt cells.',
+                  '(340): row margin 8, 51.6pt tap areas.',
                 ),
                 SizedBox(height: 12),
               ],
@@ -1097,23 +1155,27 @@ int _drafts = 0;
 static const _destinations = [
   LiquidDestination(
     icon: Icon(Icons.home_outlined),
+    selectedIcon: Icon(Icons.home),
     label: 'Home',
     sfSymbol: 'house',
   ),
   LiquidDestination(
     icon: Icon(Icons.inbox_outlined),
+    selectedIcon: Icon(Icons.inbox),
     label: 'Inbox',
     badge: LiquidBadge.count(3),
     sfSymbol: 'tray',
   ),
   LiquidDestination(
     icon: Icon(Icons.bar_chart),
+    selectedIcon: Icon(Icons.bar_chart),
     label: 'Reports',
     placement: LiquidPlacement.sidebarOnly,
     sfSymbol: 'chart.bar',
   ),
   LiquidDestination(
     icon: Icon(Icons.settings_outlined),
+    selectedIcon: Icon(Icons.settings),
     label: 'Settings',
     sfSymbol: 'gear',
   ),
@@ -1205,12 +1267,13 @@ tests behave correctly.
 
 | Layout | When | Sidebar | Tab bar |
 |---|---|---|---|
-| Compact | width < 700 | never | bottom pill (narrow margins below 340) |
-| Regular, overlay | width ≥ 700, portrait or narrower than 1024 | hidden by default; covers the content when shown | top pill + toggle |
+| Compact | width < 700, or landscape and lower than `compactHeight` (500) | never | bottom pill (narrow margins below 340; a 44pt bar with labels beside the icons in landscape) |
+| Regular, overlay | width ≥ 700 and not compact, portrait or narrower than 1024 | hidden by default; covers the content when shown | top pill + toggle |
 | Regular, tiled | width ≥ 1024 and landscape | shown by default, beside the content | none while shown; top pill + toggle when hidden |
 | Hidden | a `LiquidHideChrome` is mounted and on screen | none | none |
 
-Change the thresholds with `LiquidShellBreakpoints`. Read the current
+Change the thresholds with `LiquidShellBreakpoints`; `compactHeight: 0`
+gives landscape phones the regular layout again. Read the current
 layout, insets and sidebar state with `LiquidShellScope.of(context)`.
 
 ## Accessibility and fallbacks
@@ -1231,6 +1294,8 @@ counts as off, so the shell never fails to draw.
 
 Cells and rows are buttons with labels, badge text and selected state. From
 1.6× text size the bar is icon-only and a long press shows the label large.
+With Reduce Motion the tab lens cross-fades instead of sliding, and the
+bar neither swells nor glows.
 The overlay sidebar is modal for screen readers, and while it is open,
 system back closes it before anything else.
 
@@ -1314,13 +1379,26 @@ content viewer (see [Custom chrome](#custom-chrome)).
   injected. See [doc/native_dialogs.md](doc/native_dialogs.md#known-limits).
 - **Android signals are best effort.** Each one that cannot be read
   counts as off.
+- **The Flutter tab bar is close to iOS 26, not identical.** Its glass is
+  matched by measurement and does not re-tint by the brightness behind
+  it; corners are circular, not continuous; icons are your icon font, not
+  SF Symbols; colours are solid, not vibrant; the lens's squash and
+  stretch matches the peaks and timing but not every frame; the pocket is
+  three blur bands. In dark mode the touched lens's grey veil does not
+  take the page's hue, as iOS's does. Glass cannot see a platform view (map, web
+  view): force `frosted` or `solid` on such pages. A narrow iPad window
+  uses the iPhone measurements, and there is no iPad tab customization on
+  long press. Details in
+  [doc/tab_bar.md](doc/tab_bar.md#what-is-not-identical-to-ios).
 
 ## More
 
 - [doc/theming.md](doc/theming.md): `LiquidGlassTheme` fields and defaults
 - [doc/tiers.md](doc/tiers.md): tiers, the policy, signals, writing a renderer
-- [doc/liquid.md](doc/liquid.md): the liquid lens, its theme fields,
-  fallbacks and cost
+- [doc/tab_bar.md](doc/tab_bar.md): the Flutter tab bar, its geometry,
+  lens, icons, accessibility and what is not identical to iOS
+- [doc/liquid.md](doc/liquid.md): the liquid lens, the tab lens and the
+  pocket, its theme fields, fallbacks and cost
 - [doc/native_chrome.md](doc/native_chrome.md): native iOS chrome, its
   install rules, behaviour and limits
 - [doc/search.md](doc/search.md): the search tab, its phases, the
@@ -1336,8 +1414,10 @@ content viewer (see [Custom chrome](#custom-chrome)).
 - **P2:** native iOS 26 chrome and window controls.
 - **P3a (0.1.0-dev.3, done):** native alerts and action sheets.
 - **P4 (0.1.0-dev.4, done):** the liquid tier in the core package.
-- **P3b-1 (this release, 0.1.0-dev.5):** the search tab, `LiquidPage` and
-  the glass back button.
+- **P3b-1 (0.1.0-dev.5, done):** the search tab, `LiquidPage` and the
+  glass back button.
+- **VK-503 (this release, 0.1.0-dev.6):** tab bar fidelity: the Flutter
+  tab bar measured against iOS 26.5.
 - **P3b-2 (next):** the native navigation bar on every tab.
 - **P3a-2:** share sheet, haptics, date picker and text fields in alerts.
 - **P5:** a go_router adapter (`StatefulShellRoute` builder, route-driven

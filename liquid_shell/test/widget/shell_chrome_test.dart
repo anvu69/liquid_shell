@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 
+import 'package:liquid_shell/src/chrome/glass_tab_bar.dart';
 import 'package:liquid_shell/src/chrome/sidebar_toggle.dart';
+import 'package:liquid_shell/src/shell/shell_layout.dart'
+    show kTopBarGap, kTopPillExtent;
 import 'package:liquid_shell/src/shell/shell_scope.dart';
 
 import '../helpers/shell_harness.dart';
@@ -32,19 +35,21 @@ void main() {
       expect(pill.height, 62);
     });
 
-    testWidgets('932×430 landscape phone → top bar, sidebar overlays', (
-      tester,
-    ) async {
+    testWidgets('932×430 landscape phone with compactHeight 0 (P1) → top '
+        'bar, sidebar overlays', (tester) async {
       await pumpShell(
         tester,
-        const TestShell(),
+        const TestShell(breakpoints: LiquidShellBreakpoints(compactHeight: 0)),
         size: kPhoneLandscape,
         padding: const EdgeInsets.only(left: 59, right: 59, bottom: 21),
       );
       final scope = scopeOf(tester);
       expect(scope.sizeClass, LiquidSizeClass.regular);
       expect(scope.chromeKind, LiquidChromeKind.topBar);
-      expect(scope.chromeInsets, const EdgeInsets.only(top: 72));
+      expect(
+        scope.chromeInsets,
+        const EdgeInsets.only(top: kTopBarGap + kTopPillExtent),
+      );
       expect(find.byTooltip('Show sidebar'), findsOneWidget);
 
       await tester.tap(find.byTooltip('Show sidebar'));
@@ -52,6 +57,77 @@ void main() {
       expect(scopeOf(tester).chromeKind, LiquidChromeKind.sidebarOverlay);
       expect(find.byType(LiquidSidebar), findsOneWidget);
       expect(find.byType(ModalBarrier), findsWidgets);
+    });
+
+    testWidgets('landscape phone: the 44 pt bottom bar at margin 38 (VK-503 '
+        'Q8)', (tester) async {
+      await pumpShell(tester, const TestShell(), size: kPhoneLandscape);
+      expect(scopeOf(tester).sizeClass, LiquidSizeClass.compact);
+      final pill = tester.getRect(find.byKey(kTabPillKey));
+      expect(pill.height, 44);
+      expect(pill.left, greaterThanOrEqualTo(38));
+    });
+
+    testWidgets('the shell breakpoints pick the landscape form, not the '
+        'window (compactHeight 600 at 1000×550)', (tester) async {
+      await pumpShell(
+        tester,
+        const TestShell(
+          breakpoints: LiquidShellBreakpoints(compactHeight: 600),
+        ),
+        size: const Size(1000, 550),
+      );
+      expect(scopeOf(tester).chromeKind, LiquidChromeKind.bottomBar);
+      expect(find.byType(LiquidTabBar), findsOneWidget);
+      final pill = tester.getRect(find.byKey(kTabPillKey));
+      expect(pill.height, 44);
+      expect(pill.left, greaterThanOrEqualTo(38));
+    });
+
+    testWidgets('a compact landscape window at least compactHeight tall '
+        'keeps the 62 pt bar (690×600, VK-503 Q8)', (tester) async {
+      await pumpShell(tester, const TestShell(), size: const Size(690, 600));
+      expect(scopeOf(tester).chromeKind, LiquidChromeKind.bottomBar);
+      final pill = tester.getRect(find.byKey(kTabPillKey));
+      expect(pill.height, 62);
+      expect(scopeOf(tester).chromeInsets, const EdgeInsets.only(bottom: 83));
+    });
+
+    testWidgets('compactHeight 0 restores P1: a 690×430 shell keeps the '
+        '62 pt bar at margin 21', (tester) async {
+      await pumpShell(
+        tester,
+        TestShell(
+          breakpoints: const LiquidShellBreakpoints(compactHeight: 0),
+          // Start-pins the pill, so its left edge is the row margin.
+          trailing: LiquidTabAction(
+            icon: const Icon(Icons.search),
+            onPressed: () {},
+            semanticLabel: 'Search',
+          ),
+        ),
+        size: const Size(690, 430),
+      );
+      expect(scopeOf(tester).chromeKind, LiquidChromeKind.bottomBar);
+      final pill = tester.getRect(find.byKey(kTabPillKey));
+      expect(pill.height, 62);
+      expect(pill.left, 21);
+    });
+
+    testWidgets('the measured bar height is kept per form: a rotation uses '
+        'the right height on its first frame', (tester) async {
+      await pumpShell(tester, const TestShell());
+      expect(scopeOf(tester).chromeInsets.bottom, 62 + 21);
+      // Before the landscape bar is measured: its own 44, not portrait's 62.
+      tester.view.physicalSize = kPhoneLandscape;
+      await tester.pump();
+      expect(scopeOf(tester).chromeInsets.bottom, 44 + 21);
+      await tester.pumpAndSettle();
+      expect(scopeOf(tester).chromeInsets.bottom, 44 + 21);
+      // Back to portrait: the cached 62 at once, not landscape's 44.
+      tester.view.physicalSize = kPhone;
+      await tester.pump();
+      expect(scopeOf(tester).chromeInsets.bottom, 62 + 21);
     });
 
     testWidgets('iPad portrait 834×1194 → top bar; body never resized', (
@@ -64,11 +140,15 @@ void main() {
         padding: _tablet,
       );
       expect(scopeOf(tester).chromeKind, LiquidChromeKind.topBar);
-      expect(scopeOf(tester).chromeInsets, const EdgeInsets.only(top: 96));
-      // The pill is centred; the toggle is a 48pt circle at (20, pad.top+20).
+      expect(
+        scopeOf(tester).chromeInsets,
+        const EdgeInsets.only(top: 24 + kTopBarGap + kTopPillExtent),
+      );
+      // The pill is centred; the toggle is a 48pt circle at
+      // (20, pad.top + 5.5), centred on the 48pt row (spec VK-503 §12.2).
       expect(
         tester.getRect(find.byType(SidebarToggle)),
-        const Rect.fromLTWH(20, 44, 48, 48),
+        const Rect.fromLTWH(20, 24 + kTopBarGap, 48, 48),
       );
       await tester.tap(find.byTooltip('Show sidebar'));
       await tester.pumpAndSettle();
@@ -151,14 +231,9 @@ void main() {
         padding: const EdgeInsets.only(top: 20),
         direction: direction,
       );
+      // The slots' touch and semantics nodes (spec VK-503 §5.1).
       return [
-        for (final label in labels.take(count))
-          tester.getRect(
-            find.ancestor(
-              of: find.text(label),
-              matching: find.byType(InkWell),
-            ),
-          ),
+        for (final label in labels.take(count)) tester.getRect(tabSlot(label)),
       ];
     }
 
@@ -186,8 +261,8 @@ void main() {
       ),
     );
 
-    testWidgets('320: 5 tabs + trailing keep 45.2pt cells with margin 8 and '
-        'pill padding 4, tile the pill, and each tap selects its tab', (
+    testWidgets('320: 5 tabs + trailing keep 51.6pt slots with margin 8 and '
+        'inset 4, tile the pill, and each tap selects its tab', (
       tester,
     ) async {
       final selections = <int>[];
@@ -201,31 +276,41 @@ void main() {
       expect(row(tester).left, 8);
       expect(row(tester).right, 312);
       expect(rects.first.left - pill(tester).left, 4);
-      // (320 − 2×8 margin − 62 circle − 8 gap − 2×4 pill padding) / 5.
+      // Native slots (spec VK-503 §5.1): pitch 43.6, hit capsule 51.6.
+      final home = tester.getRect(
+        find.byWidgetPredicate(
+          (w) =>
+              w is Semantics &&
+              (w.properties.label?.startsWith('Home') ?? false),
+        ),
+      );
+      expect(home.width, closeTo(51.6, 0.01));
+      expect(home.width, greaterThanOrEqualTo(44));
       for (final rect in rects) {
         expect(rect.width, greaterThanOrEqualTo(44));
-        expect(rect.width, moreOrLessEquals(45.2, epsilon: 0.01));
         expect(rect.height, greaterThanOrEqualTo(44));
       }
+      // Neighbouring capsules overlap by 8, so the pill stays tiled.
       for (var i = 1; i < rects.length; i++) {
-        expect(rects[i].left, moreOrLessEquals(rects[i - 1].right));
+        expect(rects[i].left, moreOrLessEquals(rects[i - 1].right - 8));
       }
       expect(circle(tester).right, 312);
-      for (final label in labels) {
-        await tester.tap(find.text(label));
+      for (final rect in rects) {
+        await tester.tapAt(rect.center);
         await tester.pumpAndSettle();
       }
       expect(selections, [0, 1, 2, 3, 4]);
     });
 
-    testWidgets('375: the regular margin 16 and pill padding 8 are kept', (
+    testWidgets('375: the regular margin 21 is kept; native slots', (
       tester,
     ) async {
       final rects = await cells(tester, 5, trailing: add, width: 375);
-      expect(row(tester).left, 16);
-      expect(row(tester).right, 375 - 16);
-      expect(rects.first.left - pill(tester).left, 8);
-      expect(circle(tester).right, 375 - 16);
+      expect(row(tester).left, 21);
+      expect(row(tester).right, 375 - 21);
+      expect(circle(tester).right, 375 - 21);
+      // (375 − 42 − 70 − 16) / 5 + 8 (spec VK-503 §5.1).
+      expect(rects.first.width, closeTo(57.4, 0.01));
       for (final rect in rects) {
         expect(rect.width, greaterThanOrEqualTo(44));
       }
@@ -237,22 +322,23 @@ void main() {
       var rects = await cells(tester, 5, trailing: add, width: 339);
       expect(row(tester).left, 8);
       expect(row(tester).right, 339 - 8);
-      expect(rects.first.left - pill(tester).left, 4);
+      // (339 − 16 − 70 − 16) / 5 + 8.
+      expect(rects.first.width, closeTo(55.4, 0.01));
       for (final rect in rects) {
         expect(rect.width, greaterThanOrEqualTo(44));
       }
 
       rects = await cells(tester, 5, trailing: add, width: 340);
-      expect(row(tester).left, 16);
-      expect(row(tester).right, 340 - 16);
-      expect(rects.first.left - pill(tester).left, 8);
-      // (340 − 32 − 62 − 8 − 16) / 5 = 44.4.
+      expect(row(tester).left, 21);
+      expect(row(tester).right, 340 - 21);
+      // (340 − 42 − 70 − 16) / 5 + 8.
+      expect(rects.first.width, closeTo(50.4, 0.01));
       for (final rect in rects) {
         expect(rect.width, greaterThanOrEqualTo(44));
       }
     });
 
-    testWidgets('RTL at 320: mirrored, same margins, 45.2pt cells', (
+    testWidgets('RTL at 320: mirrored, same margins, 51.6pt slots', (
       tester,
     ) async {
       final rects = await cells(
@@ -269,7 +355,7 @@ void main() {
       expect(pill(tester).right - rects.first.right, 4);
       expect(rects.first.left, greaterThan(rects.last.left));
       for (final rect in rects) {
-        expect(rect.width, moreOrLessEquals(45.2, epsilon: 0.01));
+        expect(rect.width, moreOrLessEquals(51.6, epsilon: 0.01));
       }
     });
 
@@ -522,7 +608,7 @@ void main() {
       );
       expect(
         tester.getRect(find.byType(SidebarToggle)),
-        const Rect.fromLTWH(834 - 20 - 48, 44, 48, 48),
+        const Rect.fromLTWH(834 - 20 - 48, 24 + kTopBarGap, 48, 48),
       );
     });
   });

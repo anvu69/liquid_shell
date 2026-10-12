@@ -16,6 +16,7 @@ uniform vec4 uOptics;  // 10-13: bezel, thickness, index, dispersion
 uniform vec4 uTint;    // 14-17: rgba, straight alpha
 uniform vec4 uRim;     // 18-21: rgba
 uniform vec4 uLight;   // 22-25: light x, light y, rim width, saturation
+uniform float uVeil;   // 26: veil falloff, 0 = uniform tint (VK-503 §7.2)
 
 uniform sampler2D uBackdrop;
 
@@ -95,7 +96,13 @@ void main() {
     color = sampleBackdrop(p);
   }
 
-  color = mix(color, uTint.rgb, uTint.a);
+  // The tint is a veil. With uVeil 0 it is uniform (every surface but the
+  // engaged tab lens: mix(1, s, 0) is exactly 1, so these pixels are
+  // unchanged). With uVeil 1 it thins from the flat core to nothing at the
+  // edge across the bezel, so the bent page and its fringe show in the
+  // ring, as native's held lens: milky in the middle, clear at the rim.
+  float veil = uTint.a * mix(1.0, smoothstep(0.2, 1.0, x), uVeil);
+  color = mix(color, uTint.rgb, veil);
   float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
   color = mix(vec3(luma), color, uLight.w);
 

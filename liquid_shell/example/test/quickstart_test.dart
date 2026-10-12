@@ -12,7 +12,9 @@ void main() {
     expect(find.byType(LiquidShell), findsOneWidget);
     expect(find.text('Tab 1'), findsOneWidget);
 
-    await tester.tap(find.text('Settings'));
+    // The tab bar draws each label twice (plain and tinted), one above
+    // the other.
+    await tester.tap(find.text('Settings').first);
     await tester.pumpAndSettle();
     expect(find.text('Tab 2'), findsOneWidget);
     expect(find.byType(MaterialApp), findsOneWidget);

@@ -5,12 +5,15 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:liquid_shell/src/chrome/glass_tab_bar.dart';
 import 'package:liquid_shell/src/chrome/sidebar.dart';
 import 'package:liquid_shell/src/chrome/sidebar_toggle.dart';
 import 'package:liquid_shell/src/chrome/tab_bar.dart';
+import 'package:liquid_shell/src/chrome/tab_geometry.dart';
 import 'package:liquid_shell/src/destinations/destination.dart';
 import 'package:liquid_shell/src/destinations/tab_action.dart';
 import 'package:liquid_shell/src/glass/glass_scope.dart';
+import 'package:liquid_shell/src/glass/scroll_pocket.dart';
 import 'package:liquid_shell/src/native/native_chrome.dart';
 import 'package:liquid_shell/src/native/native_host.dart';
 import 'package:liquid_shell/src/native/native_layout.dart';
@@ -32,8 +35,11 @@ import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.
 /// Decides whether a user selection may proceed. Return `false` to cancel.
 typedef LiquidBeforeDestinationChange = Future<bool> Function(int index);
 
-/// Horizontal margin of the tab bar rows.
+/// Horizontal margin of the top tab bar row.
 const double _kBarMargin = 16;
+
+/// Horizontal margin of the bottom tab bar row (spec VK-503 §5).
+const double _kBottomBarMargin = TabMetrics.margin;
 
 /// Horizontal margin of the bottom row below [kLiquidNarrowWidth] (Q17).
 const double _kNarrowBarMargin = 8;
@@ -54,10 +60,12 @@ String _repeatedLabels(List<LiquidDestination> destinations) {
 
 /// An adaptive navigation shell with no router dependency.
 ///
-/// Below `breakpoints.regular` it floats a glass tab bar at the bottom.
-/// From there up it shows a glass sidebar: over the body in portrait (or
-/// narrow landscape), beside it in landscape at `breakpoints.tiledSidebar`
-/// and wider, with a top tab bar and a toggle while the sidebar is hidden.
+/// Below `breakpoints.regular`, and in landscape lower than
+/// `breakpoints.compactHeight` (phones), it floats a glass tab bar at the
+/// bottom: icon over label, or icon beside label in landscape. From there
+/// up it shows a glass sidebar: over the body in portrait (or narrow
+/// landscape), beside it in landscape at `breakpoints.tiledSidebar` and
+/// wider, with a top tab bar and a toggle while the sidebar is hidden.
 ///
 /// [body] is always the first child of the same subtree, so per-tab state
 /// survives every layout change. Keeping branch bodies alive (for example
@@ -154,7 +162,9 @@ class LiquidShell extends StatefulWidget {
   final double sidebarWidth;
 
   /// Compact bottom bar only: shrink to the selected tab while content
-  /// scrolls down; expand on scroll up or tap.
+  /// scrolls down. As on iOS 26, scrolling back up does not expand it: a tap
+  /// on the minimized circle or a selection change (a tab change from the
+  /// app included) does.
   final bool minimizeOnScroll;
 
   /// Every user-visible string.
@@ -192,7 +202,10 @@ class _LiquidShellState extends State<LiquidShell>
   late final GlobalObjectKey _bodyKey = GlobalObjectKey(this);
 
   /// Settled bar heights per (size class, text scale).
-  Map<(LiquidSizeClass, double), double> _measured = const {};
+  /// Measured bar heights by size class, bar form and text scale: each
+  /// orientation keeps its own, so a rotation never starts from the other
+  /// one's height.
+  Map<(LiquidSizeClass, TabBarForm, double), double> _measured = const {};
   ShellPresentation? _presentation;
   bool _sidebarVisible = false;
   bool _guardPending = false;
@@ -237,6 +250,13 @@ class _LiquidShellState extends State<LiquidShell>
   bool _scrollScheduled = false;
   // The destination the fallback's collapsed circle returns to.
   int _previousIndex = 0;
+  // The idle ⌕, bar-local: a lens drag released over it selects search
+  // (spec VK-503 §8.8).
+  Rect _searchTargetRect = Rect.zero;
+  late final TabDragTarget _searchTarget = TabDragTarget(
+    rect: () => _searchTargetRect,
+    onRelease: _selectSearch,
+  );
 
   @override
   void initState() {
@@ -253,6 +273,10 @@ class _LiquidShellState extends State<LiquidShell>
   void didUpdateWidget(LiquidShell oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.nativeChrome != widget.nativeChrome) _syncClaim();
+    // A selection change expands the minimized bar (spec VK-503 §10, Q7).
+    if (oldWidget.selectedIndex != widget.selectedIndex) {
+      _minimized.value = false;
+    }
     _configureSearch();
   }
 
@@ -335,6 +359,7 @@ class _LiquidShellState extends State<LiquidShell>
     _windowControls.value.removeListener(_rebuild);
     _windowControls.release();
     _minimized.dispose();
+    _searchTarget.dispose();
     _search.dispose();
     super.dispose();
   }
@@ -639,7 +664,10 @@ class _LiquidShellState extends State<LiquidShell>
     }
   }
 
-  void _onBarHeight((LiquidSizeClass, double) key, double height) {
+  void _onBarHeight(
+    (LiquidSizeClass, TabBarForm, double) key,
+    double height,
+  ) {
     if (!mounted || _measured[key] == height) return;
     setState(() => _measured = {..._measured, key: height});
   }
@@ -736,7 +764,7 @@ class _LiquidShellState extends State<LiquidShell>
       case ScrollDirection.reverse:
         _minimized.value = true;
       case ScrollDirection.forward:
-        _minimized.value = false;
+        break; // Q7: native stays minimized; a tap or a selection expands.
       case ScrollDirection.idle:
         break;
     }
@@ -929,7 +957,6 @@ class _LiquidShellState extends State<LiquidShell>
     if (_search.focus.hasFocus && (!fieldShown || sizeClassChanged)) {
       _search.releaseField();
     }
-    final barKey = (sizeClass, media.textScaler.scale(14));
     final bottomGap = bottomGapFor(
       platform: Theme.of(context).platform,
       viewPaddingBottom: media.viewPadding.bottom,
@@ -939,18 +966,44 @@ class _LiquidShellState extends State<LiquidShell>
     final tiled = kind == LiquidChromeKind.sidebarTiled;
     // Q17: narrow shells trade margin for 44pt-wide cells.
     final narrow = size.width < kLiquidNarrowWidth;
-    final barMargin = narrow ? _kNarrowBarMargin : _kBarMargin;
+    final barMargin = narrow ? _kNarrowBarMargin : _kBottomBarMargin;
+    // A compact shell in landscape lower than compactHeight (a phone) gets
+    // the 44 pt bar (spec VK-503 §5.2, §12.1); compactHeight 0 restores P1.
+    final landscape =
+        size.width > size.height &&
+        size.height < widget.breakpoints.compactHeight;
+    final barForm = sizeClass == LiquidSizeClass.regular
+        ? TabBarForm.top
+        : landscape
+        ? TabBarForm.landscape
+        : TabBarForm.compact;
+    final barKey = (sizeClass, barForm, media.textScaler.scale(14));
+    // The bottom row before it is measured: the form's own pill extent.
+    final measuredBar =
+        _measured[barKey] ??
+        (barForm == TabBarForm.landscape ? TabMetrics.landscapeExtent : null);
+    final bottomRowExtent = measuredBar ?? kBottomPillExtent;
     final compactRects = phase != null && kind == LiquidChromeKind.bottomBar
         ? compactSearchRects(
             phase: phase,
             size: size,
             rowBottom: size.height - bottomGap,
-            rowExtent: _measured[barKey] ?? kBottomPillExtent,
+            rowExtent: bottomRowExtent,
             margin: barMargin,
             keyboard: media.viewInsets.bottom,
             direction: Directionality.of(context),
           )
         : null;
+    // A hover on the ⌕ outlives a drag whose bar stops feeding the target
+    // (search selected, chrome hidden, another layout). Cleared after the
+    // frame: the ⌕ that listens may be mid-build.
+    final searchTargetFed =
+        phase == LiquidSearchPhase.idle && compactRects != null;
+    if (!searchTargetFed && _searchTarget.hovered.value) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _searchTarget.hovered.value = false;
+      });
+    }
     // The regular top field (spec P3b §9.3): selected and active only.
     final regularFieldTop =
         phase != null &&
@@ -967,7 +1020,7 @@ class _LiquidShellState extends State<LiquidShell>
     var insets = chromeInsetsFor(
       kind: kind,
       topPadding: media.padding.top,
-      measuredBar: _measured[barKey],
+      measuredBar: measuredBar,
       bottomGap: bottomGap,
     );
     // Content clears the field in every phase (spec P3b §4.6).
@@ -1089,8 +1142,28 @@ class _LiquidShellState extends State<LiquidShell>
         onDeactivate: _search.deactivate,
         cancelLabel: widget.strings.cancelSearch,
         inlineCancel: inlineCancel,
+        highlight: _searchTarget.hovered,
       ),
     );
+
+    // Spec VK-503 §15: the pocket under the default bottom bar. It follows
+    // the scroll view, not the bar, so it stays while the bar is minimized.
+    if (kind == LiquidChromeKind.bottomBar && widget.chromeBuilder == null) {
+      children.add(
+        Positioned(
+          key: kScrollPocketKey,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          // The native landscape pocket is 128.8 pt (measured, see
+          // kScrollPocketLandscapeExtent), not the portrait 148.
+          height: barForm == TabBarForm.landscape
+              ? kScrollPocketLandscapeExtent
+              : kScrollPocketExtent,
+          child: const ScrollEdgePocket(),
+        ),
+      );
+    }
 
     switch (kind) {
       case LiquidChromeKind.bottomBar:
@@ -1098,20 +1171,24 @@ class _LiquidShellState extends State<LiquidShell>
         if (phase != null && compactRects != null) {
           // The search row (spec P3b §9.2): the pill of the other
           // destinations, then the ⌕ circle that becomes the field.
-          final rowExtent = _measured[barKey] ?? kBottomPillExtent;
+          final rowExtent = bottomRowExtent;
           final idle = phase == LiquidSearchPhase.idle;
+          // The ⌕ in the bar's own coordinates: its top-left is the row's.
+          _searchTargetRect = compactRects.field.shift(
+            Offset(-margin, -(size.height - bottomGap - rowExtent)),
+          );
           children.add(
             CompactSearchChrome(
               phase: phase,
               rects: compactRects,
-              pill: PositionedDirectional(
-                start: margin,
-                end: margin + rowExtent + kLiquidTabBarTrailingGap,
+              pill: Positioned(
+                left: margin,
+                right: margin,
                 bottom: bottomGap,
                 child: IgnorePointer(
-                  ignoring: !idle,
+                  ignoring: phase == LiquidSearchPhase.active,
                   child: AnimatedOpacity(
-                    opacity: idle ? 1 : 0,
+                    opacity: phase == LiquidSearchPhase.active ? 0 : 1,
                     duration: morph,
                     curve: kSearchMorphCurve,
                     child: Align(
@@ -1120,27 +1197,49 @@ class _LiquidShellState extends State<LiquidShell>
                       child: ValueListenableBuilder<bool>(
                         valueListenable: _minimized,
                         builder: (context, minimized, _) {
-                          // Minimizes in idle only: suspended while the
-                          // search tab is selected (spec P3b §9.2).
-                          final isMinimized =
+                          // Scroll minimizes in idle only (spec P3b §9.2);
+                          // selected, the bar collapses into the previous
+                          // tab's circle (spec VK-503 §11).
+                          final scrolled =
                               widget.minimizeOnScroll && minimized && idle;
+                          final collapsed = scrolled || !idle;
                           return measured(
-                            slot(
-                              details(
-                                LiquidChromeSlot.tabBar,
-                                minimized: isMinimized,
-                              ),
-                              LiquidTabBar(
-                                destinations: widget.destinations.sublist(
-                                  0,
-                                  searchIndex,
+                            TabBarLandscapeScope(
+                              landscape: landscape,
+                              child: slot(
+                                details(
+                                  LiquidChromeSlot.tabBar,
+                                  minimized: collapsed,
                                 ),
-                                selectedIndex: idle ? selected : _previousIndex,
-                                onDestinationSelected: _onSelect,
-                                minimized: isMinimized,
-                                onExpand: _expand,
-                                strings: widget.strings,
-                                narrow: narrow,
+                                GlassTabBar(
+                                  // Only the pill takes the landscape
+                                  // form: the search rects keep the
+                                  // portrait morph (native landscape
+                                  // search was not captured).
+                                  form: barForm,
+                                  destinations: widget.destinations.sublist(
+                                    0,
+                                    searchIndex,
+                                  ),
+                                  selectedIndex: idle
+                                      ? selected
+                                      : _previousIndex,
+                                  onSelect: _onSelect,
+                                  minimized: collapsed,
+                                  collapseDelay: idle,
+                                  tintCollapsed: idle,
+                                  onCollapsedTap: idle
+                                      ? _expand
+                                      : () => _onSelect(_previousIndex),
+                                  announceExpand: idle,
+                                  collapsedKey: idle
+                                      ? null
+                                      : kSearchCollapsedKey,
+                                  reserveTrailing: true,
+                                  externalTarget: idle ? _searchTarget : null,
+                                  strings: widget.strings,
+                                  narrow: narrow,
+                                ),
                               ),
                             ),
                           );
@@ -1150,8 +1249,6 @@ class _LiquidShellState extends State<LiquidShell>
                   ),
                 ),
               ),
-              previous: widget.destinations[_previousIndex],
-              onPrevious: () => _onSelect(_previousIndex),
               field: searchField(),
               onCancel: _search.cancel,
               strings: widget.strings,
@@ -1159,10 +1256,15 @@ class _LiquidShellState extends State<LiquidShell>
           );
           break;
         }
+        final barRowMargin = narrow
+            ? _kNarrowBarMargin
+            : landscape
+            ? TabMetrics.landscapeMargin
+            : _kBottomBarMargin;
         children.add(
           Positioned(
-            left: margin,
-            right: margin,
+            left: barRowMargin,
+            right: barRowMargin,
             bottom: bottomGap,
             child: Align(
               alignment: Alignment.bottomCenter,
@@ -1174,17 +1276,24 @@ class _LiquidShellState extends State<LiquidShell>
                   // only stops applying (§5.7).
                   final isMinimized = widget.minimizeOnScroll && minimized;
                   return measured(
-                    slot(
-                      details(LiquidChromeSlot.tabBar, minimized: isMinimized),
-                      LiquidTabBar(
-                        destinations: widget.destinations,
-                        selectedIndex: selected,
-                        onDestinationSelected: _onSelect,
-                        trailing: widget.tabBarTrailing,
-                        minimized: isMinimized,
-                        onExpand: _expand,
-                        strings: widget.strings,
-                        narrow: narrow,
+                    // The shell's size picks the form, not the window's.
+                    TabBarLandscapeScope(
+                      landscape: landscape,
+                      child: slot(
+                        details(
+                          LiquidChromeSlot.tabBar,
+                          minimized: isMinimized,
+                        ),
+                        LiquidTabBar(
+                          destinations: widget.destinations,
+                          selectedIndex: selected,
+                          onDestinationSelected: _onSelect,
+                          trailing: widget.tabBarTrailing,
+                          minimized: isMinimized,
+                          onExpand: _expand,
+                          strings: widget.strings,
+                          narrow: narrow,
+                        ),
                       ),
                     ),
                   );

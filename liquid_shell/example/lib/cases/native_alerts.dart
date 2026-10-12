@@ -47,11 +47,13 @@ class _NativeAlertsCaseState extends State<NativeAlertsCase> {
   static const _destinations = [
     LiquidDestination(
       icon: Icon(Icons.chat_bubble_outline),
+      selectedIcon: Icon(Icons.chat_bubble),
       label: 'Alerts',
       sfSymbol: 'exclamationmark.bubble',
     ),
     LiquidDestination(
       icon: Icon(Icons.settings_outlined),
+      selectedIcon: Icon(Icons.settings),
       label: 'Settings',
       sfSymbol: 'gear',
     ),

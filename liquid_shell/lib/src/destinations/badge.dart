@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:liquid_shell/src/glass/glass_theme.dart';
 import 'package:liquid_shell/src/shell/strings.dart';
 
 /// A badge on a destination: a count or a dot.
@@ -73,8 +74,10 @@ String badgeSemanticsLabel(
   };
 }
 
-/// Draws a [LiquidBadge]: an error-coloured capsule (min 16×16, 11/16 w600
-/// text) or an 8×8 dot. Adds no semantics; the label carries the badge.
+/// Draws a [LiquidBadge]: a red capsule 21.33 tall, 12/w500 white text; a
+/// dot is the empty capsule (as native draws an empty badge). The colour is
+/// `LiquidGlassTheme.badgeColor`. Adds no semantics; the label carries the
+/// badge.
 class LiquidBadgeView extends StatelessWidget {
   /// Creates the badge view.
   const LiquidBadgeView({required this.badge, super.key});
@@ -85,44 +88,41 @@ class LiquidBadgeView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!badgeVisible(badge)) return const SizedBox.shrink();
-    final scheme = Theme.of(context).colorScheme;
+    final color = LiquidGlassTheme.of(context).badgeColor;
+    const extent = 21.33;
     return ExcludeSemantics(
-      child: switch (badge) {
-        LiquidDotBadge() => SizedBox.square(
-          dimension: 8,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: scheme.error,
-              shape: BoxShape.circle,
-            ),
-          ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: const BorderRadius.all(Radius.circular(extent / 2)),
         ),
-        final LiquidCountBadge count => DecoratedBox(
-          decoration: BoxDecoration(
-            color: scheme.error,
-            borderRadius: const BorderRadius.all(Radius.circular(8)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            minWidth: extent,
+            minHeight: extent,
+            maxHeight: extent,
           ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: switch (badge) {
+            LiquidDotBadge() => const SizedBox(width: extent, height: extent),
+            final LiquidCountBadge count => Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
               child: Center(
                 widthFactor: 1,
                 heightFactor: 1,
                 child: Text(
                   badgeText(count),
-                  style: TextStyle(
-                    fontSize: 11,
-                    height: 16 / 11,
-                    fontWeight: FontWeight.w600,
-                    color: scheme.onError,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    height: extent / 12,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFFFFFFFF),
                   ),
                 ),
               ),
             ),
-          ),
+          },
         ),
-      },
+      ),
     );
   }
 }

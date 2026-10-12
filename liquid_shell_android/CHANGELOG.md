@@ -1,3 +1,7 @@
+## 0.1.0-dev.6
+
+- No changes; versioned with `liquid_shell`.
+
 ## 0.1.0-dev.5
 
 - Version aligned with the other packages; no Android change.

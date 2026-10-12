@@ -72,7 +72,7 @@ void main() {
       tester,
       'case_guard',
       const DiscardGuardCase(),
-      interact: () => tester.tap(find.text('Explore')),
+      interact: () => tester.tap(find.bySemanticsLabel('Explore')),
     );
   });
 

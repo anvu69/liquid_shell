@@ -9,6 +9,34 @@ import 'package:liquid_shell/src/glass/renderer.dart';
 import 'package:liquid_shell/src/glass/shader_program.dart';
 import 'package:liquid_shell/src/glass/signals_controller.dart';
 
+/// Everything that can change which renderer a glass uses (liquid tier
+/// §5.5): platform signals, the shader program, the frame guard.
+Listenable liquidGlassChanges() => Listenable.merge([
+  LiquidSignalsController.instance,
+  LiquidShaderProgram.instance,
+  LiquidFrameGuard.instance,
+]);
+
+/// The renderer a glass at [context] uses now. `LiquidGlass` and
+/// `LiquidLens` share it, so the tab pill and its lens never disagree
+/// (spec VK-503 §7.3).
+LiquidGlassRenderer resolveGlassFor(BuildContext context) {
+  final platform = LiquidSignalsController.instance.value;
+  return resolveGlassRenderer(
+    LiquidGlassScope.policyOf(context),
+    context,
+    LiquidGlassSignals(
+      reduceTransparency: platform.reduceTransparency,
+      highContrast: MediaQuery.highContrastOf(context),
+      powerSave: platform.powerSave,
+      blurDisabled: platform.blurDisabled,
+      lowEnd: platform.lowEnd,
+      glesOnly: platform.glesOnly,
+      slowFrames: LiquidFrameGuard.instance.value,
+    ),
+  );
+}
+
 /// A glass surface.
 ///
 /// The background comes from the renderer the [LiquidGlassPolicy] picks
@@ -57,11 +85,7 @@ class LiquidGlass extends StatefulWidget {
 class _LiquidGlassState extends State<LiquidGlass> {
   static const _fade = Duration(milliseconds: 200);
   final LiquidSignalsController _signals = LiquidSignalsController.instance;
-  late final Listenable _changes = Listenable.merge([
-    _signals,
-    LiquidShaderProgram.instance,
-    LiquidFrameGuard.instance,
-  ]);
+  late final Listenable _changes = liquidGlassChanges();
 
   @override
   void initState() {
@@ -85,22 +109,7 @@ class _LiquidGlassState extends State<LiquidGlass> {
     listenable: _changes,
     child: widget.child,
     builder: (context, child) {
-      final platform = _signals.value;
-      final policy = LiquidGlassScope.policyOf(context);
-      // policy.resolve, then rendererFor, probing each renderer once.
-      final renderer = resolveGlassRenderer(
-        policy,
-        context,
-        LiquidGlassSignals(
-          reduceTransparency: platform.reduceTransparency,
-          highContrast: MediaQuery.highContrastOf(context),
-          powerSave: platform.powerSave,
-          blurDisabled: platform.blurDisabled,
-          lowEnd: platform.lowEnd,
-          glesOnly: platform.glesOnly,
-          slowFrames: LiquidFrameGuard.instance.value,
-        ),
-      );
+      final renderer = resolveGlassFor(context);
       final theme = LiquidGlassTheme.of(context);
       final background = KeyedSubtree(
         // Tier and type, not identity: a custom renderer built anew on every

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
+import 'package:liquid_shell/src/chrome/tab_geometry.dart';
 import 'package:liquid_shell/src/destinations/destination.dart';
 import 'package:liquid_shell/src/search/search_controller.dart';
 import 'package:liquid_shell/src/shell/shell_layout.dart';
@@ -59,7 +60,8 @@ const Curve kSearchMorphCurve = Curves.easeOutCubic;
 /// The compact collapsed circle, field and × height (iOS 26: 48).
 const double kSearchCompactExtent = 48;
 
-/// Selected: the collapsed circle's start and the field's end margin.
+/// Selected: the field's end margin. The collapsed circle is the tab bar's
+/// own minimized circle, at the row margin + `TabMetrics.minimizedInset`.
 const double kSearchSelectedMargin = 28;
 
 /// Selected: the gap between the collapsed circle and the field.
@@ -81,7 +83,7 @@ class CompactSearchRects {
     required this.cancel,
   });
 
-  /// The collapsed circle (previous tab).
+  /// The collapsed circle (previous tab): where the tab bar minimizes to.
   final Rect circle;
 
   /// The ⌕ circle (idle) or the field.
@@ -117,13 +119,13 @@ CompactSearchRects compactSearchRects({
   final rowTop = rowBottom - rowExtent;
   final top = rowTop + (rowExtent - kSearchCompactExtent) / 2;
   final circle = Rect.fromLTWH(
-    kSearchSelectedMargin,
+    margin + TabMetrics.minimizedInset,
     top,
     kSearchCompactExtent,
     kSearchCompactExtent,
   );
   final selectedField = Rect.fromLTRB(
-    kSearchSelectedMargin + kSearchCompactExtent + kSearchSelectedGap,
+    circle.right + kSearchSelectedGap,
     top,
     width - kSearchSelectedMargin,
     top + kSearchCompactExtent,

@@ -72,6 +72,7 @@ void main() {
           1, 1, 1, 0x38 / 255, // tint
           1, 1, 1, 0x80 / 255, // rim
           -0.5, -0.85, 4.5, 1.1, // light, rim width 1.5*3, saturation
+          0, // veil falloff: uniform (Task 16 part B)
         ]),
       );
     });
@@ -160,6 +161,120 @@ void main() {
         ),
       ),
     );
+  });
+
+  group('lens overrides (spec VK-503 §7.2)', () {
+    const rect = Rect.fromLTWH(300, 2300, 330, 210);
+
+    test('null overrides keep LiquidOptics.bezel and rimWidth', () {
+      // `_params` has no overrides; the float-by-float tests above pin the
+      // rest of its uniforms.
+      expect(_params.bezel, isNull);
+      expect(_params.rimWidth, isNull);
+      final u = _uniforms(rect);
+      expect(u[8], closeTo(LiquidOptics.bezel * 3, 1e-4));
+      expect(u[22], closeTo(LiquidOptics.rimWidth * 3, 1e-4));
+    });
+
+    test('bezel replaces float 8, rimWidth float 22, in pass pixels', () {
+      const lens = LiquidOpticsParams(
+        tint: Color(0x38FFFFFF),
+        rim: Color(0x80FFFFFF),
+        refraction: 1,
+        dispersion: 0.3,
+        blurSigma: 3,
+        bezel: 35,
+        rimWidth: 1,
+      );
+      final base = _uniforms(rect);
+      final over = _uniforms(rect, params: lens);
+      expect(over[8], closeTo(35 * 3, 1e-4));
+      expect(over[22], closeTo(3, 1e-4));
+      for (var i = 0; i < base.length; i++) {
+        if (i == 8 || i == 22) continue;
+        expect(over[i], base[i], reason: 'float $i');
+      }
+    });
+
+    test('a bezel override is still clamped to half the short side', () {
+      const lens = LiquidOpticsParams(
+        tint: Color(0x00000000),
+        rim: Color(0x00000000),
+        refraction: 1,
+        dispersion: 0,
+        blurSigma: 0,
+        bezel: 500,
+      );
+      expect(_uniforms(rect, params: lens)[8], closeTo(105, 1e-4));
+    });
+
+    test('== and hashCode include the overrides', () {
+      const a = LiquidOpticsParams(
+        tint: Color(0x00000000),
+        rim: Color(0x00000000),
+        refraction: 1,
+        dispersion: 0,
+        blurSigma: 0,
+        bezel: 10,
+      );
+      const b = LiquidOpticsParams(
+        tint: Color(0x00000000),
+        rim: Color(0x00000000),
+        refraction: 1,
+        dispersion: 0,
+        blurSigma: 0,
+        bezel: 11,
+      );
+      expect(a, isNot(b));
+      expect(a.hashCode, isNot(b.hashCode));
+    });
+  });
+
+  group('veil falloff (Task 16 part B, spec VK-503 §7.2)', () {
+    const rect = Rect.fromLTWH(300, 2300, 330, 210);
+
+    test('appended as shader float 26; 0 by default, the first 24 floats '
+        'unchanged', () {
+      expect(LiquidOptics.floatCount, 25);
+      expect(_params.veilFalloff, 0);
+      final u = _uniforms(rect);
+      expect(u, hasLength(25));
+      // List index k is shader float k + 2: index 24 is float 26.
+      expect(u[24], 0);
+      const lens = LiquidOpticsParams(
+        tint: Color(0x38FFFFFF),
+        rim: Color(0x80FFFFFF),
+        refraction: 1,
+        dispersion: 0.3,
+        blurSigma: 3,
+        veilFalloff: 1,
+      );
+      final over = _uniforms(rect, params: lens);
+      expect(over[24], 1);
+      expect(over.sublist(0, 24), u.sublist(0, 24));
+    });
+
+    test('clamped to 0–1, and part of == and hashCode', () {
+      const a = LiquidOpticsParams(
+        tint: Color(0x00000000),
+        rim: Color(0x00000000),
+        refraction: 1,
+        dispersion: 0,
+        blurSigma: 0,
+        veilFalloff: 3,
+      );
+      expect(_uniforms(rect, params: a)[24], 1);
+      const b = LiquidOpticsParams(
+        tint: Color(0x00000000),
+        rim: Color(0x00000000),
+        refraction: 1,
+        dispersion: 0,
+        blurSigma: 0,
+        veilFalloff: 0.5,
+      );
+      expect(a, isNot(b));
+      expect(a.hashCode, isNot(b.hashCode));
+    });
   });
 }
 

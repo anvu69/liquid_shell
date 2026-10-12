@@ -139,7 +139,11 @@ void main() {
     expect(selected.style!.color, _scheme.onPrimaryContainer);
     expect(selected.style!.fontWeight, FontWeight.w600);
     final other = tester.widget<Text>(find.text('Home'));
-    expect(other.style!.color, _scheme.onSurface);
+    // Unselected rows share the tab bar's foreground (spec VK-503 §12.3).
+    expect(
+      other.style!.color,
+      LiquidGlassTheme.of(tester.element(find.text('Home'))).tabForeground,
+    );
     expect(other.style!.fontWeight, FontWeight.w500);
     final fills = tester
         .widgetList<Material>(find.byType(Material))
@@ -298,5 +302,45 @@ void main() {
     expect(find.byIcon(Icons.home_outlined), findsNothing);
     expect(find.byIcon(Icons.inbox_outlined), findsOneWidget);
     expect(find.byIcon(Icons.inbox), findsNothing);
+  });
+
+  testWidgets('unselected rows use tabForeground (spec VK-503 §12.3)', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LiquidSidebar(
+            destinations: const [
+              LiquidDestination(icon: Icon(Icons.home), label: 'Home'),
+              LiquidDestination(icon: Icon(Icons.inbox), label: 'Inbox'),
+            ],
+            selectedIndex: 0,
+            onDestinationSelected: (_) {},
+          ),
+        ),
+      ),
+    );
+    final context = tester.element(find.text('Inbox'));
+    // The row's Text sets its colour, which wins over the ambient
+    // DefaultTextStyle (a Material's, never null).
+    expect(
+      tester.widget<Text>(find.text('Inbox')).style?.color,
+      LiquidGlassTheme.of(context).tabForeground,
+    );
+    expect(
+      tester
+          .widget<IconTheme>(
+            find
+                .ancestor(
+                  of: find.byIcon(Icons.inbox),
+                  matching: find.byType(IconTheme),
+                )
+                .first,
+          )
+          .data
+          .color,
+      LiquidGlassTheme.of(context).tabForeground,
+    );
   });
 }

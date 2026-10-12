@@ -1,3 +1,65 @@
+## 0.1.0-dev.6
+
+- **Tab bar fidelity (VK-503).** The Flutter tab bar matches iOS 26.5:
+  native slot geometry (86 pt slots, 21 pt margins, the pill pinned at
+  the start beside a trailing circle), a liquid lens that engages on touch
+  (milky in its core, clear and refracting at its rim, with the rainbow),
+  follows a drag and snaps on release (the measured springs), tinted and
+  magnified icons under the lens, a pill swell, a highlight and a finger
+  glow, an icon pop on tap, and selection clicks while dragging. See
+  `doc/tab_bar.md`.
+- **Behaviour changes.**
+  - A tab is selected on release, not on touch. A drag selects the tab
+    nearest the lens when it lifts, a flick the tab under the finger.
+  - Every tab slot draws `selectedIcon ?? icon`, selected or not, as iOS
+    draws a filled symbol in every slot. Give each destination a filled
+    `selectedIcon`. The sidebar still switches `icon` / `selectedIcon` by
+    selection.
+  - Tab colours: the selected tab is `ColorScheme.primary` on a neutral
+    capsule (`selectionFill`), not a `primaryContainer` chip; the others
+    are `tabForeground`. Sidebar rows use `tabForeground` too.
+  - There is no ink splash.
+  - With `minimizeOnScroll`, the minimized bar is a 48 pt icon-only circle
+    that expands on a tap or on a selection change, not when the page
+    scrolls back up, as on iOS 26. A `chromeBuilder` sees the same in
+    `LiquidChromeDetails.minimized`: it stays true until the chrome calls
+    `details.expand` or the selected destination changes.
+  - `LiquidChromeDetails.minimized` is also true while the search tab is
+    selected (the bar collapses into a circle beside the search field);
+    `details.expand` does not expand it there, leaving search does.
+  - The bottom `LiquidTabBar` fills the width it is given. With a trailing
+    action the pill is pinned at the start and the circle at the end;
+    without one the pill is centred. Give it a narrower box (a `SizedBox`)
+    to keep the circle close to the pill.
+  - Landscape phones get the 44 pt bottom bar (icon beside a 12 pt label)
+    instead of the top bar: a landscape shell lower than
+    `LiquidShellBreakpoints.compactHeight` (500) is compact. Pass
+    `compactHeight: 0` for the previous layout.
+  - The iPad top bar is 48 pt, label only (17 pt, the search tab as an
+    icon), 5.5 pt below the safe area instead of 20, so it sits 14.5 pt
+    higher and, with the 4 pt lower bar, a regular layout's
+    `chromeInsets.top` is 18.5 pt smaller.
+  - The bottom bar margin is 21 pt (8 pt in a narrow shell).
+  - Badges are the native 21 pt red capsule, #FF383C in light and
+    #FF4245 in dark (`badgeColor`), in the tab bar and the sidebar.
+- **New:** `LiquidGlassTheme.selectionFill`, `tabForeground`,
+  `badgeColor`, `tabIconSize`; `LiquidShellBreakpoints.compactHeight`; a
+  scroll-edge pocket under the liquid bottom bar (three blur bands and a
+  faint dim, liquid tier only: frosted, solid and Reduce Transparency draw
+  none).
+- **Defaults changed** for every glass surface (bars, circles, sidebar,
+  dialogs, the back button): `rimHighlight` 0.12, `liquidTint` a neutral
+  milky white @ 0.55 (light) / #1C1C1C @ 0.90 (dark) instead of the
+  scheme's `surface` @ 0.40 / 0.45 (native glass takes no app hue), `shadow` 7 %
+  (0, 3) blur 20, `dispersion` 0 in the constructor and in
+  `fromColorScheme` (the touched tab lens adds its own fringe; pass
+  `dispersion: 0.3` for the previous look), `labelStyle` 10 / 1.2 / w500 /
+  no tracking.
+- **Fixes (VK-491, VK-502).** The native page stack is computed after the
+  frame, so a tab switch no longer sends the stack of the tab just left;
+  a tab keeps its pages while offstage, and returning to it restores them
+  without replaying the push.
+
 ## 0.1.0-dev.5
 
 - **Search tab.** `LiquidDestinationRole.search` on `LiquidDestination` (at

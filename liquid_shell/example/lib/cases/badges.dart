@@ -20,18 +20,21 @@ class _BadgesCaseState extends State<BadgesCase> {
     const destinations = [
       LiquidDestination(
         icon: Icon(Icons.inbox_outlined),
+        selectedIcon: Icon(Icons.inbox),
         label: 'Inbox',
         badge: LiquidBadge.count(3),
         sfSymbol: 'tray',
       ),
       LiquidDestination(
         icon: Icon(Icons.forum_outlined),
+        selectedIcon: Icon(Icons.forum),
         label: 'Chats',
         badge: LiquidBadge.count(120), // shows "99+"
         sfSymbol: 'bubble.left.and.bubble.right',
       ),
       LiquidDestination(
         icon: Icon(Icons.notifications_outlined),
+        selectedIcon: Icon(Icons.notifications),
         label: 'Alerts',
         badge: LiquidBadge.dot(),
         sfSymbol: 'bell',

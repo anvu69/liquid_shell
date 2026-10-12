@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
+// The pill key is test-only and stays out of the public API.
+import 'package:liquid_shell/src/chrome/glass_tab_bar.dart' show kTabPillKey;
 import 'package:liquid_shell_example/main.dart';
 import 'package:liquid_shell_example/support/demo_page.dart';
 
@@ -118,12 +120,20 @@ void main() {
         }
 
         // Scroll so cards and wallpaper sit under the chrome, then back a
-        // little: scrolling down minimises the Flutter bar (the native one
-        // does not), scrolling up expands it again.
+        // little. Scrolling down minimises the Flutter bar (the native one
+        // does not), and since VK-503 (Q7) scrolling back does not expand
+        // it: a tap on its circle does, as on iOS 26.
         final list = find.byType(Scrollable).first;
         await tester.drag(list, const Offset(0, -340));
         await tester.pumpAndSettle();
         await tester.drag(list, const Offset(0, 40));
+        await tester.pumpAndSettle();
+        final pill = find.byKey(kTabPillKey);
+        if (mode != 'native' &&
+            pill.evaluate().length == 1 &&
+            tester.getSize(pill) == const Size(48, 48)) {
+          await tester.tapAt(tester.getCenter(pill));
+        }
         // The bar's expand animation can still be running on the device
         // after pumpAndSettle: give it time, or the shot catches it half way.
         await _settle(tester);

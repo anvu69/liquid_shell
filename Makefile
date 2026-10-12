@@ -20,7 +20,7 @@ COVERAGE_MIN := 90
 .PHONY: help get format format-check analyze test coverage goldens \
         goldens-update provenance snippets verify pana publish-check \
         android-unit ios-unit ios-ui integration-ios integration-ios-native integration-android pigeon pigeon-check \
-        test-impeller compare-images
+        test-impeller compare-images tab-traces tab-frames
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -78,6 +78,13 @@ compare-images: ## Native vs Flutter liquid side by side (iOS sims you create, e
 	cp $(EXAMPLE)/build/compare/ios_ipad_sidebar_slots_sidebar.png liquid_shell/doc/images/compare_ipad_sidebar_slots.png
 	cp $(EXAMPLE)/build/compare/android_basic.png liquid_shell/doc/images/compare_android_basic.png
 	$(DART) run tool/compress_pngs.dart liquid_shell/doc/images
+
+tab-traces: ## Flutter tab traces on an iOS 26.5 iPhone 17 Pro simulator vs the native reference (spec VK-503 §17.4)
+	FLUTTER="$(FLUTTER)" DART="$(DART)" TRACES_ONLY=1 tool/tab_frames.sh
+	$(DART) run tool/tab_trace_compare.dart $(EXAMPLE)/build/integration_response_data.json docs/qa/vk503/native_reference.json
+
+tab-frames: ## Native vs Flutter liquid tab bar strips at 60 fps on an iOS 26.5 simulator (needs ffmpeg)
+	FLUTTER="$(FLUTTER)" DART="$(DART)" tool/tab_frames.sh
 
 provenance: ## Fail on app names or banned dependencies outside docs/, or glass outside LiquidGlass
 	tool/check_provenance.sh
