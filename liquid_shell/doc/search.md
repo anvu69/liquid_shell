@@ -127,12 +127,14 @@ stays active (the query, the results, the × and Cancel) when:
   notifications: the first scroll of a user drag (a `ScrollUpdate` or
   `Overscroll` notification with drag details, the rule of Flutter's
   `ScrollViewKeyboardDismissBehavior.onDrag`) calls `dismissKeyboard()`,
-  once per drag, while the search is active. Every scrollable in the
-  search page does it, nested ones and pages pushed in the tab included;
-  you add nothing. A programmatic scroll (`jumpTo`, `animateTo`) has no
-  drag details and keeps the keyboard, and so does a sideways swipe over
-  a vertical list, which scrolls nothing (the iOS edge swipe). Opt out
-  with `LiquidSearch(dismissKeyboardOnDrag: false)`.
+  once per drag, while the search is active, as soon as the finger has
+  moved at least as far along the list's axis as across it. Every
+  scrollable in the search page does it, nested ones and pages pushed in
+  the tab included; you add nothing. A programmatic scroll (`jumpTo`,
+  `animateTo`) has no drag details and keeps the keyboard. So does a
+  near-horizontal swipe over a vertical list, such as the iOS edge swipe:
+  it may scroll the list by the thumb's drift, but it moves mostly across
+  it. Opt out with `LiquidSearch(dismissKeyboardOnDrag: false)`.
 - **The user taps a scope** of `LiquidSearchScopeBar`.
 - **The app calls `controller.dismissKeyboard()`**, for a control of its
   own (a filter chip, a custom scope bar).
@@ -142,10 +144,15 @@ presented, nothing is written into the field, and marked text the
 resignation commits reaches `onChanged` once. In the Flutter field the
 field unfocuses, which ends an IME composition with its text as composed
 (Vietnamese diacritics included) and writes nothing; the phase stays
-`active`, the field moves down to the bottom row with its ×. A tap on the
+`active`, the field moves down to the bottom row with its × (on a
+regular width it keeps the bar row and its inline ×). A tap on the
 field brings the keyboard back; × clears and ends the search;
 `deactivate()`, system back, another tab or hidden chrome end it and keep
 the text.
+
+Natively, an iPhone shows the active search with the keyboard down as
+UIKit's × beside the field; an iPad has no ×: its stacked field stays
+risen into the title row, with its ⓧ for the kept text.
 
 ## The controller is the truth
 
@@ -170,7 +177,10 @@ whatever the tabs do.
   route: the swipe pops the whole shell (VK-567).
 - **Dialogs and pages above the shell.** While a Flutter dialog, sheet or
   page covers the shell, an active search is deactivated first (the
-  keyboard would sit above the barrier). The text is kept.
+  keyboard would sit above the barrier). The text is kept. One difference
+  in the Flutter field: a search whose keyboard was already put away
+  (`dismissKeyboard()`) has no focus to lose, so it stays active under the
+  dialog, keyboard down, and is there as it was when the dialog closes.
 - **Hidden chrome.** While the chrome is hidden (`LiquidHideChrome`, a
   covering page), the search is not active: hiding it ends an active
   search and keeps its text, and `activate()` is ignored natively until

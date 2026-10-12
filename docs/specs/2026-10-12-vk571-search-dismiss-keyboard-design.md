@@ -31,14 +31,18 @@ keyboard goes, the query stays in the field, the search stays active
 - **Drag.** The shell's body listener (the same `NotificationListener`
   chain in both modes, now on `ScrollNotification`) hands every
   notification to `ShellSearch.onBodyScroll`: a `ScrollStartNotification`
-  with drag details arms it, the first `ScrollUpdateNotification` or
-  `OverscrollNotification` with drag details dismisses, once per drag.
-  This is the rule of Flutter's `ScrollViewKeyboardDismissBehavior.onDrag`.
-  Dismissing on the start alone was tried and rejected: a sideways swipe
-  over a vertical list (the iOS edge swipe of VK-551, with the shell's back
-  gesture blocked by the active search) wins that list's gesture arena
-  alone and starts a drag that scrolls nothing. Programmatic scrolls have
-  no drag details. `LiquidSearch.dismissKeyboardOnDrag` (default true)
+  with drag details arms it with the finger's start; the first
+  `ScrollUpdateNotification` or `OverscrollNotification` with drag details
+  dismisses, once per drag (the rule of Flutter's
+  `ScrollViewKeyboardDismissBehavior.onDrag`), once the finger has moved
+  at least as far along the list's axis as across it. The iOS edge swipe
+  of VK-551 is the reason. With the shell's back gesture blocked by the
+  active search, a near-horizontal swipe wins a vertical list's gesture
+  arena alone and starts a drag there. Dismissing on the start dismissed
+  on a flat swipe; dismissing on the first update still dismissed on a
+  real thumb's drift past the 3.5 px drag threshold (review M-1). The
+  dominance check keeps the keyboard for a near-horizontal swipe.
+  Programmatic scrolls have no drag details. `LiquidSearch.dismissKeyboardOnDrag` (default true)
   opts out.
 - **Scope tap.** `LiquidSearchScopeBar` sets `scopeIndex`, then calls
   `dismissKeyboard()`. VK-550's native scope bar and
@@ -47,7 +51,9 @@ keyboard goes, the query stays in the field, the search stays active
 ## Tests
 
 Dart widget tests in both modes (fake platform): `dismissKeyboard`, a
-user drag, a programmatic scroll, a sideways edge swipe, a scope tap, the
+user drag (with sideways drift), an overscroll at the top (clamping), a
+programmatic scroll, a near-horizontal edge swipe (flat and drifting), a
+scope tap, the regular layout, the
 opt-out, mid-composition, and what ends the kept search. XCTest of
 `dismissSearchKeyboard` (keeps the search and its text, reports a
 committed composition once, does nothing without an active search).

@@ -1937,14 +1937,32 @@ void main() {
       expect(fake.searchKeyboardDismissals, 0);
     });
 
-    // VK-551's edge swipe: over the vertical list it starts a drag that
-    // scrolls nothing; the keyboard stays as it was.
-    testWidgets('a sideways edge swipe sends nothing', (tester) async {
-      final (fake, controller) = await active(tester);
-      await tester.dragFrom(const Offset(2, 400), const Offset(300, 0));
+    // VK-551's edge swipe: over the vertical list it wins the arena alone
+    // and starts a drag there. A thumb drifts, so the list may scroll a
+    // little; a drag mostly across the list's axis is not a scroll of the
+    // results and keeps the keyboard.
+    for (final (name, drift) in [('flat', 0.0), ('drifting', 24.0)]) {
+      testWidgets('a near-horizontal edge swipe ($name) sends nothing', (
+        tester,
+      ) async {
+        final (fake, controller) = await active(tester);
+        await tester.dragFrom(const Offset(2, 400), Offset(300, drift));
+        await tester.pumpAndSettle();
+        expect(fake.searchKeyboardDismissals, 0);
+        expect(controller.isActive, isTrue);
+      });
+    }
+
+    testWidgets('a mostly vertical drag with some sideways drift dismisses', (
+      tester,
+    ) async {
+      final (fake, _) = await active(tester);
+      await tester.drag(
+        find.byKey(const ValueKey('list-Search')),
+        const Offset(40, -200),
+      );
       await tester.pumpAndSettle();
-      expect(fake.searchKeyboardDismissals, 0);
-      expect(controller.isActive, isTrue);
+      expect(fake.searchKeyboardDismissals, 1);
     });
 
     testWidgets('a scope tap selects it and dismisses the keyboard', (

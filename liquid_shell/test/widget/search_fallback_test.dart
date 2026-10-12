@@ -768,6 +768,8 @@ void main() {
       WidgetTester tester, {
       String text = 'hồ',
       bool scoped = false,
+      Size size = kPhone,
+      TargetPlatform platform = TargetPlatform.iOS,
     }) async {
       final controller = LiquidSearchController();
       addTearDown(controller.dispose);
@@ -779,6 +781,8 @@ void main() {
           pageBuilder: scoped ? scopedPage(controller) : null,
           search: LiquidSearch(controller: controller),
         ),
+        size: size,
+        platform: platform,
       );
       await tester.tap(find.byType(TextField));
       await tester.enterText(find.byType(TextField), text);
@@ -824,6 +828,41 @@ void main() {
       );
       await tester.pumpAndSettle();
       expectKeyboardDownSearchUp(tester, controller);
+    });
+
+    // Clamping physics (Android) at the top: a pull down scrolls nothing
+    // and overscrolls; that is still the user dragging the results.
+    testWidgets('a pull past the top (overscroll) dismisses the keyboard', (
+      tester,
+    ) async {
+      final controller = await typed(tester, platform: TargetPlatform.android);
+      await tester.drag(
+        find.byKey(const ValueKey('list-Search')),
+        const Offset(0, 200),
+      );
+      await tester.pumpAndSettle();
+      expectKeyboardDownSearchUp(tester, controller);
+    });
+
+    testWidgets('regular width: the field keeps the bar row and its ×', (
+      tester,
+    ) async {
+      final controller = await typed(tester, size: kTabletPortrait);
+      final focused = _rect(tester, kSearchFieldKey);
+      controller.dismissKeyboard();
+      await tester.pumpAndSettle();
+      expectKeyboardDownSearchUp(tester, controller);
+      expect(_rect(tester, kSearchFieldKey), focused);
+    });
+
+    testWidgets('a near-horizontal swipe over the results keeps the keyboard', (
+      tester,
+    ) async {
+      final controller = await typed(tester);
+      await tester.dragFrom(const Offset(40, 400), const Offset(300, 24));
+      await tester.pumpAndSettle();
+      expect(tester.testTextInput.isVisible, isTrue);
+      expect(controller.isActive, isTrue);
     });
 
     testWidgets('a programmatic scroll keeps the keyboard', (tester) async {

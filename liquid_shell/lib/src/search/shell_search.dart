@@ -56,8 +56,9 @@ final class ShellSearch implements SearchDriver {
   // takes the focus back, × or `deactivate` end it, or the shell releases
   // the field.
   bool _keyboardDown = false;
-  // A user drag started on the body and has not scrolled yet.
-  bool _dragArmed = false;
+  // Where a user drag on the body started, until it scrolls along the
+  // list's axis.
+  Offset? _dragOrigin;
   bool _writing = false;
   bool _disposed = false;
   String? _pendingFieldText;
@@ -290,24 +291,38 @@ final class ShellSearch implements SearchDriver {
   }
 
   /// The shell body's scroll notifications (VK-571): the first scroll of
-  /// a user drag puts the keyboard away, once per drag, unless the app
-  /// opted out (`LiquidSearch.dismissKeyboardOnDrag`). As Flutter's
-  /// `ScrollViewKeyboardDismissBehavior.onDrag`, it waits for the drag to
-  /// move the content: a sideways swipe over a vertical list (the iOS edge
-  /// swipe, VK-551) starts a drag there that scrolls nothing. A
-  /// programmatic scroll has no drag details.
+  /// a user drag along the list's axis puts the keyboard away, once per
+  /// drag, unless the app opted out (`LiquidSearch.dismissKeyboardOnDrag`).
+  /// As Flutter's `ScrollViewKeyboardDismissBehavior.onDrag`, it waits for
+  /// the drag to move the content, and it also asks that the finger has
+  /// moved at least as far along the list's axis as across it. A
+  /// near-horizontal swipe over a vertical list (the iOS edge swipe,
+  /// VK-551, which wins that list's gesture arena alone) scrolls it by the
+  /// thumb's drift, and keeps the keyboard. A programmatic scroll has no
+  /// drag details.
   void onBodyScroll(ScrollNotification notification) {
     switch (notification) {
-      case ScrollStartNotification(dragDetails: _?):
-        _dragArmed = true;
-      case ScrollUpdateNotification(dragDetails: _?) ||
-              OverscrollNotification(dragDetails: _?)
-          when _dragArmed:
-        _dragArmed = false;
-        if (_config?.dismissKeyboardOnDrag ?? true) dismissKeyboard();
+      case ScrollStartNotification(:final dragDetails?):
+        _dragOrigin = dragDetails.globalPosition;
+      case ScrollUpdateNotification(:final dragDetails?):
+        _onDragMoved(notification.metrics.axis, dragDetails.globalPosition);
+      case OverscrollNotification(:final dragDetails?):
+        _onDragMoved(notification.metrics.axis, dragDetails.globalPosition);
       default:
         break;
     }
+  }
+
+  void _onDragMoved(Axis axis, Offset position) {
+    final origin = _dragOrigin;
+    if (origin == null) return;
+    final moved = position - origin;
+    final (along, across) = axis == Axis.vertical
+        ? (moved.dy.abs(), moved.dx.abs())
+        : (moved.dx.abs(), moved.dy.abs());
+    if (along < across) return;
+    _dragOrigin = null;
+    if (_config?.dismissKeyboardOnDrag ?? true) dismissKeyboard();
   }
 
   @override
