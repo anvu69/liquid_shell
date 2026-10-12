@@ -141,7 +141,7 @@ liquid_shell_ios: pigeon (scopes, setSearchScope, onSearchScopeChanged), SearchB
 
 ## 5. Geometry (S3)
 
-All values are logical points; "control-local" means the `LiquidSegmentedControl` box. Segments are listed in **index order**; in RTL their x positions are mirrored, so segment 0 is at the right (as `UISegmentedControl` under `semanticContentAttribute = .forceRightToLeft`, **(assumption)**, Task 1 confirms).
+All values are logical points; "control-local" means the `LiquidSegmentedControl` box. Segments are listed in **index order**; in RTL their x positions are mirrored, so segment 0 is at the right (as `UISegmentedControl` under `semanticContentAttribute = .forceRightToLeft`; **measured in Task 1**: under a forced RTL launch segment 0 is drawn at the right, its thumb at 248, 2, 120 × 28 in a 370 control, and a tap at the left commits index 2).
 
 | Quantity | Value |
 |---|---|
@@ -175,7 +175,7 @@ Worked checks against spike §2 (iPhone 17 Pro, full width 370):
 
 - **Defaults** come from `LiquidGlassTheme.fromColorScheme(brightness)`; apps override them through `LiquidGlassTheme` (copyWith, lerp, `==` like the VK-503 fields).
 - **The selected label.** As the tab bar's tinted copy (VK-503 §6.3), the row is drawn twice: a normal row (w400) with the lens punched out (`LensClip(inside: false)`), and a w500 row clipped to the lens (`LensClip(inside: true)`). At rest the lens sits on the selected segment, so its label reads w500; while a drag straddles two segments, each half shows its own weight, as native's `ContentLensingView` does. The w500 copy has no colour change (native labels stay label-coloured).
-- **Magnification** of the w500 copy at full engage: **1.0 (assumption)**; Task 1 measures native's and the profile takes it.
+- **Magnification** of the w500 copy at full engage: **1.0** (measured in Task 1: the label's ink box is the same at rest and under the held lens, and no label or `ContentLensingView` layer scales; `native_reference.json` `lens.labelMagnify`).
 - **No shadow, no rim** at rest (none in the native tree).
 - **The track is not glass.** Native's standalone track is a translucent fill over the page; Q-B offers a glass track instead for the scope bar.
 
@@ -183,7 +183,7 @@ Worked checks against spike §2 (iPhone 17 Pro, full width 370):
 
 - **Liquid tier.** While `engage > 0`, the thumb is `LiquidLens(refraction:, engage:, restFill: segmentThumb, bezel:)` over the lens rect: the VK-503 second glass pass with its veil falloff, rim and dispersion (VK-503 §7.2, Task 16 part B). At `engage = 0` it is the rest thumb.
   - The control opens its own `BackdropGroup` (as a standalone `GlassTabBar` does) so the lens samples the page behind the control, not the track.
-  - **Bezel.** VK-503's 14 pt ring is sized for a 70 pt-tall lens. The segment lens is 44 tall, so its bezel is **9 pt (assumption: 14 × 44/70 rounded)**; Task 1 measures native's ring and Task 15 tunes against the strips. `LiquidLens` gains an optional `bezel` (default `kLensBezel`); the tab bar is unchanged.
+  - **Bezel.** VK-503's 14 pt ring is sized for a 70 pt-tall lens. The segment lens is 44 tall, so its bezel is **9 pt (assumption: 14 × 44/70 rounded)**; Task 1 measured native's ring at 8.3 (top) to 9.0 (bottom) pt, mean 8.7 (`lens.bezel`), which agrees with 9 within the spread; Task 15 tunes against the strips. `LiquidLens` gains an optional `bezel` (default `kLensBezel`); the tab bar is unchanged.
 - **Frosted and solid tiers.** `LiquidLens`'s own frosted and solid variants (VK-503 §7.3).
 - **Reduce transparency / increase contrast.** The rest thumb only, no lens pass (VK-503 §13.3 rule).
 - The lens is drawn above the track and the normal row, below the w500 row, inside the control's bounds widened by the lens overflow (the pressed lens is 44 tall over a 32 track: it overflows by 6 pt above and below, inside the 44 pt box).
@@ -215,7 +215,7 @@ The state machine is VK-503's (§8.2: rest, pressed, dragging, flying, settling)
 
 | Event | Lens x | Size | engage / refraction | Commit |
 |---|---|---|---|---|
-| **down** at x | holds (measured on the selected segment; a held press on another segment is **(assumption)** the same, Task 1 traces it) | thumb + (24, 16) after 24 ms on the press spring | 1 / 1 after 24 ms | none |
+| **down** at x | holds. On the selected segment the lens grows (next columns). On **another** segment nothing moves until the up (measured in Task 1, `pressOther`: no lens frame changes for the whole 2.16 s hold; the pressed segment's w400 label fades to opacity 0.2 over ≈ 0.45 s); the up then takes the tap path | selected segment: thumb + (24, 16) after 24 ms on the press spring; another segment: rest | selected segment: 1 / 1 after 24 ms; another segment: 0 | none |
 | **move** beyond the slop | `clampCentre(x)` on `dragFollow` | pressed, plus the speed squash (§8.4) | 1 / 1 | none |
 | **up, tap** (travel ≤ slop) | the segment under the finger, on the tap spring, 8 ms after the up | flight shape (§8.4) | 1 until 0.30 s after the commit, then out | **at the up** |
 | **up after a drag** | the segment nearest the *lens* centre (as native and VK-503); after a flick (≥ 600 pt/s, VK-503's reading) the segment under the *finger* | release spring, then the wobble | out after VK-503's `releaseHold` / `flickHold` | **at the up** |
@@ -224,7 +224,7 @@ The state machine is VK-503's (§8.2: rest, pressed, dragging, flying, settling)
 | **programmatic** (`selectedIndex` changed by the app, no pending commit) | slides on the programmatic spring | rest | 0 | none (no `onChanged`) |
 | **reduce motion** | §12.2 | | | |
 
-- **Commit and guard** (VK-503 §8.7). The control is controlled: `onChanged(i)` fires at the commit, and the app is expected to rebuild with `selectedIndex: i`. When the lens settles and `selectedIndex` is still another value, the lens returns to it on the release spring (a refused change). A tap on the selected segment lifts and lands in place and calls nothing (native sends no `valueChanged`, **(assumption)**, Task 1).
+- **Commit and guard** (VK-503 §8.7). The control is controlled: `onChanged(i)` fires at the commit, and the app is expected to rebuild with `selectedIndex: i`. When the lens settles and `selectedIndex` is still another value, the lens returns to it on the release spring (a refused change). A tap on the selected segment lifts and lands in place and calls nothing (native sends no `valueChanged`, measured in Task 1, `tapOnSelected`: the lens grows to ≈ 143 × 44 in place and is back at rest by ≈ 0.5 s).
 - **Disabled segments.** A tap on one does nothing; a drag never commits it (the release picks the nearest enabled segment); the lens may pass over it.
 - **No glow, no pill scale, no highlight, no pop** for the segment profile (spike §2): the profile's switches turn them off; `LensFrame` reports 0 / 1 for them.
 

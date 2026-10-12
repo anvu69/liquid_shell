@@ -81,7 +81,7 @@ Identical on iOS 27.0 (frames and rest colours) and on iPad 26.5 (height).
 | Labels | SF 13: **Regular** unselected, **Medium** selected; label colour (black / white); line box 15.67, centred (top 8.33) |
 | Disabled | the whole control at alpha **0.5** (light track 246, labels grey) |
 | No glow, no bulge | no `LittleGlowView` in the tree; the control's own layer never scales |
-| Under the engaged lens | labels drawn Medium (`ContentLensingView`); magnification not measured yet (Task 1) |
+| Under the engaged lens | labels drawn Medium (`ContentLensingView`); magnification 1.0 (§4) |
 
 ## 3. Motion (iPhone 26.5, full width 3 segments, 123 pt pitch; times from `valueChanged` for taps, from touch-down for presses)
 
@@ -100,9 +100,36 @@ Identical on iOS 27.0 (frames and rest colours) and on iPad 26.5 (height).
 | Programmatic `selectedSegmentIndex` | **animated** slide, no engage, no resize: ζ 0.82, response 0.41 s (rms 0.67 pt). Does not send `valueChanged` |
 | Haptics | no feedback-generator call seen on the simulator (as VK-503 research §4.4) |
 
-## 4. Not measured in the spike (Task 1 of the plan)
+## 4. Measured in Task 1
 
-- Dark-mode traces, the engaged lens's colours and rim.
-- Label magnification under the lens; the lens's refracting ring width.
-- Two- and five-segment taps; the flick landing; RTL; accessibility sizes.
-- iOS 27 motion.
+- **Setup.** Same probe (rebuilt from `segfid_probe_main.swift`), a fresh
+  `vk550-t1-iphone265` (iPhone 17 Pro, iOS 26.5 23F77, deleted afterwards),
+  `-mode seg -bg plain` unless noted, the same `idb` gestures. The host ran at
+  load average 300–450; runs with a touch delivered more than 30 ms late are
+  discarded (two taps of the first light run). Every number below is in
+  `docs/qa/vk550/native_reference.json`, which merges the spike's rows with
+  these.
+- **Light tap 1 → 2, re-captured.** The spike's row had `valueChanged`
+  160 ms after touch-up (other taps: 4–16 ms), a main-thread stall. Its x
+  matches, but its size and engage do not reproduce: four clean repeats
+  (two light, two dark) agree with each other, not with it. The fixture's
+  `tap_1_2` is the Task 1 re-capture: peak w 159.2 (×1.34) at +0.25 s,
+  h 39.2 (×1.40) at +0.15 s, overshoot 2.44 pt, engage ≥ 0.99 from +0.10 to
+  +0.35 s. The spike's tap fit (x only) stands.
+
+| Item | Native |
+|---|---|
+| Dark rest | track 28/28/31 over black, thumb 90/90/95 (the spike's values) |
+| Dark tap 1 → 2 | as light: x on the same path (repeats, light or dark, differ by up to 8 pt at +0.05 s, under 1 pt from +0.35 s); peak w 156.2 (×1.31), h 39.1 (×1.40); overshoot 2.50 pt; engage ≥ 0.99 +0.05 to +0.30 s |
+| Dark press | as light: 119 × 28 → 143 × 44 by +0.30 s (+0.067 s: 126.1 × 32.8 dark, 125.2 × 32.1 light) |
+| Five segments, tap 1 → 3 (74 pt pitch, 148 pt) | x 37 → 185; overshoot **2.19 pt**; peak w 103.9 (×1.48), h 38.9 (×1.39); settled ≈ +0.85 s. The lift follows the distance, not the segment count (3 segments, 246 pt: h ×1.79) |
+| Flick landing (3 → 1, released at +0.55 s) | lands on the finger's segment (61.5), overshoots to 57.64: **3.86 pt** at +0.83 s from the down; at rest ≈ +1.13 s |
+| RTL (`-AppleTextDirection YES -NSForceRightToLeftWritingDirection YES`) | **segment 0 at the right**: "All" at x 316, its thumb 248, 2, 120 × 28 (control-local); a tap at the left commits index 2 |
+| Tap on the selected segment | **no `valueChanged`**; the lens grows in place to ≈ 143 × 44 (engage 1) and is back at rest by ≈ +0.50 s |
+| Held press on an unselected segment (2.16 s) | **the lens does not move or grow before the release** (no lens frame changes); the pressed segment's label fades to opacity **0.20** over ≈ 0.45 s. At the up: `valueChanged`, then the tap slide |
+| Label magnification under the held lens | **1.0**: the label's ink box is 43 × 29 px at rest and under the lens; every `UISegmentLabel` and `ContentLensingView` layer keeps scale 1.00. The lens content is two portals at rest size; `ContentLensingView` carries `displacementMap.inputAmount` 0 → −11 with the press |
+| Refracting ring (held lens over `-bg grid`) | grid-line contrast is back to the interior level **8.3 pt** below the top edge and **9.0 pt** above the bottom one (fixture `bezel` 8.7); chromatic fringing spans 7.3 / 7.7 pt. Inside, the backdrop is pulled toward the centre (≈ 0.5 pt across, ≈ 1 pt vertically at mid-height, up to 1.5–2.6 pt near the rim) |
+
+Still not measured: accessibility text sizes, iOS 27 motion, the engaged
+lens's colours in dark, and a spring fit of the lens after a drag release
+(the release starts with the lens moving; the fixture keeps the rows).
