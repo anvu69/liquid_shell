@@ -30,6 +30,17 @@ final class SearchUITests: XCTestCase {
       .matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
   }
 
+  /// The × that ends the search: UIKit's ("Cancel" or "Close") or the
+  /// Flutter field's ("Cancel search"), which clear and unfocus. The iPad's
+  /// stacked field has no ×; its ⓧ ("Clear text") does the same. Never the
+  /// iPhone field's own ⓧ, which only clears: the × is there first.
+  private func searchExit(_ app: XCUIApplication) -> XCUIElement {
+    let cancel = app.buttons.matching(
+      NSPredicate(format: "label IN %@", ["Cancel", "Close", "Hủy", "Đóng", "Cancel search"])
+    ).firstMatch
+    return cancel.waitForExistence(timeout: 5) ? cancel : app.buttons["Clear text"].firstMatch
+  }
+
   /// The first element of [query] that [accept]s, waited for: a menu
   /// appears after its animation.
   private func waitForFirst(
@@ -83,13 +94,7 @@ final class SearchUITests: XCTestCase {
     back.tap()
     XCTAssertTrue(flutterRow(app, "Hồ Hoàn Kiếm").waitForExistence(timeout: 10))
 
-    // × (UIKit labels it "Cancel" or "Close"): clears and unfocuses. The
-    // iPad's stacked field has no ×; its ⓧ ("Clear text") does the same.
-    let cancel = app.buttons.matching(
-      NSPredicate(format: "label IN %@", ["Cancel", "Close", "Hủy", "Đóng"])
-    ).firstMatch
-    let clear = app.buttons["Clear text"].firstMatch
-    let exit = cancel.waitForExistence(timeout: 5) ? cancel : clear
+    let exit = searchExit(app)
     XCTAssertTrue(exit.waitForExistence(timeout: 10), "× or ⓧ")
     exit.tap()
     XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10))
@@ -259,5 +264,100 @@ final class SearchUITests: XCTestCase {
     XCTAssertTrue(home.waitForExistence(timeout: 10))
     home.tap()
     XCTAssertTrue(flutterRow(app, "Diễm xưa").waitForExistence(timeout: 10), "Home's list")
+  }
+}
+
+/// VK-551: an edge swipe with the keyboard up, the search case pushed
+/// above the case list as a person opens it. While the search is active
+/// the case stays, as in the Flutter field (spec P3b §9.4), and the
+/// keyboard can be dismissed, never left behind with no field. On a page
+/// pushed inside the search tab the swipe pops that page (Apple Music) and
+/// the search stays as it was there.
+extension SearchUITests {
+  /// A drag from x = 2 to 90% of the width, mid-height: Flutter's back
+  /// gesture (the native bar's own is off, Q14).
+  fileprivate func swipeFromTheLeftEdge(_ app: XCUIApplication) {
+    app.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5)).withOffset(CGVector(dx: 2, dy: 0))
+      .press(
+        forDuration: 0.05,
+        thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)))
+  }
+
+  /// The search case above the case list ([demo]), the search tab
+  /// selected and its field focused with "ho hoan" typed.
+  fileprivate func typeAboveTheCaseList(_ demo: String) -> XCUIApplication {
+    let app = XCUIApplication()
+    app.launchEnvironment["LIQUID_SHELL_EXAMPLE_DEMO"] = demo
+    app.launch()
+    let tab = searchTabButton(app)
+    XCTAssertTrue(tab.waitForExistence(timeout: timeout))
+    tab.tap()
+    // One wait for either field: the Flutter case has no native one, and
+    // waiting that out first cost every Flutter run the whole 10 s.
+    let native = app.searchFields.firstMatch
+    let flutter = app.textFields.firstMatch
+    let either = app.descendants(matching: .any).matching(
+      NSPredicate(
+        format: "elementType IN %@",
+        [XCUIElement.ElementType.searchField, .textField].map(\.rawValue))
+    ).firstMatch
+    XCTAssertTrue(either.waitForExistence(timeout: 10), "a field")
+    let field = native.exists ? native : flutter
+    field.tap()
+    XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 30), "the keyboard")
+    field.typeText("ho hoan")
+    XCTAssertTrue(flutterRow(app, "Hồ Hoàn Kiếm").waitForExistence(timeout: 10), "the results")
+    return app
+  }
+
+  /// Off the search root the swipe has nothing of the shell's to pop: the
+  /// case stays, the keyboard with it, and × still dismisses it.
+  fileprivate func expectAnEdgeSwipeOffTheRootKeepsTheCase(_ demo: String) {
+    let app = typeAboveTheCaseList(demo)
+    swipeFromTheLeftEdge(app)
+    XCTAssertFalse(flutterRow(app, "Search tab").waitForExistence(timeout: 3), "the case stays")
+    XCTAssertTrue(flutterRow(app, "Hồ Hoàn Kiếm").exists, "its results")
+    let exit = searchExit(app)
+    XCTAssertTrue(exit.waitForExistence(timeout: 10), "× or ⓧ, to dismiss the keyboard")
+    exit.tap()
+    XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10), "dismissed")
+  }
+
+  func testNativeAnEdgeSwipeOffTheSearchRootKeepsTheCaseAndTheKeyboardDismissable() {
+    expectAnEdgeSwipeOffTheRootKeepsTheCase("search-above")
+  }
+
+  func testFlutterAnEdgeSwipeOffTheSearchRootKeepsTheCaseAndTheKeyboardDismissable() {
+    expectAnEdgeSwipeOffTheRootKeepsTheCase("search-above-liquid")
+  }
+
+  /// Natively the search stays active on the result's page (its keyboard
+  /// goes down there): the swipe pops that page, not the whole case, and
+  /// the search comes back as it was, × included.
+  func testNativeAnEdgeSwipeOnAResultPagePopsThatPage() {
+    let app = typeAboveTheCaseList("search-above")
+    flutterRow(app, "Hồ Hoàn Kiếm").tap()
+    let back = app.navigationBars.buttons["BackButton"]
+    XCTAssertTrue(back.waitForExistence(timeout: 30), "the native glass back button")
+    let heading = app.staticTexts["Hồ Hoàn Kiếm"]
+    XCTAssertTrue(heading.waitForExistence(timeout: 10), "the detail")
+    swipeFromTheLeftEdge(app)
+    // A loaded runner can drop the first drag's events. The retry is
+    // recorded (activity and log), so a regression that always needs two
+    // swipes shows; a first swipe that popped the whole case still fails.
+    if !heading.waitForNonExistence(timeout: 5), !flutterRow(app, "Search tab").exists {
+      XCTContext.runActivity(named: "VK-551: retry the edge swipe (the first was dropped)") { _ in
+        print("SearchUITests: the first edge swipe was dropped; swiping again")
+        swipeFromTheLeftEdge(app)
+      }
+    }
+    XCTAssertTrue(heading.waitForNonExistence(timeout: 10), "the detail popped")
+    XCTAssertFalse(flutterRow(app, "Search tab").exists, "not the whole case")
+    XCTAssertTrue(back.waitForNonExistence(timeout: 10), "the native bar followed")
+    XCTAssertTrue(flutterRow(app, "Hồ Hoàn Kiếm").waitForExistence(timeout: 10), "the results")
+    let exit = searchExit(app)
+    XCTAssertTrue(exit.waitForExistence(timeout: 10), "the search is still active")
+    exit.tap()
+    XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10), "no keyboard left")
   }
 }

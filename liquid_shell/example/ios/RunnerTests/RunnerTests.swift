@@ -1716,6 +1716,55 @@ extension NativeTabsTests {
     XCTAssertFalse(events.sent.contains("searchText "))
   }
 
+  /// VK-551: the chrome hidden (a shell that left sends the dormant
+  /// config, a dialog the hidden one) ends an active search, keeping its
+  /// text, as any dismissal Dart asks for does. Kept, its field stayed
+  /// first responder under the hidden chrome: the keyboard stayed up with
+  /// no field and no × to dismiss it.
+  func testHiddenChromeEndsAnActiveSearchAndKeepsTheText() throws {
+    let dormant = NativeChromeConfig(
+      engaged: false, tabs: [], selectedIndex: 0, tintArgb: 0xFF00_7AFF, dark: false,
+      rtl: false, hidden: false, interactive: true)
+    for (name, hide) in [("dormant", dormant), ("hidden", searchConfig(selected: 2, hidden: true))] {
+      let tabs = try installedSearchShell(selected: 2)
+      let bridge = tabs.searchBridge
+      let field = bridge.controller.searchBar.searchTextField
+      tabs.setSearchText("phố")
+      settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+      XCTAssertTrue(field.isFirstResponder, "\(name): precondition, the keyboard is up")
+      settle(sending: "searchActive false") { tabs.apply(hide) }
+      XCTAssertFalse(tabs.chromeVisible, name)
+      XCTAssertFalse(bridge.controller.isActive, "\(name): the search ended")
+      XCTAssertFalse(field.isFirstResponder, "\(name): the keyboard went with it")
+      XCTAssertEqual(bridge.text, "phố", "\(name): kept")
+      XCTAssertFalse(events.sent.contains("searchText "), "\(name): not a user clear")
+      events.sent.removeAll()
+    }
+  }
+
+  /// VK-551 review I-2: Dart's activation while the chrome is hidden (a
+  /// `LiquidHideChrome` page in the search tab, a dialog above the shell)
+  /// is ignored: it would present the search in a hidden view, its field
+  /// first responder with no field shown to dismiss the keyboard.
+  func testAnActivationWhileTheChromeIsHiddenIsIgnored() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let bridge = tabs.searchBridge
+    tabs.apply(searchConfig(selected: 2, hidden: true))
+    settle()
+    XCTAssertFalse(tabs.chromeVisible, "precondition")
+    tabs.setSearchActive(true)
+    let deadline = Date().addingTimeInterval(1.5)
+    while Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.05)) }
+    XCTAssertFalse(bridge.controller.isActive, "not presented in hidden chrome")
+    XCTAssertFalse(bridge.controller.searchBar.searchTextField.isFirstResponder, "no keyboard")
+    XCTAssertFalse(events.sent.contains("searchActive true"))
+    // Shown again, the same activation works.
+    tabs.apply(searchConfig(selected: 2))
+    settle()
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    XCTAssertTrue(bridge.controller.isActive)
+  }
+
   /// Q2: the user's × clears the text and dismisses; Dart hears both.
   func testTheCancelButtonClearsTheText() throws {
     let tabs = try installedSearchShell(selected: 2)

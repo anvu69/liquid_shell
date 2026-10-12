@@ -1644,11 +1644,30 @@ class _LiquidShellState extends State<LiquidShell>
       bodyMedia = bodyMedia.removePadding(removeLeft: !rtl, removeRight: rtl);
     }
     final overlay = kind == LiquidChromeKind.sidebarOverlay;
+    final phase = searchIndex == null
+        ? null
+        : searchPhaseFor(
+            selected: selected,
+            searchIndex: searchIndex,
+            active: searchActive,
+          );
+    // Then an active search, as in the Flutter layout (spec P3b §9.4):
+    // back deactivates it, and the iOS edge swipe pops nothing of this
+    // route. Popping it left UIKit's search active under the hidden
+    // chrome, its keyboard with nothing to dismiss it (VK-551); the swipe
+    // on a page pushed in the search tab, which this route's took first,
+    // now pops that page.
+    final searchUp = phase == LiquidSearchPhase.active;
     return PopScope(
       // System back closes an overlay sidebar first (P1 Q10, natively too).
-      canPop: !overlay,
+      canPop: !overlay && !searchUp,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && overlay) _setSidebarVisible(false);
+        if (didPop) return;
+        if (overlay) {
+          _setSidebarVisible(false);
+        } else if (searchUp) {
+          _search.deactivate();
+        }
       },
       child: ShellScopeMarker(
         data: LiquidShellScopeData(
@@ -1658,13 +1677,7 @@ class _LiquidShellState extends State<LiquidShell>
           sidebarVisible: state?.sidebarVisible ?? false,
           setSidebarVisible: _setSidebarVisible,
           nativeChrome: engaged,
-          searchPhase: searchIndex == null
-              ? null
-              : searchPhaseFor(
-                  selected: selected,
-                  searchIndex: searchIndex,
-                  active: searchActive,
-                ),
+          searchPhase: phase,
           nativePageBar: _nativePageBar,
           // UIKit's top bar, sidebar and navigation bars make room for the
           // cluster; the body starts below or beside them (spec P2 §8.3,

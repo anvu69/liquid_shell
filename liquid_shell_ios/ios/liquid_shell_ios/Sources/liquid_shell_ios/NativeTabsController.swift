@@ -202,6 +202,11 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     // view, below an overlay sidebar and its dimming view: close the
     // overlay, which is transient. A tiled sidebar stays.
     if overlayOpen, !new.interactive { sidebar.isHidden = true }
+    // Hidden chrome holds no search (VK-551): a shell that left (the
+    // dormant config) or hid the chrome would leave the field first
+    // responder under it, the keyboard up with no field and no × to
+    // dismiss it. The text is kept, as for any dismissal Dart asks for.
+    if !chromeVisible { searchBridge.dismissKeepingText() }
     if chromeVisible != wasVisible { setChromeVisible(chromeVisible, closingOverlay: overlayOpen) }
     syncFlutter()
   }
@@ -593,10 +598,11 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   }
 
   /// Dart's activate / deactivate. Activation needs the search tab
-  /// selected; deactivation keeps the text.
+  /// selected and the chrome shown: hidden chrome holds no search
+  /// (VK-551, `apply`). Deactivation keeps the text.
   func setSearchActive(_ active: Bool) {
     if active {
-      guard isSearchSelected else { return }
+      guard isSearchSelected, chromeVisible else { return }
       searchBridge.activate()
     } else {
       searchBridge.dismissKeepingText()
