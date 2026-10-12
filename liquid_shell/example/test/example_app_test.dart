@@ -42,6 +42,33 @@ void main() {
     expect(shown.guardDetails, isTrue);
   });
 
+  // VK-551: the search case as a page above the case list, as a person
+  // opens it: an edge swipe on its root pops the whole case.
+  for (final (demo, forced) in [
+    ('search-above', null),
+    ('search-above-liquid', LiquidGlassTier.liquid),
+  ]) {
+    testWidgets('demo $demo: the search case above the case list, forced '
+        'tier $forced', (tester) async {
+      tester.view
+        ..devicePixelRatio = 1
+        ..physicalSize = const Size(393, 852);
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(ExampleApp(demo: demo));
+      await tester.pumpAndSettle();
+      final context = tester.element(find.byType(SearchCase));
+      final semantics = tester.binding.semanticsEnabled;
+      debugReleaseDemoSemantics();
+      expect(semantics, isTrue);
+      expect(LiquidGlassScope.policyOf(context).forcedTier, forced);
+      expect(find.byType(CaseList, skipOffstage: false), findsOneWidget);
+      Navigator.of(context).pop();
+      await tester.pumpAndSettle();
+      expect(find.byType(SearchCase), findsNothing);
+      expect(find.byType(CaseList), findsOneWidget);
+    });
+  }
+
   // tool/tab_frames.sh: the native run (tabs) and the Flutter liquid run
   // (tabs-liquid) open the same basic case.
   for (final (demo, forced) in [

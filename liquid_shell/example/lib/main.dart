@@ -33,8 +33,10 @@ const kExampleSeed = Color(0xFF3D5AFE);
 /// The example app: a list of cases, each opening one screen.
 class ExampleApp extends StatefulWidget {
   /// Creates the app. [demo] opens one case directly (UI tests): `search`
-  /// and `search-guarded` open the search case; `alert` and `sheet` open
-  /// the alerts case and run that demo (spec P3a §9.4).
+  /// and `search-guarded` open the search case; `search-above` and
+  /// `search-above-liquid` push it above the case list, as a person opens
+  /// it, natively and in the Flutter liquid tier (VK-551); `alert` and
+  /// `sheet` open the alerts case and run that demo (spec P3a §9.4).
   const ExampleApp({this.demo, super.key});
 
   /// The demo to open at launch, or null for the case list. Any other
@@ -53,7 +55,7 @@ class _ExampleAppState extends State<ExampleApp> {
   @override
   void initState() {
     super.initState();
-    if (widget.demo == 'tabs-liquid') {
+    if (widget.demo == 'tabs-liquid' || widget.demo == 'search-above-liquid') {
       _mode.value = ExampleChromeMode.flutterLiquid;
     }
   }
@@ -67,6 +69,7 @@ class _ExampleAppState extends State<ExampleApp> {
   @override
   Widget build(BuildContext context) {
     final demo = widget.demo;
+    final above = demo == 'search-above' || demo == 'search-above-liquid';
     final home = switch (demo) {
       'search' => const SearchCase(),
       'search-guarded' => const SearchCase(guardDetails: true),
@@ -76,7 +79,7 @@ class _ExampleAppState extends State<ExampleApp> {
     };
     // XCUITest reads the search case's Flutter rows through the
     // accessibility tree (the alerts are native).
-    if (home is SearchCase) {
+    if (home is SearchCase || above) {
       _demoSemantics ??= SemanticsBinding.instance.ensureSemantics();
     }
     return ChromeModeScope(
@@ -88,7 +91,19 @@ class _ExampleAppState extends State<ExampleApp> {
           colorSchemeSeed: kExampleSeed,
           brightness: Brightness.dark,
         ),
-        home: home,
+        home: above ? null : home,
+        // The case list, and the search case pushed above it.
+        onGenerateInitialRoutes: above
+            ? (_) => [
+                MaterialPageRoute<void>(builder: (_) => home),
+                MaterialPageRoute<void>(
+                  builder: (_) => const CaseFrame(child: SearchCase()),
+                ),
+              ]
+            : null,
+        onGenerateRoute: above
+            ? (_) => MaterialPageRoute<void>(builder: (_) => home)
+            : null,
       ),
     );
   }
