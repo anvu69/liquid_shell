@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell_example/cases/cases.dart';
+import 'package:liquid_shell_example/cases/segments.dart';
 import 'package:liquid_shell_example/main.dart';
 import 'package:liquid_shell_example/support/demo_page.dart';
 import 'package:liquid_shell_example/support/drawn_by_flutter.dart';
-import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
+
+import 'support/installed_native.dart';
 
 /// The destination labels of the only [LiquidShell] on screen.
 List<String> shellLabels(WidgetTester tester) => [
@@ -15,27 +17,6 @@ List<String> shellLabels(WidgetTester tester) => [
 ];
 
 const _sizes = {'phone': Size(393, 852), 'tablet': Size(1194, 834)};
-
-/// A platform that reports native chrome installed, as an opted-in app on
-/// iOS 26 does, until the current test ends.
-void _installNative() {
-  final original = LiquidShellPlatform.instance;
-  LiquidShellPlatform.instance = _InstalledNative();
-  addTearDown(() => LiquidShellPlatform.instance = original);
-}
-
-class _InstalledNative extends LiquidShellPlatform {
-  @override
-  Stream<LiquidPlatformSignals> watchSignals() =>
-      Stream.value(LiquidPlatformSignals.none);
-
-  @override
-  bool get supportsNativeChrome => true;
-
-  @override
-  Future<LiquidNativeShellState> attachNativeChrome() async =>
-      const LiquidNativeShellState(installed: true);
-}
 
 Future<void> _openCase(WidgetTester tester, String id) async {
   await tester.pumpWidget(const ExampleApp());
@@ -61,13 +42,101 @@ void main() {
         expect(tester.takeException(), isNull);
         expect(
           find.byWidgetPredicate(
-            (w) => w is LiquidShell || w is LiquidTabBar || w is LiquidSidebar,
+            (w) =>
+                w is LiquidShell ||
+                w is LiquidTabBar ||
+                w is LiquidSidebar ||
+                w is LiquidSegmentedControl,
           ),
           findsWidgets,
         );
       });
     }
   }
+
+  group('segments (spec VK-550 §13)', () {
+    Future<void> open(WidgetTester tester) async {
+      // The reference screen's device: an iPhone 17 Pro.
+      tester.view
+        ..devicePixelRatio = 1
+        ..physicalSize = const Size(402, 874);
+      addTearDown(tester.view.reset);
+      await _openCase(tester, 'segments');
+    }
+
+    testWidgets('five controls at the native reference frames; a tap on '
+        'Songs selects it', (tester) async {
+      await open(tester);
+      expect(find.byType(LiquidSegmentedControl), findsNWidgets(5));
+      // UIKit puts each 32 pt control's top at trackTop; the Flutter track
+      // is on the same line, in the middle of its 44 pt box.
+      for (final row in kSegmentsRows) {
+        final control = tester.widget<LiquidSegmentedControl>(
+          _control(row.id),
+        );
+        expect([for (final s in control.segments) s.label], row.labels);
+        expect(control.onChanged != null, row.enabled, reason: row.id);
+        expect(control.expand, row.fullWidth, reason: row.id);
+        final box = tester.getRect(_segments(row.id));
+        expect(box.height, 44, reason: row.id);
+        expect(box.center.dy, row.trackTop + 16, reason: row.id);
+        if (row.fullWidth) {
+          expect(box.left, 16, reason: row.id);
+          expect(box.right, 402 - 16, reason: row.id);
+        } else {
+          expect(box.center.dx, 201, reason: row.id);
+          expect(box.width, lessThan(402 - 32), reason: row.id);
+        }
+      }
+      await tester.tap(_segment('full3', 'Songs'));
+      await tester.pumpAndSettle();
+      expect(_selectedOf(tester, 'full3'), 1);
+      expect(_selectedOf(tester, 'intrinsic3'), 0, reason: 'its own index');
+    });
+
+    testWidgets('the disabled control ignores a tap', (tester) async {
+      await open(tester);
+      final disabled = tester.widget<LiquidSegmentedControl>(
+        _control('disabled3'),
+      );
+      expect(disabled.onChanged, isNull);
+      await tester.tap(_segment('disabled3', 'Songs'));
+      await tester.pumpAndSettle();
+      expect(_selectedOf(tester, 'disabled3'), 0);
+    });
+
+    testWidgets('right to left puts segment 0 at the right', (tester) async {
+      await open(tester);
+      double centreOf(String label) =>
+          tester.getCenter(_segment('full3', label)).dx;
+      expect(centreOf('All'), lessThan(centreOf('Places')));
+      await _tapPanel(tester, kSegmentsRtlKey);
+      expect(centreOf('All'), greaterThan(centreOf('Places')));
+      expect(tester.getRect(_segments('full3')).left, 16, reason: 'frame');
+    });
+
+    testWidgets('text ×2 grows the controls, centred on the same line', (
+      tester,
+    ) async {
+      await open(tester);
+      await _tapPanel(tester, kSegmentsLargeTextKey);
+      for (final row in kSegmentsRows) {
+        final box = tester.getRect(_segments(row.id));
+        expect(box.height, greaterThan(44), reason: row.id);
+        expect(box.center.dy, row.trackTop + 16, reason: row.id);
+      }
+      expect(tester.takeException(), isNull, reason: 'no overflow');
+    });
+
+    testWidgets('Next selects the next segment from code, without '
+        'onChanged', (tester) async {
+      await open(tester);
+      for (final expected in [1, 2, 0]) {
+        await _tapPanel(tester, kSegmentsNextKey);
+        expect(_selectedOf(tester, 'full3'), expected);
+      }
+    });
+  });
 
   testWidgets('the guard asks before leaving dirty edits', (tester) async {
     await _openCase(tester, 'guard');
@@ -244,6 +313,7 @@ void main() {
     'form_factors',
     'narrow',
     'standalone',
+    'segments',
   };
 
   test('every case is either native or Flutter by nature', () {
@@ -255,7 +325,7 @@ void main() {
     for (final MapEntry(key: sizeName, value: size) in _sizes.entries) {
       for (final id in nativeIds) {
         testWidgets('$id on a $sizeName draws native chrome', (tester) async {
-          _installNative();
+          installNative();
           tester.view
             ..devicePixelRatio = 1
             ..physicalSize = size;
@@ -286,7 +356,7 @@ void main() {
       for (final id in flutterIds) {
         testWidgets('$id on a $sizeName keeps the Flutter chrome and says '
             'why', (tester) async {
-          _installNative();
+          installNative();
           tester.view
             ..devicePixelRatio = 1
             ..physicalSize = size;
@@ -294,8 +364,10 @@ void main() {
           await _openCase(tester, id);
           expect(tester.takeException(), isNull);
           // Every shell draws its Flutter chrome: none waits for native
-          // (hidden) or hands it over.
-          final pages = find.byType(DemoPage).evaluate();
+          // (hidden) or hands it over. The segments case has no shell.
+          final pages = find
+              .byWidgetPredicate((w) => w is DemoPage || w is SegmentsCase)
+              .evaluate();
           expect(pages, isNotEmpty);
           for (final page in pages) {
             final scope = LiquidShellScope.maybeOf(page);
@@ -419,6 +491,32 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Result: keep'), findsWidgets);
   });
+}
+
+/// The segments case's control [id] (`kSegmentsRows`), by its frame.
+Finder _segments(String id) => find.byKey(ValueKey('segments-$id'));
+
+/// The [LiquidSegmentedControl] of [_segments].
+Finder _control(String id) => find.descendant(
+  of: _segments(id),
+  matching: find.byType(LiquidSegmentedControl),
+);
+
+int? _selectedOf(WidgetTester tester, String id) =>
+    tester.widget<LiquidSegmentedControl>(_control(id)).selectedIndex;
+
+/// The segment [label] of control [id]: its touch and semantics node (the
+/// label is drawn once per weight).
+Finder _segment(String id, String label) =>
+    find.descendant(of: _segments(id), matching: find.bySemanticsLabel(label));
+
+/// Taps the segments case's panel control [key], scrolled into view.
+Future<void> _tapPanel(WidgetTester tester, Key key) async {
+  final control = find.byKey(key);
+  await tester.ensureVisible(control);
+  await tester.pumpAndSettle();
+  await tester.tap(control);
+  await tester.pumpAndSettle();
 }
 
 /// The touch and semantics node of the tab labelled [label] in [within]:

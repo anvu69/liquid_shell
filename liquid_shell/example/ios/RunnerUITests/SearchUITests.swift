@@ -502,4 +502,45 @@ extension SearchUITests {
     }
     XCTAssertTrue(places.isSelected, "landscape: still Places")
   }
+
+  /// The app's own write (spec VK-550 §14.3): the example's "Reset scope"
+  /// sets `scopeIndex = 0`. UIKit's bar follows, and nothing comes back:
+  /// a report of the old scope would put the results back on Songs.
+  func testTheAppsResetScopeMovesTheNativeBarWithoutAReport() {
+    let app = launch()
+    let tab = searchTabButton(app)
+    XCTAssertTrue(tab.waitForExistence(timeout: timeout))
+    tab.tap()
+    let field = app.searchFields.firstMatch
+    XCTAssertTrue(field.waitForExistence(timeout: 10), "the native field")
+    field.tap()
+    XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 30), "the keyboard")
+    field.typeText("pho")
+    let song = flutterRow(app, "Thành phố buồn")
+    let place = flutterRow(app, "Phố cổ Hà Nội")
+    XCTAssertTrue(song.waitForExistence(timeout: 10), "All: a song")
+    XCTAssertTrue(place.exists, "All: a place")
+
+    let scopes = app.segmentedControls.firstMatch
+    XCTAssertTrue(scopes.waitForExistence(timeout: 10), "UIKit's scope bar")
+    let all = scopes.buttons["All"]
+    let songs = scopes.buttons["Songs"]
+    songs.tap()
+    XCTAssertTrue(place.waitForNonExistence(timeout: 10), "Songs: no place")
+
+    let reset = app.buttons["Reset scope"]
+    XCTAssertTrue(reset.waitForExistence(timeout: 10), "the app's Reset scope")
+    XCTAssertTrue(reset.isEnabled, "Songs: something to reset")
+    reset.tap()
+    XCTAssertTrue(wait { all.isSelected }, "the native bar follows: All")
+    XCTAssertTrue(place.waitForExistence(timeout: 10), "All: the place again")
+    XCTAssertTrue(song.exists, "All: the song")
+    // A report back would land within a second.
+    RunLoop.current.run(until: Date().addingTimeInterval(1))
+    XCTAssertTrue(all.isSelected, "still All")
+    XCTAssertFalse(songs.isSelected, "not Songs")
+    XCTAssertTrue(place.exists, "still All's results")
+    XCTAssertFalse(reset.isEnabled, "nothing left to reset")
+    XCTAssertTrue(scopes.exists, "the search is still active")
+  }
 }

@@ -12,6 +12,7 @@ import 'package:liquid_shell_example/cases/discard_guard.dart';
 import 'package:liquid_shell_example/cases/forced_tier.dart';
 import 'package:liquid_shell_example/cases/hide_chrome.dart';
 import 'package:liquid_shell_example/cases/narrow_width.dart';
+import 'package:liquid_shell_example/cases/segments.dart';
 import 'package:liquid_shell_example/cases/sidebar_only.dart';
 import 'package:liquid_shell_example/cases/sidebar_slots.dart';
 import 'package:liquid_shell_example/cases/standalone_widgets.dart';
@@ -26,9 +27,10 @@ void main() {
     String name,
     Widget page, {
     GoldenDevice device = iphone,
+    Brightness brightness = Brightness.light,
     Future<void> Function()? interact,
   }) async {
-    await pumpGolden(tester, page, device: device);
+    await pumpGolden(tester, page, device: device, brightness: brightness);
     if (interact != null) {
       await interact();
       await tester.pumpAndSettle();
@@ -137,6 +139,38 @@ void main() {
       'case_standalone_sidebar',
       const StandaloneWidgetsCase(),
       device: ipadLandscape,
+    );
+  });
+  // Spec VK-550 §14.4: the segments case at rest (2, 3, 5 segments, sized
+  // to the labels, disabled), light and dark, right to left, text ×2.
+  testWidgets('case_segments_light', (tester) async {
+    await golden(tester, 'case_segments_light', const SegmentsCase());
+  });
+
+  testWidgets('case_segments_dark', (tester) async {
+    await golden(
+      tester,
+      'case_segments_dark',
+      const SegmentsCase(),
+      brightness: Brightness.dark,
+    );
+  });
+
+  testWidgets('case_segments_rtl', (tester) async {
+    await golden(
+      tester,
+      'case_segments_rtl',
+      const SegmentsCase(),
+      interact: () => tester.tap(find.byKey(kSegmentsRtlKey)),
+    );
+  });
+
+  testWidgets('case_segments_ax2', (tester) async {
+    await golden(
+      tester,
+      'case_segments_ax2',
+      const SegmentsCase(),
+      interact: () => tester.tap(find.byKey(kSegmentsLargeTextKey)),
     );
   });
 }

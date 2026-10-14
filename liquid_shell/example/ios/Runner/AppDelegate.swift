@@ -12,6 +12,13 @@ import UIKit
     if ProcessInfo.processInfo.environment["LIQUID_SHELL_EXAMPLE_TRACE_NAV"] != nil {
       AnimatedStackTrace.install()
     }
+    #if DEBUG
+      // tool/segment_frames.sh: UIKit's segmented controls instead of
+      // Flutter's, at the same frames (spec VK-550 §14.5).
+      if ProcessInfo.processInfo.environment["LIQUID_SHELL_EXAMPLE_DEMO"] == "segments-native" {
+        SegmentReferenceViewController.showWhenActive()
+      }
+    #endif
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 

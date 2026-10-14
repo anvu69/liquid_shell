@@ -2,8 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:liquid_shell/liquid_shell.dart';
+import 'package:liquid_shell_example/support/chrome_mode.dart';
 import 'package:liquid_shell_example/support/search_data.dart';
 import 'package:liquid_shell_example/support/wallpaper.dart';
+
+/// The search page's "Reset scope" button.
+const kResetScopeKey = ValueKey<String>('reset-scope');
 
 /// Search is a tab (VK-407). On iOS 26 with native chrome the field is
 /// UIKit's: on iPhone the ⌕ beside the tab pill becomes the field and the
@@ -149,10 +153,25 @@ class _ListPage extends StatelessWidget {
   Widget build(BuildContext context) => _Page(
     title: title,
     child: Builder(
-      builder: (context) => ListView(
-        padding: _padding(context),
-        children: [for (final item in items) _ResultTile(item: item)],
-      ),
+      builder: (context) {
+        final mode = ChromeModeScope.maybeOf(context);
+        return ListView(
+          padding: _padding(context),
+          children: [
+            // Native or Flutter liquid, as on every case's pages (L4). Not
+            // on the search page: the switch rebuilds the chrome, the
+            // field included.
+            if (mode != null) ...[
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: ChromeModeSwitch(mode: mode),
+              ),
+              const SizedBox(height: 12),
+            ],
+            for (final item in items) _ResultTile(item: item),
+          ],
+        );
+      },
     ),
   );
 }
@@ -175,7 +194,8 @@ class _SearchPage extends StatelessWidget {
       listenable: Listenable.merge([controller, recents]),
       builder: (context, _) {
         final value = controller.value;
-        final phase = LiquidShellScope.of(context).searchPhase;
+        final shell = LiquidShellScope.of(context);
+        final phase = shell.searchPhase;
         final padding = _padding(context);
         if (value.text.isEmpty && phase != LiquidSearchPhase.active) {
           return _CategoryGrid(padding: padding);
@@ -189,9 +209,12 @@ class _SearchPage extends StatelessWidget {
         return ListView(
           padding: padding,
           children: [
-            // The shell's scopes; nothing when native chrome draws them.
+            // The shell's scopes; nothing when native chrome draws them,
+            // above the list (and no gap for them here).
             LiquidSearchScopeBar(controller: controller),
-            const SizedBox(height: 16),
+            if (!shell.nativeSearchScopes) const SizedBox(height: 16),
+            if (results != null)
+              _ResetScope(controller: controller, scope: value.scopeIndex),
             if (results == null)
               ..._recents(context)
             else if (results.isEmpty)
@@ -239,6 +262,28 @@ class _SearchPage extends StatelessWidget {
           onTap: () => controller.text = query,
         ),
   ];
+}
+
+/// The app's own write of the scope (an app action, never a reply to the
+/// bar): `controller.scopeIndex = 0`. Natively UIKit's bar follows it
+/// without reporting it back (spec VK-550 §10.2).
+class _ResetScope extends StatelessWidget {
+  const _ResetScope({required this.controller, required this.scope});
+
+  final LiquidSearchController controller;
+
+  /// The selected scope: at 0 there is nothing to reset.
+  final int scope;
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: AlignmentDirectional.centerEnd,
+    child: TextButton(
+      key: kResetScopeKey,
+      onPressed: scope == 0 ? null : () => controller.scopeIndex = 0,
+      child: const Text('Reset scope'),
+    ),
+  );
 }
 
 class _CategoryGrid extends StatelessWidget {

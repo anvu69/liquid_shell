@@ -135,7 +135,7 @@ test.
 Every case with a real shell gives each destination and the trailing action
 an `sfSymbol`, so on iOS 26 it runs with the
 [native chrome](#native-ios-chrome). The images show the Flutter chrome,
-which the same code draws everywhere else. Custom chrome, the standalone widgets, the custom theme, the forced
+which the same code draws everywhere else. Custom chrome, the standalone widgets, the segmented control, the custom theme, the forced
 tier, form factors and narrow width are about the Flutter chrome itself:
 they keep it on iOS 26 too (`nativeChrome: LiquidNativeChrome.off` or a
 `chromeBuilder`), and the example app says so on screen.
@@ -477,6 +477,33 @@ circle and its long-press history menu (each page in turn, top first) call
 `Navigator.maybePop`, and Flutter's back swipe is off while a page refuses.
 A refused pop leaves the page and the bar where they were. `LiquidBackButton` also
 works on its own, with `onPressed` to replace `maybePop`.
+
+### Segmented control
+
+`LiquidSegmentedControl` draws iOS 26's `UISegmentedControl`: a 32pt track
+centred in a 44pt touch box, and a liquid lens that lifts under the
+finger, follows a drag across segments and lands with a wobble. It is
+controlled: rebuild it with the index `onChanged` gives. The search scopes
+use it. The example's segments case puts it at the frames of a native
+reference screen, over the same stripes.
+
+<?code-excerpt "segments.dart (segments)"?>
+```dart
+int _scope = 0;
+
+Widget _scopes() => LiquidSegmentedControl(
+  segments: const [
+    LiquidSegment(label: 'All'),
+    LiquidSegment(label: 'Songs'),
+    LiquidSegment(label: 'Places'),
+  ],
+  selectedIndex: _scope,
+  // Controlled: rebuild with the index the user chose.
+  onChanged: (i) => setState(() => _scope = i),
+);
+```
+
+<img src="doc/images/case_segments_light.png" width="260" alt="Segmented controls of two, three and five segments over coloured stripes">
 
 ### "Discard changes?" guard
 
@@ -1106,7 +1133,7 @@ Widget build(BuildContext context) {
               children: const [
                 Text(
                   'This shell is 320pt wide, below kLiquidNarrowWidth '
-                  '(340): row margin 8, 51.6pt tap areas.',
+                  '(340): row margin 8, tap areas of at least 44pt.',
                 ),
                 SizedBox(height: 12),
               ],

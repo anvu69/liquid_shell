@@ -10,11 +10,14 @@ import 'package:liquid_shell/liquid_shell.dart';
 // The goldens hook is test-only and stays out of the public API (spec §16).
 import 'package:liquid_shell/src/chrome/glass_tab_bar.dart'
     show debugTabLensPress;
+import 'package:liquid_shell/src/segmented/segmented_control.dart'
+    show debugSegmentLensPress;
 import 'package:liquid_shell_example/cases/basic_tabs.dart';
 import 'package:liquid_shell_example/cases/custom_theme.dart';
 import 'package:liquid_shell_example/cases/forced_tier.dart';
 import 'package:liquid_shell_example/cases/native_alerts.dart';
 import 'package:liquid_shell_example/cases/search.dart';
+import 'package:liquid_shell_example/cases/segments.dart';
 import 'package:liquid_shell_example/cases/sidebar_slots.dart';
 
 import '../support/golden_harness.dart';
@@ -58,11 +61,19 @@ Rect _chromeBand(WidgetTester tester) {
   return band!.inflate(_bandMargin).intersect(screen);
 }
 
-/// Compares only the chrome band with `bands/<name>.png`, so the 0.5 %
-/// tolerance (Q12) is a share of the glass, not of the whole screen: a
-/// change to the lens, the rim or the dispersion fails it.
-Future<void> _expectBand(WidgetTester tester, String name) async {
-  final band = _chromeBand(tester);
+/// Compares only the chrome band (or the band [around] one widget) with
+/// `bands/<name>.png`, so the 0.5 % tolerance (Q12) is a share of the
+/// glass, not of the whole screen: a change to the lens, the rim or the
+/// dispersion fails it.
+Future<void> _expectBand(
+  WidgetTester tester,
+  String name, {
+  Finder? around,
+}) async {
+  final screen = Offset.zero & tester.view.physicalSize / goldenPixelRatio;
+  final band = around == null
+      ? _chromeBand(tester)
+      : tester.getRect(around).inflate(_bandMargin).intersect(screen);
   final source = Rect.fromLTRB(
     (band.left * goldenPixelRatio).floorToDouble(),
     (band.top * goldenPixelRatio).floorToDouble(),
@@ -263,6 +274,32 @@ void main() {
       expect(m.ringColour, greaterThanOrEqualTo(0.9), reason: seen);
       expect(m.vivid, lessThanOrEqualTo(0.03), reason: seen);
       expect(m.p99, inInclusiveRange(45, 90), reason: seen);
+    });
+  }
+
+  // The engaged segment lens, frozen pressed on the first segment and
+  // straddling the first two (spec VK-550 §14.4), on the full-width
+  // three-segment control: (393 − 2 × 16) / 3 = 120.3 pt per segment, so
+  // half of one moves the lens onto the boundary.
+  for (final (name, shift) in [
+    ('segment_lens_pressed', 0.0),
+    ('segment_lens_straddle', (393 - 2 * 16) / 3 / 2),
+  ]) {
+    testWidgets(name, (tester) async {
+      debugSegmentLensPress = shift;
+      addTearDown(() => debugSegmentLensPress = null);
+      await tester.runAsync(LiquidGlass.precache);
+      await pumpGolden(tester, const SegmentsCase(), device: iphone);
+      expect(
+        find.byWidgetPredicate((w) => w.runtimeType.toString() == 'LiquidLens'),
+        findsWidgets,
+        reason: 'the engaged lens',
+      );
+      await _expectBand(
+        tester,
+        name,
+        around: find.byKey(const ValueKey('segments-full3')),
+      );
     });
   }
 
