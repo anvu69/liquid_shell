@@ -25,6 +25,7 @@ import 'package:liquid_shell/src/search/search_controller.dart';
 import 'package:liquid_shell/src/search/search_layout.dart';
 import 'package:liquid_shell/src/search/shell_search.dart';
 import 'package:liquid_shell/src/shell/bar_measure.dart';
+import 'package:liquid_shell/src/shell/branch_navigators.dart';
 import 'package:liquid_shell/src/shell/breakpoints.dart';
 import 'package:liquid_shell/src/shell/chrome_builder.dart';
 import 'package:liquid_shell/src/shell/shell_layout.dart';
@@ -258,6 +259,12 @@ class _LiquidShellState extends State<LiquidShell>
     onRelease: _selectSearch,
   );
 
+  // --- the selected tab's navigator (VK-567) -------------------------------
+  // Found after the frame; see [_backScope].
+  List<NavigatorState> _branches = const [];
+  bool _branchCanPop = false;
+  bool _branchScanScheduled = false;
+
   @override
   void initState() {
     super.initState();
@@ -267,15 +274,18 @@ class _LiquidShellState extends State<LiquidShell>
     _host.state.addListener(_rebuild);
     _syncClaim();
     _configureSearch();
+    _scheduleBranchScan();
   }
 
   @override
   void didUpdateWidget(LiquidShell oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.nativeChrome != widget.nativeChrome) _syncClaim();
-    // A selection change expands the minimized bar (spec VK-503 §10, Q7).
+    // A selection change expands the minimized bar (spec VK-503 §10, Q7),
+    // and puts another tab's navigator on screen.
     if (oldWidget.selectedIndex != widget.selectedIndex) {
       _minimized.value = false;
+      _scheduleBranchScan();
     }
     _configureSearch();
   }
@@ -293,6 +303,7 @@ class _LiquidShellState extends State<LiquidShell>
   void activate() {
     super.activate();
     _configureSearch();
+    _scheduleBranchScan();
   }
 
   void _configureSearch() => _search.configure(
@@ -636,6 +647,99 @@ class _LiquidShellState extends State<LiquidShell>
       apply();
     }
   }
+
+  // --- the selected tab's navigator (VK-567) -------------------------------
+
+  /// Finds the selected tab's navigator after the frame, once the body has
+  /// built: a new shell, a new selection, a moved shell.
+  void _scheduleBranchScan() {
+    if (_branchScanScheduled) return;
+    _branchScanScheduled = true;
+    SchedulerBinding.instance
+      ..addPostFrameCallback((_) {
+        _branchScanScheduled = false;
+        _scanBranches();
+      })
+      ..ensureVisualUpdate();
+  }
+
+  /// A navigator in the body changed its history (a push, a pop, a new
+  /// navigator). Navigators send this after the frame.
+  bool _onBranchNavigation(NavigationNotification notification) {
+    _outsideBuild(_scanBranches);
+    return false;
+  }
+
+  void _scanBranches() {
+    if (!mounted) return;
+    final body = _bodyKey.currentContext;
+    _branches = body == null ? const [] : onScreenNavigatorsUnder(body);
+    final canPop = _branches.any((n) => n.canPop());
+    if (canPop != _branchCanPop) setState(() => _branchCanPop = canPop);
+  }
+
+  /// Back while the selected tab can pop: its top page pops, through its
+  /// own PopScope.
+  void _popBranch() {
+    for (final navigator in _branches) {
+      if (navigator.mounted && navigator.canPop()) {
+        unawaited(_maybePop(navigator));
+        return;
+      }
+    }
+  }
+
+  /// The shell's say over its own route's pops (system back, the iOS edge
+  /// swipe), in this order:
+  /// 1. an overlay sidebar closes first (P1 Q10, natively too);
+  /// 2. an active search deactivates (spec P3b §9.4). Natively, popping
+  ///    left UIKit's search active under the hidden chrome, its keyboard
+  ///    with nothing to dismiss it (VK-551);
+  /// 3. while the selected tab's navigator can pop, its top page pops
+  ///    (VK-567), as on iOS; at the tab's root the shell's route pops.
+  ///
+  /// A blocked route also loses the edge swipe: Flutter hit-tests the
+  /// outer route's back gesture before a tab route's, so in a shell that
+  /// is itself a pushed page the swipe on any tab's pushed page popped the
+  /// whole shell. Blocked, the swipe falls to the tab's top page.
+  ///
+  /// The route calls every PopScope on it, so a back blocked by another one
+  /// (an exit wrapper, an unsaved form) lands here too. A
+  /// `NavigatorPopHandler` around the branch asks the same navigator in
+  /// the same turn; `maybePop` drops the second ask once the first popped,
+  /// so one back pops one page.
+  Widget _backScope({
+    required bool overlay,
+    required bool searchActive,
+    required Widget child,
+  }) => PopScope(
+    canPop: !overlay && !searchActive && !_branchCanPop,
+    onPopInvokedWithResult: (didPop, _) {
+      if (didPop) return;
+      if (overlay) {
+        _setSidebarVisible(false);
+      } else if (searchActive) {
+        _search.deactivate();
+      } else {
+        _popBranch();
+      }
+    },
+    child: child,
+  );
+
+  /// The body under its listeners: one subtree for both layouts, so a
+  /// switch between native and Flutter chrome keeps its state (§5.6).
+  /// [kind] null: native chrome.
+  Widget _bodySubtree(LiquidChromeKind? kind) => KeyedSubtree(
+    key: _bodyKey,
+    child: NotificationListener<NavigationNotification>(
+      onNotification: _onBranchNavigation,
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (n) => _onBodyScroll(n, kind),
+        child: widget.body,
+      ),
+    ),
+  );
 
   // --- sidebar and selection ---------------------------------------------
 
@@ -1058,16 +1162,7 @@ class _LiquidShellState extends State<LiquidShell>
         top: 0,
         end: 0,
         bottom: 0,
-        child: MediaQuery(
-          data: bodyMedia,
-          child: KeyedSubtree(
-            key: _bodyKey,
-            child: NotificationListener<ScrollNotification>(
-              onNotification: (n) => _onBodyScroll(n, kind),
-              child: widget.body,
-            ),
-          ),
-        ),
+        child: MediaQuery(data: bodyMedia, child: _bodySubtree(kind)),
       ),
     ];
 
@@ -1439,22 +1534,9 @@ class _LiquidShellState extends State<LiquidShell>
       );
     }
 
-    // System back closes the overlay sidebar before it pops anything (Q10).
-    // The route calls every PopScope on it, so a back blocked by another one
-    // (an exit wrapper, an unsaved form) lands here too: act only while the
-    // overlay is what blocks it.
-    // Then an active search field (spec P3b §9.4): back deactivates it.
-    final searchActive = phase == LiquidSearchPhase.active;
-    return PopScope(
-      canPop: kind != LiquidChromeKind.sidebarOverlay && !searchActive,
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop) return;
-        if (kind == LiquidChromeKind.sidebarOverlay) {
-          _setSidebarVisible(false);
-        } else if (searchActive) {
-          _search.deactivate();
-        }
-      },
+    return _backScope(
+      overlay: kind == LiquidChromeKind.sidebarOverlay,
+      searchActive: phase == LiquidSearchPhase.active,
       child: ShellScopeMarker(
         data: LiquidShellScopeData(
           sizeClass: sizeClass,
@@ -1662,24 +1744,9 @@ class _LiquidShellState extends State<LiquidShell>
             searchIndex: searchIndex,
             active: searchActive,
           );
-    // Then an active search, as in the Flutter layout (spec P3b §9.4):
-    // back deactivates it, and the iOS edge swipe pops nothing of this
-    // route. Popping it left UIKit's search active under the hidden
-    // chrome, its keyboard with nothing to dismiss it (VK-551); the swipe
-    // on a page pushed in the search tab, which this route's took first,
-    // now pops that page.
-    final searchUp = phase == LiquidSearchPhase.active;
-    return PopScope(
-      // System back closes an overlay sidebar first (P1 Q10, natively too).
-      canPop: !overlay && !searchUp,
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop) return;
-        if (overlay) {
-          _setSidebarVisible(false);
-        } else if (searchUp) {
-          _search.deactivate();
-        }
-      },
+    return _backScope(
+      overlay: overlay,
+      searchActive: phase == LiquidSearchPhase.active,
       child: ShellScopeMarker(
         data: LiquidShellScopeData(
           sizeClass: sizeClass,
@@ -1716,13 +1783,7 @@ class _LiquidShellState extends State<LiquidShell>
                 bottom: 0,
                 child: MediaQuery(
                   data: bodyMedia,
-                  child: KeyedSubtree(
-                    key: _bodyKey,
-                    child: NotificationListener<ScrollNotification>(
-                      onNotification: (n) => _onBodyScroll(n, null),
-                      child: widget.body,
-                    ),
-                  ),
+                  child: _bodySubtree(null),
                 ),
               ),
             ],
