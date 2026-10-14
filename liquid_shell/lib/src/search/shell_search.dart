@@ -42,6 +42,11 @@ final class ShellSearch implements SearchDriver {
   // The next native entry sends the text even when empty: native may
   // still show another one (a hot restart, a reconnected scene).
   bool _replay = true;
+  // The next config that shows the search tab natively sends the scope,
+  // entered or not: after a state report the scope bar may be a new one
+  // (a reconnected scene) at its first scope. Unlike the text, the scope
+  // is always Dart's to send: it has no composition to disturb.
+  bool _replayScope = false;
   // The controller's text came from the user's typing in the field (not
   // from the app): native has it, unless its scene was rebuilt.
   bool _userText = false;
@@ -127,6 +132,9 @@ final class ShellSearch implements SearchDriver {
       if (native && selected && next.text != previous.text) {
         claim()?.setSearchText(next.text);
       }
+      if (native && selected && next.scopeIndex != previous.scopeIndex) {
+        claim()?.setSearchScope(next.scopeIndex);
+      }
     }
     // A new controller's text is the app's.
     _userText = false;
@@ -147,6 +155,7 @@ final class ShellSearch implements SearchDriver {
   ///
   /// A reconnect also ends the active state: the new field has no focus.
   void replay({required bool reconnect}) {
+    _replayScope = true;
     if (reconnect) {
       _syncInactive = true;
       final controller = _controller;
@@ -205,6 +214,14 @@ final class ShellSearch implements SearchDriver {
         }
       case LiquidNativeSearchSubmitted(:final text):
         if (selected) _config?.onSubmitted?.call(text);
+      case LiquidNativeSearchScopeChanged(:final index):
+        // Checked at the boundary: an index from the platform. Applied as
+        // the field's own edit, so it never goes back to native.
+        if (!selected || index < 0 || index == controller.scopeIndex) return;
+        applySearchEdit(
+          controller,
+          controller.value.copyWith(scopeIndex: index),
+        );
       case LiquidNativeSearchFieldChanged(:final frame):
         if (frame != field) {
           field = frame;
@@ -229,6 +246,10 @@ final class ShellSearch implements SearchDriver {
     if (entered && (_replay || controller.text.isNotEmpty)) {
       _replay = false;
       claim()?.setSearchText(controller.text);
+    }
+    if (shown && (entered || _replayScope)) {
+      _replayScope = false;
+      claim()?.setSearchScope(controller.scopeIndex);
     }
     if (entered && _syncInactive) {
       _syncInactive = false;
@@ -335,10 +356,12 @@ final class ShellSearch implements SearchDriver {
     }
   }
 
+  /// Natively, while the search tab is shown, the native scope bar follows
+  /// (spec VK-550 §10.2); otherwise the entry sends it ([afterConfigSent]).
+  /// The Flutter scope bar rebuilds from the controller.
   @override
   void scopeSetByApp(int index) {
-    // Nothing to send: the Flutter scope bar rebuilds from the controller
-    // (spec VK-550 §10.2).
+    if (native && selected) claim()?.setSearchScope(index);
   }
 
   // --- the Flutter field (fallback) --------------------------------------

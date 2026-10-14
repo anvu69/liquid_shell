@@ -60,6 +60,7 @@ void main() {
     await platform.setNativeSearchActive(active: true);
     await platform.setNativePageScroll(tab: 0, offset: 12);
     await platform.dismissNativeSearchKeyboard();
+    await expectLater(platform.setNativeSearchScope(2), completes);
     // No binding, no channel: reaching here without a MissingPluginException
     // is the assertion.
   });

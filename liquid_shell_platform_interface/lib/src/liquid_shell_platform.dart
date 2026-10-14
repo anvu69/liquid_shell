@@ -65,6 +65,10 @@ abstract class LiquidShellPlatform extends PlatformInterface {
   /// no native search).
   Future<void> dismissNativeSearchKeyboard() async {}
 
+  /// Selects scope [index] in the native scope bar (clamped to its
+  /// titles); never reported back as a user change. Default: does nothing.
+  Future<void> setNativeSearchScope(int index) async {}
+
   /// The scroll offset of tab [tab]'s top page, for the native large title
   /// and scroll-edge effect. Default: does nothing.
   Future<void> setNativePageScroll({

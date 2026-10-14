@@ -424,8 +424,43 @@ void main() {
       expect(
         const LiquidNativeChromeConfig(engaged: true, search: a).toString(),
         contains(
-          'search: LiquidNativeSearchConfig(placeholder: Songs, places)',
+          'search: LiquidNativeSearchConfig(placeholder: Songs, places, '
+          'scopes: null)',
         ),
+      );
+    });
+
+    test('LiquidNativeSearchConfig compares its scopes by value', () {
+      LiquidNativeSearchConfig scoped(List<String>? titles) =>
+          LiquidNativeSearchConfig(
+            placeholder: 'x',
+            scopes: titles == null ? null : List.of(titles),
+          );
+      expect(scoped(const ['All', 'Songs']), scoped(const ['All', 'Songs']));
+      expect(
+        scoped(const ['All', 'Songs']).hashCode,
+        scoped(const ['All', 'Songs']).hashCode,
+      );
+      expect(
+        scoped(const ['All', 'Songs']),
+        isNot(scoped(const ['All', 'Places'])),
+      );
+      expect(scoped(const ['All', 'Songs']), isNot(scoped(null)));
+      expect(const LiquidNativeSearchConfig().scopes, isNull);
+      expect(
+        scoped(const ['All', 'Songs']).toString(),
+        'LiquidNativeSearchConfig(placeholder: x, scopes: [All, Songs])',
+      );
+    });
+
+    test('LiquidNativeSearchScopeChanged compares by value', () {
+      expect(
+        const LiquidNativeSearchScopeChanged(1),
+        const LiquidNativeSearchScopeChanged(1),
+      );
+      expect(
+        const LiquidNativeSearchScopeChanged(1),
+        isNot(const LiquidNativeSearchScopeChanged(2)),
       );
     });
 
@@ -479,7 +514,12 @@ void main() {
         (
           const LiquidNativeSearchConfig(placeholder: 'x'),
           const LiquidNativeSearchConfig(placeholder: 'x'),
-          'LiquidNativeSearchConfig(placeholder: x)',
+          'LiquidNativeSearchConfig(placeholder: x, scopes: null)',
+        ),
+        (
+          const LiquidNativeSearchScopeChanged(2),
+          const LiquidNativeSearchScopeChanged(2),
+          'LiquidNativeSearchScopeChanged(2)',
         ),
         (
           const LiquidNativeSearchTextChanged('a', composing: true),

@@ -380,6 +380,7 @@ class _LiquidShellState extends State<LiquidShell>
       case LiquidNativeSearchTextChanged() ||
           LiquidNativeSearchActiveChanged() ||
           LiquidNativeSearchSubmitted() ||
+          LiquidNativeSearchScopeChanged() ||
           LiquidNativeSearchFieldChanged():
         _search.onNativeEvent(event);
       case LiquidNativeBackTapped(:final tab):
@@ -1570,6 +1571,7 @@ class _LiquidShellState extends State<LiquidShell>
           ((state?.compact ?? false) && !_routeCurrent);
       final interactive = _routeCurrent && !_guardPending;
       final placeholder = widget.search?.placeholder;
+      final scopes = widget.search?.scopes;
       final pageBar = _nativePageBar;
       // `hidden` and `interactive` are taken now; `_stackFor` reads
       // `_routeCurrent` and `_covered` after the frame. Both are set before
@@ -1588,6 +1590,7 @@ class _LiquidShellState extends State<LiquidShell>
           hidden: hidden,
           interactive: interactive,
           searchPlaceholder: placeholder,
+          searchScopes: scopes,
           pageStacks: _pageStacks,
         );
       });
@@ -1691,6 +1694,9 @@ class _LiquidShellState extends State<LiquidShell>
           nativeChrome: engaged,
           searchPhase: phase,
           nativePageBar: _nativePageBar,
+          // UIKit's scope bar draws them (spec VK-550 §10.3). Native chrome
+          // engages on iOS 26+ only, so nothing else gates it.
+          nativeSearchScopes: engaged && widget.search?.scopes != null,
           searchScopes: widget.search?.scopes,
           // UIKit's top bar, sidebar and navigation bars make room for the
           // cluster; the body starts below or beside them (spec P2 §8.3,

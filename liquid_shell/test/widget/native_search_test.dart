@@ -2016,4 +2016,81 @@ void main() {
       expect(fake.searchKeyboardDismissals, 0);
     });
   });
+
+  // VK-550 §10: the native scope bar. Native chrome draws the scopes the app
+  // gives LiquidSearch.scopes; Flutter's LiquidSearchScopeBar then builds
+  // nothing. The bridge is one-way: native reports the user's changes,
+  // Dart sends the app's.
+  group('VK-550: the native scope bar', () {
+    const scopes = ['All', 'Songs', 'Places'];
+
+    Future<(FakeNativePlatform, LiquidSearchController)> scoped(
+      WidgetTester tester, {
+      List<String>? titles = scopes,
+      int initialIndex = 2,
+    }) async {
+      final fake = installFakeNative(state: _compact);
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      await pumpShell(
+        tester,
+        TestShell(
+          destinations: _destinations,
+          initialIndex: initialIndex,
+          pageBuilder: _withSearchRoot(
+            () => ListView(
+              key: const ValueKey('list-Scopes'),
+              children: [
+                LiquidSearchScopeBar(controller: controller, scopes: scopes),
+              ],
+            ),
+          ),
+          search: LiquidSearch(controller: controller, scopes: titles),
+        ),
+        padding: _compactPadding,
+      );
+      return (fake, controller);
+    }
+
+    testWidgets('the config carries the scopes; Flutter draws no scope bar', (
+      tester,
+    ) async {
+      final (fake, _) = await scoped(tester);
+      expect(fake.last.search?.scopes, scopes);
+      expect(_scope(tester, 'Scopes').nativeSearchScopes, isTrue);
+      expect(find.byType(LiquidSegmentedControl), findsNothing);
+    });
+
+    testWidgets('without scopes native draws none', (tester) async {
+      final (fake, controller) = await scoped(tester, titles: null);
+      expect(fake.last.search?.scopes, isNull);
+      expect(_scope(tester, 'Scopes').nativeSearchScopes, isFalse);
+      // The app's own bar, without LiquidSearch.scopes: Flutter draws it.
+      expect(find.byType(LiquidSegmentedControl), findsOneWidget);
+      expect(controller.scopeIndex, 0);
+    });
+
+    testWidgets('a user change reaches the controller; an app write goes '
+        'to native once', (tester) async {
+      final (fake, controller) = await scoped(tester);
+      fake.searchScopes.clear();
+      fake.emitNative(const LiquidNativeSearchScopeChanged(1));
+      await tester.pump();
+      expect(controller.scopeIndex, 1);
+      expect(fake.searchScopes, isEmpty, reason: 'never echoed');
+      controller.scopeIndex = 2;
+      await tester.pump();
+      expect(fake.searchScopes, [2]);
+    });
+
+    testWidgets('entering the search tab sends the scope', (tester) async {
+      final (fake, controller) = await scoped(tester, initialIndex: 0);
+      controller.scopeIndex = 2;
+      await tester.pump();
+      expect(fake.searchScopes, isEmpty, reason: 'another tab is selected');
+      fake.emitNative(const LiquidNativeDestinationTapped(2));
+      await tester.pumpAndSettle();
+      expect(fake.searchScopes, [2]);
+    });
+  });
 }

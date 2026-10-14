@@ -102,6 +102,7 @@ final class NativeChromeHost extends ChangeNotifier {
       case LiquidNativeSearchTextChanged() ||
           LiquidNativeSearchActiveChanged() ||
           LiquidNativeSearchSubmitted() ||
+          LiquidNativeSearchScopeChanged() ||
           LiquidNativeSearchFieldChanged() ||
           LiquidNativeBackTapped() ||
           LiquidNativePopToPage():
@@ -199,6 +200,13 @@ final class NativeChromeClaim {
     unawaited(
       LiquidShellPlatform.instance.setNativeSearchActive(active: active),
     );
+  }
+
+  /// Selects scope [index] in the native scope bar, when this claim owns
+  /// the chrome.
+  void setSearchScope(int index) {
+    if (!isOwner) return;
+    unawaited(LiquidShellPlatform.instance.setNativeSearchScope(index));
   }
 
   /// Puts the native search keyboard away and keeps the search active,

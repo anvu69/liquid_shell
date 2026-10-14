@@ -33,6 +33,9 @@ class FakeNativePlatform extends FakeSignalsPlatform {
   /// Number of `dismissNativeSearchKeyboard` calls.
   int searchKeyboardDismissals = 0;
 
+  /// Every `setNativeSearchScope`.
+  final searchScopes = <int>[];
+
   /// Every `setNativePageScroll`, as (tab, offset).
   final pageScrolls = <(int, double)>[];
 
@@ -85,6 +88,9 @@ class FakeNativePlatform extends FakeSignalsPlatform {
   @override
   Future<void> dismissNativeSearchKeyboard() async =>
       searchKeyboardDismissals++;
+
+  @override
+  Future<void> setNativeSearchScope(int index) async => searchScopes.add(index);
 
   @override
   Future<void> setNativePageScroll({
