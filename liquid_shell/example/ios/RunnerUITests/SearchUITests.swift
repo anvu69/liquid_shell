@@ -83,7 +83,7 @@ final class SearchUITests: XCTestCase {
     XCTAssertFalse(app.keyboards.firstMatch.exists, "selected, not focused (Q13)")
 
     field.tap()
-    XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
+    XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 30), "the keyboard")
     field.typeText("ho hoan")
     let result = flutterRow(app, "Hồ Hoàn Kiếm")
     XCTAssertTrue(result.waitForExistence(timeout: 10), "Flutter's live results")
@@ -111,6 +111,8 @@ final class SearchUITests: XCTestCase {
     let field = app.searchFields.firstMatch
     XCTAssertTrue(field.waitForExistence(timeout: 10))
     field.tap()
+    // Typing before the keyboard is up drops the text (seen under load).
+    XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 30), "the keyboard")
     field.typeText("ho hoan")
     let result = flutterRow(app, "Hồ Hoàn Kiếm")
     XCTAssertTrue(result.waitForExistence(timeout: 10))
@@ -212,6 +214,8 @@ final class SearchUITests: XCTestCase {
     let field = app.searchFields.firstMatch
     XCTAssertTrue(field.waitForExistence(timeout: 10))
     field.tap()
+    // Typing before the keyboard is up drops the text (seen under load).
+    XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 30), "the keyboard")
     field.typeText("ho hoan")
     let result = flutterRow(app, "Hồ Hoàn Kiếm")
     XCTAssertTrue(result.waitForExistence(timeout: 10))
