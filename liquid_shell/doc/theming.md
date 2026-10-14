@@ -28,7 +28,7 @@ All glass reads one `ThemeExtension`, `LiquidGlassTheme`. Without one,
 | `tabIconSize` | 26 | 26 | tab and trailing-circle icons at text scale 1 (the landscape bar uses 22) |
 | `segmentTrack` | `#767680` @ 0.12 (`#1F767680`) | `#767680` @ 0.24 (`#3D767680`) | the segmented control's track and the search scope bar's |
 | `segmentThumb` | `#FFFFFF` | `#EBEBF5` @ 0.30 (`#4DEBEBF5`) | the segmented control's thumb at rest |
-| `segmentLabelStyle` | 13, w400, −0.08 tracking, black | 13, w400, −0.08 tracking, white | segment labels; the selected one is w500. The app's font family is kept; set `fontFamily` here to change it. The tracking is SF Pro's at 13 pt, which UIKit applies and Flutter does not |
+| `segmentLabelStyle` | 13, w400, black | 13, w400, white | segment labels; the selected one is w500. The app's font family is kept; set `fontFamily` here to change it. In the system font the labels take UIKit's tracking for their size (Flutter does not apply it); any other font keeps its spacing |
 
 Tab colours: the selected tab is `ColorScheme.primary` (the tint the
 native chrome uses too) over a `selectionFill` capsule, and the others are

@@ -33,9 +33,9 @@
   targets follow the segment width. An intrinsic "A | B | C" is 132 pt
   against native's 96 (the 44 pt minimum, owner Q-C). The landing wobble
   matches native's `flick` capture in peaks and settle time, not frame by
-  frame (Q-E). A short tap toward the left lifts 38 pt tall where
-  native's lifts about 49; native's lens also shrinks the page behind it
-  about 0.8 times vertically, this one does not.
+  frame (Q-E). On five segments a tap over three or four segments
+  overshoots more than native's (up to 5.6 pt against 4.3); native's lens
+  bends the labels it passes, these stay above it.
 - **Behaviour changes.**
   - `LiquidSearchScopeBar` is drawn by `LiquidSegmentedControl`: a flat
     track with a white thumb and a liquid lens, as iOS 26's
