@@ -34,10 +34,9 @@ final class SegmentEnvelope extends LensEnvelope {
     required this.slide,
     required this.showDelay,
     required this.engageHold,
-    required this.liftNear,
-    required this.liftFar,
+    required this.liftRight,
+    required this.liftLeft,
     required this.liftUntil,
-    required this.liftTravel,
     required this.wobble,
     required this.wobbleArea,
     required this.squashKnee,
@@ -77,19 +76,15 @@ final class SegmentEnvelope extends LensEnvelope {
   /// Seconds after a tap's commit the lens stays clear.
   final double engageHold;
 
-  /// A one-segment tap's lift: width and height gains.
-  final Size liftNear;
+  /// A tap's lift to the right on screen: width and height gains, wide
+  /// (`tap_1_2`, `tap_2_3`).
+  final Size liftRight;
 
-  /// The lift of a tap over two segments or more.
-  final Size liftFar;
+  /// A tap's lift to the left on screen: tall (`tap_3_1`).
+  final Size liftLeft;
 
-  /// Seconds after the commit the lift lasts: ([liftNear], [liftFar]).
+  /// Seconds after the commit the lift lasts: ([liftRight], [liftLeft]).
   final (double, double) liftUntil;
-
-  /// The lift follows the distance a tap travels, in points: [liftNear]
-  /// up to the first, [liftFar] from the second, linear between (gains and
-  /// [liftUntil] alike).
-  final (double, double) liftTravel;
 
   /// The size spring after the lift (the landing wobble): it drives the
   /// side the lift stretched most.
@@ -316,21 +311,26 @@ final class LensProfile {
       // `tap_1_2`, `tap_2_3`, `tap_3_1` engage: clear to +0.335 s, then
       // engageOut (within 0.1 of every row from +0.1 s).
       engageHold: 0.335,
-      // `tap_1_2`, `tap_2_3`: w ×1.31, h ×1.37 to +0.235 s; peaks 154.8 ×
-      // 37.9 against native's 159.2 × 39.2, then the wobble narrows it to
-      // 111.0 (native 108.2).
-      liftNear: const Size(0.31, 0.37),
-      // `tap_3_1`: h ×1.78 to +0.215 s, w held; peak h 48.4 (native 49.5),
-      // then the wobble lowers it to 23.3 (native 23.35).
-      liftFar: const Size(0.01, 0.78),
+      // The lift follows the direction on screen, nothing else (Task 15
+      // review: native_taps.json, two, three and five segments, LTR and
+      // RTL, 74 to 296 pt): to the right it is wide, to the left tall,
+      // whatever the distance or the target segment.
+      // `tap_1_2`, `tap_2_3` (right): w ×1.31, h ×1.37 to +0.235 s; peaks
+      // 154.8 × 37.9 against native's 159.2 × 39.2, then the wobble
+      // narrows it to 111.0 (native 108.2).
+      liftRight: const Size(0.31, 0.37),
+      // `tap_3_1` (left): h ×1.78 to +0.215 s, w held; peak h 48.4 (native
+      // 49.5), then the wobble lowers it to 23.3 (native 23.35).
+      liftLeft: const Size(0.01, 0.78),
       liftUntil: (0.235, 0.215),
-      // Task 15: native's lift follows the distance, not the segment
-      // count. `tap_1_3_5seg` (two segments of five, 148 pt) lifts as a
-      // one-segment tap (peak h 38.9, native's ×1.39), `tap_3_1` (247 pt)
-      // as liftFar.
-      liftTravel: (148, 246.67),
-      // The size spring after the lift, fitted with the lifts above.
-      wobble: fittedSpring(0.42, 0.47),
+      // The size spring after the lift. Task 4 fitted 0.42 / 0.47 s with
+      // the lifts above; the Task 15 review refitted it with the direction
+      // rule on the fixture's five taps and native_taps.json's fitting
+      // split (31 taps): every peak h and wobble extreme within 10 % but
+      // the w swing after a long tap to the right on five segments (222
+      // and 296 pt: +13 to +15 %). At 0.42 short taps to the left swelled
+      // 10.5 % too wide.
+      wobble: fittedSpring(0.48, 0.47),
       // Task 15: after the lift native keeps the lens's area within 4 %
       // of rest from +0.45 s (w × h of `tap_1_2`, `tap_3_1`,
       // `tap_1_3_5seg`), so a lens that narrows grows taller and one that

@@ -240,9 +240,9 @@ class LensMotion {
   double _releaseAt = 0;
   int _flightSlots = 1;
 
-  /// A segment tap's lift between its near (0) and far (1) shapes, by the
-  /// distance it travels.
-  double _liftMix = 0;
+  /// A segment tap goes to the left on screen: its lift is tall, not wide
+  /// (spec VK-550 §8.4).
+  bool _liftLeft = false;
   double _flightTarget = 0;
   int? _popSlot;
   int _lastSlot = 0;
@@ -621,11 +621,7 @@ class LensMotion {
     _flick = flick;
     _flight = tap && slot != from ? _Flight.tap : _Flight.release;
     _flightTarget = _geometry.centreOf(slot);
-    final travel = from == null
-        ? 0.0
-        : (_flightTarget - _geometry.centreOf(from)).abs();
-    final (near, far) = e.liftTravel;
-    _liftMix = ((travel - near) / (far - near)).clamp(0.0, 1.0);
+    _liftLeft = _flightTarget < _lensX;
     _follow = null;
     // An up in place keeps the press look until the press has lasted
     // pressHold (`tapOnSelected`); a longer press releases at once.
@@ -1005,12 +1001,12 @@ class LensMotion {
     _fade(_refraction, engage, profile.effectIn, profile.effectOut);
   }
 
-  /// A segment tap's lift gains, between near and far by distance.
-  Size _lift(SegmentEnvelope e) => Size.lerp(e.liftNear, e.liftFar, _liftMix)!;
+  /// A segment tap's lift gains: by its direction on screen.
+  Size _lift(SegmentEnvelope e) => _liftLeft ? e.liftLeft : e.liftRight;
 
-  /// When a segment tap's lift ends, between near and far by distance.
+  /// When a segment tap's lift ends: by its direction on screen.
   double _liftUntil(SegmentEnvelope e) =>
-      e.liftUntil.$1 + (e.liftUntil.$2 - e.liftUntil.$1) * _liftMix;
+      _liftLeft ? e.liftUntil.$2 : e.liftUntil.$1;
 
   /// The side that keeps the area takes its value from it (spec §8.4).
   void _followArea() {
