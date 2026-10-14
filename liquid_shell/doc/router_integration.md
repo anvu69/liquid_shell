@@ -74,10 +74,30 @@ the swipe on any tab's pushed page popped the whole shell.
   say: a refusing page stays, and the shell's route stays with it.
 - **The order** is the overlay sidebar, then an active search, then the
   tab's page, then the shell's route.
-- **`NavigatorPopHandler` is not needed** around a branch navigator, but
-  it still works: one back pops one page.
+- **Remove a `NavigatorPopHandler` around a branch navigator**: the shell
+  does its job. One the app keeps answers back for its navigator, and the
+  shell then only blocks its own route, so one back is still one step: an
+  open drawer or sheet closes, and its page stays.
+- **A drawer or a persistent bottom sheet** on the tab's page counts too:
+  back closes it first, at the tab's root as well.
+- **Several navigators on screen** (an iPad detail beside its master, or a
+  `PageView` whose neighbours stay alive): back pops the last one in tree
+  order that can pop.
 - A shell at the app's root has no edge swipe of its own; there system
   back (Android) pops the tab's page instead of leaving the app.
+
+Known limits:
+
+- **A navigator inside a tab's page** (a flow nested in a page, or a
+  go_router `ShellRoute` inside a `StatefulShellRoute` branch) is not
+  looked at: only the navigator nearest under `body` is. While that
+  navigator is at its root, the swipe on a page pushed in the nested one
+  still pops a pushed shell. A deeper scan is planned with the go_router
+  adapter.
+- **"On screen" for back is not quite `LiquidHideChrome`'s.** Back also
+  treats a bare `Offstage` as hidden; `LiquidHideChrome` needs
+  `Visibility` or `TickerMode`. Hide kept branches with `TickerMode` (or an
+  `IndexedStack`) and both agree.
 
 ## A search branch
 

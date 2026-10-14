@@ -85,9 +85,14 @@
   kept in another tab never holds it. Also new: a shell at the app's root
   pops the tab's page on system back (Android) instead of leaving the app,
   and an app's own `PopScope` on the shell's route hears `didPop: false`
-  while a tab's page pops (doc/router_integration.md). A
-  `NavigatorPopHandler` around a branch is no longer needed and still
-  pops one page per back.
+  while a tab's page pops (doc/router_integration.md). A drawer or a
+  persistent bottom sheet on the tab's page closes first, at the tab's
+  root too; with several navigators on screen, back pops the last one
+  that can pop. A navigator inside a tab's page is not looked at yet.
+  **Migration:** remove a `NavigatorPopHandler` around a branch navigator
+  (the README's "Hide the chrome" case no longer has one). One the app
+  keeps answers back for its navigator and the shell only blocks its own
+  route, so one back is still one step.
 - **The search keyboard goes on a drag or a scope tap (VK-571).** As in
   Apple Music and Settings, a user drag that scrolls the shell's body (the
   results), or a tap on `LiquidSearchScopeBar`, puts the keyboard away and
