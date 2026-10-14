@@ -475,7 +475,10 @@ and the scroll-edge effect.
 Every back respects the page's `PopScope`. The button, the native back
 circle and its long-press history menu (each page in turn, top first) call
 `Navigator.maybePop`, and Flutter's back swipe is off while a page refuses.
-A refused pop leaves the page and the bar where they were. `LiquidBackButton` also
+A refused pop leaves the page and the bar where they were. System back and
+the iOS edge swipe pop the selected tab's top page first, also when the
+shell is itself a pushed page; only a tab at its root lets them pop the
+shell's route ([doc/router_integration.md](doc/router_integration.md#back-pops-the-tab-first)). `LiquidBackButton` also
 works on its own, with `onPressed` to replace `maybePop`.
 
 ### Segmented control
@@ -682,38 +685,36 @@ Widget build(BuildContext context) => LiquidShell(
 
 // The branch has its own navigator, as a router's shell branch does. The
 // detail page is pushed inside it, under the shell, which is where
-// LiquidHideChrome reaches the shell. System back pops it first.
-Widget _branch() => NavigatorPopHandler(
-  onPopWithResult: (_) => _branchKey.currentState?.maybePop(),
-  child: Navigator(
-    key: _branchKey,
-    pages: [
-      MaterialPage<void>(
-        key: _rootKey,
-        child: DemoPage(
-          title: kDemoDestinations[_index].label,
-          children: [
-            ListTile(
-              title: const Text('Open a full-frame detail page'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => setState(() => _detailOpen = true),
-            ),
-          ],
+// LiquidHideChrome reaches the shell. Back and the iOS edge swipe pop it
+// first: the shell sees the branch's navigator.
+Widget _branch() => Navigator(
+  key: _branchKey,
+  pages: [
+    MaterialPage<void>(
+      key: _rootKey,
+      child: DemoPage(
+        title: kDemoDestinations[_index].label,
+        children: [
+          ListTile(
+            title: const Text('Open a full-frame detail page'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => setState(() => _detailOpen = true),
+          ),
+        ],
+      ),
+    ),
+    if (_detailOpen)
+      const MaterialPage<void>(
+        key: _detailKey,
+        // Full frame: every piece of chrome hides while it is mounted.
+        child: LiquidHideChrome(
+          child: Scaffold(body: DemoPage(title: 'Detail')),
         ),
       ),
-      if (_detailOpen)
-        const MaterialPage<void>(
-          key: _detailKey,
-          // Full frame: every piece of chrome hides while it is mounted.
-          child: LiquidHideChrome(
-            child: Scaffold(body: DemoPage(title: 'Detail')),
-          ),
-        ),
-    ],
-    onDidRemovePage: (page) {
-      if (page.key == _detailKey) setState(() => _detailOpen = false);
-    },
-  ),
+  ],
+  onDidRemovePage: (page) {
+    if (page.key == _detailKey) setState(() => _detailOpen = false);
+  },
 );
 ```
 
@@ -1355,12 +1356,20 @@ content viewer (see [Custom chrome](#custom-chrome)).
   between text scale 1 and 1.6 a label that does not fit is drawn smaller
   than the size the user chose, down to 10pt. Icon-only cells and the
   large content viewer start at 1.6 (see [Narrow width](#narrow-width)).
-- **Back with the overlay sidebar open.** System back closes the overlay
-  sidebar first, but the route still calls your own `PopScope` handlers
-  with `didPop: false`. A handler that shows a dialog should return early
-  while `chromeKind` is `LiquidChromeKind.sidebarOverlay` (see
+- **Back with the overlay sidebar open, or a tab that can pop.** System
+  back closes the overlay sidebar first, then pops the selected tab's
+  page, but the route still calls your own `PopScope` handlers on the
+  shell's route with `didPop: false`. A handler that shows a dialog should
+  return early while `chromeKind` is `LiquidChromeKind.sidebarOverlay` or
+  your branch navigator can pop (see
   [doc/router_integration.md](doc/router_integration.md#system-back-and-the-overlay-sidebar)).
   How a router such as go_router orders back is not covered yet.
+- **A navigator inside a tab's page is not looked at for back.** Back
+  and the iOS edge swipe pop the navigator nearest under `body` first (see
+  [doc/router_integration.md](doc/router_integration.md#back-pops-the-tab-first));
+  a flow nested in a page, or a go_router `ShellRoute` inside a branch,
+  still loses the swipe to a pushed shell while the tab's own navigator is
+  at its root.
 - **Native chrome is opt-in.** It needs iOS 26,
   `LiquidShellNativeChrome` in Info.plist, and an SF Symbol on every
   destination. Strings the system draws (the sidebar button's VoiceOver

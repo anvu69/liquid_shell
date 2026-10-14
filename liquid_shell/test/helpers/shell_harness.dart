@@ -45,6 +45,7 @@ class TestShell extends StatefulWidget {
     this.strings = const LiquidShellStrings(),
     this.pageBuilder,
     this.offstageBranches = false,
+    this.bodyBuilder,
     this.nativeChrome = LiquidNativeChrome.auto,
     this.nativeSidebarFooter,
     this.search,
@@ -71,6 +72,10 @@ class TestShell extends StatefulWidget {
   /// (`Offstage` + `TickerMode`) instead of with an `IndexedStack`
   /// (`Visibility`).
   final bool offstageBranches;
+
+  /// Builds the body from the selected index and the pages, in place of
+  /// the `IndexedStack` (or [offstageBranches]).
+  final Widget Function(int index, List<Widget> pages)? bodyBuilder;
 
   final LiquidNativeChrome nativeChrome;
   final LiquidNativeSidebarFooter? nativeSidebarFooter;
@@ -106,7 +111,9 @@ class TestShellState extends State<TestShell> {
     nativeSidebarFooter: widget.nativeSidebarFooter,
     search: widget.search,
     breakpoints: widget.breakpoints,
-    body: widget.offstageBranches
+    body: widget.bodyBuilder != null
+        ? widget.bodyBuilder!(index, _pages)
+        : widget.offstageBranches
         ? Stack(
             fit: StackFit.expand,
             children: [

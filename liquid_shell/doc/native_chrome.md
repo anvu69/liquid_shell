@@ -191,7 +191,9 @@ and the glass back circle; `LiquidPage` draws only its child.
 - **The back swipe is Flutter's.** UIKit's interactive pop gestures are off
   in the search tab; the left-edge swipe reaches Flutter, whose page route
   runs its own back gesture. The native bar switches when the gesture ends:
-  it does not follow the finger yet.
+  it does not follow the finger yet. In a shell that is itself a pushed
+  page the swipe pops the tab's top page too, not the shell (see
+  [router_integration.md](router_integration.md#back-pops-the-tab-first)).
 - **Large titles.** On iPhone a root page's large title sits on the bar
   row (`.inline`); on iPad the root's title is small, unless it asks for a
   large title (`largeTitle: true`), which then gets its own row and

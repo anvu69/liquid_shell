@@ -208,9 +208,10 @@ whatever the tabs do.
   search instead of popping, natively and in the Flutter field, and the
   iOS edge swipe pops nothing of the shell's own route meanwhile. While
   the search is active, the swipe on a page pushed in the search tab pops
-  that page, and the search stays active. With the search inactive, a
-  shell that is itself a pushed page still loses the swipe to its own
-  route: the swipe pops the whole shell (VK-567).
+  that page, and the search stays active. With the search inactive the
+  swipe and system back pop the tab's top page too, and only at the tab's
+  root the shell's own route (see
+  [router_integration.md](router_integration.md#back-pops-the-tab-first)).
 - **Dialogs and pages above the shell.** While a Flutter dialog, sheet or
   page covers the shell, an active search is deactivated first (the
   keyboard would sit above the barrier). The text is kept. One difference
