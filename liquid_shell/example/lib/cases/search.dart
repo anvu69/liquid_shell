@@ -68,8 +68,8 @@ class _SearchCaseState extends State<SearchCase> {
     search: LiquidSearch(
       controller: _search,
       placeholder: 'Songs, places',
-      // Native chrome (iOS 26+) shows them in UIKit's scope bar while the
-      // search is active; elsewhere LiquidSearchScopeBar below does.
+      // UIKit's scope bar while the search is active (native chrome, iOS
+      // 26+); LiquidSearchScopeBar on the search page elsewhere.
       scopes: kSearchScopes,
       onSubmitted: _remember,
     ),

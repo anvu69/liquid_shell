@@ -401,6 +401,9 @@ Widget build(BuildContext context) => LiquidShell(
   search: LiquidSearch(
     controller: _search,
     placeholder: 'Songs, places',
+    // UIKit's scope bar while the search is active (native chrome, iOS
+    // 26+); LiquidSearchScopeBar on the search page elsewhere.
+    scopes: kSearchScopes,
     onSubmitted: _remember,
   ),
   body: IndexedStack(
