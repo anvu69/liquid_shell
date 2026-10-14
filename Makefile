@@ -164,7 +164,9 @@ ios-unit: ## XCTest of liquid_shell_ios (example RunnerTests) on an iPad or iPho
 # iPad Pro 11 (14 run, 3 iPhone-only skipped), both iOS 26.5; scaled to
 # the slow runner, about 1250 s, too close to the old 1500 s. 1800 s keeps
 # ~550 s in hand, inside the job's 40 minutes; a stalled test still stops
-# at its 300 s.
+# at its 300 s. VK-567 adds one iPhone-only full-launch test (18): 29 s
+# locally, the whole run 445 s on an iPhone 17 (iOS 26.5) under heavy
+# load; about 1330 s on the slow runner, still ~470 s in hand.
 IOS_UI_TIMEOUT ?= 1800
 
 ios-ui: ## XCUITest: real taps on native dialogs and the search tab (example RunnerUITests) on a simulator; IOS_UNIT_DEVICE=<udid>
