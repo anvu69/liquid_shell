@@ -1,4 +1,8 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
@@ -71,6 +75,7 @@ class _Pushed {
     bool offstageBranches = false,
     Widget Function(int, Widget)? wrap,
     Widget Function(Widget shell)? around,
+    Widget Function(int index, List<Widget> pages)? body,
     bool pushed = true,
   }) async {
     if (mode == _Mode.native) fake = installFakeNative(state: _compact);
@@ -81,6 +86,7 @@ class _Pushed {
       destinations: _destinations,
       initialIndex: initialIndex,
       offstageBranches: offstageBranches,
+      bodyBuilder: body,
       pageBuilder: (i) => branch(i, wrap: wrap),
       search: LiquidSearch(controller: search),
     );
@@ -146,6 +152,70 @@ Future<void> _swipeFromTheEdge(WidgetTester tester) async {
 }
 
 Finder _page(String label) => find.text('$label page: 0');
+
+/// The route of the page of [label]: a `Scaffold` drawer or a persistent
+/// bottom sheet adds its local-history entry there.
+ModalRoute<Object?> _routeOf(WidgetTester tester, String label) =>
+    ModalRoute.of(tester.element(find.byKey(ValueKey('list-$label'))))!;
+
+/// A `NavigatorPopHandler` around a tab's navigator, as the README's
+/// "Hide the chrome" case had it before VK-567.
+Widget Function(int, Widget) _popHandlers(_Pushed app) =>
+    (i, navigator) => NavigatorPopHandler(
+      onPopWithResult: (_) => app.tabs[i].currentState?.maybePop(),
+      child: navigator,
+    );
+
+/// Branches kept as a router keeps them, but the one left goes offstage
+/// 300 ms after the selection (the end of a cross-fade), not in the same
+/// frame.
+class _LateHide extends StatefulWidget {
+  const _LateHide({required this.index, required this.children});
+
+  final int index;
+  final List<Widget> children;
+
+  @override
+  State<_LateHide> createState() => _LateHideState();
+}
+
+class _LateHideState extends State<_LateHide> {
+  int? _leaving;
+  Timer? _timer;
+
+  @override
+  void didUpdateWidget(_LateHide oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.index == widget.index) return;
+    _leaving = oldWidget.index;
+    _timer?.cancel();
+    _timer = Timer(
+      const Duration(milliseconds: 300),
+      () => setState(() => _leaving = null),
+    );
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    fit: StackFit.expand,
+    children: [
+      for (final (i, child) in widget.children.indexed)
+        Offstage(
+          offstage: i != widget.index && i != _leaving,
+          child: TickerMode(
+            enabled: i == widget.index || i == _leaving,
+            child: child,
+          ),
+        ),
+    ],
+  );
+}
 
 void main() {
   setUp(debugResetLiquidNative);
@@ -277,18 +347,12 @@ void main() {
         expect(app.shellPopped, isTrue);
       });
 
-      // An app that already wraps its branch in a NavigatorPopHandler, as
-      // doc/router_integration.md advises: one back, one page.
+      // An app that kept the NavigatorPopHandler the README used to show
+      // around its branch: one back, one page.
       testWidgets('a NavigatorPopHandler around the branch: one back pops '
           'one page', (tester) async {
         final app = _Pushed(mode);
-        await app.pump(
-          tester,
-          wrap: (i, navigator) => NavigatorPopHandler(
-            onPopWithResult: (_) => app.tabs[i].currentState?.maybePop(),
-            child: navigator,
-          ),
-        );
+        await app.pump(tester, wrap: _popHandlers(app));
         await app.push(tester, 0, 'One');
         await app.push(tester, 0, 'Two');
         await app.outer.currentState!.maybePop();
@@ -341,6 +405,131 @@ void main() {
         expect(_page('Home'), findsOneWidget);
       });
 
+      // VK-567 review I1(a): a drawer, a persistent bottom sheet or any
+      // local-history entry changes `canPop()` with no navigation event.
+      testWidgets('a drawer opened at the tab root: back closes it first', (
+        tester,
+      ) async {
+        final app = _Pushed(mode);
+        await app.pump(tester);
+        var removed = 0;
+        _routeOf(
+          tester,
+          'Home',
+        ).addLocalHistoryEntry(LocalHistoryEntry(onRemove: () => removed++));
+        await tester.pumpAndSettle();
+        await app.outer.currentState!.maybePop();
+        await tester.pumpAndSettle();
+        expect(removed, 1);
+        expect(app.shellPopped, isFalse, reason: 'only the drawer');
+        await app.outer.currentState!.maybePop();
+        await tester.pumpAndSettle();
+        expect(app.shellPopped, isTrue);
+      });
+
+      testWidgets('a drawer seen by a tab round-trip, then closed by back: '
+          'the next back pops the shell', (tester) async {
+        final app = _Pushed(mode);
+        await app.pump(tester);
+        var removed = 0;
+        _routeOf(
+          tester,
+          'Home',
+        ).addLocalHistoryEntry(LocalHistoryEntry(onRemove: () => removed++));
+        await tester.pumpAndSettle();
+        await app.select(tester, 1);
+        await app.select(tester, 0);
+        await app.outer.currentState!.maybePop();
+        await tester.pumpAndSettle();
+        expect(removed, 1);
+        expect(app.shellPopped, isFalse);
+        await app.outer.currentState!.maybePop();
+        await tester.pumpAndSettle();
+        expect(app.shellPopped, isTrue, reason: 'not stuck at the root');
+      });
+
+      testWidgets('a drawer closed by its scrim: the swipe pops the shell', (
+        tester,
+      ) async {
+        final app = _Pushed(mode);
+        await app.pump(tester);
+        final drawer = LocalHistoryEntry();
+        _routeOf(tester, 'Home').addLocalHistoryEntry(drawer);
+        await tester.pumpAndSettle();
+        await app.select(tester, 1);
+        await app.select(tester, 0);
+        drawer.remove();
+        await tester.pumpAndSettle();
+        await _swipeFromTheEdge(tester);
+        expect(app.shellPopped, isTrue, reason: 'not stuck at the root');
+      });
+
+      // VK-567 review I1(b).
+      testWidgets('a tab hidden a few frames late: back pops the shell, never '
+          "the hidden tab's page", (tester) async {
+        final app = _Pushed(mode);
+        await app.pump(
+          tester,
+          body: (index, pages) => _LateHide(index: index, children: pages),
+        );
+        await app.push(tester, 0, 'Detail');
+        await app.select(tester, 1);
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.pumpAndSettle();
+        final home = app.tabs[0].currentState!;
+        await app.outer.currentState!.maybePop();
+        expect(home.canPop(), isTrue, reason: "Home's page is kept");
+        await tester.pumpAndSettle();
+        expect(app.shellPopped, isTrue, reason: 'Library is at its root');
+      });
+
+      // VK-567 review I2: one back, one step, whether or not the app kept
+      // the NavigatorPopHandler the README used to show.
+      for (final handler in [false, true]) {
+        testWidgets('a drawer on a pushed page'
+            '${handler ? ', a NavigatorPopHandler around the branch' : ''}: '
+            'one back closes only the drawer', (tester) async {
+          final app = _Pushed(mode);
+          await app.pump(tester, wrap: handler ? _popHandlers(app) : null);
+          await app.push(tester, 0, 'Two');
+          var removed = 0;
+          _routeOf(tester, 'Two').addLocalHistoryEntry(
+            LocalHistoryEntry(onRemove: () => removed++),
+          );
+          await tester.pumpAndSettle();
+          await app.outer.currentState!.maybePop();
+          await tester.pumpAndSettle();
+          expect(removed, 1);
+          expect(_page('Two'), findsOneWidget, reason: 'the page stays');
+          await app.outer.currentState!.maybePop();
+          await tester.pumpAndSettle();
+          expect(_page('Two'), findsNothing);
+          expect(_page('Home'), findsOneWidget);
+          expect(app.shellPopped, isFalse);
+        });
+      }
+
+      // VK-567 review M5: TickerMode alone hides a branch.
+      testWidgets('a branch hidden by TickerMode alone does not hold back', (
+        tester,
+      ) async {
+        final app = _Pushed(mode);
+        await app.pump(
+          tester,
+          body: (index, pages) => Stack(
+            fit: StackFit.expand,
+            children: [
+              for (final (i, page) in pages.indexed)
+                TickerMode(enabled: i == index, child: page),
+            ],
+          ),
+        );
+        await app.push(tester, 1, 'Kept');
+        await app.outer.currentState!.maybePop();
+        await tester.pumpAndSettle();
+        expect(app.shellPopped, isTrue);
+      });
+
       // A refusing page keeps its route: the shell does not go instead.
       testWidgets("a page's PopScope refusal holds the swipe and back", (
         tester,
@@ -371,4 +560,42 @@ void main() {
       });
     });
   }
+
+  // VK-567 review M5: Android asks the framework before its predictive
+  // back. A root shell claims back while the tab can pop, and gives it
+  // back at the tab's root, so the app can be left.
+  testWidgets('Android, a root shell: the framework claims back only while '
+      'the tab can pop', (tester) async {
+    final claims = <Object?>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'SystemNavigator.setFrameworkHandlesBack') {
+          claims.add(call.arguments);
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    try {
+      final app = _Pushed(_Mode.flutter);
+      await app.pump(tester, pushed: false);
+      await app.push(tester, 0, 'Detail');
+      expect(claims.last, isTrue);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(_page('Detail'), findsNothing);
+      expect(_page('Home'), findsOneWidget);
+      expect(claims.last, isFalse);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
 }

@@ -261,9 +261,10 @@ class _LiquidShellState extends State<LiquidShell>
 
   // --- the selected tab's navigator (VK-567) -------------------------------
   // Found after the frame; see [_backScope].
-  List<NavigatorState> _branches = const [];
+  List<BranchNavigator> _branches = const [];
   bool _branchCanPop = false;
   bool _branchScanScheduled = false;
+  bool _branchCheckArmed = false;
 
   @override
   void initState() {
@@ -670,22 +671,67 @@ class _LiquidShellState extends State<LiquidShell>
     return false;
   }
 
+  /// Walks the body for its on-screen navigators (the selected tab's).
   void _scanBranches() {
     if (!mounted) return;
     final body = _bodyKey.currentContext;
     _branches = body == null ? const [] : onScreenNavigatorsUnder(body);
-    final canPop = _branches.any((n) => n.canPop());
+    _checkBranches();
+    _armBranchCheck();
+  }
+
+  /// Whether a navigator found by the last scan is still on screen and can
+  /// pop. Cheap: its ancestors, not the tree.
+  void _checkBranches() {
+    final body = _bodyKey.currentContext;
+    final canPop =
+        body != null &&
+        _branches.any(
+          (b) =>
+              b.navigator.mounted &&
+              isOnScreenUnder(b.navigator.context, body) &&
+              b.navigator.canPop(),
+        );
     if (canPop != _branchCanPop) setState(() => _branchCanPop = canPop);
   }
 
+  /// While the body has a navigator, checks it again after every frame (no
+  /// frame is asked for). `canPop()` changes with no navigation event when
+  /// a drawer, a persistent bottom sheet or any local-history entry comes
+  /// or goes, and a branch can go offstage frames after the selection (the
+  /// end of a cross-fade): a stale answer kept the shell's route blocked at
+  /// the tab's root, or let back pop a hidden tab's page (VK-567 review).
+  void _armBranchCheck() {
+    if (_branchCheckArmed || _branches.isEmpty) return;
+    _branchCheckArmed = true;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      _branchCheckArmed = false;
+      if (!mounted) return;
+      _checkBranches();
+      _armBranchCheck();
+    });
+  }
+
   /// Back while the selected tab can pop: its top page pops, through its
-  /// own PopScope.
+  /// own PopScope. With several navigators on screen (an iPad detail
+  /// beside its master), the last one in tree order that can pop.
   void _popBranch() {
-    for (final navigator in _branches) {
-      if (navigator.mounted && navigator.canPop()) {
-        unawaited(_maybePop(navigator));
-        return;
-      }
+    // A fresh walk: back may come before the frame that would tell.
+    if (SchedulerBinding.instance.schedulerPhase !=
+        SchedulerPhase.persistentCallbacks) {
+      _scanBranches();
+    }
+    for (final (:navigator, :handled) in _branches.reversed) {
+      if (!navigator.mounted || !navigator.canPop()) continue;
+      // The app's NavigatorPopHandler around it asks the same navigator in
+      // the same turn: a second ask would close a drawer and pop its page.
+      if (handled) return;
+      unawaited(
+        _maybePop(navigator).whenComplete(() {
+          if (mounted) _scheduleBranchScan();
+        }),
+      );
+      return;
     }
   }
 
@@ -704,10 +750,9 @@ class _LiquidShellState extends State<LiquidShell>
   /// whole shell. Blocked, the swipe falls to the tab's top page.
   ///
   /// The route calls every PopScope on it, so a back blocked by another one
-  /// (an exit wrapper, an unsaved form) lands here too. A
-  /// `NavigatorPopHandler` around the branch asks the same navigator in
-  /// the same turn; `maybePop` drops the second ask once the first popped,
-  /// so one back pops one page.
+  /// (an exit wrapper, an unsaved form) lands here too. An enabled
+  /// `NavigatorPopHandler` around the branch answers back for its
+  /// navigator; the shell then only blocks its own route.
   Widget _backScope({
     required bool overlay,
     required bool searchActive,
