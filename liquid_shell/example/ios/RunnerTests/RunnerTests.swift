@@ -347,6 +347,13 @@ final class RecordingEvents: NativeShellFlutterApiProtocol {
     completion(.success(()))
   }
 
+  func onSearchScopeChanged(
+    index indexArg: Int64, completion: @escaping (Result<Void, PigeonError>) -> Void
+  ) {
+    sent.append("searchScope \(indexArg)")
+    completion(.success(()))
+  }
+
   func onBackTapped(tab tabArg: Int64, completion: @escaping (Result<Void, PigeonError>) -> Void) {
     sent.append("back \(tabArg)")
     completion(.success(()))
@@ -1334,7 +1341,8 @@ extension NativeTabsTests {
   /// Home · Library · [Reports, sidebar only] · Find (search, last).
   fileprivate func searchConfig(
     selected: Int64 = 0, pages: [NativePage] = [], placeholder: String? = nil,
-    reports: Bool = false, hidden: Bool = false, interactive: Bool = true
+    reports: Bool = false, hidden: Bool = false, interactive: Bool = true,
+    scopes: [String]? = nil
   ) -> NativeChromeConfig {
     var tabs = [
       NativeTab(title: "Home", sfSymbol: "house", sidebarOnly: false, search: false, pages: []),
@@ -1348,13 +1356,14 @@ extension NativeTabsTests {
     tabs.append(NativeTab(title: "Find", sfSymbol: "", sidebarOnly: false, search: true, pages: pages))
     return NativeChromeConfig(
       engaged: true, tabs: tabs, selectedIndex: selected,
-      search: NativeSearchConfig(placeholder: placeholder), tintArgb: 0xFF00_7AFF, dark: false,
+      search: NativeSearchConfig(placeholder: placeholder, scopes: scopes), tintArgb: 0xFF00_7AFF,
+      dark: false,
       rtl: false, hidden: hidden, interactive: interactive)
   }
 
   fileprivate func installedSearchShell(
     selected: Int64 = 0, pages: [NativePage] = [], placeholder: String? = nil,
-    reports: Bool = false, sizeClass: UIUserInterfaceSizeClass? = nil
+    reports: Bool = false, sizeClass: UIUserInterfaceSizeClass? = nil, scopes: [String]? = nil
   ) throws -> NativeTabsController {
     let flutter = UIViewController()
     let tabs = NativeTabsController(flutter: flutter, events: events)
@@ -1365,7 +1374,9 @@ extension NativeTabsTests {
     self.window = window
     tabs.dartAttached = true
     tabs.apply(
-      searchConfig(selected: selected, pages: pages, placeholder: placeholder, reports: reports))
+      searchConfig(
+        selected: selected, pages: pages, placeholder: placeholder, reports: reports,
+        scopes: scopes))
     settle()
     return tabs
   }
@@ -2254,6 +2265,204 @@ extension NativeTabsTests {
       XCTAssertEqual(snapshot.placement, "stacked")
     }
     XCTAssertFalse(snapshot.searchActive)
+    XCTAssertEqual(snapshot.scopeTitles, [])
+    XCTAssertFalse(snapshot.scopeShown)
+  }
+}
+
+// MARK: - VK-550: the native scope bar in the shell
+
+@available(iOS 26.0, *)
+extension NativeTabsTests {
+  fileprivate static let scopes = ["All", "Songs", "Places"]
+
+  /// What UIKit does for a user's scope tap: the segment changes, then the
+  /// delegate hears it once, on lift (spike §1).
+  fileprivate func userSelectsScope(_ index: Int, in bridge: SearchBridge) {
+    bridge.controller.searchBar.selectedScopeButtonIndex = index
+    bridge.searchBar(bridge.controller.searchBar, selectedScopeButtonIndexDidChange: index)
+  }
+
+  func testTheConfigsScopesReachTheSearchBarAndTheSnapshot() throws {
+    let tabs = try installedSearchShell(selected: 2, scopes: Self.scopes)
+    let bar = tabs.searchBridge.controller.searchBar
+    XCTAssertEqual(bar.scopeButtonTitles, Self.scopes)
+    XCTAssertFalse(bar.showsScopeBar, "only while the search is active")
+    tabs.apply(searchConfig(selected: 2))
+    XCTAssertEqual(bar.scopeButtonTitles ?? [], [], "a config without scopes clears them")
+    tabs.apply(searchConfig(selected: 2, scopes: Self.scopes))
+    tabs.setSearchScope(1)
+    let snapshot = tabs.debugSnapshot()
+    XCTAssertEqual(snapshot.scopeTitles, Self.scopes)
+    XCTAssertFalse(snapshot.scopeShown)
+    XCTAssertEqual(snapshot.selectedScope, 1)
+  }
+
+  /// UIKit presents and dismisses the search (the real delegate calls):
+  /// the scope bar shows only while the search is active (spike §1).
+  func testTheScopeBarShowsOnlyWhileTheSearchIsActive() throws {
+    let tabs = try installedSearchShell(selected: 2, scopes: Self.scopes)
+    let bar = tabs.searchBridge.controller.searchBar
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    XCTAssertTrue(bar.showsScopeBar)
+    XCTAssertTrue(tabs.debugSnapshot().scopeShown)
+    settle(sending: "searchActive false") { tabs.setSearchActive(false) }
+    XCTAssertFalse(bar.showsScopeBar)
+  }
+
+  func testAUserScopeChangeIsSentToDartOnce() throws {
+    let tabs = try installedSearchShell(selected: 2, scopes: Self.scopes)
+    let bridge = tabs.searchBridge
+    userSelectsScope(1, in: bridge)
+    bridge.searchBar(bridge.controller.searchBar, selectedScopeButtonIndexDidChange: 1)
+    XCTAssertEqual(events.sent.filter { $0.hasPrefix("searchScope") }, ["searchScope 1"])
+  }
+
+  func testDartsScopeIsNeverSentBack() throws {
+    let tabs = try installedSearchShell(selected: 2, scopes: Self.scopes)
+    let bridge = tabs.searchBridge
+    tabs.setSearchScope(2)
+    XCTAssertEqual(bridge.controller.searchBar.selectedScopeButtonIndex, 2)
+    bridge.searchBar(bridge.controller.searchBar, selectedScopeButtonIndexDidChange: 2)
+    XCTAssertEqual(events.sent.filter { $0.hasPrefix("searchScope") }, [])
+  }
+
+  /// A user's tap on UIKit's scope bar keeps the keyboard up (measured,
+  /// iOS 26.5 iPhone, VK-550 Task 10): the shell puts it away and keeps the
+  /// search, as a tap on Flutter's scope bar does (VK-571).
+  func testAUserScopeChangePutsTheKeyboardAwayAndKeepsTheSearch() throws {
+    let tabs = try installedSearchShell(selected: 2, scopes: Self.scopes)
+    let bridge = tabs.searchBridge
+    let field = bridge.controller.searchBar.searchTextField
+    tabs.setSearchText("phố")
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    XCTAssertTrue(field.isFirstResponder, "precondition: the keyboard is up")
+    userSelectsScope(1, in: bridge)
+    settle()
+    XCTAssertFalse(field.isFirstResponder, "the keyboard went")
+    XCTAssertTrue(bridge.controller.isActive, "the search stays")
+    XCTAssertTrue(bridge.controller.searchBar.showsScopeBar, "its scope bar too")
+    XCTAssertEqual(bridge.text, "phố", "the query stays")
+    XCTAssertEqual(events.sent.filter { $0.hasPrefix("searchScope") }, ["searchScope 1"])
+    XCTAssertFalse(events.sent.contains("searchActive false"), "\(events.sent)")
+  }
+
+  /// As Dart's text: a scope sent while another tab is selected waits for
+  /// the search tab.
+  func testDartsScopeWaitsForTheSearchTab() throws {
+    let tabs = try installedSearchShell(selected: 0, scopes: Self.scopes)
+    let bar = tabs.searchBridge.controller.searchBar
+    tabs.setSearchScope(2)
+    XCTAssertEqual(bar.selectedScopeButtonIndex, 0, "held")
+    tabs.apply(searchConfig(selected: 2, scopes: Self.scopes))
+    settle()
+    XCTAssertEqual(bar.selectedScopeButtonIndex, 2)
+    XCTAssertEqual(events.sent.filter { $0.hasPrefix("searchScope") }, [])
+  }
+}
+
+// MARK: - VK-550: SearchBridge's scope bar (no window)
+
+/// The scope half of `SearchBridge` (spec VK-550 §10): UIKit's own scope
+/// bar, `.manual`, shown by the controller's delegate while the search is
+/// active (spike §1), and a one-way bridge: only the user's changes are
+/// reported, once each; Dart's index is never reported back.
+@available(iOS 26.0, *)
+final class SearchScopeBridgeTests: XCTestCase {
+  private static let scopes = ["All", "Songs", "Places"]
+  private var reported: [Int] = []
+  private var reporting = true
+
+  private func makeBridge() -> SearchBridge {
+    let bridge = SearchBridge()
+    bridge.canReport = { [unowned self] in self.reporting }
+    bridge.onScope = { [unowned self] in self.reported.append($0) }
+    return bridge
+  }
+
+  /// UIKit for a user's tap: the segment changes, then the delegate.
+  private func userSelects(_ index: Int, in bridge: SearchBridge) {
+    bridge.controller.searchBar.selectedScopeButtonIndex = index
+    bridge.searchBar(bridge.controller.searchBar, selectedScopeButtonIndexDidChange: index)
+  }
+
+  func testScopesSetTheTitlesWithManualActivation() {
+    let bridge = makeBridge()
+    XCTAssertEqual(bridge.controller.scopeBarActivation, .manual)
+    bridge.setScopes(Self.scopes)
+    XCTAssertEqual(bridge.controller.searchBar.scopeButtonTitles, Self.scopes)
+    XCTAssertFalse(bridge.controller.searchBar.showsScopeBar, "only while active")
+  }
+
+  func testPresentingShowsTheScopeBarAndDismissingHidesIt() {
+    let bridge = makeBridge()
+    bridge.setScopes(Self.scopes)
+    bridge.willPresentSearchController(bridge.controller)
+    XCTAssertTrue(bridge.controller.searchBar.showsScopeBar)
+    bridge.willDismissSearchController(bridge.controller)
+    XCTAssertFalse(bridge.controller.searchBar.showsScopeBar)
+  }
+
+  func testNoScopesOrFewerThanTwoClearTheScopeBar() {
+    let bridge = makeBridge()
+    bridge.setScopes(Self.scopes)
+    bridge.willPresentSearchController(bridge.controller)
+    bridge.setScopes(nil)
+    XCTAssertEqual(bridge.controller.searchBar.scopeButtonTitles ?? [], [])
+    XCTAssertFalse(bridge.controller.searchBar.showsScopeBar, "hidden at once")
+    bridge.willPresentSearchController(bridge.controller)
+    XCTAssertFalse(bridge.controller.searchBar.showsScopeBar, "nothing to show")
+    bridge.setScopes(["All"])
+    XCTAssertEqual(bridge.controller.searchBar.scopeButtonTitles ?? [], [], "one title: none")
+    XCTAssertFalse(bridge.controller.searchBar.showsScopeBar)
+  }
+
+  func testDartsIndexIsClampedAndNeverReported() {
+    let bridge = makeBridge()
+    bridge.setScopes(Self.scopes)
+    bridge.setScope(5)
+    XCTAssertEqual(bridge.controller.searchBar.selectedScopeButtonIndex, 2)
+    bridge.setScope(-1)
+    XCTAssertEqual(bridge.controller.searchBar.selectedScopeButtonIndex, 0)
+    XCTAssertEqual(reported, [])
+  }
+
+  func testAUserChangeIsReportedOnce() {
+    let bridge = makeBridge()
+    bridge.setScopes(Self.scopes)
+    userSelects(1, in: bridge)
+    XCTAssertEqual(reported, [1])
+    bridge.searchBar(bridge.controller.searchBar, selectedScopeButtonIndexDidChange: 1)
+    XCTAssertEqual(reported, [1], "a repeat reports nothing")
+  }
+
+  func testDartsOwnIndexIsNotReportedBack() {
+    let bridge = makeBridge()
+    bridge.setScopes(Self.scopes)
+    bridge.setScope(2)
+    bridge.searchBar(bridge.controller.searchBar, selectedScopeButtonIndexDidChange: 2)
+    XCTAssertEqual(reported, [])
+  }
+
+  func testAChangeIsNotReportedWhileReportingIsOff() {
+    let bridge = makeBridge()
+    bridge.setScopes(Self.scopes)
+    reporting = false
+    userSelects(1, in: bridge)
+    XCTAssertEqual(reported, [])
+  }
+
+  /// Titles that arrive after Dart's index still show it.
+  func testNewTitlesKeepDartsIndex() {
+    let bridge = makeBridge()
+    bridge.setScope(2)
+    bridge.setScopes(Self.scopes)
+    XCTAssertEqual(bridge.controller.searchBar.selectedScopeButtonIndex, 2)
+    bridge.setScopes(["All", "Songs"])
+    XCTAssertEqual(bridge.controller.searchBar.selectedScopeButtonIndex, 1, "clamped")
+    bridge.setScopes(Self.scopes)
+    XCTAssertEqual(bridge.controller.searchBar.selectedScopeButtonIndex, 2, "Dart's again")
+    XCTAssertEqual(reported, [])
   }
 }
 

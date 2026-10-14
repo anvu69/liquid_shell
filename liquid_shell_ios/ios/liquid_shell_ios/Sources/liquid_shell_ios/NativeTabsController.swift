@@ -40,6 +40,9 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   /// Dart's text sent while another tab is selected: applied when the
   /// search tab is (spec §7.4).
   private var heldSearchText: String?
+  /// Dart's scope sent while another tab is selected, likewise (spec
+  /// VK-550 §10.2).
+  private var heldSearchScope: Int?
   /// Per destination 0 fixed, 1 sidebar-only, 2 search; plus 1 when there
   /// is a trailing action: a change rebuilds the tabs.
   private var structure: [Int] = []
@@ -90,6 +93,15 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     }
     searchBridge.onSubmit = { [weak self] text in
       self?.send("onSearchSubmitted") { self?.events.onSearchSubmitted(text: text, completion: $0) }
+    }
+    searchBridge.onScope = { [weak self] index in
+      self?.send("onSearchScopeChanged") {
+        self?.events.onSearchScopeChanged(index: Int64(index), completion: $0)
+      }
+      // UIKit keeps the keyboard up on a scope tap (measured, iOS 26.5):
+      // put it away and keep the search, as Flutter's scope bar does
+      // (VK-571).
+      self?.dismissSearchKeyboard()
     }
   }
 
@@ -279,13 +291,15 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       rootLargeTitle: rootLargeTitle)
   }
 
-  /// Placeholder and placement of the search tab (spec §7.2).
+  /// Placeholder, scopes and placement of the search tab (spec §7.2,
+  /// VK-550 §10.1).
   private func applySearch(_ new: NativeChromeConfig) {
     guard let searchIndex, new.tabs.indices.contains(searchIndex),
       let nav = navControllers[searchIndex]
     else { return }
     searchBridge.controller.searchBar.placeholder =
       new.search?.placeholder ?? searchBridge.defaultPlaceholder
+    searchBridge.setScopes(new.search?.scopes)
     nav.rootHost.applySearchStyle(
       searchStyle(rootLargeTitle: new.tabs[searchIndex].pages.first?.largeTitle ?? nil))
   }
@@ -358,6 +372,10 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     if isSearchSelected, let held = heldSearchText {
       heldSearchText = nil
       searchBridge.setText(held)
+    }
+    if isSearchSelected, let held = heldSearchScope {
+      heldSearchScope = nil
+      searchBridge.setScope(held)
     }
   }
 
@@ -609,6 +627,17 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     }
   }
 
+  /// Dart's scope: selected in the scope bar, never reported back; held
+  /// while another tab is selected.
+  func setSearchScope(_ index: Int) {
+    guard isSearchSelected else {
+      heldSearchScope = index
+      return
+    }
+    heldSearchScope = nil
+    searchBridge.setScope(index)
+  }
+
   /// Dart's dismissKeyboard (VK-571): a drag on the results or a scope
   /// tap. The keyboard goes, the search stays active with its text.
   func dismissSearchKeyboard() {
@@ -695,7 +724,10 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
         placement: placement,
         pageTitles: nav?.viewControllers.map { $0.title ?? "" } ?? [],
         fieldFrame: currentFieldFrame(),
-        firstResponderIsSearch: searchBridge.controller.searchBar.searchTextField.isFirstResponder)
+        firstResponderIsSearch: searchBridge.controller.searchBar.searchTextField.isFirstResponder,
+        scopeTitles: searchBridge.controller.searchBar.scopeButtonTitles ?? [],
+        scopeShown: searchBridge.controller.searchBar.showsScopeBar,
+        selectedScope: Int64(searchBridge.controller.searchBar.selectedScopeButtonIndex))
     #else
       return .empty
     #endif
@@ -759,6 +791,7 @@ extension NativeDebugSnapshot {
   static var empty: NativeDebugSnapshot {
     NativeDebugSnapshot(
       selectedTab: "", searchActive: false, searchText: "", placement: "", pageTitles: [],
-      fieldFrame: NativeRect(x: 0, y: 0, width: 0, height: 0), firstResponderIsSearch: false)
+      fieldFrame: NativeRect(x: 0, y: 0, width: 0, height: 0), firstResponderIsSearch: false,
+      scopeTitles: [], scopeShown: false, selectedScope: 0)
   }
 }

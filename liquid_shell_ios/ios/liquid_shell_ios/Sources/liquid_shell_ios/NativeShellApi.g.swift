@@ -492,35 +492,42 @@ struct NativePage: Hashable, CustomStringConvertible {
 /// Generated class from Pigeon that represents data sent in messages.
 struct NativeSearchConfig: Hashable, CustomStringConvertible {
   var placeholder: String? = nil
+  /// The scope bar's titles, shown while the search is active; null, or
+  /// fewer than two, shows none.
+  var scopes: [String]? = nil
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
   static func fromList(_ pigeonVar_list: [Any?]) -> NativeSearchConfig? {
     let placeholder: String? = nilOrValue(pigeonVar_list[0])
+    let scopes: [String]? = nilOrValue(pigeonVar_list[1])
 
     return NativeSearchConfig(
-      placeholder: placeholder
+      placeholder: placeholder,
+      scopes: scopes
     )
   }
   func toList() -> [Any?] {
     return [
-      placeholder
+      placeholder,
+      scopes,
     ]
   }
   static func == (lhs: NativeSearchConfig, rhs: NativeSearchConfig) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return NativeShellApiPigeonInternal.deepEquals(lhs.placeholder, rhs.placeholder)
+    return NativeShellApiPigeonInternal.deepEquals(lhs.placeholder, rhs.placeholder) && NativeShellApiPigeonInternal.deepEquals(lhs.scopes, rhs.scopes)
   }
 
   func hash(into hasher: inout Hasher) {
     hasher.combine("NativeSearchConfig")
     NativeShellApiPigeonInternal.deepHash(value: placeholder, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: scopes, hasher: &hasher)
   }
 
   public var description: String {
-    return "NativeSearchConfig(placeholder: \(String(describing: placeholder)))"
+    return "NativeSearchConfig(placeholder: \(String(describing: placeholder)), scopes: \(String(describing: scopes)))"
   }
 }
 
@@ -590,6 +597,12 @@ struct NativeDebugSnapshot: Hashable, CustomStringConvertible {
   var pageTitles: [String]
   var fieldFrame: NativeRect
   var firstResponderIsSearch: Bool
+  /// The search bar's `scopeButtonTitles` (empty when none).
+  var scopeTitles: [String]
+  /// Whether the scope bar is shown (`showsScopeBar`).
+  var scopeShown: Bool
+  /// The search bar's `selectedScopeButtonIndex`.
+  var selectedScope: Int64
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -601,6 +614,9 @@ struct NativeDebugSnapshot: Hashable, CustomStringConvertible {
     let pageTitles = pigeonVar_list[4] as! [String]
     let fieldFrame = pigeonVar_list[5] as! NativeRect
     let firstResponderIsSearch = pigeonVar_list[6] as! Bool
+    let scopeTitles = pigeonVar_list[7] as! [String]
+    let scopeShown = pigeonVar_list[8] as! Bool
+    let selectedScope = pigeonVar_list[9] as! Int64
 
     return NativeDebugSnapshot(
       selectedTab: selectedTab,
@@ -609,7 +625,10 @@ struct NativeDebugSnapshot: Hashable, CustomStringConvertible {
       placement: placement,
       pageTitles: pageTitles,
       fieldFrame: fieldFrame,
-      firstResponderIsSearch: firstResponderIsSearch
+      firstResponderIsSearch: firstResponderIsSearch,
+      scopeTitles: scopeTitles,
+      scopeShown: scopeShown,
+      selectedScope: selectedScope
     )
   }
   func toList() -> [Any?] {
@@ -621,13 +640,16 @@ struct NativeDebugSnapshot: Hashable, CustomStringConvertible {
       pageTitles,
       fieldFrame,
       firstResponderIsSearch,
+      scopeTitles,
+      scopeShown,
+      selectedScope,
     ]
   }
   static func == (lhs: NativeDebugSnapshot, rhs: NativeDebugSnapshot) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return NativeShellApiPigeonInternal.deepEquals(lhs.selectedTab, rhs.selectedTab) && NativeShellApiPigeonInternal.deepEquals(lhs.searchActive, rhs.searchActive) && NativeShellApiPigeonInternal.deepEquals(lhs.searchText, rhs.searchText) && NativeShellApiPigeonInternal.deepEquals(lhs.placement, rhs.placement) && NativeShellApiPigeonInternal.deepEquals(lhs.pageTitles, rhs.pageTitles) && NativeShellApiPigeonInternal.deepEquals(lhs.fieldFrame, rhs.fieldFrame) && NativeShellApiPigeonInternal.deepEquals(lhs.firstResponderIsSearch, rhs.firstResponderIsSearch)
+    return NativeShellApiPigeonInternal.deepEquals(lhs.selectedTab, rhs.selectedTab) && NativeShellApiPigeonInternal.deepEquals(lhs.searchActive, rhs.searchActive) && NativeShellApiPigeonInternal.deepEquals(lhs.searchText, rhs.searchText) && NativeShellApiPigeonInternal.deepEquals(lhs.placement, rhs.placement) && NativeShellApiPigeonInternal.deepEquals(lhs.pageTitles, rhs.pageTitles) && NativeShellApiPigeonInternal.deepEquals(lhs.fieldFrame, rhs.fieldFrame) && NativeShellApiPigeonInternal.deepEquals(lhs.firstResponderIsSearch, rhs.firstResponderIsSearch) && NativeShellApiPigeonInternal.deepEquals(lhs.scopeTitles, rhs.scopeTitles) && NativeShellApiPigeonInternal.deepEquals(lhs.scopeShown, rhs.scopeShown) && NativeShellApiPigeonInternal.deepEquals(lhs.selectedScope, rhs.selectedScope)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -639,10 +661,13 @@ struct NativeDebugSnapshot: Hashable, CustomStringConvertible {
     NativeShellApiPigeonInternal.deepHash(value: pageTitles, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: fieldFrame, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: firstResponderIsSearch, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: scopeTitles, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: scopeShown, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: selectedScope, hasher: &hasher)
   }
 
   public var description: String {
-    return "NativeDebugSnapshot(selectedTab: \(String(describing: selectedTab)), searchActive: \(String(describing: searchActive)), searchText: \(String(describing: searchText)), placement: \(String(describing: placement)), pageTitles: \(String(describing: pageTitles)), fieldFrame: \(String(describing: fieldFrame)), firstResponderIsSearch: \(String(describing: firstResponderIsSearch)))"
+    return "NativeDebugSnapshot(selectedTab: \(String(describing: selectedTab)), searchActive: \(String(describing: searchActive)), searchText: \(String(describing: searchText)), placement: \(String(describing: placement)), pageTitles: \(String(describing: pageTitles)), fieldFrame: \(String(describing: fieldFrame)), firstResponderIsSearch: \(String(describing: firstResponderIsSearch)), scopeTitles: \(String(describing: scopeTitles)), scopeShown: \(String(describing: scopeShown)), selectedScope: \(String(describing: selectedScope)))"
   }
 }
 
@@ -1186,6 +1211,8 @@ protocol NativeShellHostApi {
   func setSearchText(text: String) throws
   /// Presents or dismisses the search; dismissing keeps the text.
   func setSearchActive(active: Bool) throws
+  /// Selects scope [index] (clamped to the titles); never reported back.
+  func setSearchScope(index: Int64) throws
   /// Puts the search field's keyboard away: the field resigns first
   /// responder, the search stays active and keeps its text.
   func dismissSearchKeyboard() throws
@@ -1307,6 +1334,22 @@ class NativeShellHostApiSetup {
     } else {
       setSearchActiveChannel.setMessageHandler(nil)
     }
+    /// Selects scope [index] (clamped to the titles); never reported back.
+    let setSearchScopeChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.liquid_shell_ios.NativeShellHostApi.setSearchScope\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      setSearchScopeChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let indexArg = args[0] as! Int64
+        do {
+          try api.setSearchScope(index: indexArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      setSearchScopeChannel.setMessageHandler(nil)
+    }
     /// Puts the search field's keyboard away: the field resigns first
     /// responder, the search stays active and keeps its text.
     let dismissSearchKeyboardChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.liquid_shell_ios.NativeShellHostApi.dismissSearchKeyboard\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
@@ -1368,6 +1411,8 @@ protocol NativeShellFlutterApiProtocol {
   func onSearchTextChanged(text textArg: String, composing composingArg: Bool, completion: @escaping (Result<Void, PigeonError>) -> Void)
   func onSearchActiveChanged(active activeArg: Bool, completion: @escaping (Result<Void, PigeonError>) -> Void)
   func onSearchSubmitted(text textArg: String, completion: @escaping (Result<Void, PigeonError>) -> Void)
+  /// The user selected scope [index]; reported once, on lift.
+  func onSearchScopeChanged(index indexArg: Int64, completion: @escaping (Result<Void, PigeonError>) -> Void)
   func onSearchFieldChanged(frame frameArg: NativeRect, completion: @escaping (Result<Void, PigeonError>) -> Void)
   func onBackTapped(tab tabArg: Int64, completion: @escaping (Result<Void, PigeonError>) -> Void)
   /// UIKit asked to pop tab [tab] to the page at [index] (the back menu, a
@@ -1514,6 +1559,25 @@ class NativeShellFlutterApi: NativeShellFlutterApiProtocol {
     let channelName: String = "dev.flutter.pigeon.liquid_shell_ios.NativeShellFlutterApi.onSearchSubmitted\(messageChannelSuffix)"
     let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
     channel.sendMessage([textArg] as [Any?]) { response in
+      guard let listResponse = response as? [Any?] else {
+        completion(.failure(createConnectionError(withChannelName: channelName)))
+        return
+      }
+      if listResponse.count > 1 {
+        let code: String = listResponse[0] as! String
+        let message: String? = nilOrValue(listResponse[1])
+        let details: String? = nilOrValue(listResponse[2])
+        completion(.failure(PigeonError(code: code, message: message, details: details)))
+      } else {
+        completion(.success(()))
+      }
+    }
+  }
+  /// The user selected scope [index]; reported once, on lift.
+  func onSearchScopeChanged(index indexArg: Int64, completion: @escaping (Result<Void, PigeonError>) -> Void) {
+    let channelName: String = "dev.flutter.pigeon.liquid_shell_ios.NativeShellFlutterApi.onSearchScopeChanged\(messageChannelSuffix)"
+    let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
+    channel.sendMessage([indexArg] as [Any?]) { response in
       guard let listResponse = response as? [Any?] else {
         completion(.failure(createConnectionError(withChannelName: channelName)))
         return

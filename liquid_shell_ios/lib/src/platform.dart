@@ -115,6 +115,10 @@ class LiquidShellIOS extends EventChannelLiquidShellPlatform {
       _send('dismissSearchKeyboard', _host.dismissSearchKeyboard);
 
   @override
+  Future<void> setNativeSearchScope(int index) =>
+      _send('setSearchScope', () => _host.setSearchScope(index));
+
+  @override
   Future<void> setNativePageScroll({
     required int tab,
     required double offset,
@@ -238,6 +242,10 @@ final class _NativeReceiver implements NativeShellFlutterApi {
   @override
   void onSearchSubmitted(String text) =>
       _emit(LiquidNativeSearchSubmitted(text));
+
+  @override
+  void onSearchScopeChanged(int index) =>
+      _emit(LiquidNativeSearchScopeChanged(index));
 
   @override
   void onSearchFieldChanged(NativeRect frame) =>

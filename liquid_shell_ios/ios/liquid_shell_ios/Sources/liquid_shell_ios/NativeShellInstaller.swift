@@ -238,6 +238,10 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
     if #available(iOS 26.0, *) { tabs?.setSearchActive(active) }
   }
 
+  func setSearchScope(index: Int64) throws {
+    if #available(iOS 26.0, *) { tabs?.setSearchScope(Int(index)) }
+  }
+
   func dismissSearchKeyboard() throws {
     if #available(iOS 26.0, *) { tabs?.dismissSearchKeyboard() }
   }

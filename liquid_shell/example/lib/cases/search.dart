@@ -68,6 +68,9 @@ class _SearchCaseState extends State<SearchCase> {
     search: LiquidSearch(
       controller: _search,
       placeholder: 'Songs, places',
+      // Native chrome (iOS 26+) shows them in UIKit's scope bar while the
+      // search is active; elsewhere LiquidSearchScopeBar below does.
+      scopes: kSearchScopes,
       onSubmitted: _remember,
     ),
     body: IndexedStack(
@@ -186,10 +189,8 @@ class _SearchPage extends StatelessWidget {
         return ListView(
           padding: padding,
           children: [
-            LiquidSearchScopeBar(
-              controller: controller,
-              scopes: kSearchScopes,
-            ),
+            // The shell's scopes; nothing when native chrome draws them.
+            LiquidSearchScopeBar(controller: controller),
             const SizedBox(height: 16),
             if (results == null)
               ..._recents(context)

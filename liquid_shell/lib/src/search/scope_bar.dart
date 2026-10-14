@@ -26,7 +26,8 @@ class LiquidSearchScopeBar extends StatelessWidget {
   final List<String>? scopes;
 
   /// Selects scope [i] and puts the keyboard away, keeping the search
-  /// active, as a tap on UIKit's scope bar does (VK-571).
+  /// active (VK-571), as the shell does for a tap on UIKit's scope bar
+  /// (which alone keeps the keyboard up).
   void _select(int i) => controller
     ..scopeIndex = i
     ..dismissKeyboard();
