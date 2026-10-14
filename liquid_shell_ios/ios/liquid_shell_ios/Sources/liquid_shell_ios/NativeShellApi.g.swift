@@ -1186,6 +1186,9 @@ protocol NativeShellHostApi {
   func setSearchText(text: String) throws
   /// Presents or dismisses the search; dismissing keeps the text.
   func setSearchActive(active: Bool) throws
+  /// Puts the search field's keyboard away: the field resigns first
+  /// responder, the search stays active and keeps its text.
+  func dismissSearchKeyboard() throws
   /// The top page's scroll offset of tab [tab] (proxy scroll view).
   func setPageScroll(tab: Int64, offset: Double) throws
   /// Debug builds: the native search and page state. Release: empty.
@@ -1303,6 +1306,21 @@ class NativeShellHostApiSetup {
       }
     } else {
       setSearchActiveChannel.setMessageHandler(nil)
+    }
+    /// Puts the search field's keyboard away: the field resigns first
+    /// responder, the search stays active and keeps its text.
+    let dismissSearchKeyboardChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.liquid_shell_ios.NativeShellHostApi.dismissSearchKeyboard\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      dismissSearchKeyboardChannel.setMessageHandler { _, reply in
+        do {
+          try api.dismissSearchKeyboard()
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      dismissSearchKeyboardChannel.setMessageHandler(nil)
     }
     /// The top page's scroll offset of tab [tab] (proxy scroll view).
     let setPageScrollChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.liquid_shell_ios.NativeShellHostApi.setPageScroll\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)

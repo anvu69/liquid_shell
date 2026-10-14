@@ -12,6 +12,7 @@ class LiquidSearch {
     this.scopes,
     this.onChanged,
     this.onSubmitted,
+    this.dismissKeyboardOnDrag = true,
   }) : assert(
          scopes == null || scopes.length >= 2,
          'LiquidSearch.scopes needs two titles or more, or null.',
@@ -40,6 +41,13 @@ class LiquidSearch {
   /// The user pressed the keyboard's Search key.
   final ValueChanged<String>? onSubmitted;
 
+  /// Whether a user drag that scrolls the shell's body (the results, a
+  /// page pushed in the search tab) puts the keyboard away while the search
+  /// is active, keeping the search, as Apple Music does. A programmatic
+  /// scroll never does. Default true. See
+  /// `LiquidSearchController.dismissKeyboard`.
+  final bool dismissKeyboardOnDrag;
+
   /// Field by field, [scopes] by value; callbacks by identity.
   @override
   bool operator ==(Object other) =>
@@ -48,7 +56,8 @@ class LiquidSearch {
       other.placeholder == placeholder &&
       listEquals(other.scopes, scopes) &&
       other.onChanged == onChanged &&
-      other.onSubmitted == onSubmitted;
+      other.onSubmitted == onSubmitted &&
+      other.dismissKeyboardOnDrag == dismissKeyboardOnDrag;
 
   @override
   int get hashCode => Object.hash(
@@ -57,5 +66,6 @@ class LiquidSearch {
     scopes == null ? null : Object.hashAll(scopes!),
     onChanged,
     onSubmitted,
+    dismissKeyboardOnDrag,
   );
 }

@@ -69,6 +69,12 @@
   - The bottom bar margin is 21 pt (8 pt in a narrow shell).
   - Badges are the native 21 pt red capsule, #FF383C in light and
     #FF4245 in dark (`badgeColor`), in the tab bar and the sidebar.
+  - `LiquidSearchValue.active` and `LiquidSearchPhase.active` mean the
+    search is open, not that the field has focus (VK-571): after
+    `dismissKeyboard()` (a drag on the results, a scope tap) the Flutter
+    field has no focus and the phase stays `active`, as it does natively.
+    A `chromeBuilder` or `searchPhaseOf` reader that took `active` for
+    "keyboard up" sees the field in the bottom row with its × instead.
 - **New:** `LiquidGlassTheme.selectionFill`, `tabForeground`,
   `badgeColor`, `tabIconSize`; `LiquidShellBreakpoints.compactHeight`; a
   scroll-edge pocket under the liquid bottom bar (three blur bands and a
@@ -96,6 +102,21 @@
   page still loses the swipe on any tab's pushed page to its own route,
   which pops the whole shell (VK-567). Hidden native chrome
   (`LiquidHideChrome`) ends an active search and keeps its text.
+- **The search keyboard goes on a drag or a scope tap (VK-571).** As in
+  Apple Music and Settings, a user drag that scrolls the shell's body (the
+  results), or a tap on `LiquidSearchScopeBar`, puts the keyboard away and
+  keeps the search: the query, the results, the active phase and its ×
+  stay. Natively the field resigns first responder (UIKit's search stays
+  presented); the Flutter field unfocuses and the search stays active. A
+  tap on the field brings the keyboard back; ×, `deactivate()`, system
+  back, another tab or hidden chrome end the search, as before. Only a
+  drag that moves at least as far along the list's axis as across it
+  counts: a programmatic scroll, or a near-horizontal swipe over the
+  results (the iOS edge swipe, even when the thumb drifts and the list
+  scrolls a little), keeps the keyboard. New
+  `LiquidSearchController.dismissKeyboard()`, and
+  `LiquidSearch.dismissKeyboardOnDrag` (default true) to opt out of the
+  drag. See Behaviour changes for what `active` now means.
 
 ## 0.1.0-dev.5
 

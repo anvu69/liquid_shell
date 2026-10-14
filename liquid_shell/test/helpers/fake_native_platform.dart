@@ -30,6 +30,9 @@ class FakeNativePlatform extends FakeSignalsPlatform {
   /// Every `setNativeSearchActive`.
   final searchActives = <bool>[];
 
+  /// Number of `dismissNativeSearchKeyboard` calls.
+  int searchKeyboardDismissals = 0;
+
   /// Every `setNativePageScroll`, as (tab, offset).
   final pageScrolls = <(int, double)>[];
 
@@ -78,6 +81,10 @@ class FakeNativePlatform extends FakeSignalsPlatform {
   @override
   Future<void> setNativeSearchActive({required bool active}) async =>
       searchActives.add(active);
+
+  @override
+  Future<void> dismissNativeSearchKeyboard() async =>
+      searchKeyboardDismissals++;
 
   @override
   Future<void> setNativePageScroll({

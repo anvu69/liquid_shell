@@ -25,6 +25,12 @@ class LiquidSearchScopeBar extends StatelessWidget {
   /// `LiquidSearch.scopes`. When both are given they must be equal.
   final List<String>? scopes;
 
+  /// Selects scope [i] and puts the keyboard away, keeping the search
+  /// active, as a tap on UIKit's scope bar does (VK-571).
+  void _select(int i) => controller
+    ..scopeIndex = i
+    ..dismissKeyboard();
+
   @override
   Widget build(BuildContext context) {
     final shell = LiquidShellScope.maybeOf(context);
@@ -48,7 +54,7 @@ class LiquidSearchScopeBar extends StatelessWidget {
       builder: (context, value, _) => LiquidSegmentedControl(
         segments: segments,
         selectedIndex: value.scopeIndex.clamp(0, titles.length - 1),
-        onChanged: (index) => controller.scopeIndex = index,
+        onChanged: _select,
       ),
     );
   }

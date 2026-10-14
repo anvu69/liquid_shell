@@ -195,9 +195,7 @@ void main() {
 
   testWidgets(
     'a native tap on the search tab runs the guard, then selects it',
-    (
-      tester,
-    ) async {
+    (tester) async {
       final asked = <int>[];
       final (fake, _, _) = await _pump(
         tester,
@@ -1615,10 +1613,7 @@ void main() {
 
     testWidgets('back to a search tab with a pushed page: its whole stack, '
         'no pop and push again', (tester) async {
-      final (fake, _, _) = await _pump(
-        tester,
-        pageBuilder: _homeNavigatorPage,
-      );
+      final (fake, _, _) = await _pump(tester, pageBuilder: _homeNavigatorPage);
       await _pushDetail(tester);
       fake.emitNative(const LiquidNativeDestinationTapped(0));
       await tester.pumpAndSettle();
@@ -1836,6 +1831,189 @@ void main() {
       expect(fake.last.tabs.last.pages.map((p) => p.title), ['Search']);
       expect(controller.isActive, isTrue);
       expect(fake.searchActives, isEmpty);
+    });
+  });
+
+  // VK-571: a drag on the results, or a scope tap, puts UIKit's keyboard
+  // away and keeps its search: the field resigns first responder, the
+  // search stays active with its text and Cancel. Never an `isActive`
+  // change, never a text write.
+  group('VK-571: the keyboard goes, the search stays', () {
+    Future<(FakeNativePlatform, LiquidSearchController)> active(
+      WidgetTester tester, {
+      Widget Function(int index) pageBuilder = _page,
+      bool dismissKeyboardOnDrag = true,
+      LiquidSearchController? search,
+    }) async {
+      final fake = installFakeNative(state: _compact);
+      final controller = search ?? LiquidSearchController();
+      addTearDown(controller.dispose);
+      await pumpShell(
+        tester,
+        TestShell(
+          destinations: _destinations,
+          initialIndex: 2,
+          pageBuilder: pageBuilder,
+          search: LiquidSearch(
+            controller: controller,
+            dismissKeyboardOnDrag: dismissKeyboardOnDrag,
+          ),
+        ),
+        padding: _compactPadding,
+      );
+      fake
+        ..emitNative(const LiquidNativeSearchActiveChanged(true))
+        ..emitNative(
+          const LiquidNativeSearchTextChanged('hồ', composing: false),
+        );
+      await tester.pump();
+      fake.searchTexts.clear();
+      fake.searchActives.clear();
+      return (fake, controller);
+    }
+
+    void expectSearchKept(
+      WidgetTester tester,
+      FakeNativePlatform fake,
+      LiquidSearchController controller, {
+      String page = 'Search',
+    }) {
+      expect(fake.searchActives, isEmpty, reason: 'isActive untouched');
+      expect(fake.searchTexts, isEmpty, reason: 'no write (Telex)');
+      expect(controller.text, 'hồ');
+      expect(controller.isActive, isTrue);
+      expect(_scope(tester, page).searchPhase, LiquidSearchPhase.active);
+    }
+
+    Future<void> dragResults(WidgetTester tester) async {
+      await tester.drag(
+        find.byKey(const ValueKey('list-Search')),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('dismissKeyboard asks native once, the search stays', (
+      tester,
+    ) async {
+      final (fake, controller) = await active(tester);
+      controller.dismissKeyboard();
+      await tester.pump();
+      expect(fake.searchKeyboardDismissals, 1);
+      expectSearchKept(tester, fake, controller);
+    });
+
+    testWidgets('inactive: dismissKeyboard sends nothing', (tester) async {
+      final (fake, controller, _) = await _pump(tester);
+      controller.dismissKeyboard();
+      await tester.pump();
+      expect(fake.searchKeyboardDismissals, 0);
+    });
+
+    testWidgets('a user drag on the results: one dismissal per drag', (
+      tester,
+    ) async {
+      final (fake, controller) = await active(tester);
+      await dragResults(tester);
+      expect(fake.searchKeyboardDismissals, 1);
+      expectSearchKept(tester, fake, controller);
+      await dragResults(tester);
+      expect(fake.searchKeyboardDismissals, 2);
+    });
+
+    testWidgets('a programmatic scroll sends nothing', (tester) async {
+      final (fake, _) = await active(tester);
+      final position = _position(tester, 'Search')..jumpTo(160);
+      await tester.pump();
+      unawaited(
+        position.animateTo(
+          0,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.linear,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(position.pixels, 0);
+      expect(fake.searchKeyboardDismissals, 0);
+    });
+
+    // VK-551's edge swipe: over the vertical list it wins the arena alone
+    // and starts a drag there. A thumb drifts, so the list may scroll a
+    // little; a drag mostly across the list's axis is not a scroll of the
+    // results and keeps the keyboard.
+    for (final (name, drift) in [('flat', 0.0), ('drifting', 24.0)]) {
+      testWidgets('a near-horizontal edge swipe ($name) sends nothing', (
+        tester,
+      ) async {
+        final (fake, controller) = await active(tester);
+        await tester.dragFrom(const Offset(2, 400), Offset(300, drift));
+        await tester.pumpAndSettle();
+        expect(fake.searchKeyboardDismissals, 0);
+        expect(controller.isActive, isTrue);
+      });
+    }
+
+    testWidgets('a mostly vertical drag with some sideways drift dismisses', (
+      tester,
+    ) async {
+      final (fake, _) = await active(tester);
+      await tester.drag(
+        find.byKey(const ValueKey('list-Search')),
+        const Offset(40, -200),
+      );
+      await tester.pumpAndSettle();
+      expect(fake.searchKeyboardDismissals, 1);
+    });
+
+    testWidgets('a scope tap selects it and dismisses the keyboard', (
+      tester,
+    ) async {
+      final controller = LiquidSearchController();
+      final (fake, _) = await active(
+        tester,
+        search: controller,
+        pageBuilder: _withSearchRoot(
+          () => Builder(
+            builder: (context) => ListView(
+              key: const ValueKey('list-Scopes'),
+              padding: LiquidShellScope.contentPaddingOf(context),
+              children: [
+                LiquidSearchScopeBar(
+                  controller: controller,
+                  scopes: const ['All', 'Songs', 'Places'],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      // The segment's node takes the touch (VK-550: the label is drawn
+      // once per weight).
+      await tester.tap(find.bySemanticsLabel('Songs'));
+      await tester.pump();
+      expect(controller.scopeIndex, 1);
+      expect(fake.searchKeyboardDismissals, 1);
+      expectSearchKept(tester, fake, controller, page: 'Scopes');
+    });
+
+    testWidgets('dismissKeyboardOnDrag: false sends nothing on a drag', (
+      tester,
+    ) async {
+      final (fake, _) = await active(tester, dismissKeyboardOnDrag: false);
+      await dragResults(tester);
+      expect(fake.searchKeyboardDismissals, 0);
+    });
+
+    testWidgets('a drag on another tab sends nothing', (tester) async {
+      final (fake, _) = await active(tester);
+      fake.emitNative(const LiquidNativeDestinationTapped(0));
+      await tester.pumpAndSettle();
+      await tester.drag(
+        find.byKey(const ValueKey('list-Home')),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+      expect(fake.searchKeyboardDismissals, 0);
     });
   });
 }

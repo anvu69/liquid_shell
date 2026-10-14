@@ -8,7 +8,9 @@ enum LiquidSearchPhase {
   /// The search tab is selected; the field has no focus.
   selected,
 
-  /// The field has focus.
+  /// The search is active: the field has focus, or its keyboard was put
+  /// away (`LiquidSearchController.dismissKeyboard`) and the search stays
+  /// up with its ×.
   active,
 }
 
@@ -35,7 +37,9 @@ class LiquidSearchValue {
   /// the controller is a no-op.
   final bool composing;
 
-  /// The field has focus.
+  /// The search is active: the field has focus, or its keyboard was put
+  /// away (`LiquidSearchController.dismissKeyboard`, a drag on the
+  /// results, a scope tap) and the search stays up with its ×.
   final bool active;
 
   /// Index into the scope titles (`LiquidSearch.scopes`).
@@ -85,6 +89,9 @@ abstract interface class SearchDriver {
 
   /// The app changed the scope (spec VK-550 §10.2).
   void scopeSetByApp(int index);
+
+  /// Put the keyboard away; the search stays active.
+  void dismissKeyboard();
 }
 
 /// The search query as a [ValueListenable] (Flutter's stream of values),
@@ -152,7 +159,7 @@ class LiquidSearchController extends ValueNotifier<LiquidSearchValue> {
     super.value = next;
   }
 
-  /// Whether the field has focus.
+  /// Whether the search is active, with or without the keyboard.
   bool get isActive => value.active;
 
   /// The selected scope.
@@ -167,8 +174,20 @@ class LiquidSearchController extends ValueNotifier<LiquidSearchValue> {
   /// the shell ignores it (one debug line).
   void activate() => _driver?.activate();
 
-  /// Unfocuses the field and keeps the text (unlike ×).
+  /// Ends the search: unfocuses the field and keeps the text (unlike ×).
   void deactivate() => _driver?.deactivate();
+
+  /// Puts the keyboard away and keeps the search active, with its text and
+  /// its ×, as a drag on Apple Music's results does (VK-571). Only while
+  /// [isActive]; otherwise nothing happens. Natively the field resigns
+  /// first responder; the Flutter field unfocuses. Neither writes text, so
+  /// an IME composition ends with its text as composed. A tap on the field
+  /// brings the keyboard back.
+  ///
+  /// The shell already calls it on a user drag of its body
+  /// (`LiquidSearch.dismissKeyboardOnDrag`) and `LiquidSearchScopeBar` on
+  /// a scope tap; call it for a control of your own.
+  void dismissKeyboard() => _driver?.dismissKeyboard();
 
   /// Empties the text; keeps the focus.
   void clear() => text = '';

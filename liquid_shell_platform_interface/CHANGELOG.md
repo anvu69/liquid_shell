@@ -1,6 +1,7 @@
 ## 0.1.0-dev.6
 
-- No changes; versioned with `liquid_shell`.
+- `dismissNativeSearchKeyboard()`, with a default that does nothing:
+  puts the native search keyboard away and keeps the search (VK-571).
 
 ## 0.1.0-dev.5
 
