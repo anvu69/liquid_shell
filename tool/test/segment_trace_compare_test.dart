@@ -298,14 +298,15 @@ void main() {
       Kind.condition,
     });
     // The model's springs were fitted to the tap, press, release and
-    // programmatic rows (spec §8.2); the onsets, the drag lag and the
-    // flick landing are out of sample.
+    // programmatic rows (spec §8.2), and since Task 15 the release spring
+    // to the flick landing's overshoot too; the onsets and the drag lag are
+    // out of sample.
     expect(row(rows, 'tap_1_2 x @100ms').kind, Kind.fitted);
     expect(row(rows, 'press w @100ms').kind, Kind.fitted);
     expect(row(rows, 'programmatic x @100ms').kind, Kind.fitted);
+    expect(row(rows, 'flick overshoot').kind, Kind.fitted);
     expect(row(rows, 'tap_1_2 engage onset').kind, Kind.native);
     expect(row(rows, 'drag lag').kind, Kind.native);
-    expect(row(rows, 'flick overshoot').kind, Kind.native);
     expect(row(rows, 'flick drive').kind, Kind.condition);
   });
 
@@ -579,7 +580,10 @@ void main() {
       '| check | kind | result | flutter | native | tolerance |',
     );
     expect(lines, contains(startsWith('| flick drive | condition | FAIL |')));
-    expect(lines, contains(startsWith('| flick overshoot | native | n/a |')));
+    expect(
+      lines,
+      contains(startsWith('| flick overshoot | native, fitted | n/a |')),
+    );
     expect(lines.length, rows.length + 5);
     expect(lines[lines.length - 2], '1 not comparable: flick overshoot');
     expect(lines.last, '✗ 1 of ${rows.length - 1} failed');

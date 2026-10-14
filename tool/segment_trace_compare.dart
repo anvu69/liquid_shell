@@ -34,6 +34,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'segment_gate.dart';
 import 'trace_math.dart';
 
 /// One row of the table: the Flutter value and the native reference as
@@ -83,16 +84,8 @@ const List<_Capture> _taps = [
   ),
 ];
 
-/// Tap rows are compared every 0.05 s to here (spec §14.5).
-const double _tapRowsTo = 0.6;
-
 /// One display frame: the engage onset's tolerance, the flick drive's.
 const double _frame = 1 / 60;
-
-/// The tap clock's grid (0.5 ms) and its bound, the last grid step within
-/// one frame (spec §14.5, amended 2026-10-14).
-const double _clockStep = 0.0005;
-const int _clockSteps = 33;
 
 /// The longest gap between two frames a tap may have after its commit:
 /// one and a half frames (spec §14.5, amended 2026-10-14).
@@ -390,7 +383,6 @@ class _Table {
     final t0 = trace[lift - 1]['t']!;
     final after = trace.sublist(lift - 1);
     final ourTs = [for (final s in after) s['t']! - t0];
-    final ts = _times(native);
     _add(
       '${c.name} engage onset',
       Kind.native,
@@ -400,32 +392,19 @@ class _Table {
       digits: 3,
     );
 
-    final rows = [
-      for (var i = 0; i < native.length; i++)
-        if (ts[i] <= _tapRowsTo + _eps) i,
-    ];
-    double at(double shift, double t, String key) =>
-        valueAt(after, t - shift, key, zero: t0);
-    final shift = bestShift(
-      (s) => rows.fold(
-        0,
-        (sum, i) => sum + math.pow(at(s, ts[i], 'x') - native[i][1], 2),
-      ),
-      from: -_clockSteps,
-      steps: 2 * _clockSteps,
-      step: _clockStep,
-    );
+    double ours(double t, String key) => valueAt(after, t, key, zero: t0);
+    final shift = tapClock(native, ours);
     _condition(
       '${c.name} clock',
-      pass: shift.abs() < _clockSteps * _clockStep - _eps,
+      pass: !tapClockPinned(shift),
       flutter: _msOf(shift),
       native:
-          'x rows to ${_ms(_tapRowsTo)}, '
-          'within ±${_msOf(_clockSteps * _clockStep)}',
+          'x rows to ${_ms(tapRowsTo)}, '
+          'within ±${_msOf(tapClockSteps * tapClockStep)}',
     );
     final gap = longestGap([
       for (final t in ourTs)
-        if (t <= _tapRowsTo + _eps) t,
+        if (t <= tapRowsTo + _eps) t,
     ]);
     _condition(
       '${c.name} frames',
@@ -434,68 +413,31 @@ class _Table {
       native: 'at most ${_msOf(_maxGap)}',
     );
 
-    for (final i in rows) {
-      _add(
-        '${c.name} x @${_ms(ts[i])}',
-        Kind.fitted,
-        at(shift, ts[i], 'x'),
-        native[i][1],
-        abs: 2,
-      );
-    }
-
-    final from = native.first[1];
     final rest = native.last[1];
-    final xs = [for (final r in native) r[1]];
-    final sign = (rest - from).sign;
-    final peak = xs.reduce(sign > 0 ? math.max : math.min);
-    final ourRest = after.last['x']!;
-    _add(
-      '${c.name} overshoot',
-      Kind.fitted,
-      overshoot([for (final s in after) s['x']!], after.first['x']!, ourRest),
-      overshoot(xs, from, rest),
-      abs: 1,
-      note: ' (peak ${_n(peak)}, rest ${_n(rest)})',
-    );
-    _add(
-      '${c.name} settle',
-      Kind.fitted,
-      settle([for (final t in ts) at(shift, t, 'x')], ourRest, ts: ts),
-      settle(xs, rest, ts: ts),
-      rel: 0.10,
-      digits: 3,
-      note: ' s (x within 0.5 of ${_n(rest)})',
-    );
-    _add(
-      '${c.name} peak h',
-      Kind.fitted,
-      [for (final t in ts) at(shift, t, 'h')].reduce(math.max),
-      [for (final r in native) r[3]].reduce(math.max),
-      rel: 0.10,
-    );
-    // The wobble (spec §8.4): once x passes its rest, the size swings
-    // past its own; the extreme of each, against native's at the same
-    // rows.
-    final past = math.max(
-      0,
-      native.indexWhere((r) => (r[1] - rest) * sign > 0),
-    );
-    for (final (key, column) in [('w', 2), ('h', 3)]) {
-      final restValue = native.last[column];
-      final nativeValues = [for (final r in native.skip(past)) r[column]];
-      final extreme = nativeValues.reduce(
-        (a, b) => (b - restValue).abs() > (a - restValue).abs() ? b : a,
-      );
-      final ourValues = [
-        for (var i = past; i < native.length; i++) at(shift, ts[i], key),
-      ];
+    final peak = [
+      for (final r in native) r[1],
+    ].reduce((rest - native.first[1]).sign > 0 ? math.max : math.min);
+    for (final row in tapGateRows(
+      native,
+      ours,
+      shift: shift,
+      ourXs: [for (final s in after) s['x']!],
+      ourFrom: after.first['x']!,
+      ourRest: after.last['x']!,
+    )) {
       _add(
-        '${c.name} $key wobble',
+        '${c.name} ${row.name}',
         Kind.fitted,
-        ourValues.reduce(extreme < restValue ? math.min : math.max),
-        extreme,
-        rel: 0.10,
+        row.flutter,
+        row.native,
+        abs: row.abs,
+        rel: row.rel,
+        digits: row.name == 'settle' ? 3 : 2,
+        note: switch (row.name) {
+          'overshoot' => ' (peak ${_n(peak)}, rest ${_n(rest)})',
+          'settle' => ' s (x within 0.5 of ${_n(rest)})',
+          _ => '',
+        },
       );
     }
   }
@@ -656,9 +598,11 @@ class _Table {
       _d(landing['landing']),
       abs: 0.5,
     );
+    // Task 15 fitted the release spring to this landing's overshoot (the
+    // median over frame phases, as this drive makes it): in sample.
     _add(
       'flick overshoot',
-      Kind.native,
+      Kind.fitted,
       overshoot([for (final s in after) s['x']!], after.first['x']!, rest),
       _d(landing['overshoot']),
       abs: 1,
