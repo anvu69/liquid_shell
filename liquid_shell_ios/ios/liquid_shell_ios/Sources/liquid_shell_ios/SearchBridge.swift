@@ -42,11 +42,12 @@ final class SearchBridge: NSObject, UISearchResultsUpdating, UISearchControllerD
     let text: String
     let composing: Bool
   }
-  /// True while Dart's text is assigned: UIKit may call back synchronously.
+  /// True while Dart's text, scope titles or scope index is assigned: UIKit
+  /// may call back synchronously.
   private var writing = false
   /// What Dart knows of the scope: its own last index (unclamped), or the
   /// last user change reported. A delegate call with it is no change.
-  private var knownScope = 0
+  private(set) var knownScope = 0
 
   override init() {
     super.init()

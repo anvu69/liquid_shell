@@ -627,6 +627,13 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     }
   }
 
+  /// The scope a shell installed after a scene reconnect starts with, as
+  /// `carriedSearchText`: Dart's newest index held for another tab, else
+  /// the bar's (Dart's last write, or the user's last change reported).
+  var carriedSearchScope: Int {
+    heldSearchScope ?? searchBridge.knownScope
+  }
+
   /// Dart's scope: selected in the scope bar, never reported back; held
   /// while another tab is selected.
   func setSearchScope(_ index: Int) {

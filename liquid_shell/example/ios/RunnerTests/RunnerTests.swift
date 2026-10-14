@@ -1402,6 +1402,29 @@ extension NativeTabsTests {
     bridge.updateSearchResults(for: bridge.controller)
   }
 
+  /// A scene reconnect: the scene goes away (its window and shell are
+  /// released), [meanwhile] runs with no shell installed, and the installer
+  /// installs a new shell in a new window of the scene, as a reconnect does.
+  /// Returns that window.
+  fileprivate func reconnect(
+    _ installer: NativeShellInstaller, from window: UIWindow, meanwhile: () throws -> Void = {}
+  ) throws -> UIWindow {
+    installer.sceneDisconnected()
+    window.rootViewController = UIViewController()
+    settle()
+    try meanwhile()
+
+    let scene = try XCTUnwrap(window.windowScene)
+    let next = UIWindow(windowScene: scene)
+    let flutter = UIViewController()
+    next.rootViewController = flutter
+    next.isHidden = false
+    extraWindows.append(next)
+    installer.install(flutter, in: next)
+    settle()
+    return next
+  }
+
   /// A scene reconnect whose first state report differs from the last one
   /// (spec §7.10): to Dart that is a live size-class change, and it never
   /// sends the user's own text back (the one-way rule). The installer
@@ -1414,19 +1437,7 @@ extension NativeTabsTests {
     settle()
     userTypes("hồ", into: try tabs(in: window).searchBridge)
     let edits = events.searchTexts.count
-    // The scene goes away: its window and shell are released.
-    installer.sceneDisconnected()
-    window.rootViewController = UIViewController()
-    settle()
-
-    let scene = try XCTUnwrap(window.windowScene)
-    let next = UIWindow(windowScene: scene)
-    let flutter = UIViewController()
-    next.rootViewController = flutter
-    next.isHidden = false
-    extraWindows.append(next)
-    installer.install(flutter, in: next)
-    settle()
+    let next = try reconnect(installer, from: window)
 
     let shell = try tabs(in: next)
     XCTAssertTrue(shell.selectedTab === shell.searchTab)
@@ -1445,17 +1456,7 @@ extension NativeTabsTests {
     try installer.update(config: searchConfig(selected: 0))
     settle()
     try installer.setSearchText(text: "hà")
-    installer.sceneDisconnected()
-    window.rootViewController = UIViewController()
-    settle()
-
-    let scene = try XCTUnwrap(window.windowScene)
-    let next = UIWindow(windowScene: scene)
-    let flutter = UIViewController()
-    next.rootViewController = flutter
-    next.isHidden = false
-    extraWindows.append(next)
-    installer.install(flutter, in: next)
+    let next = try reconnect(installer, from: window)
     try installer.update(config: searchConfig(selected: 2))
     settle()
 
@@ -2357,6 +2358,62 @@ extension NativeTabsTests {
     tabs.apply(searchConfig(selected: 2, scopes: Self.scopes))
     settle()
     XCTAssertEqual(bar.selectedScopeButtonIndex, 2)
+    XCTAssertEqual(events.sent.filter { $0.hasPrefix("searchScope") }, [])
+  }
+
+  /// The selected scope of [window]'s shell.
+  private func selectedScope(in window: UIWindow) throws -> Int {
+    try tabs(in: window).searchBridge.controller.searchBar.selectedScopeButtonIndex
+  }
+
+  /// A scene reconnect whose first state report differs: Dart sends no
+  /// scope after a changed state, since a resend could undo a user's tap
+  /// still on its way (Task 10 review M1). The installer carries the old
+  /// bar's scope to the reinstalled shell instead, as it carries the text,
+  /// and reports nothing.
+  func testASceneReconnectCarriesTheUsersScopeToTheNewShell() throws {
+    let (installer, window) = try installedByInstaller()
+    _ = try installer.attach()
+    try installer.update(config: searchConfig(selected: 2, scopes: Self.scopes))
+    settle()
+    userSelectsScope(2, in: try tabs(in: window).searchBridge)
+    let reports = events.sent.filter { $0.hasPrefix("searchScope") }
+    XCTAssertEqual(reports, ["searchScope 2"], "precondition: the user's change")
+    let next = try reconnect(installer, from: window)
+    XCTAssertEqual(try selectedScope(in: next), 2)
+    XCTAssertEqual(
+      events.sent.filter { $0.hasPrefix("searchScope") }, reports, "not a user change")
+  }
+
+  /// Dart's scope held while another tab was selected is newer than the
+  /// bar's: it is the one to carry.
+  func testASceneReconnectCarriesDartsHeldScopeOverTheBars() throws {
+    let (installer, window) = try installedByInstaller()
+    _ = try installer.attach()
+    try installer.update(config: searchConfig(selected: 2, scopes: Self.scopes))
+    settle()
+    userSelectsScope(2, in: try tabs(in: window).searchBridge)
+    try installer.update(config: searchConfig(selected: 0, scopes: Self.scopes))
+    settle()
+    try installer.setSearchScope(index: 1)
+    let next = try reconnect(installer, from: window)
+    try installer.update(config: searchConfig(selected: 2, scopes: Self.scopes))
+    settle()
+    XCTAssertEqual(try selectedScope(in: next), 1)
+  }
+
+  /// Dart's scope sent while no shell is installed (the scene is
+  /// reconnecting) reaches the next one: Dart does not send it again after
+  /// a changed state report.
+  func testDartsScopeSentWhileNoShellIsInstalledReachesTheNextOne() throws {
+    let (installer, window) = try installedByInstaller()
+    _ = try installer.attach()
+    try installer.update(config: searchConfig(selected: 2, scopes: Self.scopes))
+    settle()
+    let next = try reconnect(installer, from: window) {
+      try installer.setSearchScope(index: 2)
+    }
+    XCTAssertEqual(try selectedScope(in: next), 2)
     XCTAssertEqual(events.sent.filter { $0.hasPrefix("searchScope") }, [])
   }
 }
