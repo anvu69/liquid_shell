@@ -131,6 +131,7 @@ class NativeDebugSnapshot {
     required this.scopeTitles,
     required this.scopeShown,
     required this.selectedScope,
+    required this.scopeFrame,
   });
 
   /// The selected `UITab`'s identifier ("destination<i>", or "" when none).
@@ -154,6 +155,9 @@ class NativeDebugSnapshot {
 
   /// The search bar's `selectedScopeButtonIndex`.
   int selectedScope;
+
+  /// The scope bar's frame in the Flutter view; zero when it is not shown.
+  NativeRect scopeFrame;
 }
 
 /// The whole chrome. Applied in order: tabs, selection, footer, tint,

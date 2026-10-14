@@ -603,6 +603,8 @@ struct NativeDebugSnapshot: Hashable, CustomStringConvertible {
   var scopeShown: Bool
   /// The search bar's `selectedScopeButtonIndex`.
   var selectedScope: Int64
+  /// The scope bar's frame in the Flutter view; zero when it is not shown.
+  var scopeFrame: NativeRect
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -617,6 +619,7 @@ struct NativeDebugSnapshot: Hashable, CustomStringConvertible {
     let scopeTitles = pigeonVar_list[7] as! [String]
     let scopeShown = pigeonVar_list[8] as! Bool
     let selectedScope = pigeonVar_list[9] as! Int64
+    let scopeFrame = pigeonVar_list[10] as! NativeRect
 
     return NativeDebugSnapshot(
       selectedTab: selectedTab,
@@ -628,7 +631,8 @@ struct NativeDebugSnapshot: Hashable, CustomStringConvertible {
       firstResponderIsSearch: firstResponderIsSearch,
       scopeTitles: scopeTitles,
       scopeShown: scopeShown,
-      selectedScope: selectedScope
+      selectedScope: selectedScope,
+      scopeFrame: scopeFrame
     )
   }
   func toList() -> [Any?] {
@@ -643,13 +647,14 @@ struct NativeDebugSnapshot: Hashable, CustomStringConvertible {
       scopeTitles,
       scopeShown,
       selectedScope,
+      scopeFrame,
     ]
   }
   static func == (lhs: NativeDebugSnapshot, rhs: NativeDebugSnapshot) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return NativeShellApiPigeonInternal.deepEquals(lhs.selectedTab, rhs.selectedTab) && NativeShellApiPigeonInternal.deepEquals(lhs.searchActive, rhs.searchActive) && NativeShellApiPigeonInternal.deepEquals(lhs.searchText, rhs.searchText) && NativeShellApiPigeonInternal.deepEquals(lhs.placement, rhs.placement) && NativeShellApiPigeonInternal.deepEquals(lhs.pageTitles, rhs.pageTitles) && NativeShellApiPigeonInternal.deepEquals(lhs.fieldFrame, rhs.fieldFrame) && NativeShellApiPigeonInternal.deepEquals(lhs.firstResponderIsSearch, rhs.firstResponderIsSearch) && NativeShellApiPigeonInternal.deepEquals(lhs.scopeTitles, rhs.scopeTitles) && NativeShellApiPigeonInternal.deepEquals(lhs.scopeShown, rhs.scopeShown) && NativeShellApiPigeonInternal.deepEquals(lhs.selectedScope, rhs.selectedScope)
+    return NativeShellApiPigeonInternal.deepEquals(lhs.selectedTab, rhs.selectedTab) && NativeShellApiPigeonInternal.deepEquals(lhs.searchActive, rhs.searchActive) && NativeShellApiPigeonInternal.deepEquals(lhs.searchText, rhs.searchText) && NativeShellApiPigeonInternal.deepEquals(lhs.placement, rhs.placement) && NativeShellApiPigeonInternal.deepEquals(lhs.pageTitles, rhs.pageTitles) && NativeShellApiPigeonInternal.deepEquals(lhs.fieldFrame, rhs.fieldFrame) && NativeShellApiPigeonInternal.deepEquals(lhs.firstResponderIsSearch, rhs.firstResponderIsSearch) && NativeShellApiPigeonInternal.deepEquals(lhs.scopeTitles, rhs.scopeTitles) && NativeShellApiPigeonInternal.deepEquals(lhs.scopeShown, rhs.scopeShown) && NativeShellApiPigeonInternal.deepEquals(lhs.selectedScope, rhs.selectedScope) && NativeShellApiPigeonInternal.deepEquals(lhs.scopeFrame, rhs.scopeFrame)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -664,10 +669,11 @@ struct NativeDebugSnapshot: Hashable, CustomStringConvertible {
     NativeShellApiPigeonInternal.deepHash(value: scopeTitles, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: scopeShown, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: selectedScope, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: scopeFrame, hasher: &hasher)
   }
 
   public var description: String {
-    return "NativeDebugSnapshot(selectedTab: \(String(describing: selectedTab)), searchActive: \(String(describing: searchActive)), searchText: \(String(describing: searchText)), placement: \(String(describing: placement)), pageTitles: \(String(describing: pageTitles)), fieldFrame: \(String(describing: fieldFrame)), firstResponderIsSearch: \(String(describing: firstResponderIsSearch)), scopeTitles: \(String(describing: scopeTitles)), scopeShown: \(String(describing: scopeShown)), selectedScope: \(String(describing: selectedScope)))"
+    return "NativeDebugSnapshot(selectedTab: \(String(describing: selectedTab)), searchActive: \(String(describing: searchActive)), searchText: \(String(describing: searchText)), placement: \(String(describing: placement)), pageTitles: \(String(describing: pageTitles)), fieldFrame: \(String(describing: fieldFrame)), firstResponderIsSearch: \(String(describing: firstResponderIsSearch)), scopeTitles: \(String(describing: scopeTitles)), scopeShown: \(String(describing: scopeShown)), selectedScope: \(String(describing: selectedScope)), scopeFrame: \(String(describing: scopeFrame)))"
   }
 }
 

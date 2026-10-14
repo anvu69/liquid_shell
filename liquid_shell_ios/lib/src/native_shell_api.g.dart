@@ -609,6 +609,7 @@ class NativeDebugSnapshot {
     required this.scopeTitles,
     required this.scopeShown,
     required this.selectedScope,
+    required this.scopeFrame,
   });
 
   /// The selected `UITab`'s identifier ("destination<i>", or "" when none).
@@ -637,6 +638,9 @@ class NativeDebugSnapshot {
   /// The search bar's `selectedScopeButtonIndex`.
   int selectedScope;
 
+  /// The scope bar's frame in the Flutter view; zero when it is not shown.
+  NativeRect scopeFrame;
+
   List<Object?> _toList() {
     return <Object?>[
       selectedTab,
@@ -649,6 +653,7 @@ class NativeDebugSnapshot {
       scopeTitles,
       scopeShown,
       selectedScope,
+      scopeFrame,
     ];
   }
 
@@ -669,6 +674,7 @@ class NativeDebugSnapshot {
       scopeTitles: (result[7]! as List<Object?>).cast<String>(),
       scopeShown: result[8]! as bool,
       selectedScope: result[9]! as int,
+      scopeFrame: result[10]! as NativeRect,
     );
   }
 
@@ -690,7 +696,8 @@ class NativeDebugSnapshot {
         _deepEquals(firstResponderIsSearch, other.firstResponderIsSearch) &&
         _deepEquals(scopeTitles, other.scopeTitles) &&
         _deepEquals(scopeShown, other.scopeShown) &&
-        _deepEquals(selectedScope, other.selectedScope);
+        _deepEquals(selectedScope, other.selectedScope) &&
+        _deepEquals(scopeFrame, other.scopeFrame);
   }
 
   @override
@@ -699,7 +706,7 @@ class NativeDebugSnapshot {
 
   @override
   String toString() {
-    return 'NativeDebugSnapshot(selectedTab: $selectedTab, searchActive: $searchActive, searchText: $searchText, placement: $placement, pageTitles: $pageTitles, fieldFrame: $fieldFrame, firstResponderIsSearch: $firstResponderIsSearch, scopeTitles: $scopeTitles, scopeShown: $scopeShown, selectedScope: $selectedScope)';
+    return 'NativeDebugSnapshot(selectedTab: $selectedTab, searchActive: $searchActive, searchText: $searchText, placement: $placement, pageTitles: $pageTitles, fieldFrame: $fieldFrame, firstResponderIsSearch: $firstResponderIsSearch, scopeTitles: $scopeTitles, scopeShown: $scopeShown, selectedScope: $selectedScope, scopeFrame: $scopeFrame)';
   }
 }
 

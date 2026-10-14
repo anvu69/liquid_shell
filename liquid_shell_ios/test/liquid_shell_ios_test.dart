@@ -96,6 +96,7 @@ class _FakeHost extends NativeShellHostApi {
     scopeTitles: ['All', 'Songs', 'Places'],
     scopeShown: true,
     selectedScope: 1,
+    scopeFrame: NativeRect(x: 16, y: 64, width: 370, height: 32),
   );
 
   @override
@@ -487,6 +488,7 @@ void main() {
     expect(snapshot.scopeTitles, ['All', 'Songs', 'Places']);
     expect(snapshot.scopeShown, isTrue);
     expect(snapshot.selectedScope, 1);
+    expect(snapshot.scopeFrame.y, 64);
     expect(host.calls, ['debugSnapshot']);
   });
 

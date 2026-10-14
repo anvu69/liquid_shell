@@ -687,18 +687,25 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   /// The search field's frame in the Flutter view, or zero when the search
   /// tab is not selected or the field is not shown (spec §7.5).
   func currentFieldFrame() -> NativeRect {
-    let zero = NativeRect(x: 0, y: 0, width: 0, height: 0)
     let field = searchBridge.controller.searchBar.searchTextField
-    guard chromeVisible, isSearchSelected, field.window != nil,
+    guard chromeVisible, isSearchSelected, field.window != nil, Self.isDrawn(field),
       let flutterView = flutter.viewIfLoaded
-    else { return zero }
-    var node: UIView? = field
-    while let current = node {
-      if current.isHidden || current.alpha < 0.01 { return zero }
-      node = current.superview
-    }
+    else { return Self.zeroRect }
     let frame = field.convert(field.bounds, to: flutterView)
     return NativeRect(x: frame.minX, y: frame.minY, width: frame.width, height: frame.height)
+  }
+
+  private static let zeroRect = NativeRect(x: 0, y: 0, width: 0, height: 0)
+
+  /// Whether [view] and every view above it are drawn (not hidden, not
+  /// transparent).
+  private static func isDrawn(_ view: UIView) -> Bool {
+    var node: UIView? = view
+    while let current = node {
+      if current.isHidden || current.alpha < 0.01 { return false }
+      node = current.superview
+    }
+    return true
   }
 
   func publishSearchField() {
@@ -710,6 +717,34 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       self.events.onSearchFieldChanged(frame: frame, completion: $0)
     }
   }
+
+  #if DEBUG
+    /// Debug builds: the scope bar's segmented control in the Flutter view,
+    /// or zero when it is not drawn. UIKit places it (iPhone: under the
+    /// status bar; iPad: under the field, spike §1) and keeps it private,
+    /// so it is found in the window by its titles.
+    func currentScopeFrame() -> NativeRect {
+      let bar = searchBridge.controller.searchBar
+      guard chromeVisible, isSearchSelected, bar.showsScopeBar,
+        let titles = bar.scopeButtonTitles, !titles.isEmpty,
+        let root = view.window, let flutterView = flutter.viewIfLoaded
+      else { return Self.zeroRect }
+      guard
+        let control = Self.segmentedControls(in: root).first(where: { control in
+          control.numberOfSegments == titles.count
+            && titles.indices.allSatisfy { control.titleForSegment(at: $0) == titles[$0] }
+            && !control.bounds.isEmpty && Self.isDrawn(control)
+        })
+      else { return Self.zeroRect }
+      let frame = control.convert(control.bounds, to: flutterView)
+      return NativeRect(x: frame.minX, y: frame.minY, width: frame.width, height: frame.height)
+    }
+
+    private static func segmentedControls(in view: UIView) -> [UISegmentedControl] {
+      ((view as? UISegmentedControl).map { [$0] } ?? [])
+        + view.subviews.flatMap { segmentedControls(in: $0) }
+    }
+  #endif
 
   /// Debug builds: the native search and page state (integration tests).
   func debugSnapshot() -> NativeDebugSnapshot {
@@ -734,7 +769,8 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
         firstResponderIsSearch: searchBridge.controller.searchBar.searchTextField.isFirstResponder,
         scopeTitles: searchBridge.controller.searchBar.scopeButtonTitles ?? [],
         scopeShown: searchBridge.controller.searchBar.showsScopeBar,
-        selectedScope: Int64(searchBridge.controller.searchBar.selectedScopeButtonIndex))
+        selectedScope: Int64(searchBridge.controller.searchBar.selectedScopeButtonIndex),
+        scopeFrame: currentScopeFrame())
     #else
       return .empty
     #endif
@@ -799,6 +835,7 @@ extension NativeDebugSnapshot {
     NativeDebugSnapshot(
       selectedTab: "", searchActive: false, searchText: "", placement: "", pageTitles: [],
       fieldFrame: NativeRect(x: 0, y: 0, width: 0, height: 0), firstResponderIsSearch: false,
-      scopeTitles: [], scopeShown: false, selectedScope: 0)
+      scopeTitles: [], scopeShown: false, selectedScope: 0,
+      scopeFrame: NativeRect(x: 0, y: 0, width: 0, height: 0))
   }
 }
