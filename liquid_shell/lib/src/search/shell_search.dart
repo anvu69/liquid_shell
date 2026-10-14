@@ -42,11 +42,13 @@ final class ShellSearch implements SearchDriver {
   // The next native entry sends the text even when empty: native may
   // still show another one (a hot restart, a reconnected scene).
   bool _replay = true;
-  // The next config that shows the search tab natively sends the scope,
-  // entered or not: after a state report the scope bar may be a new one
-  // (a reconnected scene) at its first scope. Unlike the text, the scope
-  // is always Dart's to send: it has no composition to disturb.
-  bool _replayScope = false;
+  // Whether native's scope bar has the controller's scope: the last config
+  // showed the search tab natively, and no reconnect came since. Unlike
+  // [_sentShown], a changed state report keeps it: it comes from a live
+  // scope bar, or from a new one the plugin's installer gave the old one's
+  // scope, and a resend could undo a user's tap still on its way (VK-550
+  // Task 10 review M1).
+  bool _scopeSent = false;
   // The controller's text came from the user's typing in the field (not
   // from the app): native has it, unless its scene was rebuilt.
   bool _userText = false;
@@ -81,6 +83,7 @@ final class ShellSearch implements SearchDriver {
   set native(bool value) {
     if (!value) {
       _sentShown = false;
+      _scopeSent = false;
       _replay = true;
       final controller = _controller;
       if (_native && controller != null) _writeField(controller.text);
@@ -154,10 +157,13 @@ final class ShellSearch implements SearchDriver {
   /// text to the new one natively.
   ///
   /// A reconnect also ends the active state: the new field has no focus.
+  /// Only a reconnect sends the scope again (to the new scope bar): a
+  /// changed state keeps the scope natively, as the installer keeps the
+  /// text.
   void replay({required bool reconnect}) {
-    _replayScope = true;
     if (reconnect) {
       _syncInactive = true;
+      _scopeSent = false;
       final controller = _controller;
       if (controller != null && controller.isActive) {
         applySearchEdit(controller, controller.value.copyWith(active: false));
@@ -240,6 +246,8 @@ final class ShellSearch implements SearchDriver {
     final shown = selected && native;
     final entered = shown && !_sentShown;
     _sentShown = shown;
+    final scopeEntered = shown && !_scopeSent;
+    _scopeSent = shown;
     final left = !selected && _sentSelected;
     _sentSelected = selected;
     if (controller == null) return;
@@ -247,10 +255,7 @@ final class ShellSearch implements SearchDriver {
       _replay = false;
       claim()?.setSearchText(controller.text);
     }
-    if (shown && (entered || _replayScope)) {
-      _replayScope = false;
-      claim()?.setSearchScope(controller.scopeIndex);
-    }
+    if (scopeEntered) claim()?.setSearchScope(controller.scopeIndex);
     if (entered && _syncInactive) {
       _syncInactive = false;
       if (!controller.isActive) claim()?.setSearchActive(active: false);

@@ -177,21 +177,49 @@ void main() {
       expect(fake.searchScopes, [2], reason: 'once per entry');
     });
 
-    test('a native state report replays the scope, the user text kept', () {
+    // A changed state (an iPad crossing the size class, or a reconnected
+    // scene whose first report differs) comes from a live scope bar, or
+    // from a new one the plugin's installer gave the old one's scope. A
+    // resend could undo a user's tap still on its way (Task 10 review M1).
+    test('a changed state report sends no scope, the user text kept', () {
       final search = nativeBridge()
         ..onNativeEvent(
           const LiquidNativeSearchTextChanged('hồ', composing: false),
         )
         ..onNativeEvent(const LiquidNativeSearchScopeChanged(1))
-        // A changed state (a reconnected scene whose first report differs,
-        // or an iPad crossing the size class): the user's text is never
-        // sent back, but the scope is Dart's to restore.
         ..replay(reconnect: false)
         ..afterConfigSent();
       expect(fake.searchTexts, isEmpty);
-      expect(fake.searchScopes, [1]);
+      expect(fake.searchScopes, isEmpty);
       search.afterConfigSent();
-      expect(fake.searchScopes, [1]);
+      expect(fake.searchScopes, isEmpty);
+    });
+
+    test("a changed state report sends no scope, the app's text replayed", () {
+      final search = nativeBridge();
+      controller
+        ..text = 'phố'
+        ..scopeIndex = 2;
+      fake
+        ..searchTexts.clear()
+        ..searchScopes.clear();
+      search
+        ..replay(reconnect: false)
+        ..afterConfigSent();
+      expect(fake.searchTexts, ['phố'], reason: "the app's text is replayed");
+      expect(fake.searchScopes, isEmpty);
+    });
+
+    test('a reconnect sends the scope to the new scope bar', () {
+      final search = nativeBridge();
+      controller.scopeIndex = 2;
+      fake.searchScopes.clear();
+      search
+        ..replay(reconnect: true)
+        ..afterConfigSent();
+      expect(fake.searchScopes, [2]);
+      search.afterConfigSent();
+      expect(fake.searchScopes, [2], reason: 'once');
     });
 
     test("a new controller's scope goes to native", () {
