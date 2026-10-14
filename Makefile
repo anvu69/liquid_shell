@@ -20,7 +20,8 @@ COVERAGE_MIN := 90
 .PHONY: help get format format-check analyze test coverage goldens \
         goldens-update provenance snippets verify pana publish-check \
         android-unit ios-unit ios-ui integration-ios integration-ios-native integration-android pigeon pigeon-check \
-        test-impeller compare-images tab-traces tab-frames
+        test-impeller compare-images tab-traces tab-frames segment-traces \
+        segment-frames
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -85,6 +86,13 @@ tab-traces: ## Flutter tab traces on an iOS 26.5 iPhone 17 Pro simulator vs the 
 
 tab-frames: ## Native vs Flutter liquid tab bar strips at 60 fps on an iOS 26.5 simulator (needs ffmpeg)
 	FLUTTER="$(FLUTTER)" DART="$(DART)" tool/tab_frames.sh
+
+segment-traces: ## Flutter segmented control traces on an iOS 26.5 iPhone 17 Pro simulator vs the native reference (spec VK-550 §14.5)
+	FLUTTER="$(FLUTTER)" DART="$(DART)" TRACES_ONLY=1 tool/segment_frames.sh
+	$(DART) run tool/segment_trace_compare.dart $(EXAMPLE)/build/integration_response_data.json docs/qa/vk550/native_reference.json
+
+segment-frames: ## Native vs Flutter liquid segmented control strips at 60 fps on an iOS 26.5 simulator (needs ffmpeg)
+	FLUTTER="$(FLUTTER)" DART="$(DART)" tool/segment_frames.sh
 
 provenance: ## Fail on app names or banned dependencies outside docs/, or glass outside LiquidGlass
 	tool/check_provenance.sh
@@ -164,9 +172,21 @@ ios-unit: ## XCTest of liquid_shell_ios (example RunnerTests) on an iPad or iPho
 # iPad Pro 11 (14 run, 3 iPhone-only skipped), both iOS 26.5; scaled to
 # the slow runner, about 1250 s, too close to the old 1500 s. 1800 s keeps
 # ~550 s in hand, inside the job's 40 minutes; a stalled test still stops
-# at its 300 s. VK-567 adds one iPhone-only full-launch test (18): 29 s
-# locally, the whole run 445 s on an iPhone 17 (iOS 26.5) under heavy
-# load; about 1330 s on the slow runner, still ~470 s in hand.
+# at its 300 s. VK-550 adds the native scope bar test (18): locally 410 s
+# on an iPhone 17 Pro and 343 s on an iPad Air 11 (M4) (15 run), iOS
+# 26.5, the new test 26-37 s of it; scaled the same way, about 1350 s, so
+# 1800 s still keeps ~450 s in hand. Its reset-scope test (19): 446 s on
+# the iPhone and 397 s on the iPad (16 run), the new test 21-22 s; about
+# 1400 s scaled. VK-567 adds one iPhone-only full-launch test: 29 s
+# locally, its whole run 445 s on an iPhone 17 (iOS 26.5) under heavy
+# load; about 1330 s on the slow runner. Merged, with VK-550's
+# SegmentFidelityUITests (iPhone only), 21 tests: 443 s on an iPhone 17
+# Pro (21 run) and 318 s on an iPad Air 11 (M4) (16 run, 5 iPhone-only
+# skipped), iOS 26.5, load 4-7; scaled the same way, about 1400 s. CI ran
+# PR #13's 18 in about 850 s per device (the whole XCUITest step), so
+# 1800 s keeps ~400 s in hand even on the slow-runner scale. On a shared
+# host at load ~850 one run stalled past 1800 s; IOS_UI_TIMEOUT=3600 gets
+# such a host through.
 IOS_UI_TIMEOUT ?= 1800
 
 ios-ui: ## XCUITest: real taps on native dialogs and the search tab (example RunnerUITests) on a simulator; IOS_UNIT_DEVICE=<udid>

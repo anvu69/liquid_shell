@@ -17,6 +17,7 @@ uniform vec4 uTint;    // 14-17: rgba, straight alpha
 uniform vec4 uRim;     // 18-21: rgba
 uniform vec4 uLight;   // 22-25: light x, light y, rim width, saturation
 uniform float uVeil;   // 26: veil falloff, 0 = uniform tint (VK-503 §7.2)
+uniform float uSqueeze; // 27: sampling pushed out from the spine, 0 = none
 
 uniform sampler2D uBackdrop;
 
@@ -80,20 +81,33 @@ void main() {
   float t = max(-d, 0.0);
   float x = clamp(t / uOptics.x, 0.0, 1.0);
 
+  // Where the page is read. With uSqueeze 0 (every surface but the segment
+  // lens, VK-550 §7) it is p, exactly as before. Otherwise a point at u
+  // from the spine (the centre line of a capsule, half its short side
+  // across) reads the page at (1 + uSqueeze) u from it, out to the edge:
+  // the page under the glass shows 1 / (1 + uSqueeze) of its size across
+  // the height, as native's segment lens shows it (about 0.8), and the
+  // edge reads the page a little beyond the glass, as native's does.
+  vec2 s = p;
+  if (uSqueeze > 0.0) {
+    float u = max(0.5 * min(uRect.z, uRect.w) - t, 0.0);
+    s = p + n2 * (uSqueeze * u);
+  }
+
   vec3 color;
   if (x < 1.0 && uOptics.y > 0.0) {
     float n = uOptics.z;
     float spread = 0.1 * uOptics.w;
     if (spread > 0.0) {
       color = vec3(
-          sampleBackdrop(p + displacement(n2, x, n - spread)).r,
-          sampleBackdrop(p + displacement(n2, x, n)).g,
-          sampleBackdrop(p + displacement(n2, x, n + spread)).b);
+          sampleBackdrop(s + displacement(n2, x, n - spread)).r,
+          sampleBackdrop(s + displacement(n2, x, n)).g,
+          sampleBackdrop(s + displacement(n2, x, n + spread)).b);
     } else {
-      color = sampleBackdrop(p + displacement(n2, x, n));
+      color = sampleBackdrop(s + displacement(n2, x, n));
     }
   } else {
-    color = sampleBackdrop(p);
+    color = sampleBackdrop(s);
   }
 
   // The tint is a veil. With uVeil 0 it is uniform (every surface but the

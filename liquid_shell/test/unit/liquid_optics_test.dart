@@ -73,6 +73,7 @@ void main() {
           1, 1, 1, 0x80 / 255, // rim
           -0.5, -0.85, 4.5, 1.1, // light, rim width 1.5*3, saturation
           0, // veil falloff: uniform (Task 16 part B)
+          0, // squeeze: none (VK-550 §7)
         ]),
       );
     });
@@ -230,15 +231,92 @@ void main() {
     });
   });
 
+  // VK-550 §7 (Task 15): the segment lens keeps the page's colours, as
+  // native's (core chroma 0.965 of the page's); the shared 1.1 boosted it.
+  group('saturation override (spec VK-550 §7)', () {
+    const rect = Rect.fromLTWH(300, 2300, 330, 210);
+    test('replaces shader float 25; null keeps LiquidOptics.saturation', () {
+      const base = LiquidOpticsParams(
+        tint: Color(0x00000000),
+        rim: Color(0x00000000),
+        refraction: 1,
+        dispersion: 0,
+        blurSigma: 0,
+      );
+      const flat = LiquidOpticsParams(
+        tint: Color(0x00000000),
+        rim: Color(0x00000000),
+        refraction: 1,
+        dispersion: 0,
+        blurSigma: 0,
+        saturation: 1,
+      );
+      final a = _uniforms(rect, params: base);
+      final b = _uniforms(rect, params: flat);
+      expect(a[23], closeTo(LiquidOptics.saturation, 1e-6));
+      expect(b[23], 1);
+      for (var i = 0; i < a.length; i++) {
+        if (i == 23) continue;
+        expect(b[i], a[i], reason: 'float $i');
+      }
+      expect(flat, isNot(base));
+      expect(flat.hashCode, isNot(base.hashCode));
+    });
+  });
+
+  // VK-550 §7 (Task 15 review, owner approved): native's segment lens shows
+  // the page under it squeezed to about 0.8 across its height. One
+  // uniform, 0 everywhere else, so every other surface draws as before.
+  group('squeeze (spec VK-550 §7)', () {
+    const rect = Rect.fromLTWH(300, 2300, 330, 210);
+
+    test('appended as shader float 27; 0 by default, the first 25 floats '
+        'unchanged', () {
+      expect(LiquidOptics.floatCount, 26);
+      expect(_params.squeeze, 0);
+      final u = _uniforms(rect);
+      expect(u, hasLength(26));
+      // List index k is shader float k + 2: index 25 is float 27.
+      expect(u[25], 0);
+      const lens = LiquidOpticsParams(
+        tint: Color(0x00000000),
+        rim: Color(0x00000000),
+        refraction: 1,
+        dispersion: 0,
+        blurSigma: 0,
+        squeeze: 0.25,
+      );
+      const flat = LiquidOpticsParams(
+        tint: Color(0x00000000),
+        rim: Color(0x00000000),
+        refraction: 1,
+        dispersion: 0,
+        blurSigma: 0,
+      );
+      final over = _uniforms(rect, params: lens);
+      expect(over[25], 0.25);
+      expect(over.sublist(0, 25), _uniforms(rect, params: flat).sublist(0, 25));
+      expect(lens, isNot(flat));
+      expect(lens.hashCode, isNot(flat.hashCode));
+      const negative = LiquidOpticsParams(
+        tint: Color(0x00000000),
+        rim: Color(0x00000000),
+        refraction: 1,
+        dispersion: 0,
+        blurSigma: 0,
+        squeeze: -1,
+      );
+      expect(_uniforms(rect, params: negative)[25], 0, reason: 'never < 0');
+    });
+  });
+
   group('veil falloff (Task 16 part B, spec VK-503 §7.2)', () {
     const rect = Rect.fromLTWH(300, 2300, 330, 210);
 
     test('appended as shader float 26; 0 by default, the first 24 floats '
         'unchanged', () {
-      expect(LiquidOptics.floatCount, 25);
       expect(_params.veilFalloff, 0);
       final u = _uniforms(rect);
-      expect(u, hasLength(25));
       // List index k is shader float k + 2: index 24 is float 26.
       expect(u[24], 0);
       const lens = LiquidOpticsParams(

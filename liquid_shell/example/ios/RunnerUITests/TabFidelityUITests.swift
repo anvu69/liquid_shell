@@ -25,6 +25,22 @@ final class TabFidelityUITests: XCTestCase {
     CGPoint(x: element.frame.midX, y: element.frame.midY)
   }
 
+  /// Polls [condition] until it holds or [timeout] passes: a loaded
+  /// runner stretches UIKit's animations.
+  private func wait(timeout: TimeInterval = 5, until condition: () -> Bool) -> Bool {
+    let deadline = Date().addingTimeInterval(timeout)
+    repeat {
+      if condition() { return true }
+      RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+    } while Date() < deadline
+    return condition()
+  }
+
+  /// Whether [element] is on screen to be tapped (false when it is gone).
+  private func shown(_ element: XCUIElement) -> Bool {
+    element.exists && element.isHittable
+  }
+
   /// Waits until [tab] is the selected one and the others are not.
   private func expectSelected(
     _ tab: String, among tabs: [String: XCUIElement], after step: String,
@@ -91,15 +107,24 @@ final class TabFidelityUITests: XCTestCase {
       withVelocity: XCUIGestureVelocity(1500), thenHoldForDuration: 0)
     idle()
     expectSelected("Home", among: tabs, after: "fast_flick")
-    // minimize, then expand by a tap on the circle. The bar sits as far
-    // from the screen's side as from its bottom, so the circle's centre is
-    // that far in from the leading edge, on the tabs' row.
+    // The Flutter run's minimize, then its expand by a tap on the circle.
+    // Native chrome does not minimize on a Flutter scroll (UIKit sees no
+    // scroll view; `minimizeOnScroll` is the Flutter bar's,
+    // doc/native_chrome.md), so here the swipe only scrolls the page and
+    // the bar stays whole: native strip 7 is a scroll and strip 8 a tap
+    // where the Flutter circle is (docs/qa/vk503/acceptance.md). The
+    // state is asserted (VK-503 review), so a native minimize shows here.
     app.swipeUp(); idle()
+    XCTAssertTrue(
+      shown(tabs["Explore"]!) && shown(tabs["Settings"]!),
+      "native: the swipe scrolls the page and the bar does not minimize")
+    // The bar sits as far from the screen's side as from its bottom, so
+    // the Flutter circle's centre is that far in from the leading edge.
     let window = app.windows.firstMatch.frame
     let inset = window.maxY - home.y
     point(app, CGPoint(x: window.minX + inset, y: home.y)).tap()
     idle()
-    expectSelected("Home", among: tabs, after: "expand")
-    XCTAssertTrue(tabs["Explore"]!.isHittable, "expanded: Explore is back")
+    expectSelected("Home", among: tabs, after: "the tap at the circle")
+    XCTAssertTrue(wait { shown(tabs["Explore"]!) }, "still whole: Explore")
   }
 }

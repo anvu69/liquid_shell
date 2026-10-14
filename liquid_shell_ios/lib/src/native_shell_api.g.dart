@@ -480,13 +480,19 @@ class NativePage {
 class NativeSearchConfig {
   NativeSearchConfig({
     this.placeholder,
+    this.scopes,
   });
 
   String? placeholder;
 
+  /// The scope bar's titles, shown while the search is active; null, or
+  /// fewer than two, shows none.
+  List<String>? scopes;
+
   List<Object?> _toList() {
     return <Object?>[
       placeholder,
+      scopes,
     ];
   }
 
@@ -498,6 +504,7 @@ class NativeSearchConfig {
     result as List<Object?>;
     return NativeSearchConfig(
       placeholder: result[0] as String?,
+      scopes: (result[1] as List<Object?>?)?.cast<String>(),
     );
   }
 
@@ -510,7 +517,8 @@ class NativeSearchConfig {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(placeholder, other.placeholder);
+    return _deepEquals(placeholder, other.placeholder) &&
+        _deepEquals(scopes, other.scopes);
   }
 
   @override
@@ -519,7 +527,7 @@ class NativeSearchConfig {
 
   @override
   String toString() {
-    return 'NativeSearchConfig(placeholder: $placeholder)';
+    return 'NativeSearchConfig(placeholder: $placeholder, scopes: $scopes)';
   }
 }
 
@@ -598,6 +606,10 @@ class NativeDebugSnapshot {
     required this.pageTitles,
     required this.fieldFrame,
     required this.firstResponderIsSearch,
+    required this.scopeTitles,
+    required this.scopeShown,
+    required this.selectedScope,
+    required this.scopeFrame,
   });
 
   /// The selected `UITab`'s identifier ("destination<i>", or "" when none).
@@ -617,6 +629,18 @@ class NativeDebugSnapshot {
 
   bool firstResponderIsSearch;
 
+  /// The search bar's `scopeButtonTitles` (empty when none).
+  List<String> scopeTitles;
+
+  /// Whether the scope bar is shown (`showsScopeBar`).
+  bool scopeShown;
+
+  /// The search bar's `selectedScopeButtonIndex`.
+  int selectedScope;
+
+  /// The scope bar's frame in the Flutter view; zero when it is not shown.
+  NativeRect scopeFrame;
+
   List<Object?> _toList() {
     return <Object?>[
       selectedTab,
@@ -626,6 +650,10 @@ class NativeDebugSnapshot {
       pageTitles,
       fieldFrame,
       firstResponderIsSearch,
+      scopeTitles,
+      scopeShown,
+      selectedScope,
+      scopeFrame,
     ];
   }
 
@@ -643,6 +671,10 @@ class NativeDebugSnapshot {
       pageTitles: (result[4]! as List<Object?>).cast<String>(),
       fieldFrame: result[5]! as NativeRect,
       firstResponderIsSearch: result[6]! as bool,
+      scopeTitles: (result[7]! as List<Object?>).cast<String>(),
+      scopeShown: result[8]! as bool,
+      selectedScope: result[9]! as int,
+      scopeFrame: result[10]! as NativeRect,
     );
   }
 
@@ -661,7 +693,11 @@ class NativeDebugSnapshot {
         _deepEquals(placement, other.placement) &&
         _deepEquals(pageTitles, other.pageTitles) &&
         _deepEquals(fieldFrame, other.fieldFrame) &&
-        _deepEquals(firstResponderIsSearch, other.firstResponderIsSearch);
+        _deepEquals(firstResponderIsSearch, other.firstResponderIsSearch) &&
+        _deepEquals(scopeTitles, other.scopeTitles) &&
+        _deepEquals(scopeShown, other.scopeShown) &&
+        _deepEquals(selectedScope, other.selectedScope) &&
+        _deepEquals(scopeFrame, other.scopeFrame);
   }
 
   @override
@@ -670,7 +706,7 @@ class NativeDebugSnapshot {
 
   @override
   String toString() {
-    return 'NativeDebugSnapshot(selectedTab: $selectedTab, searchActive: $searchActive, searchText: $searchText, placement: $placement, pageTitles: $pageTitles, fieldFrame: $fieldFrame, firstResponderIsSearch: $firstResponderIsSearch)';
+    return 'NativeDebugSnapshot(selectedTab: $selectedTab, searchActive: $searchActive, searchText: $searchText, placement: $placement, pageTitles: $pageTitles, fieldFrame: $fieldFrame, firstResponderIsSearch: $firstResponderIsSearch, scopeTitles: $scopeTitles, scopeShown: $scopeShown, selectedScope: $selectedScope, scopeFrame: $scopeFrame)';
   }
 }
 
@@ -1421,6 +1457,27 @@ class NativeShellHostApi {
     );
   }
 
+  /// Selects scope [index] (clamped to the titles); never reported back.
+  Future<void> setSearchScope(int index) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.liquid_shell_ios.NativeShellHostApi.setSearchScope$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[index],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
+  }
+
   /// Puts the search field's keyboard away: the field resigns first
   /// responder, the search stays active and keeps its text.
   Future<void> dismissSearchKeyboard() async {
@@ -1502,6 +1559,9 @@ abstract class NativeShellFlutterApi {
   void onSearchActiveChanged(bool active);
 
   void onSearchSubmitted(String text);
+
+  /// The user selected scope [index]; reported once, on lift.
+  void onSearchScopeChanged(int index);
 
   void onSearchFieldChanged(NativeRect frame);
 
@@ -1706,6 +1766,31 @@ abstract class NativeShellFlutterApi {
           final String arg_text = args[0]! as String;
           try {
             api.onSearchSubmitted(arg_text);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          } catch (e) {
+            return wrapResponse(
+              error: PlatformException(code: 'error', message: e.toString()),
+            );
+          }
+        });
+      }
+    }
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+        'dev.flutter.pigeon.liquid_shell_ios.NativeShellFlutterApi.onSearchScopeChanged$messageChannelSuffix',
+        pigeonChannelCodec,
+        binaryMessenger: binaryMessenger,
+      );
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          final List<Object?> args = message! as List<Object?>;
+          final int arg_index = args[0]! as int;
+          try {
+            api.onSearchScopeChanged(arg_index);
             return wrapResponse(empty: true);
           } on PlatformException catch (e) {
             return wrapResponse(error: e);

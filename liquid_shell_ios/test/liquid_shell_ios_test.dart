@@ -74,6 +74,12 @@ class _FakeHost extends NativeShellHostApi {
   }
 
   @override
+  Future<void> setSearchScope(int index) async {
+    calls.add('setSearchScope($index)');
+    _maybeFail();
+  }
+
+  @override
   Future<void> setPageScroll(int tab, double offset) async {
     calls.add('setPageScroll($tab, $offset)');
     _maybeFail();
@@ -87,6 +93,10 @@ class _FakeHost extends NativeShellHostApi {
     pageTitles: ['Search', 'Hồ Hoàn Kiếm'],
     fieldFrame: NativeRect(x: 20, y: 86, width: 780, height: 44),
     firstResponderIsSearch: true,
+    scopeTitles: ['All', 'Songs', 'Places'],
+    scopeShown: true,
+    selectedScope: 1,
+    scopeFrame: NativeRect(x: 16, y: 64, width: 370, height: 32),
   );
 
   @override
@@ -382,6 +392,46 @@ void main() {
     ]);
     expect(sent.tabs.last.pages.map((p) => p.largeTitle), [true, null]);
     expect(sent.search?.placeholder, 'Songs, places');
+    expect(sent.search?.scopes, isNull);
+  });
+
+  test('updateNativeChrome sends the scope titles', () async {
+    final host = _FakeHost();
+    await liquidShellIOSWithHost(host).updateNativeChrome(
+      const LiquidNativeChromeConfig(
+        engaged: true,
+        tabs: [LiquidNativeTab(title: 'Search', sfSymbol: '', search: true)],
+        search: LiquidNativeSearchConfig(scopes: ['All', 'Songs', 'Places']),
+      ),
+    );
+    final sent = host.calls.single as NativeChromeConfig;
+    expect(sent.search?.scopes, ['All', 'Songs', 'Places']);
+  });
+
+  test(
+    'setNativeSearchScope reaches the host; a failure is logged once',
+    () async {
+      final logs = captureLogs();
+      final host = _FakeHost();
+      final platform = liquidShellIOSWithHost(host);
+      await platform.setNativeSearchScope(2);
+      expect(host.calls, ['setSearchScope(2)']);
+      host.failure = PlatformException(code: 'gone');
+      await platform.setNativeSearchScope(1);
+      await platform.setNativeSearchScope(0);
+      expect(logs, [
+        'liquid_shell native: setSearchScope failed (gone); falling back',
+      ]);
+    },
+  );
+
+  test('a native scope change arrives as an event', () async {
+    final platform = liquidShellIOSWithHost(_FakeHost());
+    final events = <LiquidNativeEvent>[];
+    final subscription = platform.nativeEvents.listen(events.add);
+    addTearDown(subscription.cancel);
+    expect(await deliver('onSearchScopeChanged', [1]), isTrue);
+    expect(events, [const LiquidNativeSearchScopeChanged(1)]);
   });
 
   test('no search config maps to null', () async {
@@ -435,6 +485,10 @@ void main() {
     final snapshot = await liquidShellIOSWithHost(host).debugSnapshot();
     expect(snapshot.pageTitles, ['Search', 'Hồ Hoàn Kiếm']);
     expect(snapshot.placement, 'stacked');
+    expect(snapshot.scopeTitles, ['All', 'Songs', 'Places']);
+    expect(snapshot.scopeShown, isTrue);
+    expect(snapshot.selectedScope, 1);
+    expect(snapshot.scopeFrame.y, 64);
     expect(host.calls, ['debugSnapshot']);
   });
 

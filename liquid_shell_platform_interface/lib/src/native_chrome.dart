@@ -253,20 +253,31 @@ class LiquidNativePage {
 @immutable
 class LiquidNativeSearchConfig {
   /// Creates the config.
-  const LiquidNativeSearchConfig({this.placeholder});
+  const LiquidNativeSearchConfig({this.placeholder, this.scopes});
 
   /// Placeholder of the empty field; null keeps the system's.
   final String? placeholder;
 
+  /// Titles of the scope bar shown under the active search; null, or fewer
+  /// than two, shows none.
+  final List<String>? scopes;
+
+  /// Field by field, [scopes] by value.
   @override
   bool operator ==(Object other) =>
-      other is LiquidNativeSearchConfig && other.placeholder == placeholder;
+      other is LiquidNativeSearchConfig &&
+      other.placeholder == placeholder &&
+      listEquals(other.scopes, scopes);
 
   @override
-  int get hashCode => placeholder.hashCode;
+  int get hashCode => Object.hash(
+    placeholder,
+    scopes == null ? null : Object.hashAll(scopes!),
+  );
 
   @override
-  String toString() => 'LiquidNativeSearchConfig(placeholder: $placeholder)';
+  String toString() =>
+      'LiquidNativeSearchConfig(placeholder: $placeholder, scopes: $scopes)';
 }
 
 /// Everything the native chrome shows, sent whole on every change.
@@ -513,6 +524,26 @@ final class LiquidNativeSearchActiveChanged extends LiquidNativeEvent {
 
   @override
   String toString() => 'LiquidNativeSearchActiveChanged($active)';
+}
+
+/// The user selected scope [index] in the native scope bar. Only the
+/// user's changes are reported, once each, never the app's own writes.
+final class LiquidNativeSearchScopeChanged extends LiquidNativeEvent {
+  /// Creates the event.
+  const LiquidNativeSearchScopeChanged(this.index);
+
+  /// Index into the config's scope titles.
+  final int index;
+
+  @override
+  bool operator ==(Object other) =>
+      other is LiquidNativeSearchScopeChanged && other.index == index;
+
+  @override
+  int get hashCode => index.hashCode;
+
+  @override
+  String toString() => 'LiquidNativeSearchScopeChanged($index)';
 }
 
 /// The user pressed the keyboard's Search key in the native field.

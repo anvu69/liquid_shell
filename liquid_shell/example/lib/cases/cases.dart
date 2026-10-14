@@ -11,6 +11,7 @@ import 'package:liquid_shell_example/cases/narrow_width.dart';
 import 'package:liquid_shell_example/cases/native_alerts.dart';
 import 'package:liquid_shell_example/cases/native_chrome.dart';
 import 'package:liquid_shell_example/cases/search.dart';
+import 'package:liquid_shell_example/cases/segments.dart';
 import 'package:liquid_shell_example/cases/sidebar_only.dart';
 import 'package:liquid_shell_example/cases/sidebar_slots.dart';
 import 'package:liquid_shell_example/cases/standalone_widgets.dart';
@@ -70,6 +71,15 @@ const kCases = <ExampleCase>[
     subtitle: 'A real search tab: field, scopes, recents, live results',
     drawnByFlutter: null,
     page: SearchCase(),
+  ),
+  (
+    id: 'segments',
+    title: 'Segmented control',
+    subtitle: 'LiquidSegmentedControl at the native frames, over stripes',
+    drawnByFlutter:
+        'LiquidSegmentedControl is a Flutter widget; native draws only the '
+        'search scope bar.',
+    page: SegmentsCase(),
   ),
   (
     id: 'guard',

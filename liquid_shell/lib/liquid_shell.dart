@@ -30,6 +30,8 @@ export 'src/search/scope_bar.dart';
 export 'src/search/search.dart';
 export 'src/search/search_controller.dart'
     show LiquidSearchController, LiquidSearchPhase, LiquidSearchValue;
+export 'src/segmented/segmented_control.dart'
+    show LiquidSegment, LiquidSegmentedControl;
 export 'src/shell/breakpoints.dart';
 export 'src/shell/chrome_builder.dart';
 export 'src/shell/liquid_shell.dart';

@@ -1,3 +1,11 @@
+## 0.1.0-dev.7
+
+- Native search scopes (VK-550): `LiquidNativeSearchConfig.scopes` (the
+  titles, two or more, or null), `setNativeSearchScope(int)` (default does
+  nothing) and the event `LiquidNativeSearchScopeChanged(index)`, a user's
+  change of scope. `LiquidNativeEvent` is sealed: an exhaustive `switch`
+  over it needs the new case.
+
 ## 0.1.0-dev.6
 
 - `dismissNativeSearchKeyboard()`, with a default that does nothing:

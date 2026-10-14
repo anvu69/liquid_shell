@@ -40,6 +40,9 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   /// Dart's text sent while another tab is selected: applied when the
   /// search tab is (spec §7.4).
   private var heldSearchText: String?
+  /// Dart's scope sent while another tab is selected, likewise (spec
+  /// VK-550 §10.2).
+  private var heldSearchScope: Int?
   /// Per destination 0 fixed, 1 sidebar-only, 2 search; plus 1 when there
   /// is a trailing action: a change rebuilds the tabs.
   private var structure: [Int] = []
@@ -90,6 +93,15 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     }
     searchBridge.onSubmit = { [weak self] text in
       self?.send("onSearchSubmitted") { self?.events.onSearchSubmitted(text: text, completion: $0) }
+    }
+    searchBridge.onScope = { [weak self] index in
+      self?.send("onSearchScopeChanged") {
+        self?.events.onSearchScopeChanged(index: Int64(index), completion: $0)
+      }
+      // UIKit keeps the keyboard up on a scope tap (measured, iOS 26.5):
+      // put it away and keep the search, as Flutter's scope bar does
+      // (VK-571).
+      self?.dismissSearchKeyboard()
     }
   }
 
@@ -279,13 +291,15 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       rootLargeTitle: rootLargeTitle)
   }
 
-  /// Placeholder and placement of the search tab (spec §7.2).
+  /// Placeholder, scopes and placement of the search tab (spec §7.2,
+  /// VK-550 §10.1).
   private func applySearch(_ new: NativeChromeConfig) {
     guard let searchIndex, new.tabs.indices.contains(searchIndex),
       let nav = navControllers[searchIndex]
     else { return }
     searchBridge.controller.searchBar.placeholder =
       new.search?.placeholder ?? searchBridge.defaultPlaceholder
+    searchBridge.setScopes(new.search?.scopes)
     nav.rootHost.applySearchStyle(
       searchStyle(rootLargeTitle: new.tabs[searchIndex].pages.first?.largeTitle ?? nil))
   }
@@ -358,6 +372,10 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     if isSearchSelected, let held = heldSearchText {
       heldSearchText = nil
       searchBridge.setText(held)
+    }
+    if isSearchSelected, let held = heldSearchScope {
+      heldSearchScope = nil
+      searchBridge.setScope(held)
     }
   }
 
@@ -609,6 +627,24 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     }
   }
 
+  /// The scope a shell installed after a scene reconnect starts with, as
+  /// `carriedSearchText`: Dart's newest index held for another tab, else
+  /// the bar's (Dart's last write, or the user's last change reported).
+  var carriedSearchScope: Int {
+    heldSearchScope ?? searchBridge.knownScope
+  }
+
+  /// Dart's scope: selected in the scope bar, never reported back; held
+  /// while another tab is selected.
+  func setSearchScope(_ index: Int) {
+    guard isSearchSelected else {
+      heldSearchScope = index
+      return
+    }
+    heldSearchScope = nil
+    searchBridge.setScope(index)
+  }
+
   /// Dart's dismissKeyboard (VK-571): a drag on the results or a scope
   /// tap. The keyboard goes, the search stays active with its text.
   func dismissSearchKeyboard() {
@@ -651,18 +687,25 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   /// The search field's frame in the Flutter view, or zero when the search
   /// tab is not selected or the field is not shown (spec §7.5).
   func currentFieldFrame() -> NativeRect {
-    let zero = NativeRect(x: 0, y: 0, width: 0, height: 0)
     let field = searchBridge.controller.searchBar.searchTextField
-    guard chromeVisible, isSearchSelected, field.window != nil,
+    guard chromeVisible, isSearchSelected, field.window != nil, Self.isDrawn(field),
       let flutterView = flutter.viewIfLoaded
-    else { return zero }
-    var node: UIView? = field
-    while let current = node {
-      if current.isHidden || current.alpha < 0.01 { return zero }
-      node = current.superview
-    }
+    else { return Self.zeroRect }
     let frame = field.convert(field.bounds, to: flutterView)
     return NativeRect(x: frame.minX, y: frame.minY, width: frame.width, height: frame.height)
+  }
+
+  private static let zeroRect = NativeRect(x: 0, y: 0, width: 0, height: 0)
+
+  /// Whether [view] and every view above it are drawn (not hidden, not
+  /// transparent).
+  private static func isDrawn(_ view: UIView) -> Bool {
+    var node: UIView? = view
+    while let current = node {
+      if current.isHidden || current.alpha < 0.01 { return false }
+      node = current.superview
+    }
+    return true
   }
 
   func publishSearchField() {
@@ -674,6 +717,34 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       self.events.onSearchFieldChanged(frame: frame, completion: $0)
     }
   }
+
+  #if DEBUG
+    /// Debug builds: the scope bar's segmented control in the Flutter view,
+    /// or zero when it is not drawn. UIKit places it (iPhone: under the
+    /// status bar; iPad: under the field, spike §1) and keeps it private,
+    /// so it is found in the window by its titles.
+    func currentScopeFrame() -> NativeRect {
+      let bar = searchBridge.controller.searchBar
+      guard chromeVisible, isSearchSelected, bar.showsScopeBar,
+        let titles = bar.scopeButtonTitles, !titles.isEmpty,
+        let root = view.window, let flutterView = flutter.viewIfLoaded
+      else { return Self.zeroRect }
+      guard
+        let control = Self.segmentedControls(in: root).first(where: { control in
+          control.numberOfSegments == titles.count
+            && titles.indices.allSatisfy { control.titleForSegment(at: $0) == titles[$0] }
+            && !control.bounds.isEmpty && Self.isDrawn(control)
+        })
+      else { return Self.zeroRect }
+      let frame = control.convert(control.bounds, to: flutterView)
+      return NativeRect(x: frame.minX, y: frame.minY, width: frame.width, height: frame.height)
+    }
+
+    private static func segmentedControls(in view: UIView) -> [UISegmentedControl] {
+      ((view as? UISegmentedControl).map { [$0] } ?? [])
+        + view.subviews.flatMap { segmentedControls(in: $0) }
+    }
+  #endif
 
   /// Debug builds: the native search and page state (integration tests).
   func debugSnapshot() -> NativeDebugSnapshot {
@@ -695,7 +766,11 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
         placement: placement,
         pageTitles: nav?.viewControllers.map { $0.title ?? "" } ?? [],
         fieldFrame: currentFieldFrame(),
-        firstResponderIsSearch: searchBridge.controller.searchBar.searchTextField.isFirstResponder)
+        firstResponderIsSearch: searchBridge.controller.searchBar.searchTextField.isFirstResponder,
+        scopeTitles: searchBridge.controller.searchBar.scopeButtonTitles ?? [],
+        scopeShown: searchBridge.controller.searchBar.showsScopeBar,
+        selectedScope: Int64(searchBridge.controller.searchBar.selectedScopeButtonIndex),
+        scopeFrame: currentScopeFrame())
     #else
       return .empty
     #endif
@@ -759,6 +834,8 @@ extension NativeDebugSnapshot {
   static var empty: NativeDebugSnapshot {
     NativeDebugSnapshot(
       selectedTab: "", searchActive: false, searchText: "", placement: "", pageTitles: [],
-      fieldFrame: NativeRect(x: 0, y: 0, width: 0, height: 0), firstResponderIsSearch: false)
+      fieldFrame: NativeRect(x: 0, y: 0, width: 0, height: 0), firstResponderIsSearch: false,
+      scopeTitles: [], scopeShown: false, selectedScope: 0,
+      scopeFrame: NativeRect(x: 0, y: 0, width: 0, height: 0))
   }
 }

@@ -724,8 +724,10 @@ void main() {
         ),
       ),
     );
-    await tester.tap(find.text('Places'));
-    await tester.pump();
+    // The segmented control draws each title twice (one per weight): tap
+    // the segment's node.
+    await tester.tap(find.bySemanticsLabel('Places'));
+    await tester.pumpAndSettle();
     expect(controller.scopeIndex, 2);
     expect(
       tester.getSemantics(find.bySemanticsLabel('Places')),
@@ -889,7 +891,9 @@ void main() {
       tester,
     ) async {
       final controller = await typed(tester, scoped: true);
-      await tester.tap(find.text('Songs'));
+      // The segment's node takes the touch (VK-550: the label is drawn
+      // once per weight).
+      await tester.tap(find.bySemanticsLabel('Songs'));
       await tester.pumpAndSettle();
       expect(controller.scopeIndex, 1);
       expectKeyboardDownSearchUp(tester, controller);

@@ -77,7 +77,10 @@ NativeChromeConfig configToNative(LiquidNativeChromeConfig config) =>
       },
       search: switch (config.search) {
         null => null,
-        final search => NativeSearchConfig(placeholder: search.placeholder),
+        final search => NativeSearchConfig(
+          placeholder: search.placeholder,
+          scopes: search.scopes,
+        ),
       },
       tintArgb: config.tintArgb,
       dark: config.dark,

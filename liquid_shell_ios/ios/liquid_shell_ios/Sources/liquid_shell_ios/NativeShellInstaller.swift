@@ -47,6 +47,11 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
   /// changed one it never sends the user's own text back (the one-way
   /// rule), so the new field starts with the old one's.
   private var carriedSearchText: String?
+  /// Likewise the scope (VK-550): the old shell's, or Dart's newest one
+  /// sent while no shell is installed. Dart sends the scope again only
+  /// after a reconnect whose first state report is unchanged: after a
+  /// changed one a resend could undo a user's tap still on its way.
+  private var carriedSearchScope: Int?
 
   init(
     events: NativeShellFlutterApiProtocol,
@@ -172,6 +177,10 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
       carriedSearchText = nil
       tabs.setSearchText(text)
     }
+    if let scope = carriedSearchScope {
+      carriedSearchScope = nil
+      tabs.setSearchScope(scope)
+    }
   }
 
   private func disconnect(_ scene: UIScene?) {
@@ -186,6 +195,7 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
   func sceneDisconnected() {
     if #available(iOS 26.0, *), let old = shell as? NativeTabsController {
       carriedSearchText = old.carriedSearchText
+      carriedSearchScope = old.carriedSearchScope
     }
     shell = nil
     flutter = nil
@@ -236,6 +246,15 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
 
   func setSearchActive(active: Bool) throws {
     if #available(iOS 26.0, *) { tabs?.setSearchActive(active) }
+  }
+
+  func setSearchScope(index: Int64) throws {
+    if #available(iOS 26.0, *), let tabs {
+      tabs.setSearchScope(Int(index))
+    } else {
+      // No shell yet (a scene reconnecting): the next install applies it.
+      carriedSearchScope = Int(index)
+    }
   }
 
   func dismissSearchKeyboard() throws {

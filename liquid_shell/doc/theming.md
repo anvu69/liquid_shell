@@ -26,6 +26,9 @@ All glass reads one `ThemeExtension`, `LiquidGlassTheme`. Without one,
 | `tabForeground` | `#191919` | `#F4F4F4` | unselected tab icons and labels, the trailing circle's icon, unselected sidebar rows |
 | `badgeColor` | `#FF383C` | `#FF4245` | badge capsules in the tab bar and the sidebar |
 | `tabIconSize` | 26 | 26 | tab and trailing-circle icons at text scale 1 (the landscape bar uses 22) |
+| `segmentTrack` | `#767680` @ 0.12 (`#1F767680`) | `#767680` @ 0.24 (`#3D767680`) | the segmented control's track and the search scope bar's |
+| `segmentThumb` | `#FFFFFF` | `#EBEBF5` @ 0.30 (`#4DEBEBF5`) | the segmented control's thumb at rest |
+| `segmentLabelStyle` | 13, w400, black | 13, w400, white | segment labels; the selected one is w500. The app's font family is kept; set `fontFamily` here to change it. In the system font the labels take UIKit's tracking for their size (Flutter does not apply it); any other font keeps its spacing |
 
 Tab colours: the selected tab is `ColorScheme.primary` (the tint the
 native chrome uses too) over a `selectionFill` capsule, and the others are
@@ -48,6 +51,9 @@ Between text scale 1 and 1.6 this also shrinks labels below the size the
 user chose; from 1.6 the cells are icon-only with a large content viewer.
 The pill height never changes, because a shrunk label keeps its line
 height.
+
+The segmented control and its fields are in
+[segmented_control.md](segmented_control.md).
 
 ## A brand theme
 

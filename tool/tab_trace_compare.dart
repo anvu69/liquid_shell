@@ -6,93 +6,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
-/// One check's outcome.
-typedef Check = ({bool pass, String detail});
-
-/// Closed-form step response of a unit-mass spring of damping ratio
-/// [zeta] and period [response], from 0 toward [distance], at [t].
-double springAt(double distance, double zeta, double response, double t) {
-  if (t <= 0) return 0;
-  final w = 2 * math.pi / response;
-  if (zeta < 1) {
-    final wd = w * math.sqrt(1 - zeta * zeta);
-    final e = math.exp(-zeta * w * t);
-    return distance *
-        (1 - e * (math.cos(wd * t) + zeta * w / wd * math.sin(wd * t)));
-  }
-  if (zeta == 1) {
-    return distance * (1 - math.exp(-w * t) * (1 + w * t));
-  }
-  final s = math.sqrt(zeta * zeta - 1);
-  final r1 = -w * (zeta - s);
-  final r2 = -w * (zeta + s);
-  final c2 = r1 / (r2 - r1);
-  final c1 = -1 - c2;
-  return distance * (1 + c1 * math.exp(r1 * t) + c2 * math.exp(r2 * t));
-}
-
-/// Time after which [xs] stays within [tol] of [target]: the time of the
-/// first sample that stays in band. Samples are at [ts] when given (a
-/// trace that never settles gives one [dt] past its last sample), else one
-/// per [dt] from 0.
-double settle(
-  List<double> xs,
-  double target, {
-  double dt = 1 / 60,
-  double tol = 0.5,
-  List<double>? ts,
-}) {
-  var last = -1;
-  for (var i = 0; i < xs.length; i++) {
-    if ((xs[i] - target).abs() > tol) last = i;
-  }
-  if (ts == null) return (last + 1) * dt;
-  return last + 1 < ts.length ? ts[last + 1] : ts.last + dt;
-}
-
-/// The steady lag of a drag [trace] behind the continuous finger ramp, to
-/// compare with [rampLag]: the mean `finger − x` over the middle third
-/// (past the start transient, clear of the end clamp), plus half a frame
-/// of finger travel. Each frame steps the spring toward the finger as
-/// sampled at that frame, which leads the continuous ramp by half a frame
-/// on average (the same correction as `lens_motion_test`'s drag lag).
-double steadyLag(List<Map<String, double>> trace) {
-  final n = trace.length;
-  final middle = trace.sublist(n ~/ 3, n - n ~/ 3);
-  final first = middle.first;
-  final last = middle.last;
-  final span = last['t']! - first['t']!;
-  final speed = (last['finger']! - first['finger']!) / span;
-  final frame = span / (middle.length - 1);
-  final lag =
-      middle.map((s) => s['finger']! - s['x']!).reduce((a, b) => a + b) /
-      middle.length;
-  return lag + speed * frame / 2;
-}
-
-/// How far [xs], moving from [from] toward [to], gets past [to]: 0 when it
-/// never passes it.
-double overshoot(List<double> xs, double from, double to) {
-  final sign = (to - from).sign;
-  return xs.fold(0, (m, x) => math.max(m, (x - to) * sign));
-}
-
-/// Steady lag of a spring following a ramp of [speed].
-double rampLag(double speed, double zeta, double response) =>
-    speed * 2 * zeta / (2 * math.pi / response);
-
-/// [value] against [reference] within [abs] or [rel].
-Check within(double value, double reference, {double? abs, double? rel}) {
-  final tol = abs ?? (rel! * reference.abs());
-  // The epsilon keeps a value exactly on the bound inside it.
-  final ok = (value - reference).abs() <= tol + 1e-9;
-  return (
-    pass: ok,
-    detail:
-        '${value.toStringAsFixed(3)} vs ${reference.toStringAsFixed(3)} '
-        '(±${tol.toStringAsFixed(3)})',
-  );
-}
+import 'trace_math.dart';
 
 /// The reference tap spring sampled at [trace]'s times.
 List<double> _tapReference(
@@ -154,37 +68,6 @@ Check checkTapOvershoot(
   return within(overshoot(xs, from, to), overshoot(ref, from, to), abs: 1);
 }
 
-/// The tap delay that fits [trace] best: the start time of the reference
-/// spring (least squares over the first 0.3 s, searched in 0.5 ms steps
-/// from 0 to 75 ms). Spec §17.4: 25 ms ± 1 frame.
-double fitDelay(
-  List<Map<String, double>> trace, {
-  required double from,
-  required double to,
-  required double zeta,
-  required double response,
-}) {
-  var best = 0.0;
-  var bestError = double.infinity;
-  for (var step = 0; step <= 150; step++) {
-    final delay = step * 0.0005;
-    var error = 0.0;
-    for (final s in trace) {
-      final t = s['t']!;
-      if (t > 0.3) break;
-      final ref = t < delay
-          ? from
-          : from + springAt(to - from, zeta, response, t - delay);
-      error += math.pow(s['x']! - ref, 2);
-    }
-    if (error < bestError) {
-      bestError = error;
-      best = delay;
-    }
-  }
-  return best;
-}
-
 /// The lens rect of a trace [sample] as `[left, top, width, height]`.
 List<double> restRect(Map<String, double> sample) => [
   sample['x']! - sample['w']! / 2,
@@ -215,62 +98,11 @@ List<double> restRect(Map<String, double> sample) => [
   );
 }
 
-/// [got] against [want], every channel within [tolerance] (spec §17.4).
-Check colourCheck(List<double> got, List<double> want, double tolerance) {
-  final worst = [
-    for (var c = 0; c < 3; c++) (got[c] - want[c]).abs(),
-  ].reduce(math.max);
-  return (
-    pass: worst <= tolerance,
-    detail:
-        '${got.map((v) => v.round()).join('/')} vs '
-        '${want.map((v) => v.round()).join('/')} (±${tolerance.round()})',
-  );
-}
-
 /// How far the minimize morph's right edge passes the full pill on an
 /// expand, in points: the deepest negative morph times the right edge's
 /// [travel] (the morph rect is `lerp(pill, minimized, morph)`).
 double morphOvershoot(List<double> morphs, double travel) =>
     -math.min(0, morphs.reduce(math.min)) * travel;
-
-/// [key] of [trace] at [t] seconds after [zero] (default: its first
-/// sample), linear between samples and clamped at the ends.
-double valueAt(
-  List<Map<String, double>> trace,
-  double t,
-  String key, {
-  double? zero,
-}) {
-  final t0 = zero ?? trace.first['t']!;
-  for (var i = 1; i < trace.length; i++) {
-    final a = trace[i - 1];
-    final b = trace[i];
-    final ta = a['t']! - t0;
-    final tb = b['t']! - t0;
-    if (t <= tb) {
-      if (t <= ta) return a[key]!;
-      return a[key]! + (b[key]! - a[key]!) * (t - ta) / (tb - ta);
-    }
-  }
-  return trace.last[key]!;
-}
-
-/// When the finger left: the last touching sample's time (the drivers in
-/// `tab_fidelity_test.dart` lift right after a pumped frame), or the first
-/// sample's time.
-double liftTime(List<Map<String, double>> trace) {
-  final i = liftIndex(trace);
-  return trace[i == 0 ? 0 : i - 1]['t']!;
-}
-
-/// The first sample after the finger left (`touch` 0 after a 1), or 0.
-int liftIndex(List<Map<String, double>> trace) {
-  for (var i = 1; i < trace.length; i++) {
-    if (trace[i - 1]['touch'] == 1 && trace[i]['touch'] == 0) return i;
-  }
-  return 0;
-}
 
 /// Places where the lens, on its way to [to], slows by more than 10 % and
 /// then speeds up again by more than 10 % (+ 30 pt/s of frame jitter): a
@@ -300,25 +132,6 @@ int speedDips(List<Map<String, double>> trace, double to) {
     }
   }
   return dips;
-}
-
-/// What a row compares against.
-enum Kind {
-  /// Independent native data (the research traces, frames or pixels), and
-  /// the Flutter value comes out of the model: it can fail.
-  native('native'),
-
-  /// Native data, but the Flutter value is set to it by a constant: only
-  /// the plumbing can fail.
-  constant('native, constant'),
-
-  /// Flutter against a fitted spring: a bug detector, not native evidence.
-  fit('fit');
-
-  const Kind(this.label);
-
-  /// The table label.
-  final String label;
 }
 
 void main(List<String> args) {
@@ -730,27 +543,15 @@ void main(List<String> args) {
     );
   }
 
-  var failed = 0;
   stdout.writeln('| check | kind | result | detail |\n|---|---|---|---|');
   for (final (kind, name, check) in rows) {
-    if (!check.pass) failed++;
     stdout.writeln(
       '| $name | ${kind.label} | ${check.pass ? 'pass' : 'FAIL'} | '
       '${check.detail} |',
     );
   }
-  final counts = {
-    for (final k in Kind.values) k: rows.where((r) => r.$1 == k).length,
-  };
-  stdout
-    ..writeln(
-      '${counts[Kind.native]} native, ${counts[Kind.constant]} native but '
-      'constant, ${counts[Kind.fit]} against fitted springs',
-    )
-    ..writeln(
-      failed == 0
-          ? '✓ all ${rows.length} checks pass'
-          : '✗ $failed of ${rows.length} failed',
-    );
+  final failed = writeSummary(stdout, [
+    for (final (kind, _, check) in rows) (kind, check.pass),
+  ]);
   exit(failed == 0 ? 0 : 1);
 }

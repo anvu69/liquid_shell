@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
@@ -321,6 +324,98 @@ void main() {
         ),
       );
       expect(base.copyWith(), base);
+    });
+  });
+
+  group('segment tokens (spec VK-550 §6)', () {
+    final colors =
+        (jsonDecode(
+                  File(
+                    '../docs/qa/vk550/native_reference.json',
+                  ).readAsStringSync(),
+                )
+                as Map<String, Object?>)['colors']!
+            as Map<String, Object?>;
+    List<int> rgb(String key) => (colors[key]! as List<Object?>).cast<int>();
+    final tolerance = colors['tolerance']! as int;
+
+    void expectRgb(Color c, List<int> native, String what) {
+      expect((c.r * 255).round(), closeTo(native[0], tolerance), reason: what);
+      expect((c.g * 255).round(), closeTo(native[1], tolerance), reason: what);
+      expect((c.b * 255).round(), closeTo(native[2], tolerance), reason: what);
+    }
+
+    final light = LiquidGlassTheme.fromColorScheme(
+      ColorScheme.fromSeed(seedColor: const Color(0xFF3D5AFE)),
+    );
+    final dark = LiquidGlassTheme.fromColorScheme(
+      ColorScheme.fromSeed(
+        seedColor: const Color(0xFF3D5AFE),
+        brightness: Brightness.dark,
+      ),
+    );
+
+    test('light composites match native', () {
+      const white = Color(0xFFFFFFFF);
+      expectRgb(
+        Color.alphaBlend(light.segmentTrack, white),
+        rgb('lightTrackOverWhite'),
+        'track over white',
+      );
+      expectRgb(light.segmentThumb, rgb('lightThumb'), 'thumb');
+      expectRgb(
+        light.segmentLabelStyle.color!,
+        rgb('lightLabel'),
+        'label',
+      );
+    });
+
+    test('dark composites match native', () {
+      const black = Color(0xFF000000);
+      final track = Color.alphaBlend(dark.segmentTrack, black);
+      expectRgb(track, rgb('darkTrackOverBlack'), 'track over black');
+      expectRgb(
+        Color.alphaBlend(dark.segmentThumb, track),
+        rgb('darkThumbOverTrack'),
+        'thumb over track',
+      );
+      expectRgb(dark.segmentLabelStyle.color!, rgb('darkLabel'), 'label');
+    });
+
+    test('label style is 13 pt regular with the native line height', () {
+      for (final t in [light, dark]) {
+        expect(t.segmentLabelStyle.fontSize, 13);
+        expect(t.segmentLabelStyle.fontWeight, FontWeight.w400);
+        expect(t.segmentLabelStyle.height, closeTo(15.67 / 13, 1e-9));
+      }
+    });
+
+    test('exact spec values', () {
+      expect(light.segmentTrack, const Color(0x1F767680));
+      expect(light.segmentThumb, const Color(0xFFFFFFFF));
+      expect(dark.segmentTrack, const Color(0x3D767680));
+      expect(dark.segmentThumb, const Color(0x4DEBEBF5));
+    });
+
+    test('copyWith, lerp, == and hashCode carry them', () {
+      final a = LiquidGlassTheme.fromColorScheme(const ColorScheme.light());
+      final b = a.copyWith(
+        segmentTrack: const Color(0xFF00FF00),
+        segmentThumb: const Color(0xFF0000FF),
+        segmentLabelStyle: const TextStyle(fontSize: 20),
+      );
+      expect(b.segmentTrack, const Color(0xFF00FF00));
+      expect(b.segmentThumb, const Color(0xFF0000FF));
+      expect(b.segmentLabelStyle.fontSize, 20);
+      expect(b, isNot(a));
+      expect(b.hashCode, isNot(a.hashCode));
+      expect(a.lerp(b, 1).segmentTrack, b.segmentTrack);
+      expect(
+        a.lerp(b, 0.5).segmentThumb,
+        Color.lerp(a.segmentThumb, b.segmentThumb, 0.5),
+      );
+      expect(a.lerp(b, 1).segmentLabelStyle.fontSize, 20);
+      expect(a.copyWith(), a);
     });
   });
 }

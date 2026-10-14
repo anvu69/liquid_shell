@@ -42,6 +42,13 @@ final class ShellSearch implements SearchDriver {
   // The next native entry sends the text even when empty: native may
   // still show another one (a hot restart, a reconnected scene).
   bool _replay = true;
+  // Whether native's scope bar has the controller's scope: the last config
+  // showed the search tab natively, and no reconnect came since. Unlike
+  // [_sentShown], a changed state report keeps it: it comes from a live
+  // scope bar, or from a new one the plugin's installer gave the old one's
+  // scope, and a resend could undo a user's tap still on its way (VK-550
+  // Task 10 review M1).
+  bool _scopeSent = false;
   // The controller's text came from the user's typing in the field (not
   // from the app): native has it, unless its scene was rebuilt.
   bool _userText = false;
@@ -76,6 +83,7 @@ final class ShellSearch implements SearchDriver {
   set native(bool value) {
     if (!value) {
       _sentShown = false;
+      _scopeSent = false;
       _replay = true;
       final controller = _controller;
       if (_native && controller != null) _writeField(controller.text);
@@ -127,6 +135,9 @@ final class ShellSearch implements SearchDriver {
       if (native && selected && next.text != previous.text) {
         claim()?.setSearchText(next.text);
       }
+      if (native && selected && next.scopeIndex != previous.scopeIndex) {
+        claim()?.setSearchScope(next.scopeIndex);
+      }
     }
     // A new controller's text is the app's.
     _userText = false;
@@ -146,9 +157,13 @@ final class ShellSearch implements SearchDriver {
   /// text to the new one natively.
   ///
   /// A reconnect also ends the active state: the new field has no focus.
+  /// Only a reconnect sends the scope again (to the new scope bar): a
+  /// changed state keeps the scope natively, as the installer keeps the
+  /// text.
   void replay({required bool reconnect}) {
     if (reconnect) {
       _syncInactive = true;
+      _scopeSent = false;
       final controller = _controller;
       if (controller != null && controller.isActive) {
         applySearchEdit(controller, controller.value.copyWith(active: false));
@@ -205,6 +220,22 @@ final class ShellSearch implements SearchDriver {
         }
       case LiquidNativeSearchSubmitted(:final text):
         if (selected) _config?.onSubmitted?.call(text);
+      case LiquidNativeSearchScopeChanged(:final index):
+        // Checked at the boundary: an index from the platform, which may be
+        // past the titles when they changed while a native tap was in
+        // flight. Applied as the field's own edit, so it never goes back
+        // to native.
+        final count = _config?.scopes?.length ?? 0;
+        if (!selected ||
+            index < 0 ||
+            index >= count ||
+            index == controller.scopeIndex) {
+          return;
+        }
+        applySearchEdit(
+          controller,
+          controller.value.copyWith(scopeIndex: index),
+        );
       case LiquidNativeSearchFieldChanged(:final frame):
         if (frame != field) {
           field = frame;
@@ -223,6 +254,8 @@ final class ShellSearch implements SearchDriver {
     final shown = selected && native;
     final entered = shown && !_sentShown;
     _sentShown = shown;
+    final scopeEntered = shown && !_scopeSent;
+    _scopeSent = shown;
     final left = !selected && _sentSelected;
     _sentSelected = selected;
     if (controller == null) return;
@@ -230,6 +263,7 @@ final class ShellSearch implements SearchDriver {
       _replay = false;
       claim()?.setSearchText(controller.text);
     }
+    if (scopeEntered) claim()?.setSearchScope(controller.scopeIndex);
     if (entered && _syncInactive) {
       _syncInactive = false;
       if (!controller.isActive) claim()?.setSearchActive(active: false);
@@ -333,6 +367,14 @@ final class ShellSearch implements SearchDriver {
     } else {
       _writeField(text);
     }
+  }
+
+  /// Natively, while the search tab is shown, the native scope bar follows
+  /// (spec VK-550 §10.2); otherwise the entry sends it ([afterConfigSent]).
+  /// The Flutter scope bar rebuilds from the controller.
+  @override
+  void scopeSetByApp(int index) {
+    if (native && selected) claim()?.setSearchScope(index);
   }
 
   // --- the Flutter field (fallback) --------------------------------------

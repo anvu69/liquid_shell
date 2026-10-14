@@ -1,3 +1,66 @@
+## 0.1.0-dev.7
+
+- **`LiquidSegmentedControl` (VK-550).** A public segmented control after
+  iOS 26's `UISegmentedControl`: a flat 32 pt track centred in a 44 pt
+  box, a white thumb, and a liquid lens that lifts under the finger,
+  follows a drag across segments, and lands with a wobble (a tap commits
+  on release; one selection click per segment crossed while dragging).
+  Controlled and text-only: `segments` (`LiquidSegment(label, enabled,
+  semanticLabel)`, two or more), `selectedIndex`, `onChanged` (null
+  disables the control), `expand` (fill the width, or size to the labels)
+  and `semanticLabel`. Colours and label style come from three new
+  `LiquidGlassTheme` fields: `segmentTrack`, `segmentThumb` and
+  `segmentLabelStyle`. Text scale to x2, RTL, reduce motion and the
+  large content viewer are handled. See `doc/segmented_control.md`.
+- **Search scopes (VK-550).** `LiquidSearch.scopes` takes the scope titles
+  (two or more, or null). `LiquidSearchScopeBar.scopes` is now optional:
+  null reads the shell's `LiquidSearch.scopes`; when both are given they
+  must be equal (debug assert). An app write of
+  `LiquidSearchController.scopeIndex` now reaches the shell, so the native
+  scope bar can follow it. `LiquidShellScopeData.nativeSearchScopes` is
+  true while UIKit draws the scope bar, and the new
+  `LiquidShellScopeData.searchScopes` holds the shell's
+  `LiquidSearch.scopes` (null without scopes or a shell search). See
+  `doc/search.md`.
+- **Native scope bar on iOS 26+.** With native chrome and
+  `LiquidSearch.scopes`, the scope bar is UIKit's own (`.manual`
+  activation, shown while the search is active, hidden when it ends). It
+  sits at the top on an iPhone and under the field on an iPad.
+  `LiquidSearchScopeBar` builds nothing there. A tap on a scope selects
+  it and puts the keyboard away; the search stays active.
+- **Platform interface.** `LiquidNativeEvent` is sealed and gains a case,
+  `LiquidNativeSearchScopeChanged`: an exhaustive `switch` over it needs
+  the new case (as in dev.5, sealed, add the new cases).
+  `LiquidNativeSearchConfig.scopes` and `setNativeSearchScope` are new.
+- **Known limits.** In `expand` mode below 44 pt per segment the hit
+  targets follow the segment width. An intrinsic "A | B | C" is 132 pt
+  against native's 96 (the 44 pt minimum, owner Q-C). The landing wobble
+  matches native's `flick` capture in peaks and settle time, not frame by
+  frame (Q-E). On five segments a tap over three or four segments
+  overshoots more than native's (up to 5.6 pt against 4.3); native's lens
+  bends the labels it passes, these stay above it.
+- **Behaviour changes.**
+  - `LiquidSearchScopeBar` is drawn by `LiquidSegmentedControl`: a flat
+    track with a white thumb and a liquid lens, as iOS 26's
+    `UISegmentedControl`, instead of a glass pill with a
+    `primaryContainer` chip and an ink ripple. Its height is unchanged
+    (44 pt).
+  - Segment labels keep your app's font family (`ThemeData.fontFamily`,
+    read from `textTheme.labelLarge`); size and weights follow
+    `UISegmentedControl` (13 pt, w400 / w500 when selected). Set
+    `LiquidGlassTheme.segmentLabelStyle.fontFamily` to choose another.
+    In the system font on iOS and macOS (no family, or SF Pro) the labels
+    take SF Pro's tracking for the drawn size, as UIKit does (−0.08 pt at
+    13 pt); an app's own font keeps its spacing.
+  - `LiquidSearchScopeBar.scopes` changed from `List<String>` to
+    `List<String>?`. Every constructor call still compiles; only code that
+    reads `bar.scopes` as non-null needs a `!`. Allowed before 1.0.
+  - **Widget tests:** each segment's title is painted twice (the normal
+    label and the copy under the lens), but only the normal one is a
+    `Text`, so `find.text('Songs')` still finds one widget. Prefer
+    tapping a segment through its node, `find.bySemanticsLabel('Songs')`:
+    the labels themselves ignore pointers.
+
 ## 0.1.0-dev.6
 
 - **Tab bar fidelity (VK-503).** The Flutter tab bar matches iOS 26.5:

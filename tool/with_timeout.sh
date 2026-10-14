@@ -27,10 +27,10 @@ set +m
 # Stops the whole group: SIGNAL first, SIGKILL after a 5 s grace, then
 # exits with CODE.
 stop() {
-  local signal=$1 code=$2 i
+  local signal=$1 code=$2
   trap - INT TERM
   kill "-$signal" -- "-$pid" 2>/dev/null
-  for i in 1 2 3 4 5; do
+  for _ in 1 2 3 4 5; do
     kill -0 -- "-$pid" 2>/dev/null || break
     sleep 1
   done

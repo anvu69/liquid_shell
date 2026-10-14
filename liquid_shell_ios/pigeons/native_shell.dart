@@ -94,9 +94,13 @@ class NativePage {
 
 /// The search tab's field.
 class NativeSearchConfig {
-  NativeSearchConfig({this.placeholder});
+  NativeSearchConfig({this.placeholder, this.scopes});
 
   String? placeholder;
+
+  /// The scope bar's titles, shown while the search is active; null, or
+  /// fewer than two, shows none.
+  List<String>? scopes;
 }
 
 /// A rectangle in the Flutter view's coordinates (points).
@@ -124,6 +128,10 @@ class NativeDebugSnapshot {
     required this.pageTitles,
     required this.fieldFrame,
     required this.firstResponderIsSearch,
+    required this.scopeTitles,
+    required this.scopeShown,
+    required this.selectedScope,
+    required this.scopeFrame,
   });
 
   /// The selected `UITab`'s identifier ("destination<i>", or "" when none).
@@ -138,6 +146,18 @@ class NativeDebugSnapshot {
   List<String> pageTitles;
   NativeRect fieldFrame;
   bool firstResponderIsSearch;
+
+  /// The search bar's `scopeButtonTitles` (empty when none).
+  List<String> scopeTitles;
+
+  /// Whether the scope bar is shown (`showsScopeBar`).
+  bool scopeShown;
+
+  /// The search bar's `selectedScopeButtonIndex`.
+  int selectedScope;
+
+  /// The scope bar's frame in the Flutter view; zero when it is not shown.
+  NativeRect scopeFrame;
 }
 
 /// The whole chrome. Applied in order: tabs, selection, footer, tint,
@@ -208,6 +228,9 @@ abstract class NativeShellHostApi {
   /// Presents or dismisses the search; dismissing keeps the text.
   void setSearchActive(bool active);
 
+  /// Selects scope [index] (clamped to the titles); never reported back.
+  void setSearchScope(int index);
+
   /// Puts the search field's keyboard away: the field resigns first
   /// responder, the search stays active and keeps its text.
   void dismissSearchKeyboard();
@@ -237,6 +260,9 @@ abstract class NativeShellFlutterApi {
   void onSearchActiveChanged(bool active);
 
   void onSearchSubmitted(String text);
+
+  /// The user selected scope [index]; reported once, on lift.
+  void onSearchScopeChanged(int index);
 
   void onSearchFieldChanged(NativeRect frame);
 

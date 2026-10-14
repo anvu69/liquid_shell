@@ -31,7 +31,7 @@ abstract final class LiquidOptics {
   static const int firstIndex = 2;
 
   /// Number of floats [liquidUniforms] returns.
-  static const int floatCount = 25;
+  static const int floatCount = 26;
 }
 
 /// What the shader needs besides the geometry, from `LiquidGlassTheme`.
@@ -47,6 +47,8 @@ class LiquidOpticsParams {
     this.bezel,
     this.rimWidth,
     this.veilFalloff = 0,
+    this.saturation,
+    this.squeeze = 0,
   });
 
   /// The liquid fields of [theme]; the rim uses `rimHighlight`.
@@ -90,6 +92,19 @@ class LiquidOpticsParams {
   /// VK-503 §7.2, Task 16 part B).
   final double veilFalloff;
 
+  /// Vibrancy override; null uses [LiquidOptics.saturation]. The segment
+  /// lens keeps the page's colours (spec VK-550 §7).
+  final double? saturation;
+
+  /// How much farther from the shape's spine (its centre line) the page is
+  /// read, as a share of the distance, out to the edge: 0.22 shows the page
+  /// under the glass at 1 / 1.22 of its size across a capsule's height,
+  /// and its edge reads the page 0.22 × the radius beyond it. 0 (the
+  /// default, every surface but the segment lens) reads it as before. The
+  /// segment lens's (spec VK-550 §7): native's squeezes the page to about
+  /// 0.8.
+  final double squeeze;
+
   @override
   bool operator ==(Object other) =>
       other is LiquidOpticsParams &&
@@ -100,7 +115,9 @@ class LiquidOpticsParams {
       other.blurSigma == blurSigma &&
       other.bezel == bezel &&
       other.rimWidth == rimWidth &&
-      other.veilFalloff == veilFalloff;
+      other.veilFalloff == veilFalloff &&
+      other.saturation == saturation &&
+      other.squeeze == squeeze;
 
   @override
   int get hashCode => Object.hash(
@@ -112,10 +129,12 @@ class LiquidOpticsParams {
     bezel,
     rimWidth,
     veilFalloff,
+    saturation,
+    squeeze,
   );
 }
 
-/// The floats for shader indices 2–26 (spec §4.2), in pass pixels.
+/// The floats for shader indices 2–27 (spec §4.2), in pass pixels.
 ///
 /// [rect] is the glass in pass pixels and [radii] its drawn corners in
 /// logical pixels. [scale] is pass pixels per logical pixel, and [pass] the
@@ -173,8 +192,9 @@ Float32List liquidUniforms({
     LiquidOptics.light.dx,
     LiquidOptics.light.dy,
     (params.rimWidth ?? LiquidOptics.rimWidth) * scale,
-    LiquidOptics.saturation,
+    params.saturation ?? LiquidOptics.saturation,
     params.veilFalloff.clamp(0.0, 1.0),
+    math.max(0, params.squeeze),
   ]);
 }
 

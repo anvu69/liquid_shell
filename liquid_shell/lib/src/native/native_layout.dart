@@ -146,6 +146,7 @@ LiquidNativeChromeConfig nativeConfigFor({
   required bool hidden,
   required bool interactive,
   String? searchPlaceholder,
+  List<String>? searchScopes,
   Map<int, List<LiquidNativePage>> pageStacks = const {},
 }) {
   final searchIndex = searchIndexOf(destinations);
@@ -184,7 +185,10 @@ LiquidNativeChromeConfig nativeConfigFor({
     interactive: interactive,
     search: searchIndex == null
         ? null
-        : LiquidNativeSearchConfig(placeholder: searchPlaceholder),
+        : LiquidNativeSearchConfig(
+            placeholder: searchPlaceholder,
+            scopes: searchScopes,
+          ),
   );
 }
 

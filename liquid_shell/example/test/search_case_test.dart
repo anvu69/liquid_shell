@@ -3,6 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell_example/cases/search.dart';
 import 'package:liquid_shell_example/support/search_data.dart';
+import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
+
+import 'support/installed_native.dart';
 
 Future<void> _pump(
   WidgetTester tester, {
@@ -25,6 +28,13 @@ Future<void> _openSearch(WidgetTester tester) async {
   await tester.tap(find.bySemanticsLabel('Search'));
   await tester.pumpAndSettle();
 }
+
+/// The case's search controller, as the shell holds it.
+LiquidSearchController _controller(WidgetTester tester) =>
+    tester.widget<LiquidShell>(find.byType(LiquidShell)).search!.controller;
+
+TextButton _reset(WidgetTester tester) =>
+    tester.widget<TextButton>(find.byKey(kResetScopeKey));
 
 void main() {
   group('data', () {
@@ -254,6 +264,58 @@ void main() {
       expect(find.text('Nồng nàn Hà Nội'), findsOneWidget);
     });
 
+    // Spec VK-550 §11: the shell's scopes, drawn by the liquid control.
+    testWidgets('the case gives LiquidSearch its scopes; the page draws them '
+        'with LiquidSegmentedControl', (tester) async {
+      await _pump(tester);
+      final shell = tester.widget<LiquidShell>(find.byType(LiquidShell));
+      expect(shell.search!.scopes, kSearchScopes);
+      await _openSearch(tester);
+      await tester.tap(find.byType(TextField));
+      await tester.pumpAndSettle();
+      final control = find.descendant(
+        of: find.byType(LiquidSearchScopeBar),
+        matching: find.byType(LiquidSegmentedControl),
+      );
+      expect(control, findsOneWidget);
+      expect(
+        [
+          for (final s
+              in tester.widget<LiquidSegmentedControl>(control).segments)
+            s.label,
+        ],
+        kSearchScopes,
+      );
+    });
+
+    // Spec VK-550 §14.3: the app's own write of the scope.
+    testWidgets('Reset scope writes 0 from code; it is off at 0', (
+      tester,
+    ) async {
+      await _pump(tester);
+      await _openSearch(tester);
+      await tester.tap(find.byType(TextField));
+      await tester.enterText(find.byType(TextField), 'ha noi');
+      await tester.pumpAndSettle();
+      expect(_reset(tester).onPressed, isNull, reason: 'All already');
+      final bar = find.byType(LiquidSegmentedControl);
+      expect(
+        tester.getRect(find.byKey(kResetScopeKey)).top,
+        tester.getRect(bar).bottom + 16,
+        reason: 'under the scope bar',
+      );
+
+      await tester.tap(find.bySemanticsLabel('Songs'));
+      await tester.pumpAndSettle();
+      expect(find.text('Hồ Hoàn Kiếm'), findsNothing);
+      await tester.tap(find.byKey(kResetScopeKey));
+      await tester.pumpAndSettle();
+      expect(_controller(tester).scopeIndex, 0);
+      expect(tester.widget<LiquidSegmentedControl>(bar).selectedIndex, 0);
+      expect(find.text('Hồ Hoàn Kiếm'), findsOneWidget);
+      expect(_reset(tester).onPressed, isNull);
+    });
+
     testWidgets('the query is kept across tab switches', (tester) async {
       await _pump(tester);
       await _openSearch(tester);
@@ -296,5 +358,24 @@ void main() {
         expect(find.byType(Chip), guarded ? findsOneWidget : findsNothing);
       });
     }
+  });
+
+  // Task 10 review M7: natively UIKit draws the scope bar above the list,
+  // so the page leaves no room for Flutter's.
+  group('SearchCase (native chrome, iOS 26)', () {
+    testWidgets('no Flutter scope bar and no gap above the results', (
+      tester,
+    ) async {
+      final native = installNative();
+      await _pump(tester);
+      native.emit(const LiquidNativeDestinationTapped(2));
+      await tester.pumpAndSettle();
+      _controller(tester).text = 'ha noi';
+      await tester.pumpAndSettle();
+      expect(find.byType(LiquidSegmentedControl), findsNothing);
+      final reset = find.byKey(kResetScopeKey);
+      final padding = LiquidShellScope.contentPaddingOf(tester.element(reset));
+      expect(tester.getRect(reset).top, padding.top, reason: 'the first row');
+    });
   });
 }

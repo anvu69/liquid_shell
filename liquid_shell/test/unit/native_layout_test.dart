@@ -330,6 +330,24 @@ void main() {
       expect(config.tabs.first.pages, isEmpty);
       expect(config.tabs.last.pages.map((p) => p.title), ['Search', 'Hồ']);
       expect(config.search?.placeholder, 'Songs, places');
+      expect(config.search?.scopes, isNull);
+    });
+
+    test('nativeConfigFor carries the scopes (spec VK-550 §10.2)', () {
+      final config = nativeConfigFor(
+        engaged: true,
+        destinations: const [home, search],
+        selectedIndex: 1,
+        trailing: null,
+        footer: null,
+        tint: const Color(0xFF3D5AFE),
+        dark: false,
+        rtl: false,
+        hidden: false,
+        interactive: true,
+        searchScopes: const ['All', 'Songs', 'Places'],
+      );
+      expect(config.search?.scopes, ['All', 'Songs', 'Places']);
     });
 
     test('no search destination: no search config', () {

@@ -437,6 +437,118 @@ extension SearchUITests {
   }
 }
 
+/// VK-550: UIKit's scope bar while the search is active (spec VK-550 §10,
+/// §14.3), at the top on an iPhone and under the risen field on an iPad.
+/// Real touches change Flutter's results: a tap on "Songs" leaves only
+/// songs, and a drag from "Songs" to "Places" commits "Places" on release.
+/// Turned to landscape, the bar stays over the results (Task 10 review;
+/// iPadOS turns a resizable app only with the device, so the iPad's
+/// rotation is checked here rather than in native_search_test).
+extension SearchUITests {
+  /// Polls [condition] until it holds or [timeout] passes: UIKit animates a
+  /// rotation over several passes, which a loaded runner stretches.
+  fileprivate func wait(
+    timeout: TimeInterval = 10, until condition: () -> Bool
+  ) -> Bool {
+    let deadline = Date().addingTimeInterval(timeout)
+    repeat {
+      if condition() { return true }
+      RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+    } while Date() < deadline
+    return condition()
+  }
+
+  func testTheNativeScopeBar() {
+    let app = launch()
+    let tab = searchTabButton(app)
+    XCTAssertTrue(tab.waitForExistence(timeout: timeout))
+    tab.tap()
+    let field = app.searchFields.firstMatch
+    XCTAssertTrue(field.waitForExistence(timeout: 10), "the native field")
+    field.tap()
+    XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 30), "the keyboard")
+    field.typeText("pho")
+    let song = flutterRow(app, "Thành phố buồn")
+    let place = flutterRow(app, "Phố cổ Hà Nội")
+    XCTAssertTrue(song.waitForExistence(timeout: 10), "All: a song")
+    XCTAssertTrue(place.exists, "All: a place")
+
+    let scopes = app.segmentedControls.firstMatch
+    XCTAssertTrue(scopes.waitForExistence(timeout: 10), "UIKit's scope bar")
+    if UIDevice.current.userInterfaceIdiom == .pad {
+      XCTAssertGreaterThanOrEqual(
+        scopes.frame.minY, field.frame.maxY - 1, "under the field \(field.frame): \(scopes.frame)")
+    } else {
+      XCTAssertLessThan(scopes.frame.minY, 120, "at the top: \(scopes.frame)")
+    }
+
+    let songs = scopes.buttons["Songs"]
+    let places = scopes.buttons["Places"]
+    songs.tap()
+    XCTAssertTrue(place.waitForNonExistence(timeout: 10), "Songs: no place")
+    XCTAssertTrue(song.exists, "Songs: the song")
+
+    songs.press(forDuration: 0.3, thenDragTo: places)
+    XCTAssertTrue(song.waitForNonExistence(timeout: 10), "Places: no song")
+    XCTAssertTrue(place.waitForExistence(timeout: 10), "Places: the place")
+    XCTAssertTrue(places.isSelected, "the bar shows Places")
+
+    addTeardownBlock { XCUIDevice.shared.orientation = .portrait }
+    XCUIDevice.shared.orientation = .landscapeLeft
+    XCTAssertTrue(wait { app.frame.width > app.frame.height }, "landscape: \(app.frame)")
+    XCTAssertTrue(
+      wait { scopes.exists && place.exists && place.frame.minY >= scopes.frame.maxY },
+      "landscape: the results under the bar \(scopes.frame): \(place.frame)")
+    if UIDevice.current.userInterfaceIdiom == .pad {
+      XCTAssertGreaterThanOrEqual(
+        scopes.frame.minY, field.frame.maxY - 1,
+        "landscape: under the field \(field.frame): \(scopes.frame)")
+    }
+    XCTAssertTrue(places.isSelected, "landscape: still Places")
+  }
+
+  /// The app's own write (spec VK-550 §14.3): the example's "Reset scope"
+  /// sets `scopeIndex = 0`. UIKit's bar follows, and nothing comes back:
+  /// a report of the old scope would put the results back on Songs.
+  func testTheAppsResetScopeMovesTheNativeBarWithoutAReport() {
+    let app = launch()
+    let tab = searchTabButton(app)
+    XCTAssertTrue(tab.waitForExistence(timeout: timeout))
+    tab.tap()
+    let field = app.searchFields.firstMatch
+    XCTAssertTrue(field.waitForExistence(timeout: 10), "the native field")
+    field.tap()
+    XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 30), "the keyboard")
+    field.typeText("pho")
+    let song = flutterRow(app, "Thành phố buồn")
+    let place = flutterRow(app, "Phố cổ Hà Nội")
+    XCTAssertTrue(song.waitForExistence(timeout: 10), "All: a song")
+    XCTAssertTrue(place.exists, "All: a place")
+
+    let scopes = app.segmentedControls.firstMatch
+    XCTAssertTrue(scopes.waitForExistence(timeout: 10), "UIKit's scope bar")
+    let all = scopes.buttons["All"]
+    let songs = scopes.buttons["Songs"]
+    songs.tap()
+    XCTAssertTrue(place.waitForNonExistence(timeout: 10), "Songs: no place")
+
+    let reset = app.buttons["Reset scope"]
+    XCTAssertTrue(reset.waitForExistence(timeout: 10), "the app's Reset scope")
+    XCTAssertTrue(reset.isEnabled, "Songs: something to reset")
+    reset.tap()
+    XCTAssertTrue(wait { all.isSelected }, "the native bar follows: All")
+    XCTAssertTrue(place.waitForExistence(timeout: 10), "All: the place again")
+    XCTAssertTrue(song.exists, "All: the song")
+    // A report back would land within a second.
+    RunLoop.current.run(until: Date().addingTimeInterval(1))
+    XCTAssertTrue(all.isSelected, "still All")
+    XCTAssertFalse(songs.isSelected, "not Songs")
+    XCTAssertTrue(place.exists, "still All's results")
+    XCTAssertFalse(reset.isEnabled, "nothing left to reset")
+    XCTAssertTrue(scopes.exists, "the search is still active")
+  }
+}
+
 /// VK-567: the search case pushed above the case list, as a person opens
 /// it (a shell that is itself a pushed page), its search inactive. As on
 /// iOS the left-edge swipe pops the selected tab's top page, in Home (a

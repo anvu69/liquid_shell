@@ -5,11 +5,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/semantics.dart';
-import 'package:flutter/services.dart';
 import 'package:liquid_shell/src/chrome/fit_label.dart';
 import 'package:liquid_shell/src/chrome/large_content_viewer.dart';
+import 'package:liquid_shell/src/chrome/lens_clip.dart';
 import 'package:liquid_shell/src/chrome/lens_gesture.dart';
 import 'package:liquid_shell/src/chrome/lens_motion.dart';
+import 'package:liquid_shell/src/chrome/lens_ticker.dart';
+import 'package:liquid_shell/src/chrome/lens_track.dart';
 import 'package:liquid_shell/src/chrome/tab_bar.dart' show LiquidActionCircle;
 import 'package:liquid_shell/src/chrome/tab_geometry.dart';
 import 'package:liquid_shell/src/chrome/tab_springs.dart';
@@ -143,10 +145,16 @@ class _GlassTabBarState extends State<GlassTabBar>
     with SingleTickerProviderStateMixin {
   LensMotion? _motion;
 
-  /// Created on the first touch: a bar nobody touches never makes one, and
-  /// `dispose` must not create it (no ancestor lookups there).
-  Ticker? _ticker;
-  Duration _last = Duration.zero;
+  /// The frame loop of the lens and the minimize; it makes its ticker on
+  /// the first kick, so a bar nobody touches never makes one.
+  late final LensTicker _ticker = LensTicker(
+    vsync: this,
+    motion: () => _motion,
+    selected: () => _slotOf(widget.selectedIndex),
+    onFrame: () => setState(_dropRingWhenCollapsed),
+    extra: _minimize.advance,
+    trace: _trace,
+  );
 
   /// The group a standalone bar opens, so the lens samples the page and
   /// not the pill (spec §7.2). One key for the bar's life.
@@ -199,14 +207,23 @@ class _GlassTabBarState extends State<GlassTabBar>
       _minimize
         ..reduceMotion = MediaQuery.disableAnimationsOf(context)
         ..set(widget.minimized, delayed: widget.collapseDelay);
-      _kick();
+      // Reduce motion jumps: this build already draws the circle.
+      _dropRingWhenCollapsed();
+      _ticker.kick();
     }
+  }
+
+  /// The slots' focus nodes leave with the slots (the circle replaces them
+  /// past the morph's midpoint) and do not report the loss: no ring is
+  /// left for the expand to bring back.
+  void _dropRingWhenCollapsed() {
+    if (_morph >= 0.5) _focusedSlot = null;
   }
 
   @override
   void dispose() {
     _ownTarget?.dispose();
-    _ticker?.dispose();
+    _ticker.dispose();
     _collapsedLit.dispose();
     super.dispose();
   }
@@ -229,87 +246,29 @@ class _GlassTabBarState extends State<GlassTabBar>
     final m = (_motion ??= LensMotion(geometry: g, selected: selected))
       ..reduceMotion = MediaQuery.disableAnimationsOf(context)
       ..geometry = g;
-    if (m.pending != null) {
-      if (selected == m.pending) m.accept();
-    } else if (selected != m.committed && !m.interacting) {
-      m.show(selected);
-    }
+    // The tab profile jumps (no programmatic spring): nothing to tick.
+    if (m.follow(selected)) _ticker.kick();
     return m;
   }
 
-  void _kick() {
-    if (!mounted) return;
-    final ticker = _ticker ??= createTicker(_onTick);
-    if (ticker.isActive) return;
-    _last = Duration.zero;
-    unawaited(_start(ticker));
-  }
-
-  // A future of our own to hand to `unawaited`: newer SDKs mark
-  // `Ticker.start` `@awaitNotRequired` (unnecessary_unawaited) while 3.44
-  // still asks for it (discarded_futures).
-  // The future ends when the ticker stops; nothing waits for it.
-  static Future<void> _start(Ticker ticker) async {
-    await ticker.start();
-  }
-
-  void _onTick(Duration elapsed) {
-    // Wall time, as Core Animation: a long frame moves the lens on. The
-    // springs cap one step at SpringValue.maxAdvance (VK-503 Task 16: a
-    // 1/30 s cap left the lens 10 ms behind after a 44 ms first frame).
-    final dt = ((elapsed - _last).inMicroseconds / 1e6).clamp(
-      0.0,
-      SpringValue.maxAdvance,
-    );
-    _last = elapsed;
-    final minimizing = _minimize.advance(dt);
-    final m = _motion;
-    var moving = m != null && m.advance(dt);
-    if (m != null) {
-      for (final _ in m.takeCrossings()) {
-        // Spec §9 / Q6: one selection click per slot crossing while
-        // dragging.
-        unawaited(HapticFeedback.selectionClick());
-      }
-      if (!moving) {
-        final selected = _slotOf(widget.selectedIndex);
-        if (m.pending != null && m.pending != selected) {
-          // The app did not adopt the commit (spec §8.7).
-          m.returnTo(selected);
-          moving = true;
-        } else {
-          m.accept();
-        }
-      }
-    }
-    if (!moving && !minimizing) _ticker?.stop();
+  /// [debugTabTrace]'s sample: the global lens centre and the frame's
+  /// scalars, once per tick.
+  void _trace(Duration elapsed, LensFrame f) {
     final trace = debugTabTrace;
-    if (trace != null && m != null && mounted) {
-      final box = context.findRenderObject() as RenderBox?;
-      final f = m.frame;
-      final centre = box == null
-          ? f.lens.center
-          : box.localToGlobal(f.lens.center);
-      trace({
-        't': elapsed.inMicroseconds / 1e6,
-        'x': centre.dx,
-        'y': centre.dy,
-        'w': f.lens.width,
-        'h': f.lens.height,
-        'engage': f.engage,
-        'scale': f.pillScale,
-        'glow': f.glowOpacity,
-        'glowD': f.glowDiameter,
-        'pop': f.popScale,
-        'morph': _minimize.value,
-      });
-    }
-    setState(() {});
+    if (trace == null || !mounted) return;
+    trace({
+      ...lensTraceSample(context, elapsed, f),
+      'scale': f.pillScale,
+      'glow': f.glowOpacity,
+      'glowD': f.glowDiameter,
+      'pop': f.popScale,
+      'morph': _minimize.value,
+    });
   }
 
   void _down(Offset p) {
     _motion?.down(p);
-    _kick();
+    _ticker.kick();
   }
 
   void _move(Offset p) {
@@ -327,7 +286,7 @@ class _GlassTabBarState extends State<GlassTabBar>
       // Released over the target: it fires, no slot commits (spec §8.8).
       t.hovered.value = false;
       _motion?.cancel();
-      _kick();
+      _ticker.kick();
       t.onRelease();
       return;
     }
@@ -339,7 +298,7 @@ class _GlassTabBarState extends State<GlassTabBar>
     final under = _slotUnder(m.geometry, p.dx);
     final at = under == null ? p : Offset(m.geometry.centreOf(under), p.dy);
     final slot = m.up(at, velocity: velocity);
-    _kick();
+    _ticker.kick();
     if (slot != null) widget.onSelect(_shown[slot]);
   }
 
@@ -359,12 +318,12 @@ class _GlassTabBarState extends State<GlassTabBar>
       t?.hovered.value = false;
     }
     _motion?.cancel();
-    _kick();
+    _ticker.kick();
   }
 
   void _select(int slot) {
     _motion?.tapSlot(slot);
-    _kick();
+    _ticker.kick();
     widget.onSelect(_shown[slot]);
   }
 
@@ -640,7 +599,7 @@ class _GlassTabBarState extends State<GlassTabBar>
                       Positioned.fill(
                         child: ClipPath(
                           key: kTabNormalKey,
-                          clipper: _LensClip(
+                          clipper: LensClip(
                             frame.visible ? lens : Rect.zero,
                             inside: false,
                           ),
@@ -664,7 +623,7 @@ class _GlassTabBarState extends State<GlassTabBar>
                       Positioned.fill(
                         child: ClipPath(
                           key: kTabTintedKey,
-                          clipper: _LensClip(
+                          clipper: LensClip(
                             frame.visible ? lens : Rect.zero,
                             inside: true,
                           ),
@@ -793,8 +752,6 @@ class _GlassTabBarState extends State<GlassTabBar>
           child: _collapsedNode(shown[collapsedSlot]),
         ),
     ];
-    // The slots' focus nodes leave with the slots: no ring left behind.
-    if (morph >= 0.5) _focusedSlot = null;
     return Stack(clipBehavior: Clip.none, children: children);
   }
 
@@ -863,7 +820,7 @@ class _GlassTabBarState extends State<GlassTabBar>
   }
 
   /// The slot whose tap area holds bar-local [x], or null.
-  static int? _slotUnder(TabBarGeometry g, double x) {
+  static int? _slotUnder(LensTrack g, double x) {
     for (var s = 0; s < g.slots.length; s++) {
       final hit = _hitRect(g.slots, s).shift(g.slots[s].topLeft);
       if (x >= hit.left && x < hit.right) return s;
@@ -1189,32 +1146,6 @@ class _CollapsedIcon extends StatelessWidget {
       ],
     );
   }
-}
-
-/// Inside or outside the lens capsule, pill-local.
-class _LensClip extends CustomClipper<Path> {
-  const _LensClip(this.lens, {required this.inside});
-
-  final Rect lens;
-  final bool inside;
-
-  @override
-  Path getClip(Size size) {
-    final capsule = Path()
-      ..addRRect(
-        RRect.fromRectAndRadius(lens, Radius.circular(lens.shortestSide / 2)),
-      );
-    if (inside) return capsule;
-    return Path.combine(
-      PathOperation.difference,
-      Path()..addRect((Offset.zero & size).inflate(64)),
-      capsule,
-    );
-  }
-
-  @override
-  bool shouldReclip(_LensClip oldClipper) =>
-      oldClipper.lens != lens || oldClipper.inside != inside;
 }
 
 /// Highlight, rest fill (and the reduce-motion ghost), and the finger glow,

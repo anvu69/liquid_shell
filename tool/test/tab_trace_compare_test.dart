@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:test/test.dart';
 
 import '../tab_trace_compare.dart';
+import '../trace_math.dart';
 
 /// A synthetic tap trace on the reference spring: 60 fps, from [from] to
 /// [to], held for [delay].

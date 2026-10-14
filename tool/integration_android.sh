@@ -94,8 +94,8 @@ battery_saver_on() {
 # the power state, so a device that ignores the request is named as such
 # instead of surfacing as a test failure.
 wait_for() {
-  local what=$1 check=$2 i
-  for i in $(seq 30); do
+  local what=$1 check=$2
+  for _ in $(seq 30); do
     if "$check"; then return 0; fi
     sleep 1
   done

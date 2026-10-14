@@ -5,6 +5,7 @@
 // that runtime exists (the Flutter search UI). It drives the native field
 // through the plugin's debug hooks and checks both sides.
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
@@ -41,11 +42,18 @@ class _RecordingIOS extends LiquidShellIOS {
   }
 }
 
+/// The search page's scope bar. Natively it builds nothing (UIKit draws
+/// the bar): a list item of no height, which finders take for offstage.
+final Finder _scopeBar = find.byType(
+  LiquidSearchScopeBar,
+  skipOffstage: false,
+);
+
 /// The scope seen by the search page's content.
 LiquidShellScopeData _scope(WidgetTester tester) => LiquidShellScope.of(
   tester.element(
-    find.byType(LiquidSearchScopeBar).evaluate().isNotEmpty
-        ? find.byType(LiquidSearchScopeBar).first
+    _scopeBar.evaluate().isNotEmpty
+        ? _scopeBar.first
         : find.byType(GridView).first,
   ),
 );
@@ -218,6 +226,108 @@ void main() {
     await shot('cancelled');
     expectResumed();
   });
+
+  // VK-550 Task 11: UIKit's scope bar (spec VK-550 §10, §14.3). It shows
+  // while the search is active, at the top on an iPhone (the field is down
+  // by the tab bar) and under the risen field on an iPad; Flutter draws no
+  // second bar, and the content starts below it (iPhone: in landscape too).
+  testWidgets(
+    'VK-550: the native scope bar, over the results, follows the app',
+    (tester) async {
+      await tester.pumpWidget(_app);
+      await _settle(tester);
+      final controller = _controller(tester);
+      await _ios.debugTap(NativeTapTarget.destination, 2);
+      await _settle(tester);
+      expect((await _ios.debugSnapshot()).scopeShown, isFalse);
+
+      await _ios.debugTap(NativeTapTarget.searchField, 2);
+      await _settle(tester);
+      controller.text = 'ho hoan';
+      await _settle(tester);
+      final row = find.ancestor(
+        of: find.text('Hồ Hoàn Kiếm'),
+        matching: find.byType(Card),
+      );
+      expect(row, findsOneWidget);
+      expect(find.byType(LiquidSegmentedControl), findsNothing);
+
+      /// The scope bar is shown, and the results start below it.
+      Future<void> expectTheScopeBarOverTheResults(String phase) async {
+        final snapshot = await _ios.debugSnapshot();
+        final scope = snapshot.scopeFrame;
+        final field = snapshot.fieldFrame;
+        final scopeBottom = scope.y + scope.height;
+        final padding = LiquidShellScope.contentPaddingOf(
+          tester.element(_scopeBar),
+        );
+        final rowTop = tester.getRect(row).top;
+        debugPrint(
+          'liquid_shell scopes $phase: scope ${scope.x},${scope.y} '
+          '${scope.width}x${scope.height} field ${field.x},${field.y} '
+          '${field.width}x${field.height} padding $padding row $rowTop',
+        );
+        expect(snapshot.searchActive, isTrue, reason: phase);
+        expect(snapshot.scopeShown, isTrue, reason: phase);
+        expect(snapshot.scopeTitles, ['All', 'Songs', 'Places']);
+        expect(scope.width, greaterThan(100), reason: phase);
+        if (_isPad(tester)) {
+          expect(
+            scope.y,
+            greaterThanOrEqualTo(field.y + field.height - 1),
+            reason: '$phase: under the risen field',
+          );
+        } else {
+          expect(scope.y, lessThan(120), reason: '$phase: at the top');
+          expect(scopeBottom, lessThan(field.y), reason: '$phase: field below');
+        }
+        expect(
+          padding.top,
+          greaterThanOrEqualTo(scopeBottom - 1),
+          reason: '$phase: the content inset covers the scope bar',
+        );
+        expect(rowTop, greaterThanOrEqualTo(scopeBottom), reason: phase);
+      }
+
+      await expectTheScopeBarOverTheResults('portrait');
+      await shot('scopes');
+
+      // The app's write: native follows, a frame later.
+      controller.scopeIndex = 2;
+      await tester.pump();
+      expect((await _ios.debugSnapshot()).selectedScope, 2);
+      expect(row, findsOneWidget, reason: 'a place');
+
+      // Rotation (Task 10 review): UIKit lays the bar out again. Only an
+      // iPhone turns on the app's request; iPadOS keeps a resizable app's
+      // window as the device is (measured on the iPad Air 26.5), so
+      // SearchUITests turns the iPad itself.
+      if (!_isPad(tester)) {
+        addTearDown(() => SystemChrome.setPreferredOrientations(const []));
+        await SystemChrome.setPreferredOrientations(const [
+          DeviceOrientation.landscapeLeft,
+        ]);
+        await _settle(tester);
+        expect(
+          MediaQueryData.fromView(tester.view).orientation,
+          Orientation.landscape,
+        );
+        await expectTheScopeBarOverTheResults('landscape');
+        await shot('scopes_landscape');
+        await SystemChrome.setPreferredOrientations(const [
+          DeviceOrientation.portraitUp,
+        ]);
+        await _settle(tester);
+        await expectTheScopeBarOverTheResults('portrait again');
+      }
+
+      controller.deactivate();
+      await _settle(tester);
+      expect((await _ios.debugSnapshot()).scopeShown, isFalse);
+      expect(controller.scopeIndex, 2, reason: 'kept');
+    },
+    skip: !_expectNative,
+  );
 
   testWidgets(
     'debug taps: the field needs the search tab; back on a root page '

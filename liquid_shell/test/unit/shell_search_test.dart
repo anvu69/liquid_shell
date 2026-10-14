@@ -1,7 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
+import 'package:liquid_shell/src/native/native_host.dart';
 import 'package:liquid_shell/src/search/shell_search.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
+
+import '../helpers/fake_native_platform.dart';
 
 void main() {
   ShellSearch bridge() {
@@ -71,6 +74,170 @@ void main() {
       other.detach();
       search.configure(config, hasSearchDestination: true);
       expect(search.controller, same(app));
+    });
+  });
+
+  // VK-550 §10.2: the native scope bar's one-way bridge. Native reports
+  // only the user's changes; Dart sends only the app's writes and the
+  // replay on entering the search tab natively. Nothing echoes.
+  group('native scopes (spec VK-550 §10.2)', () {
+    late FakeNativePlatform fake;
+    late LiquidSearchController controller;
+
+    /// A bridge on [controller] over an owned native claim, the search tab
+    /// shown natively (entered) unless [selected] is false.
+    ShellSearch nativeBridge({bool selected = true}) {
+      fake = installFakeNative();
+      final claim = NativeChromeHost.instance.claim((_) {});
+      addTearDown(claim.release);
+      final search = ShellSearch(claim: () => claim, onChange: () {});
+      addTearDown(search.dispose);
+      search
+        ..configure(
+          LiquidSearch(
+            controller: controller,
+            scopes: const ['All', 'Songs', 'Places'],
+          ),
+          hasSearchDestination: true,
+        )
+        ..native = true
+        ..selected = selected
+        ..afterConfigSent();
+      fake
+        ..searchScopes.clear()
+        ..searchTexts.clear()
+        ..searchActives.clear();
+      return search;
+    }
+
+    setUp(() => controller = LiquidSearchController());
+    tearDown(() => controller.dispose());
+
+    test('a user change reaches the controller once, never sent back', () {
+      final search = nativeBridge();
+      var heard = 0;
+      controller.addListener(() => heard++);
+      search.onNativeEvent(const LiquidNativeSearchScopeChanged(1));
+      expect(controller.scopeIndex, 1);
+      expect(heard, 1, reason: "the app's listener hears it once");
+      search.onNativeEvent(const LiquidNativeSearchScopeChanged(1));
+      expect(heard, 1, reason: 'the same index again changes nothing');
+      search.afterConfigSent();
+      expect(
+        fake.searchScopes,
+        isEmpty,
+        reason:
+            'a native change never '
+            'causes setNativeSearchScope',
+      );
+    });
+
+    test('a change while the search tab is not selected is ignored', () {
+      final search = nativeBridge(selected: false)
+        ..onNativeEvent(const LiquidNativeSearchScopeChanged(2));
+      expect(controller.scopeIndex, 0);
+      expect(search.controller, same(controller));
+    });
+
+    test('a negative index from the platform is ignored', () {
+      nativeBridge().onNativeEvent(const LiquidNativeSearchScopeChanged(-1));
+      expect(controller.scopeIndex, 0);
+    });
+
+    // Task 10 review M6: the titles can change while a native tap is in
+    // flight, so an index past the last title reaches the bridge.
+    test('an index past the last scope from the platform is ignored', () {
+      nativeBridge().onNativeEvent(const LiquidNativeSearchScopeChanged(3));
+      expect(controller.scopeIndex, 0);
+    });
+
+    test("the app's write goes to native once, only while native and "
+        'selected', () {
+      final search = nativeBridge();
+      controller.scopeIndex = 2;
+      expect(fake.searchScopes, [2]);
+      controller.scopeIndex = 2;
+      expect(fake.searchScopes, [2], reason: 'the same index sends nothing');
+      search.selected = false;
+      controller.scopeIndex = 1;
+      search
+        ..native = false
+        ..selected = true;
+      controller.scopeIndex = 0;
+      expect(fake.searchScopes, [2], reason: 'Flutter mode, or another tab');
+      expect(fake.searchTexts, isEmpty);
+    });
+
+    test('entering the search tab natively sends the scope with the text', () {
+      final search = nativeBridge(selected: false);
+      controller
+        ..text = 'hồ'
+        ..scopeIndex = 2;
+      expect(fake.searchScopes, isEmpty, reason: 'held for the entry');
+      fake.searchTexts.clear();
+      search
+        ..selected = true
+        ..afterConfigSent();
+      expect(fake.searchTexts, ['hồ']);
+      expect(fake.searchScopes, [2]);
+      search.afterConfigSent();
+      expect(fake.searchScopes, [2], reason: 'once per entry');
+    });
+
+    // A changed state (an iPad crossing the size class, or a reconnected
+    // scene whose first report differs) comes from a live scope bar, or
+    // from a new one the plugin's installer gave the old one's scope. A
+    // resend could undo a user's tap still on its way (Task 10 review M1).
+    test('a changed state report sends no scope, the user text kept', () {
+      final search = nativeBridge()
+        ..onNativeEvent(
+          const LiquidNativeSearchTextChanged('hồ', composing: false),
+        )
+        ..onNativeEvent(const LiquidNativeSearchScopeChanged(1))
+        ..replay(reconnect: false)
+        ..afterConfigSent();
+      expect(fake.searchTexts, isEmpty);
+      expect(fake.searchScopes, isEmpty);
+      search.afterConfigSent();
+      expect(fake.searchScopes, isEmpty);
+    });
+
+    test("a changed state report sends no scope, the app's text replayed", () {
+      final search = nativeBridge();
+      controller
+        ..text = 'phố'
+        ..scopeIndex = 2;
+      fake
+        ..searchTexts.clear()
+        ..searchScopes.clear();
+      search
+        ..replay(reconnect: false)
+        ..afterConfigSent();
+      expect(fake.searchTexts, ['phố'], reason: "the app's text is replayed");
+      expect(fake.searchScopes, isEmpty);
+    });
+
+    test('a reconnect sends the scope to the new scope bar', () {
+      final search = nativeBridge();
+      controller.scopeIndex = 2;
+      fake.searchScopes.clear();
+      search
+        ..replay(reconnect: true)
+        ..afterConfigSent();
+      expect(fake.searchScopes, [2]);
+      search.afterConfigSent();
+      expect(fake.searchScopes, [2], reason: 'once');
+    });
+
+    test("a new controller's scope goes to native", () {
+      final search = nativeBridge();
+      final next = LiquidSearchController(scopeIndex: 2);
+      addTearDown(next.dispose);
+      search.configure(
+        LiquidSearch(controller: next, scopes: const ['All', 'Songs']),
+        hasSearchDestination: true,
+      );
+      expect(fake.searchScopes, [2]);
     });
   });
 }

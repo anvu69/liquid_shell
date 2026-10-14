@@ -48,6 +48,8 @@ glass, and your symbol replaces it when you give one.
 - `placeholder`: the empty field's text. Null: the platform's own,
   "Search" in the device language natively, and
   `LiquidShellStrings.searchPlaceholder` in the Flutter field.
+- `scopes`: the scope titles ("All", "Songs", "Places"), two or more, or
+  null for none (below).
 - `onChanged`: every text change the user makes, IME composition included.
   It is not called for text the app sets through the controller.
 - `onSubmitted`: the user pressed the keyboard's Search key.
@@ -62,7 +64,7 @@ builds is fine: the shell re-attaches.
 | Member | What it does |
 |---|---|
 | `text` (get, set) | The field's text. Setting it shows it in the field (natively once no IME composition is in progress) and does not call `onChanged`. The same text is a no-op |
-| `scopeIndex` (get, set) | The selected scope, for `LiquidSearchScopeBar` |
+| `scopeIndex` (get, set) | The selected scope. Writing it from the app moves the native scope bar too; do it for app actions only (below) |
 | `isActive` | Whether the search is active: the field has focus, or its keyboard was put away and the search stays up with its × |
 | `activate()` | Focuses the field, only while the search tab is selected (otherwise ignored, with one debug line). Unfocuses any Flutter text field first |
 | `deactivate()` | Ends the search: unfocuses the field and keeps the text |
@@ -80,12 +82,46 @@ field has focus, or the keyboard was put away and the × still shows).
 Read it from `LiquidShellScope.of(context).searchPhase`; it is null for a
 shell without a search tab.
 
-**`LiquidSearchScopeBar(controller:, scopes:)`** is a glass segmented
-control for search scopes ("All | Songs | Places"), bound to the
-controller's `scopeIndex`. Flutter draws it on every platform. Put it at
-the top of the search page's content while the phase is `active`, as Apple
-Music does. A tap on a scope selects it and puts the keyboard away
-(`dismissKeyboard()`); the search stays active.
+**`LiquidSearchScopeBar(controller:, scopes:)`** is a
+[`LiquidSegmentedControl`](segmented_control.md) for the search scopes
+("All | Songs | Places"), bound to the controller's `scopeIndex`. `scopes`
+is optional: null reads the shell's `LiquidSearch.scopes`, and when you
+give both they must be equal (debug assert). Put it at the top of the
+search page's content while the phase is `active`, as Apple Music does.
+See [Scopes](#scopes).
+
+## Scopes
+
+Give `LiquidSearch` the titles once, and put a `LiquidSearchScopeBar` on
+the search page:
+
+```dart
+search: LiquidSearch(controller: search, scopes: const ['All', 'Songs', 'Places']),
+// on the search page, while search.value.active:
+LiquidSearchScopeBar(controller: search)
+```
+
+- **Native mode** (iOS 26+, [native chrome](native_chrome.md)). The scope
+  bar is UIKit's own, set up with `scopeBarActivation = .manual` and
+  shown while the search is active, hidden when it ends (as Apple Music).
+  On an iPhone it sits at the top, under the status bar, and the large
+  title goes; on an iPad it is under the field. The shell's content inset
+  covers it. `LiquidSearchScopeBar` builds nothing there
+  (`LiquidShellScope.of(context).nativeSearchScopes` is true), so the page
+  needs no branching. UIKit's look and placement are accepted as they are.
+  A tap on a scope selects it and puts the keyboard away; the search
+  stays active. An inactive search with a kept query shows no scope bar.
+- **Flutter mode** (Android, iOS before 26, the Flutter chrome). The
+  `LiquidSearchScopeBar` is drawn on the page, a segmented control with
+  the liquid lens. A tap on a scope selects it and puts the keyboard away
+  (`dismissKeyboard()`); the search stays active.
+- **One way.** The user's choice, in either mode, reaches
+  `controller.scopeIndex` and never goes back to the control. Write
+  `scopeIndex` for the app's own actions only (a "reset" button, a
+  restored state): that write moves the native bar once. Do not write it
+  in answer to a change you just read from the controller.
+- The Flutter bar's look follows [`LiquidGlassTheme`](theming.md)
+  (`segmentTrack`, `segmentThumb`, `segmentLabelStyle`).
 
 ## Phases per platform
 

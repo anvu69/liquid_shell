@@ -87,7 +87,7 @@ class _NarrowWidthCaseState extends State<NarrowWidthCase> {
                 children: const [
                   Text(
                     'This shell is 320pt wide, below kLiquidNarrowWidth '
-                    '(340): row margin 8, 51.6pt tap areas.',
+                    '(340): row margin 8, tap areas of at least 44pt.',
                   ),
                   SizedBox(height: 12),
                 ],

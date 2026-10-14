@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell_example/cases/basic_tabs.dart';
 import 'package:liquid_shell_example/cases/search.dart';
+import 'package:liquid_shell_example/cases/segments.dart';
 import 'package:liquid_shell_example/main.dart';
 
 void main() {
@@ -90,6 +91,50 @@ void main() {
       expect(LiquidGlassScope.policyOf(context).forcedTier, forced);
     });
   }
+
+  // tool/segment_frames.sh (spec VK-550 §14.5): the Flutter run opens the
+  // segments case in the Flutter liquid tier; `segments-native` is the
+  // Runner's own UIKit screen, so Dart shows the case list under it.
+  for (final (demo, forced) in [
+    ('segments', null),
+    ('segments-liquid', LiquidGlassTier.liquid),
+  ]) {
+    testWidgets('demo $demo: the segments case, forced tier $forced', (
+      tester,
+    ) async {
+      tester.view
+        ..devicePixelRatio = 1
+        ..physicalSize = const Size(402, 874);
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(ExampleApp(demo: demo));
+      await tester.pumpAndSettle();
+      expect(find.byType(SegmentsCase), findsOneWidget);
+      expect(find.byType(CaseList), findsNothing);
+      final context = tester.element(find.byType(SegmentsCase));
+      expect(LiquidGlassScope.policyOf(context).forcedTier, forced);
+    });
+  }
+
+  // The search demos are framed like a case opened from the list, so the
+  // switch on their pages works (L4).
+  testWidgets('demo search: the switch forces the liquid tier', (
+    tester,
+  ) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(393, 852);
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(const ExampleApp(demo: 'search'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Flutter liquid'));
+    await tester.pumpAndSettle();
+    final context = tester.element(find.byType(SearchCase));
+    debugReleaseDemoSemantics();
+    expect(
+      LiquidGlassScope.policyOf(context).forcedTier,
+      LiquidGlassTier.liquid,
+    );
+  });
 
   testWidgets('an unknown demo falls back to the case list', (tester) async {
     await tester.pumpWidget(const ExampleApp(demo: 'nope'));

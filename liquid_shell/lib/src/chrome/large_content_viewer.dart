@@ -3,8 +3,8 @@ import 'package:liquid_shell/src/chrome/text_scale.dart';
 import 'package:liquid_shell/src/glass/liquid_glass.dart';
 
 /// iOS-style large content viewer: at accessibility text sizes a long press
-/// on an icon-only control shows its icon and label large in the middle of
-/// the screen until the finger lifts. Below that size it returns [child].
+/// on a control shows its icon and label large in the middle of the screen
+/// until the finger lifts. Below that size it returns [child].
 ///
 /// The long press wins the gesture arena, so lifting the finger after the
 /// card appears does not activate the control. No animation, so it already
@@ -12,17 +12,17 @@ import 'package:liquid_shell/src/glass/liquid_glass.dart';
 class LargeContentViewer extends StatefulWidget {
   /// Wraps [child] with the long-press viewer.
   const LargeContentViewer({
-    required this.icon,
     required this.label,
     required this.child,
+    this.icon,
     super.key,
   });
 
   /// Key of the floating card, for tests.
   static const overlayKey = ValueKey<String>('liquid-large-content-viewer');
 
-  /// Icon shown in the card.
-  final Widget icon;
+  /// Icon shown in the card, or none (a text segment).
+  final Widget? icon;
 
   /// Label shown in the card.
   final String label;
@@ -89,7 +89,7 @@ class _LargeContentViewerState extends State<LargeContentViewer> {
 class _Card extends StatelessWidget {
   const _Card({required this.icon, required this.label});
 
-  final Widget icon;
+  final Widget? icon;
   final String label;
 
   @override
@@ -108,13 +108,14 @@ class _Card extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             spacing: 12,
             children: [
-              IconTheme.merge(
-                data: IconThemeData(
-                  size: 64,
-                  color: theme.colorScheme.onSurface,
+              if (icon case final icon?)
+                IconTheme.merge(
+                  data: IconThemeData(
+                    size: 64,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                  child: icon,
                 ),
-                child: icon,
-              ),
               Text(
                 label,
                 textAlign: TextAlign.center,

@@ -135,7 +135,7 @@ test.
 Every case with a real shell gives each destination and the trailing action
 an `sfSymbol`, so on iOS 26 it runs with the
 [native chrome](#native-ios-chrome). The images show the Flutter chrome,
-which the same code draws everywhere else. Custom chrome, the standalone widgets, the custom theme, the forced
+which the same code draws everywhere else. Custom chrome, the standalone widgets, the segmented control, the custom theme, the forced
 tier, form factors and narrow width are about the Flutter chrome itself:
 they keep it on iOS 26 too (`nativeChrome: LiquidNativeChrome.off` or a
 `chromeBuilder`), and the example app says so on screen.
@@ -401,6 +401,9 @@ Widget build(BuildContext context) => LiquidShell(
   search: LiquidSearch(
     controller: _search,
     placeholder: 'Songs, places',
+    // UIKit's scope bar while the search is active (native chrome, iOS
+    // 26+); LiquidSearchScopeBar on the search page elsewhere.
+    scopes: kSearchScopes,
     onSubmitted: _remember,
   ),
   body: IndexedStack(
@@ -477,6 +480,47 @@ the iOS edge swipe pop the selected tab's top page first, also when the
 shell is itself a pushed page; only a tab at its root lets them pop the
 shell's route ([doc/router_integration.md](doc/router_integration.md#back-pops-the-tab-first)). `LiquidBackButton` also
 works on its own, with `onPressed` to replace `maybePop`.
+
+### Segmented control
+
+`LiquidSegmentedControl` is modelled on iOS 26's `UISegmentedControl`, close
+to it but not identical: a flat 32pt track centred in a 44pt touch box, a
+white thumb, and a liquid lens that lifts under the finger, follows a drag
+across segments, lands with a wobble and plays a selection click per
+segment crossed. It is controlled (rebuild it
+with the index `onChanged` gives), text-only, and each `LiquidSegment` can
+be `enabled: false`. `expand: true` (default) fills the width; `false`
+sizes to the labels. Colours and the label style are `segmentTrack`,
+`segmentThumb` and `segmentLabelStyle` of `LiquidGlassTheme`. The search
+scopes use it. Every segment keeps a 44pt tap target in height; below 44pt
+of width per segment the target is as wide as the segment. Details, the
+accessibility rules and what differs from iOS (a 3-segment "A | B | C" is
+132pt against native's 96, the wobble matches native's peaks and settle
+time, not every frame) are in
+[doc/segmented_control.md](doc/segmented_control.md).
+
+<?code-excerpt "segments.dart (segments)"?>
+```dart
+int _scope = 0;
+
+Widget _scopes() => LiquidSegmentedControl(
+  segments: const [
+    LiquidSegment(label: 'All'),
+    LiquidSegment(label: 'Songs'),
+    LiquidSegment(label: 'Places'),
+  ],
+  selectedIndex: _scope,
+  // Controlled: rebuild with the index the user chose.
+  onChanged: (i) => setState(() => _scope = i),
+);
+```
+
+<img src="doc/images/case_segments_light.png" width="260" alt="Segmented controls of two, three and five segments over coloured stripes"> <img src="doc/images/case_segments_dark.png" width="260" alt="The same controls in dark mode">
+
+The search tab's `LiquidSearch.scopes` takes the titles: on iOS 26+ with
+native chrome the scope bar is UIKit's own (shown while the search is
+active), and elsewhere `LiquidSearchScopeBar` draws this control. See
+[doc/search.md](doc/search.md#scopes).
 
 ### "Discard changes?" guard
 
@@ -1104,7 +1148,7 @@ Widget build(BuildContext context) {
               children: const [
                 Text(
                   'This shell is 320pt wide, below kLiquidNarrowWidth '
-                  '(340): row margin 8, 51.6pt tap areas.',
+                  '(340): row margin 8, tap areas of at least 44pt.',
                 ),
                 SizedBox(height: 12),
               ],
@@ -1399,10 +1443,19 @@ content viewer (see [Custom chrome](#custom-chrome)).
   uses the iPhone measurements, and there is no iPad tab customization on
   long press. Details in
   [doc/tab_bar.md](doc/tab_bar.md#what-is-not-identical-to-ios).
+- **The segmented control is close to iOS 26, not identical.** The track
+  is flat (as iOS 26.5's), the box is 44pt (native's 32pt) with segments
+  at least 44pt wide (a 3-segment "A | B | C" is 132pt, native's 96pt),
+  labels follow the system text size up to x2, below 44pt of width per
+  segment the hit target is as wide as the segment, and the landing wobble
+  matches native's peaks and settle time, not every frame. Details in
+  [doc/segmented_control.md](doc/segmented_control.md#what-is-not-identical-to-ios).
 
 ## More
 
 - [doc/theming.md](doc/theming.md): `LiquidGlassTheme` fields and defaults
+- [doc/segmented_control.md](doc/segmented_control.md): the segmented control,
+  its API, motion, accessibility and what differs from iOS
 - [doc/tiers.md](doc/tiers.md): tiers, the policy, signals, writing a renderer
 - [doc/tab_bar.md](doc/tab_bar.md): the Flutter tab bar, its geometry,
   lens, icons, accessibility and what is not identical to iOS
@@ -1425,8 +1478,10 @@ content viewer (see [Custom chrome](#custom-chrome)).
 - **P4 (0.1.0-dev.4, done):** the liquid tier in the core package.
 - **P3b-1 (0.1.0-dev.5, done):** the search tab, `LiquidPage` and the
   glass back button.
-- **VK-503 (this release, 0.1.0-dev.6):** tab bar fidelity: the Flutter
-  tab bar measured against iOS 26.5.
+- **VK-503 (0.1.0-dev.6, done):** tab bar fidelity: the Flutter tab bar
+  measured against iOS 26.5.
+- **VK-550 (this release, 0.1.0-dev.7):** `LiquidSegmentedControl` and the
+  search scopes, with UIKit's scope bar on iOS 26+.
 - **P3b-2 (next):** the native navigation bar on every tab.
 - **P3a-2:** share sheet, haptics, date picker and text fields in alerts.
 - **P5:** a go_router adapter (`StatefulShellRoute` builder, route-driven

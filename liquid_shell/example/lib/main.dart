@@ -5,6 +5,7 @@ import 'package:liquid_shell_example/cases/basic_tabs.dart';
 import 'package:liquid_shell_example/cases/cases.dart';
 import 'package:liquid_shell_example/cases/native_alerts.dart';
 import 'package:liquid_shell_example/cases/search.dart';
+import 'package:liquid_shell_example/cases/segments.dart';
 import 'package:liquid_shell_example/support/chrome_mode.dart';
 import 'package:liquid_shell_example/support/drawn_by_flutter.dart';
 import 'package:liquid_shell_example/support/launch_demo.dart';
@@ -36,7 +37,11 @@ class ExampleApp extends StatefulWidget {
   /// and `search-guarded` open the search case; `search-above` and
   /// `search-above-liquid` push it above the case list, as a person opens
   /// it, natively and in the Flutter liquid tier (VK-551); `alert` and
-  /// `sheet` open the alerts case and run that demo (spec P3a §9.4).
+  /// `sheet` open the alerts case and run that demo (spec P3a §9.4);
+  /// `tabs` and `tabs-liquid` open the basic case, `segments` and
+  /// `segments-liquid` the segments case (the frame strips; the Runner
+  /// answers `segments-native` with its own UIKit screen, over the case
+  /// list). Every `-liquid` demo starts in the Flutter liquid tier.
   const ExampleApp({this.demo, super.key});
 
   /// The demo to open at launch, or null for the case list. Any other
@@ -55,7 +60,7 @@ class _ExampleAppState extends State<ExampleApp> {
   @override
   void initState() {
     super.initState();
-    if (widget.demo == 'tabs-liquid' || widget.demo == 'search-above-liquid') {
+    if (widget.demo?.endsWith('-liquid') ?? false) {
       _mode.value = ExampleChromeMode.flutterLiquid;
     }
   }
@@ -70,16 +75,21 @@ class _ExampleAppState extends State<ExampleApp> {
   Widget build(BuildContext context) {
     final demo = widget.demo;
     final above = demo == 'search-above' || demo == 'search-above-liquid';
+    final search = demo == 'search' || demo == 'search-guarded';
+    // Framed as a case opened from the list, so its switch works (L4).
     final home = switch (demo) {
-      'search' => const SearchCase(),
-      'search-guarded' => const SearchCase(guardDetails: true),
+      'search' => const CaseFrame(child: SearchCase()),
+      'search-guarded' => const CaseFrame(
+        child: SearchCase(guardDetails: true),
+      ),
       'alert' || 'sheet' => NativeAlertsCase(autorun: demo),
       'tabs' || 'tabs-liquid' => const CaseFrame(child: BasicTabsCase()),
+      'segments' || 'segments-liquid' => const CaseFrame(child: SegmentsCase()),
       _ => const CaseList(),
     };
     // XCUITest reads the search case's Flutter rows through the
     // accessibility tree (the alerts are native).
-    if (home is SearchCase || above) {
+    if (search || above) {
       _demoSemantics ??= SemanticsBinding.instance.ensureSemantics();
     }
     return ChromeModeScope(

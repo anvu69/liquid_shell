@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
+import 'package:liquid_shell_example/cases/cases.dart';
 import 'package:liquid_shell_example/main.dart';
 import 'package:liquid_shell_example/support/chrome_mode.dart';
 
@@ -31,6 +32,26 @@ void main() {
 
     expect(find.text('Auto'), findsOneWidget); // not iOS in flutter test
     expect(_forced(tester), isNull);
+  });
+
+  // Owner rule L4: every case shows native and Flutter liquid, through
+  // the one switch.
+  for (final entry in kCases) {
+    testWidgets('${entry.id} shows the switch (L4)', (tester) async {
+      await _open(tester, entry.id);
+      expect(find.byKey(const ValueKey('chrome-mode')), findsWidgets);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('the search case: Flutter liquid forces the tier and keeps '
+      'the case', (tester) async {
+    await _open(tester, 'search');
+    final shell = tester.state(find.byType(LiquidShell));
+    await tester.tap(find.text('Flutter liquid'));
+    await tester.pumpAndSettle();
+    expect(_forced(tester), LiquidGlassTier.liquid);
+    expect(tester.state(find.byType(LiquidShell)), same(shell));
   });
 
   testWidgets('the form factors case shows it too', (tester) async {

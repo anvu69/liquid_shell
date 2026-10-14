@@ -1,10 +1,9 @@
 // Flutter liquid tab bar traces for the acceptance (spec VK-503 §17.4).
 // tool/tab_frames.sh runs it on an iOS 26.5 iPhone 17 Pro simulator;
 // tool/tab_trace_compare.dart reads build/integration_response_data.json.
-import 'dart:math' as math;
-
+// The touches, settle and pixels are fidelity_driver.dart's, shared with
+// segment_fidelity_test.dart.
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
@@ -14,6 +13,8 @@ import 'package:liquid_shell/src/chrome/glass_tab_bar.dart'
     show debugTabTrace, kTabPillKey;
 import 'package:liquid_shell_example/cases/basic_tabs.dart';
 
+import 'fidelity_driver.dart';
+
 /// The slot centre line on a 874 pt tall iPhone 17 Pro: 21 pt above the
 /// bottom, half of the 62 pt pill.
 const double _y = 874.0 - 21 - 31;
@@ -21,14 +22,6 @@ const double _y = 874.0 - 21 - 31;
 /// `make tab-traces` only (tool/tab_frames.sh sets it): extra sequences
 /// the strips cannot have, because they pair the native run's sequences.
 const bool _tracesOnly = bool.fromEnvironment('TABFID_TRACES_ONLY');
-
-/// Bounds every settle: a perpetual animation fails the run within seconds
-/// instead of stalling for pumpAndSettle's default 10 minutes.
-Future<void> _settle(WidgetTester tester) => tester.pumpAndSettle(
-  const Duration(milliseconds: 100),
-  EnginePhase.sendSemanticsUpdate,
-  const Duration(seconds: 10),
-);
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized()
@@ -49,108 +42,85 @@ void main() {
         ),
       ),
     );
-    await _settle(tester);
+    await settle(tester);
     final sequences = <String, List<Map<String, double>>>{};
     var current = <Map<String, double>>[];
-    var finger = 0.0;
-    var touching = false;
-    debugTabTrace = (s) =>
-        current.add({...s, 'finger': finger, 'touch': touching ? 1 : 0});
-    addTearDown(() => debugTabTrace = null);
-
-    Future<void> idle() => tester.pump(const Duration(seconds: 1));
-    Future<void> record(String name, Future<void> Function() body) async {
-      debugPrint('TABFID $name');
-      await idle();
-      current = [];
-      await body();
-      await _settle(tester);
-      sequences[name] = current;
-    }
-
     final pill = tester.getRect(find.byKey(kTabPillKey));
     final geometry = <String, List<double>>{
       'pill3': [pill.left, pill.top, pill.width, pill.height],
     };
+    await FidelityTouches.run(tester, (touches) async {
+      debugTabTrace = (s) => current.add({
+        ...s,
+        'finger': touches.finger,
+        'touch': touches.touching ? 1 : 0,
+      });
+      addTearDown(() => debugTabTrace = null);
 
-    Future<void> tap(double x) async {
-      finger = x;
-      await tester.tapAt(Offset(x, _y));
-    }
-
-    /// A tap pressed [held] seconds, as a finger does.
-    Future<void> pressTap(double x, double held) async {
-      finger = x;
-      touching = true;
-      final g = await tester.startGesture(Offset(x, _y));
-      await tester.pump(Duration(microseconds: (held * 1e6).round()));
-      touching = false;
-      await g.up();
-    }
-
-    /// Drags from [from] to [to] at [speed] pt/s of wall-clock time: frames
-    /// are live, so the finger's speed is real time, not pump time. Every
-    /// event carries its wall-clock time stamp: without one the velocity
-    /// tracker reads 0 and a flick never counts as a flick.
-    Future<void> drag(double from, double to, double speed) async {
-      finger = from;
-      final clock = Stopwatch()..start();
-      final g = await tester.createGesture();
-      touching = true;
-      await g.down(Offset(from, _y), timeStamp: clock.elapsed);
-      final span = (to - from).abs();
-      final sign = (to - from).sign;
-      var travelled = 0.0;
-      while (travelled < span) {
-        travelled = math.min(span, speed * clock.elapsedMicroseconds / 1e6);
-        finger = from + sign * travelled;
-        await g.moveTo(Offset(finger, _y), timeStamp: clock.elapsed);
-        await tester.pump(const Duration(milliseconds: 4));
+      Future<void> idle() => tester.pump(const Duration(seconds: 1));
+      Future<void> record(String name, Future<void> Function() body) async {
+        debugPrint('TABFID $name');
+        await idle();
+        current = [];
+        await body();
+        await settle(tester);
+        sequences[name] = current;
       }
-      touching = false;
-      await g.up(timeStamp: clock.elapsed);
-    }
 
-    // tool/tab_frames.sh cuts the recording here.
-    debugPrint('TABFID start');
-    await idle();
-    await idle();
-    await record('tap_1_2', () => tap(201));
-    await record('tap_2_3', () => tap(287));
-    await record('tap_3_1', () => tap(115));
-    await record('press_hold', () async {
-      finger = 115;
-      touching = true;
-      final g = await tester.startGesture(const Offset(115, _y));
-      await tester.pump(const Duration(seconds: 1));
-      sequences['press_hold_snapshot'] = List.of(current);
-      touching = false;
-      await g.up();
+      Future<void> tap(double x) => touches.press(Offset(x, _y));
+
+      // tool/tab_frames.sh cuts the recording here.
+      debugPrint('TABFID start');
+      await idle();
+      await idle();
+      await record('tap_1_2', () => tap(201));
+      await record('tap_2_3', () => tap(287));
+      await record('tap_3_1', () => tap(115));
+      await record('press_hold', () async {
+        final g = await touches.down(const Offset(115, _y));
+        await tester.pump(const Duration(seconds: 1));
+        sequences['press_hold_snapshot'] = List.of(current);
+        await touches.up(g);
+      });
+      // The press alone, and the press with its release.
+      sequences['press_release'] = sequences['press_hold']!;
+      sequences['press_hold'] = sequences.remove('press_hold_snapshot')!;
+      // Research §4.2: a slow drag at 90 pt/s, a flick of 172 pt in 7
+      // frames (≈ 1500 pt/s).
+      await record('slow_drag', () => touches.drag(115, 287, _y, 90));
+      await record(
+        'fast_flick',
+        () => touches.drag(287, 115, _y, 172 * 60 / 7),
+      );
+      // A scroll of the page, not a lens gesture: the tester's own drag,
+      // whose marker stays mid-screen, far above the bar band.
+      await record('minimize', () async {
+        await tester.drag(
+          find.byType(Scrollable).first,
+          const Offset(0, -400),
+        );
+      });
+      final circle = tester.getRect(find.byKey(kTabPillKey));
+      geometry['minimized'] = [
+        circle.left,
+        circle.top,
+        circle.width,
+        circle.height,
+      ];
+      await record('expand', () => touches.press(circle.center));
+      if (_tracesOnly) {
+        // Review I2: an 80 ms tap, Home → Explore; the lift must not brake
+        // the lens the press set moving.
+        await record(
+          'tap_held',
+          () => touches.press(
+            const Offset(201, _y),
+            const Duration(milliseconds: 80),
+          ),
+        );
+      }
+      debugTabTrace = null;
     });
-    // The press alone, and the press with its release.
-    sequences['press_release'] = sequences['press_hold']!;
-    sequences['press_hold'] = sequences.remove('press_hold_snapshot')!;
-    // Research §4.2: a slow drag at 90 pt/s, a flick of 172 pt in 7
-    // frames (≈ 1500 pt/s).
-    await record('slow_drag', () => drag(115, 287, 90));
-    await record('fast_flick', () => drag(287, 115, 172 * 60 / 7));
-    await record('minimize', () async {
-      await tester.drag(find.byType(Scrollable).first, const Offset(0, -400));
-    });
-    final circle = tester.getRect(find.byKey(kTabPillKey));
-    geometry['minimized'] = [
-      circle.left,
-      circle.top,
-      circle.width,
-      circle.height,
-    ];
-    await record('expand', () => tester.tapAt(circle.center));
-    if (_tracesOnly) {
-      // Review I2: an 80 ms tap, Home → Explore; the lift must not brake
-      // the lens the press set moving.
-      await record('tap_held', () => pressTap(201, 0.08));
-    }
-    debugTabTrace = null;
 
     // Rest colours (spec §17.4): the bar over a white page in light and a
     // black one in dark, read back from the engine at the device scale.
@@ -208,20 +178,9 @@ void main() {
           ),
         ),
       );
-      await _settle(tester);
-      final ratio = tester.view.devicePixelRatio;
-      final render =
-          boundary.currentContext!.findRenderObject()! as RenderRepaintBoundary;
-      final image = await render.toImage(pixelRatio: ratio);
-      final width = image.width;
-      final bytes = (await image.toByteData())!;
-      image.dispose();
-      List<double> rgb(Offset p) {
-        final i = ((p.dy * ratio).floor() * width + (p.dx * ratio).floor()) * 4;
-        return [
-          for (var c = 0; c < 3; c++) bytes.getUint8(i + c).toDouble(),
-        ];
-      }
+      await settle(tester);
+      final pixels = await Pixels.of(tester, boundary);
+      List<double> rgb(Offset p) => pixels.rgb(p);
 
       final pill = tester.getRect(find.byKey(kTabPillKey));
       // Between slots 1 and 2: glass with nothing drawn on it.
@@ -236,16 +195,10 @@ void main() {
       // The unselected "Explore" label: its darkest pixel in light, its
       // brightest in dark (the stem of a glyph, clear of antialiasing).
       final label = tester.getRect(find.text('Explore').first);
-      List<double>? extreme;
-      for (var y = label.top; y < label.bottom; y += 1 / ratio) {
-        for (var x = label.left; x < label.right; x += 1 / ratio) {
-          final c = rgb(Offset(x, y));
-          final l = c.reduce((a, b) => a + b);
-          final e = extreme?.reduce((a, b) => a + b);
-          if (e == null || (name == 'light' ? l < e : l > e)) extreme = c;
-        }
-      }
-      colors['${name}Label'] = extreme!;
+      colors['${name}Label'] = pixels.extreme(
+        label,
+        brightest: name != 'light',
+      );
     }
 
     binding.reportData = {

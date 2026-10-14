@@ -3,6 +3,10 @@ import UIKit
 /// The search tab's `UISearchController` and its delegates (spec P3b
 /// §7.4). It reports only what the user did, and writes Dart's text only
 /// outside an IME composition, so Vietnamese Telex is never disturbed.
+///
+/// The scope bar is UIKit's own (spec VK-550 §10): `.manual` activation,
+/// shown by `willPresent` and hidden by `willDismiss`, the only setup
+/// drawn on iPhone and iPad, iOS 26.5 and 27 (spike §1).
 @available(iOS 26.0, *)
 final class SearchBridge: NSObject, UISearchResultsUpdating, UISearchControllerDelegate,
   UISearchBarDelegate
@@ -14,6 +18,8 @@ final class SearchBridge: NSObject, UISearchResultsUpdating, UISearchControllerD
   var onText: (String, Bool) -> Void = { _, _ in }
   var onActive: (Bool) -> Void = { _ in }
   var onSubmit: (String) -> Void = { _ in }
+  /// A user's scope change (once, on lift; never Dart's own index).
+  var onScope: (Int) -> Void = { _ in }
   /// Whether an IME composition (marked text) is in progress. Injectable
   /// for tests: XCTest cannot type marked text.
   var isComposing: () -> Bool = { false }
@@ -36,8 +42,12 @@ final class SearchBridge: NSObject, UISearchResultsUpdating, UISearchControllerD
     let text: String
     let composing: Bool
   }
-  /// True while Dart's text is assigned: UIKit may call back synchronously.
+  /// True while Dart's text, scope titles or scope index is assigned: UIKit
+  /// may call back synchronously.
   private var writing = false
+  /// What Dart knows of the scope: its own last index (unclamped), or the
+  /// last user change reported. A delegate call with it is no change.
+  private(set) var knownScope = 0
 
   override init() {
     super.init()
@@ -45,6 +55,9 @@ final class SearchBridge: NSObject, UISearchResultsUpdating, UISearchControllerD
     controller.delegate = self
     controller.searchBar.delegate = self
     controller.obscuresBackgroundDuringPresentation = false
+    // UIKit's default (.automatic) never draws the scope bar in a search
+    // tab (spike §1): the delegate shows it while the search is active.
+    controller.scopeBarActivation = .manual
     defaultPlaceholder = controller.searchBar.placeholder
     isComposing = { [weak self] in
       self?.controller.searchBar.searchTextField.markedTextRange != nil
@@ -52,6 +65,43 @@ final class SearchBridge: NSObject, UISearchResultsUpdating, UISearchControllerD
   }
 
   var text: String { controller.searchBar.text ?? "" }
+
+  /// Whether the search bar has scopes to show.
+  private var hasScopes: Bool { !(controller.searchBar.scopeButtonTitles ?? []).isEmpty }
+
+  /// Dart's titles; nil or fewer than two hide the scope bar (spec VK-550
+  /// §10.1). Shown at once while the search is active; Dart's index is
+  /// selected again, clamped to the new titles.
+  func setScopes(_ titles: [String]?) {
+    let wanted = (titles?.count ?? 0) >= 2 ? titles : nil
+    let bar = controller.searchBar
+    if (bar.scopeButtonTitles ?? []) != (wanted ?? []) {
+      writing = true
+      bar.scopeButtonTitles = wanted
+      writing = false
+    }
+    let show = hasScopes && controller.isActive
+    if bar.showsScopeBar != show { bar.setShowsScope(show, animated: false) }
+    selectKnownScope()
+  }
+
+  /// Dart's index, clamped. Never reported back.
+  func setScope(_ index: Int) {
+    knownScope = index
+    selectKnownScope()
+  }
+
+  /// Selects Dart's index, clamped to the titles. A programmatic selection
+  /// does not call the delegate (spike §1); `writing` guards it anyway.
+  private func selectKnownScope() {
+    let count = controller.searchBar.scopeButtonTitles?.count ?? 0
+    guard count > 0 else { return }
+    let index = min(max(knownScope, 0), count - 1)
+    guard controller.searchBar.selectedScopeButtonIndex != index else { return }
+    writing = true
+    controller.searchBar.selectedScopeButtonIndex = index
+    writing = false
+  }
 
   /// The text the field will show once UIKit is done: the text a
   /// dismissal Dart asked for keeps (UIKit has emptied the field), else
@@ -165,6 +215,12 @@ final class SearchBridge: NSObject, UISearchResultsUpdating, UISearchControllerD
   func willPresentSearchController(_ searchController: UISearchController) {
     activateAfterDismiss = false
     restoreKept()
+    if hasScopes { controller.searchBar.setShowsScope(true, animated: true) }
+  }
+
+  /// The scope bar goes with the search (Music: shown only while active).
+  func willDismissSearchController(_ searchController: UISearchController) {
+    controller.searchBar.setShowsScope(false, animated: true)
   }
 
   func didPresentSearchController(_ searchController: UISearchController) {
@@ -192,5 +248,13 @@ final class SearchBridge: NSObject, UISearchResultsUpdating, UISearchControllerD
 
   func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
     if canReport() { onSubmit(text) }
+  }
+
+  /// A user's scope change: once, at touch-up or at the end of a drag
+  /// (spike §1). Dart's own index is no change.
+  func searchBar(_ searchBar: UISearchBar, selectedScopeButtonIndexDidChange selectedScope: Int) {
+    guard !writing, canReport(), selectedScope != knownScope else { return }
+    knownScope = selectedScope
+    onScope(selectedScope)
   }
 }
