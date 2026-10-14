@@ -417,9 +417,10 @@
     },
     "lookMethod": "Task 15, 2026-10-14: native's held lens (143.3 x 44, pressed on full3 segment 0, the stripes page of segments-native, iOS 26.5 simulator @3x) against the same pixels with the lens on another segment: the VK-550 segment strips, frames_4 row 9 (press) and frames_1 row 17 (rest on segment 1), native column. core: inside the lens capsule deflated by the 9 pt ring; ring: the 9 pt bands at the top and bottom of its straight part; both without the 22 pt label column either side of its centre. chromaRatio: p95 of max - min of RGB, lens over page; luma5 / luma95: ITU-R 601 percentiles, lens minus page",
     "look": {
-      "light": {"coreChromaRatio": 0.965, "coreLuma5": -3.2, "coreLuma95": -7.0, "ringChromaRatio": 0.897, "ringLuma5": -8.0, "ringLuma95": -8.0},
-      "dark": {"coreChromaRatio": 0.965, "coreLuma5": -1.4, "coreLuma95": -4.1, "ringChromaRatio": 0.889, "ringLuma5": 0.0, "ringLuma95": -4.5}
-    }
+      "light": {"coreChromaRatio": 0.965, "coreLuma5": -3.2, "coreLuma95": -7.0, "ringChromaRatio": 0.897, "ringLuma5": -8.0, "ringLuma95": -8.0, "coreSqueeze": 1.225, "ringBend": 2.98},
+      "dark": {"coreChromaRatio": 0.965, "coreLuma5": -1.4, "coreLuma95": -4.1, "ringChromaRatio": 0.889, "ringLuma5": 0.0, "ringLuma95": -4.5, "coreSqueeze": 1.231, "ringBend": 3.38}
+    },
+    "lookGeometryMethod": "Task 15 review, the same frames as lookMethod: the stripes run at 45 degrees, so a row read from a page row higher or lower shows them shifted sideways. For rows 4, 6, 8, 10 and 12 pt above and below the lens's spine, and 18 pt windows either side of the label column (14 pt), the sideways shift (whole pixels, least squares over RGB, within 40 px) that best matches the page's same row; coreSqueeze: 1 minus the slope of shift over distance from the spine (how much farther out the page is read: 1.22 reads it from 1.22 times as far, the page shows at 1 / 1.22); ringBend: the mean absolute shift, in pt, of rows 1.5, 3, 4.5 and 6 pt in from the top and bottom edges. The look is tuned to these numbers (native, fitted)"
   },
   "rtl": {
     "segment0Right": true,

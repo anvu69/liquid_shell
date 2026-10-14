@@ -8,6 +8,7 @@ import 'package:liquid_shell/src/chrome/lens_gesture.dart';
 import 'package:liquid_shell/src/chrome/lens_motion.dart';
 import 'package:liquid_shell/src/chrome/lens_profile.dart';
 import 'package:liquid_shell/src/chrome/lens_ticker.dart';
+import 'package:liquid_shell/src/chrome/sf_tracking.dart';
 import 'package:liquid_shell/src/chrome/sized_layout_builder.dart';
 import 'package:liquid_shell/src/chrome/text_scale.dart';
 import 'package:liquid_shell/src/glass/glass_theme.dart';
@@ -352,12 +353,24 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl>
         ? Theme.of(context).textTheme.labelLarge
         : null;
     final fontSize = themed.fontSize ?? SegmentMetrics.labelSize;
+    final family = themed.fontFamily ?? app?.fontFamily;
+    // UIKit tracks its system font by size and Flutter's text engine does
+    // not: without it the labels, and an intrinsic control, came out wider
+    // than native's ("Places" 41.27 against 40.67, VK-550 Task 15). For the
+    // drawn size, since Flutter does not scale a letterSpacing with the
+    // text. An app's own font keeps its spacing.
+    final tracking =
+        themed.letterSpacing ??
+        (isAppleSystemFont(family, Theme.of(context).platform)
+            ? sfTracking(scaler.scale(fontSize))
+            : null);
     final style = themed.copyWith(
       fontSize: fontSize,
       height:
           themed.height ?? SegmentMetrics.labelLine / SegmentMetrics.labelSize,
       fontFamily: app?.fontFamily,
       fontFamilyFallback: themed.fontFamilyFallback ?? app?.fontFamilyFallback,
+      letterSpacing: tracking,
     );
     final medium = style.copyWith(fontWeight: FontWeight.w500);
     final lineHeight = scaler.scale(fontSize) * style.height!;
@@ -569,16 +582,6 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl>
               child: _row(g, medium, scaler, lensCopy: true),
             ),
           ),
-        ),
-      // Builds the lens pipeline before the first press (Task 15).
-      if (!lensDrawn)
-        const Positioned(
-          key: ValueKey<String>('warm-up'),
-          left: 0,
-          top: 0,
-          width: 1,
-          height: 1,
-          child: LiquidLensWarmUp(),
         ),
       // A ring whose segment is gone (fewer segments) is not drawn.
       if (_focused case final i? when i < g.slots.length)

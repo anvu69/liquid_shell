@@ -143,6 +143,7 @@ class _LiquidLensState extends State<LiquidLens> {
                     engage *
                     (light ? look.veilFalloffLight : look.veilFalloffDark),
                 saturation: look.saturation,
+                squeeze: look.squeeze * refraction,
               ),
             ),
           );
@@ -216,95 +217,5 @@ class _LiquidLensState extends State<LiquidLens> {
         );
       },
     ),
-  );
-}
-
-/// The lens warm-up's 1 × 1 lens, for tests.
-@visibleForTesting
-const kLensWarmUpKey = ValueKey<String>('liquid-lens-warm-up');
-
-/// Lets the next [LiquidLensWarmUp] warm the pipeline again, for tests.
-@visibleForTesting
-void debugResetLensWarmUp() => _LiquidLensWarmUpState._done = false;
-
-/// Builds the lens shader's pipeline before the first press (VK-550 Task
-/// 15): on the simulator the first engaged lens after launch dropped a
-/// frame (33-50 ms) while the engine built it. Once per process, in the
-/// liquid tier, it draws one frame of a 1 × 1 lens that bends, tints and
-/// rims nothing (so its pixel is the page's) with the lens's shadow at an
-/// alpha that rounds to nothing, then nothing. A host whose
-/// lens may be the first liquid glass on screen (the segmented control)
-/// places it anywhere in its box.
-class LiquidLensWarmUp extends StatefulWidget {
-  /// Creates the warm-up.
-  const LiquidLensWarmUp({super.key});
-
-  @override
-  State<LiquidLensWarmUp> createState() => _LiquidLensWarmUpState();
-}
-
-class _LiquidLensWarmUpState extends State<LiquidLensWarmUp> {
-  static bool _done = false;
-
-  late final Listenable _changes = liquidGlassChanges();
-  bool _scheduled = false;
-
-  /// The segment lens with nothing to bend, tint or rim, and the colours
-  /// as they are: the same layers and pipelines, a pixel that is the
-  /// page's.
-  static const LensLook _clear = LensLook(
-    overGlass: false,
-    veil: 0,
-    veilLight: Color(0x00000000),
-    veilDark: Color(0x00000000),
-    veilFalloffLight: 0,
-    veilFalloffDark: 0,
-    thickness: 0,
-    dispersion: 0,
-    blurSigma: 0,
-    bezel: 9,
-    rim: Color(0x00000000),
-    rimWidth: 1,
-    saturation: 1,
-  );
-
-  /// The lens's shadow at 1/255 alpha (a transparent one is not drawn),
-  /// which rounds to nothing in 8 bits.
-  static final double _engage = 1 / 255 / kLensShadow.color.a;
-
-  @override
-  void initState() {
-    super.initState();
-    // A control alone on screen: nothing else loads the program.
-    if (!_done && liquidGlassCanRefract()) {
-      unawaited(LiquidShaderProgram.instance.load());
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => ListenableBuilder(
-    listenable: _changes,
-    builder: (context, _) {
-      if (_done ||
-          LiquidShaderProgram.instance.value == null ||
-          resolveGlassFor(context) is! LiquidShaderRenderer) {
-        return const SizedBox.shrink();
-      }
-      if (!_scheduled) {
-        _scheduled = true;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _done = true;
-          if (mounted) setState(() {});
-        }, debugLabel: 'LiquidLensWarmUp');
-      }
-      // A real lens, so every layer the first press builds (its clip, the
-      // pass, its shadow and the signals) is built here first.
-      return SizedBox(
-        key: kLensWarmUpKey,
-        width: 1,
-        height: 1,
-        child: LiquidLens(refraction: 0, engage: _engage, look: _clear),
-      );
-    },
   );
 }

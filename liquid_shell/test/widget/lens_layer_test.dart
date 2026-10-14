@@ -160,6 +160,27 @@ void main() {
     expect(reach, lessThan(thumb), reason: 'reach $reach pt');
   });
 
+  // VK-550 §7 (Task 15 review): the segment lens squeezes the page under it
+  // as native's does, with its refraction; the tab lens never does.
+  testWidgets('the squeeze: the segment look at its refraction, the tab '
+      'none', (tester) async {
+    await _liquid(tester);
+    await tester.pumpWidget(_lens(look: LensLook.segment, refraction: 0.5));
+    await tester.pump();
+    var u = tester
+        .renderObject<RenderLiquidBackdrop>(find.byType(LiquidBackdrop))
+        .debugUniforms!;
+    expect(LensLook.segment.squeeze, greaterThan(0));
+    expect(u[25], closeTo(LensLook.segment.squeeze * 0.5, 1e-6));
+    await tester.pumpWidget(_lens());
+    await tester.pump();
+    u = tester
+        .renderObject<RenderLiquidBackdrop>(find.byType(LiquidBackdrop))
+        .debugUniforms!;
+    expect(LensLook.tab.squeeze, 0);
+    expect(u[25], 0);
+  });
+
   // VK-550 R8: the segment control draws no rest thumb under its lens, so
   // the lens draws the rest fill in every tier (the tab's pill painter
   // draws its own fill, so the tab lens leaves the frosted one to it).

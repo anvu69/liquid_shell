@@ -64,6 +64,32 @@ class _Ramp extends CustomPainter {
   bool shouldRepaint(_Ramp oldDelegate) => false;
 }
 
+/// Grey rows: from logical y 128 each physical row is 4 levels brighter
+/// than the one above (64 rows), so a sample's source row is readable from
+/// its level; black above, white below.
+class _Rows extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size.width, 128),
+      Paint()..color = const Color(0xFF000000),
+    );
+    for (var r = 0; r < 64; r++) {
+      canvas.drawRect(
+        Rect.fromLTWH(0, 128 + r / _scale, size.width, 1 / _scale),
+        Paint()..color = Color.fromARGB(255, r * 4, r * 4, r * 4),
+      );
+    }
+    canvas.drawRect(
+      Rect.fromLTWH(0, 128 + 64 / _scale, size.width, size.height),
+      Paint()..color = const Color(0xFFFCFCFC),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_Rows oldDelegate) => false;
+}
+
 /// First physical column of [_Ramp].
 const _rampStart = 196;
 
@@ -216,6 +242,64 @@ void main() {
     // The body is not bent: 204 lies in blue [200, 208).
     final centre = _pixel(data, const Offset(204, 150));
     expect(centre[2], greaterThan(200), reason: 'centre is the backdrop');
+  });
+
+  // VK-550 §7 (Task 15 review): a squeeze samples the page farther out
+  // from the lens's spine, so the page under it shows smaller across its
+  // height, as native's segment lens; 0 draws exactly as before.
+  testWidgets('a squeeze samples the page farther from the spine; 0 draws '
+      'as before', (tester) async {
+    final program = await _program(tester);
+    // A capsule 200 x 44 centred at y 150, over rows whose grey level is
+    // 4 per physical row from y 128 (logical): a pixel's source row reads
+    // from its level.
+    const glass = Rect.fromLTWH(100, 128, 200, 44);
+    const radii = BorderRadius.all(Radius.circular(22));
+    LiquidOpticsParams params(double squeeze) => LiquidOpticsParams(
+      tint: const Color(0x00000000),
+      rim: const Color(0x00000000),
+      refraction: 0,
+      dispersion: 0,
+      blurSigma: 0,
+      saturation: 1,
+      squeeze: squeeze,
+    );
+    Future<ByteData> render(LiquidOpticsParams? p) => _render(
+      tester,
+      Positioned.fromRect(
+        rect: glass,
+        child: ClipRect(
+          child: BackdropFilter(
+            filter: p == null
+                ? ui.ImageFilter.blur()
+                : _lens(program, glass, radii: radii, params: p),
+            child: const SizedBox.expand(),
+          ),
+        ),
+      ),
+      backdrop: _Rows(),
+    );
+    // 8 pt above the spine: 14 pt in from the edge, 0.7 of the default
+    // 20 pt bezel.
+    final squeezed = await render(params(0.25));
+    final level = _pixel(squeezed, const Offset(200, 142))[0];
+    final source = level / 4 / _scale + 128;
+    // At 8 pt from the spine the bezel height is about 0.99: the source is
+    // about 1.25 × 8 = 10 pt above the spine, 140 against 142 unbent.
+    expect(source, closeTo(140, 0.6), reason: 'level $level');
+    // 0: byte for byte the lens without the uniform.
+    final none = await render(params(0));
+    final base = await render(
+      const LiquidOpticsParams(
+        tint: Color(0x00000000),
+        rim: Color(0x00000000),
+        refraction: 0,
+        dispersion: 0,
+        blurSigma: 0,
+        saturation: 1,
+      ),
+    );
+    expect(none.buffer.asUint8List(), base.buffer.asUint8List());
   });
 
   testWidgets('the specular rim lights the top more than the bottom', (

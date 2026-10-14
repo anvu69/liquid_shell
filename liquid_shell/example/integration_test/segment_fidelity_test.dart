@@ -129,8 +129,10 @@ void main() {
       // path fell: warming the lens pipeline did not remove it, and a 1 x 1
       // lens drawn at mount moved it from the engage to the release. One
       // unrecorded tap there and back runs every tap path once before the
-      // recording, and before the strips' start marker. A release (AOT)
-      // build compiles nothing at run time.
+      // recording, and before the strips' start marker, so the first
+      // engage after launch is not measured. A release (AOT) build compiles
+      // no Dart at run time; its first lens (the pipeline, the backdrop)
+      // is unmeasured: profile mode does not run on a simulator.
       for (final to in [1, 0]) {
         await touches.press(centre('full3', to, 3), _tapHeld);
         await settle(tester);

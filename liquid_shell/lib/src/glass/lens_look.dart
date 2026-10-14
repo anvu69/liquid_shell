@@ -41,6 +41,7 @@ final class LensLook {
     required this.rim,
     required this.rimWidth,
     this.saturation,
+    this.squeeze = 0,
   });
 
   /// The lens sits on glass (the tab pill): at engage 0 it is that glass's
@@ -85,6 +86,11 @@ final class LensLook {
   /// Vibrancy; null keeps `LiquidOptics.saturation`.
   final double? saturation;
 
+  /// At refraction 1, how much farther from the lens's spine the page is
+  /// read (`LiquidOpticsParams.squeeze`): the page under the lens shows
+  /// 1 / (1 + squeeze) of its size across the height. 0 for the tab.
+  final double squeeze;
+
   /// VK-503's tab lens: milky in the core, a clear refracting ring, over
   /// the pill's glass.
   static const LensLook tab = LensLook(
@@ -104,23 +110,26 @@ final class LensLook {
 
   /// VK-550's segment lens (spec §7, Task 15): clear glass on a flat
   /// track, tuned against native's held lens in the segment strips
-  /// (`native_reference.json` `lens.look`): the page passes almost as is
-  /// (core chroma 0.965 of the page's, about 3 % darker, light and dark),
-  /// a thin bright rim, a ring that bends the page without reaching past
-  /// the lens (the tab's thickness bent rays 59 pt in: a black rim).
+  /// (`native_reference.json` `lens.look`): the page passes with its
+  /// colours (core chroma 0.96 of the page's, native 0.965) a little darker,
+  /// squeezed to 1 / 1.22 across the height as native's (squeeze 0.22:
+  /// 1.226 against 1.225 / 1.231), bent about 3 pt in its ring (3.1 / 3.0
+  /// against 3.0 / 3.4, thickness 0.2 with the full fringe), under a thin
+  /// bright rim. The tab's thickness bent rays 59 pt in: a black rim.
   static const LensLook segment = LensLook(
     overGlass: false,
-    veil: 0.03,
+    veil: 0.04,
     veilLight: Color(0xFF000000),
     veilDark: Color(0xFF000000),
     veilFalloffLight: 0,
     veilFalloffDark: 0,
-    thickness: 0.3,
-    dispersion: 0.6,
+    thickness: 0.2,
+    dispersion: 1,
     blurSigma: 0,
     bezel: 9,
     rim: Color.from(alpha: 0.5, red: 1, green: 1, blue: 1),
     rimWidth: 1,
     saturation: 1,
+    squeeze: 0.22,
   );
 }

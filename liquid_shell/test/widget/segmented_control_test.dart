@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/chrome/lens_clip.dart';
+import 'package:liquid_shell/src/chrome/sf_tracking.dart';
 import 'package:liquid_shell/src/chrome/sized_layout_builder.dart';
 import 'package:liquid_shell/src/segmented/segmented_control.dart';
 
@@ -988,6 +989,56 @@ void main() {
         FontWeight.w400,
         FontWeight.w500,
       });
+    });
+
+    // Task 15 review: UIKit tracks its system font by size; Flutter's text
+    // engine does not. The labels take SF Pro's tracking for their drawn
+    // size when they are in the system font, and an app's own font keeps
+    // its spacing.
+    testWidgets("the system font tracks as UIKit's, by the drawn size", (
+      tester,
+    ) async {
+      await pumpThemed(tester, ThemeData(platform: TargetPlatform.iOS));
+      for (final style in styles(tester)) {
+        expect(style.letterSpacing, closeTo(sfTracking(13), 1e-9));
+      }
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+          child: MaterialApp(
+            theme: ThemeData(platform: TargetPlatform.iOS),
+            home: Center(
+              child: SizedBox(
+                width: 370,
+                child: LiquidSegmentedControl(
+                  segments: _segments(),
+                  selectedIndex: 0,
+                  onChanged: (_) {},
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      for (final style in styles(tester)) {
+        expect(style.letterSpacing, closeTo(sfTracking(26), 1e-9));
+      }
+    });
+
+    testWidgets("an app's own font, or Android's, keeps its spacing", (
+      tester,
+    ) async {
+      await pumpThemed(
+        tester,
+        ThemeData(platform: TargetPlatform.iOS, fontFamily: 'AppFont'),
+      );
+      for (final style in styles(tester)) {
+        expect(style.letterSpacing, isNull);
+      }
+      await pumpThemed(tester, ThemeData(platform: TargetPlatform.android));
+      for (final style in styles(tester)) {
+        expect(style.letterSpacing, isNull);
+      }
     });
 
     testWidgets('segmentLabelStyle.fontFamily wins', (tester) async {

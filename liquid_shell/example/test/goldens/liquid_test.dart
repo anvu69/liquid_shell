@@ -257,6 +257,7 @@ Map<String, double> _segmentLook(
   final c = stats(pressed, ring);
   final d = stats(page, ring);
   double round(double v) => (v * 1000).round() / 1000;
+  final geometry = _segmentGeometry(pressed, page, lens, width: width);
   return {
     'coreChromaRatio': round(a.chroma95 / b.chroma95),
     'coreLuma5': round(a.luma5 - b.luma5),
@@ -264,7 +265,84 @@ Map<String, double> _segmentLook(
     'ringChromaRatio': round(c.chroma95 / math.max(1, d.chroma95)),
     'ringLuma5': round(c.luma5 - d.luma5),
     'ringLuma95': round(c.luma95 - d.luma95),
+    'coreSqueeze': round(geometry.squeeze),
+    'ringBend': round(geometry.bend),
   };
+}
+
+/// Where the lens reads the page (`native_reference.json`
+/// `lens.lookGeometryMethod`): the example's stripes run at 45°, so a row
+/// read from a page row higher or lower shows them shifted sideways. The
+/// shift of rows 4–12 pt from the spine over their distance gives how
+/// much farther out the page is read (`squeeze`, 1.22 for native's lens);
+/// the mean shift of rows 1.5–6 pt in from the edges, the ring's `bend`.
+({double squeeze, double bend}) _segmentGeometry(
+  ByteData pressed,
+  ByteData page,
+  Rect lens, {
+  required int width,
+}) {
+  const k = goldenPixelRatio;
+  const column = 14.0;
+  const window = 18.0;
+  final r = lens.height / 2;
+  final windows = <(int, int)>[
+    for (final (from, to) in [
+      (lens.left + r + 2, lens.center.dx - column),
+      (lens.center.dx + column, lens.right - r - 2),
+    ])
+      for (var x = from; x + window <= to + 1e-6; x += window)
+        ((x * k).floor(), ((x + window) * k).floor()),
+  ];
+  // The sideways shift (whole pixels) that best matches row [y] of the
+  // lens to the same row of the page, over [x0, x1).
+  double shift(int y, int x0, int x1) {
+    var best = double.infinity;
+    var at = 0;
+    for (var dx = -40; dx <= 40; dx++) {
+      var sum = 0.0;
+      var n = 0;
+      for (var x = x0; x < x1; x++) {
+        final xx = x + dx;
+        if (xx < 0 || xx >= width) continue;
+        for (var c = 0; c < 3; c++) {
+          final d =
+              pressed.getUint8((y * width + x) * 4 + c) -
+              page.getUint8((y * width + xx) * 4 + c);
+          sum += d * d;
+        }
+        n++;
+      }
+      final mean = sum / math.max(n, 1);
+      if (mean < best) {
+        best = mean;
+        at = dx;
+      }
+    }
+    return at / k;
+  }
+
+  var sxy = 0.0;
+  var sxx = 0.0;
+  for (final off in [-12, -10, -8, -6, -4, 4, 6, 8, 10, 12]) {
+    final y = ((lens.center.dy + off) * k).floor();
+    for (final (x0, x1) in windows) {
+      sxy += off * shift(y, x0, x1);
+      sxx += off * off;
+    }
+  }
+  final bends = <double>[
+    for (final depth in [1.5, 3.0, 4.5, 6.0])
+      for (final y in [
+        ((lens.top + depth) * k).floor(),
+        ((lens.bottom - depth) * k).floor(),
+      ])
+        for (final (x0, x1) in windows) shift(y, x0, x1).abs(),
+  ];
+  return (
+    squeeze: 1 - sxy / sxx,
+    bend: bends.reduce((a, b) => a + b) / bends.length,
+  );
 }
 
 void main() {
@@ -466,6 +544,18 @@ void main() {
           reason: '$key: $seen',
         );
       }
+      // Where it reads the page (Task 15 review): squeezed about 0.8 across
+      // the height, bent a few points at the ring.
+      expect(
+        m['coreSqueeze'],
+        closeTo((native['coreSqueeze'] as num).toDouble(), 0.05),
+        reason: 'coreSqueeze: $seen',
+      );
+      expect(
+        m['ringBend'],
+        closeTo((native['ringBend'] as num).toDouble(), 1),
+        reason: 'ringBend: $seen',
+      );
     });
   }
 

@@ -165,30 +165,22 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
   /// [LiquidSegmentedControl] thumb at rest, drawn over the track.
   final Color segmentThumb;
 
-  /// [LiquidSegmentedControl] labels at text scale 1.
-  ///
-  /// The default tracks as UIKit's 13 pt system font: −0.08 pt, SF Pro's
-  /// tracking at 13 pt (Apple's table, −6/1000 em). UIKit applies it and
-  /// Flutter's text engine does not, so without it a label measured 0.1 pt
-  /// per glyph wider than native's on iOS ("Places" 41.27 against 40.67),
-  /// and an intrinsic control a point per segment wider (VK-550 Task 15).
+  /// [LiquidSegmentedControl] labels at text scale 1. Without its own
+  /// `letterSpacing`, a label in the system font takes UIKit's tracking for
+  /// its drawn size (VK-550 Task 15); an app's own font keeps its spacing.
   final TextStyle segmentLabelStyle;
-
-  static const double _segmentLabelTracking = -0.08;
 
   static const TextStyle _segmentLabelLight = TextStyle(
     fontSize: 13,
     fontWeight: FontWeight.w400,
     color: Color(0xFF000000),
     height: 15.67 / 13,
-    letterSpacing: _segmentLabelTracking,
   );
   static const TextStyle _segmentLabelDark = TextStyle(
     fontSize: 13,
     fontWeight: FontWeight.w400,
     color: Color(0xFFFFFFFF),
     height: 15.67 / 13,
-    letterSpacing: _segmentLabelTracking,
   );
 
   @override
