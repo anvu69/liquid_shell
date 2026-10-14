@@ -230,6 +230,39 @@ void main() {
     });
   });
 
+  // VK-550 §7 (Task 15): the segment lens keeps the page's colours, as
+  // native's (core chroma 0.965 of the page's); the shared 1.1 boosted it.
+  group('saturation override (spec VK-550 §7)', () {
+    const rect = Rect.fromLTWH(300, 2300, 330, 210);
+    test('replaces shader float 25; null keeps LiquidOptics.saturation', () {
+      const base = LiquidOpticsParams(
+        tint: Color(0x00000000),
+        rim: Color(0x00000000),
+        refraction: 1,
+        dispersion: 0,
+        blurSigma: 0,
+      );
+      const flat = LiquidOpticsParams(
+        tint: Color(0x00000000),
+        rim: Color(0x00000000),
+        refraction: 1,
+        dispersion: 0,
+        blurSigma: 0,
+        saturation: 1,
+      );
+      final a = _uniforms(rect, params: base);
+      final b = _uniforms(rect, params: flat);
+      expect(a[23], closeTo(LiquidOptics.saturation, 1e-6));
+      expect(b[23], 1);
+      for (var i = 0; i < a.length; i++) {
+        if (i == 23) continue;
+        expect(b[i], a[i], reason: 'float $i');
+      }
+      expect(flat, isNot(base));
+      expect(flat.hashCode, isNot(base.hashCode));
+    });
+  });
+
   group('veil falloff (Task 16 part B, spec VK-503 §7.2)', () {
     const rect = Rect.fromLTWH(300, 2300, 330, 210);
 

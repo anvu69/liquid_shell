@@ -122,9 +122,14 @@ Offset _at(WidgetTester tester, int i, {int count = 3}) {
   return Offset(box.left + box.width * (i + 0.5) / count, box.center.dy);
 }
 
-/// The rest thumb (the lens rect), on screen.
-Rect _thumb(WidgetTester tester) =>
-    tester.getRect(find.byKey(kSegmentThumbKey));
+/// The lens rect on screen: the engaged lens while it is drawn (it draws
+/// the rest fill then, Task 15 R8), otherwise the rest thumb.
+Rect _thumb(WidgetTester tester) {
+  final lens = find.byType(LiquidLens);
+  return tester.getRect(
+    lens.evaluate().isEmpty ? find.byKey(kSegmentThumbKey) : lens,
+  );
+}
 
 List<String> _haptics(WidgetTester tester) {
   final calls = <String>[];

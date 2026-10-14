@@ -1,7 +1,11 @@
 import 'dart:ui';
 
+import 'package:flutter/material.dart' show ColorScheme, Colors;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:liquid_shell/src/glass/glass_theme.dart';
 import 'package:liquid_shell/src/segmented/segment_geometry.dart';
+
+import '../helpers/native_rows.dart';
 
 const double line = 15.67;
 
@@ -94,5 +98,44 @@ void main() {
     expect(lens.width, closeTo(119, 1));
     expect(g.restLensAt(0), lens);
     expect(g.tapInflation, isNull);
+  });
+
+  // Task 15: on the iOS 26.5 simulator Flutter measures the w500 labels
+  // wider than UIKit ("Places" 41.27 against 40.67): UIKit applies SF Pro's
+  // tracking, Flutter's text engine does not. Flutter's own measure of each
+  // label without tracking (a device probe, the example's font), with the
+  // theme's tracking added per glyph as Flutter adds it, must give native's
+  // intrinsic widths (geometry.intrinsic3 and intrinsicLong, ±1 pt).
+  test("with the theme's label tracking, Flutter's iOS measure gives "
+      "native's intrinsic widths", () {
+    const ios = {
+      'All': 16.016,
+      'Songs': 39.178,
+      'Places': 41.267,
+      'Recently played': 99.631,
+    };
+    final geometry = segmentReference()['geometry'] as Map<String, dynamic>;
+    final tracking =
+        LiquidGlassTheme.fromColorScheme(
+          ColorScheme.fromSeed(seedColor: Colors.blue),
+        ).segmentLabelStyle.letterSpacing ??
+        0;
+    double width(List<String> labels) => segmentGeometry(
+      count: labels.length,
+      maxWidth: double.infinity,
+      lineHeight: 15.67,
+      direction: TextDirection.ltr,
+      mediumLabelWidths: [
+        for (final l in labels) ios[l]! + tracking * l.length,
+      ],
+    ).size.width;
+    expect(
+      width(['All', 'Songs', 'Places']),
+      closeTo((geometry['intrinsic3'] as num).toDouble(), 1),
+    );
+    expect(
+      width(['All', 'Recently played']),
+      closeTo((geometry['intrinsicLong'] as num).toDouble(), 1),
+    );
   });
 }

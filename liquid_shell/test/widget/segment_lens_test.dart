@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/glass/liquid_backdrop.dart';
 import 'package:liquid_shell/src/glass/liquid_lens.dart';
+import 'package:liquid_shell/src/glass/outside_shadow.dart';
 import 'package:liquid_shell/src/segmented/segmented_control.dart';
 
 import '../helpers/native_rows.dart';
@@ -87,7 +88,7 @@ Offset _at2(WidgetTester tester, int i) {
 void main() {
   final ref = segmentReference();
 
-  testWidgets('LiquidLens exists only while engaged, with bezel 9', (
+  testWidgets('LiquidLens exists only while engaged, with the segment look', (
     tester,
   ) async {
     await _liquid(tester);
@@ -99,8 +100,8 @@ void main() {
     expect(lens.engage, closeTo(1, 0.05));
     // Spec §7: 9 pt, inside native's measured ring (lens.bezelEdges).
     final edges = (ref['lens'] as Map)['bezelEdges'] as Map;
-    expect(lens.bezel, 9);
-    expect(lens.bezel, inInclusiveRange(edges['top'] as num, 9.0));
+    expect(lens.look, same(LensLook.segment));
+    expect(lens.look.bezel, inInclusiveRange(edges['top'] as num, 9.0));
     expect(lens.restFill, isNotNull);
     expect(find.byType(LiquidBackdrop), findsOneWidget);
     // The w500 copy is clipped to the lens.
@@ -115,6 +116,86 @@ void main() {
     await g.up();
     await tester.pumpAndSettle();
     expect(find.byType(LiquidLens), findsNothing);
+  });
+
+  // VK-550 R8 (Task 8 review): the rest fill was drawn twice while the lens
+  // engaged, once under the lens (captured and refracted) and once by the
+  // lens. Native cross-fades one thumb into the glass: while the lens is
+  // drawn, it alone draws the rest fill.
+  testWidgets('while the lens is drawn the control draws no rest thumb '
+      'under it', (tester) async {
+    await _liquid(tester);
+    await _pump(tester);
+    await tester.pump();
+    expect(find.byKey(kSegmentThumbKey), findsOneWidget, reason: 'at rest');
+    final g = await tester.startGesture(_at(tester, 0));
+    await tester.pump();
+    var drawn = 0;
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(_frame);
+      final lens = find.byType(LiquidLens);
+      if (lens.evaluate().isEmpty) {
+        expect(find.byKey(kSegmentThumbKey), findsOneWidget);
+        continue;
+      }
+      drawn++;
+      expect(find.byKey(kSegmentThumbKey), findsNothing, reason: 'frame $i');
+      final fill = tester.widget<LiquidLens>(lens).restFill;
+      expect(fill, isNotNull, reason: 'the lens draws it instead');
+    }
+    expect(drawn, greaterThan(0));
+    await g.up();
+    await tester.pumpAndSettle();
+    expect(find.byType(LiquidLens), findsNothing);
+    expect(find.byKey(kSegmentThumbKey), findsOneWidget, reason: 'at rest');
+  });
+
+  // Task 15 (Task 13: `tap_1_2 frames`): the first engaged lens after
+  // launch dropped a frame on the simulator (33-50 ms) while the engine
+  // built the lens pipeline. In the liquid tier the first control draws
+  // one frame of a 1 × 1 lens that bends and tints nothing, once per
+  // process, so the pipeline exists before the first press.
+  testWidgets('the first control warms the lens pipeline up: one frame of '
+      'a clear 1 × 1 lens, once per process', (tester) async {
+    await _liquid(tester);
+    debugResetLensWarmUp();
+    addTearDown(debugResetLensWarmUp);
+    await _pump(tester);
+    final warm = find.byKey(kLensWarmUpKey);
+    expect(warm, findsOneWidget, reason: 'the first frame');
+    expect(tester.getSize(warm), const Size(1, 1));
+    final u = tester
+        .renderObject<RenderLiquidBackdrop>(
+          find.descendant(of: warm, matching: find.byType(LiquidBackdrop)),
+        )
+        .debugUniforms!;
+    expect(u[9], 0, reason: 'no thickness: bends nothing');
+    expect(u[15], 0, reason: 'no tint');
+    expect(u[19], 0, reason: 'no rim');
+    expect(u[23], 1, reason: 'the colours as they are');
+    // The lens's shadow too (its blur's pipeline), at an alpha that rounds
+    // to nothing in 8 bits.
+    final shadow = tester.widget<OutsideShadow>(
+      find.descendant(of: warm, matching: find.byType(OutsideShadow)),
+    );
+    expect(shadow.shadow.blurRadius, kLensShadow.blurRadius);
+    expect(shadow.shadow.color.a, greaterThan(0));
+    expect(shadow.shadow.color.a, lessThanOrEqualTo(1 / 255));
+    await tester.pump();
+    expect(warm, findsNothing, reason: 'one frame only');
+    // Another control later: the pipeline is warm already.
+    await tester.pumpWidget(const SizedBox());
+    await _pump(tester);
+    expect(warm, findsNothing);
+  });
+
+  testWidgets('no warm-up outside the liquid tier', (tester) async {
+    debugLiquidGlassCanRefractOverride = false;
+    addTearDown(() => debugLiquidGlassCanRefractOverride = null);
+    debugResetLensWarmUp();
+    addTearDown(debugResetLensWarmUp);
+    await _pump(tester);
+    expect(find.byKey(kLensWarmUpKey), findsNothing);
   });
 
   testWidgets("it shares the control's own BackdropGroup key", (

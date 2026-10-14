@@ -414,6 +414,11 @@
       "bottom": 9.0,
       "fringeTop": 7.3,
       "fringeBottom": 7.7
+    },
+    "lookMethod": "Task 15, 2026-10-14: native's held lens (143.3 x 44, pressed on full3 segment 0, the stripes page of segments-native, iOS 26.5 simulator @3x) against the same pixels with the lens on another segment: the VK-550 segment strips, frames_4 row 9 (press) and frames_1 row 17 (rest on segment 1), native column. core: inside the lens capsule deflated by the 9 pt ring; ring: the 9 pt bands at the top and bottom of its straight part; both without the 22 pt label column either side of its centre. chromaRatio: p95 of max - min of RGB, lens over page; luma5 / luma95: ITU-R 601 percentiles, lens minus page",
+    "look": {
+      "light": {"coreChromaRatio": 0.965, "coreLuma5": -3.2, "coreLuma95": -7.0, "ringChromaRatio": 0.897, "ringLuma5": -8.0, "ringLuma95": -8.0},
+      "dark": {"coreChromaRatio": 0.965, "coreLuma5": -1.4, "coreLuma95": -4.1, "ringChromaRatio": 0.889, "ringLuma5": 0.0, "ringLuma95": -4.5}
     }
   },
   "rtl": {

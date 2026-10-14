@@ -26,6 +26,16 @@ enum LensPhase {
   settling,
 }
 
+/// The side of a segment lens that follows its area after a tap's lift
+/// (spec VK-550 §8.4).
+enum _Follow {
+  /// The height is the area over the width.
+  height,
+
+  /// The width is the area over the height.
+  width,
+}
+
 /// What a segment flight is landing (spec VK-550 §8.3).
 enum _Flight {
   /// A tap on another segment: the lift, then the wobble.
@@ -174,6 +184,11 @@ class LensMotion {
   double _share = 0;
   late final SpringValue _w;
   late final SpringValue _h;
+
+  /// After a segment tap's lift: the lens area, and the side that follows
+  /// it (spec VK-550 §8.4); null otherwise.
+  final SpringValue _area = SpringValue(0, TabSprings.widthOut);
+  _Follow? _follow;
   final SpringValue _scale = SpringValue(1, TabSprings.scaleOut);
   late final SpringValue _engage = SpringValue(0, profile.engageOut);
   late final SpringValue _refraction = SpringValue(0, profile.effectOut);
@@ -224,6 +239,10 @@ class LensMotion {
   /// for a quicker tap. The lens keeps the press look 25 ms past it.
   double _releaseAt = 0;
   int _flightSlots = 1;
+
+  /// A segment tap's lift between its near (0) and far (1) shapes, by the
+  /// distance it travels.
+  double _liftMix = 0;
   double _flightTarget = 0;
   int? _popSlot;
   int _lastSlot = 0;
@@ -237,6 +256,7 @@ class LensMotion {
     _x2,
     _w,
     _h,
+    _area,
     _scale,
     _engage,
     _refraction,
@@ -311,6 +331,8 @@ class LensMotion {
     _x2.jump(r.center.dx);
     _w.jump(r.width);
     _h.jump(r.height);
+    _area.jump(r.width * r.height);
+    _follow = null;
     _scale.jump(1);
     _engage.jump(0);
     _refraction.jump(0);
@@ -598,8 +620,13 @@ class LensMotion {
     _phase = LensPhase.flying;
     _flick = flick;
     _flight = tap && slot != from ? _Flight.tap : _Flight.release;
-    _flightSlots = from == null ? 1 : (slot - from).abs();
     _flightTarget = _geometry.centreOf(slot);
+    final travel = from == null
+        ? 0.0
+        : (_flightTarget - _geometry.centreOf(from)).abs();
+    final (near, far) = e.liftTravel;
+    _liftMix = ((travel - near) / (far - near)).clamp(0.0, 1.0);
+    _follow = null;
     // An up in place keeps the press look until the press has lasted
     // pressHold (`tapOnSelected`); a longer press releases at once.
     _releaseAt = tap ? math.max(0, e.pressHold - pressed) : 0;
@@ -636,7 +663,7 @@ class LensMotion {
         e.slide.delay,
         e.slide.secondaryDelay,
         e.pressDelay,
-        if (_flightSlots <= 1) e.liftUntil.$1 else e.liftUntil.$2,
+        _liftUntil(e),
         e.engageHold,
       ]..sort(),
       _Flight.release => [
@@ -673,6 +700,7 @@ class LensMotion {
     for (final s in _springs) {
       s.advance(rest);
     }
+    _followArea();
     if (_phase == LensPhase.flying &&
         _flight == _Flight.release &&
         _landAt == null &&
@@ -699,6 +727,7 @@ class LensMotion {
       }
       _share = 0;
       _popSlot = null;
+      _follow = null;
       _phase = LensPhase.rest;
     }
     return moving;
@@ -713,7 +742,7 @@ class LensMotion {
           e.slide.delay,
           e.slide.secondaryDelay,
           e.engageHold,
-          if (_flightSlots <= 1) e.liftUntil.$1 else e.liftUntil.$2,
+          _liftUntil(e),
         ].reduce(math.max),
         _Flight.release => math.max(
           _releaseAt +
@@ -913,15 +942,29 @@ class LensMotion {
         engage = 1;
       }
     } else if (flight == _Flight.tap) {
-      final near = _flightSlots <= 1;
       final answered = since >= e.pressDelay;
+      final lift = _lift(e);
+      final lifting = since < _liftUntil(e);
       (size, spring) = _liftThenWobble(
         e,
         rest,
-        near ? e.liftNear : e.liftFar,
-        lifting: since < (near ? e.liftUntil.$1 : e.liftUntil.$2),
+        lift,
+        lifting: lifting,
         answered: answered,
       );
+      if (!lifting && answered && _follow == null) {
+        // The lift is over: the side it stretched most wobbles back, the
+        // other keeps the area (spec §8.4).
+        _follow = lift.width * rest.width >= lift.height * rest.height
+            ? _Follow.height
+            : _Follow.width;
+        _area
+          ..spring = e.wobbleArea
+          ..place(
+            _w.value * _h.value,
+            _w.value * _h.velocity + _h.value * _w.velocity,
+          );
+      }
       engage = answered && since < e.engageHold ? 1 : 0;
     } else if (flight == _Flight.release) {
       if (since < _releaseAt) {
@@ -953,8 +996,35 @@ class LensMotion {
       _w.spring = spring;
       _h.spring = spring;
     }
+    // A tap's wobble keeps the area to rest, through its settling; a press,
+    // a release or a programmatic slide drives both sides again.
+    if (flight != _Flight.tap && flight != null) _follow = null;
+    if (interacting || reduceMotion) _follow = null;
+    _area.target = rest.width * rest.height;
     _fade(_engage, engage, profile.engageIn, profile.engageOut);
     _fade(_refraction, engage, profile.effectIn, profile.effectOut);
+  }
+
+  /// A segment tap's lift gains, between near and far by distance.
+  Size _lift(SegmentEnvelope e) => Size.lerp(e.liftNear, e.liftFar, _liftMix)!;
+
+  /// When a segment tap's lift ends, between near and far by distance.
+  double _liftUntil(SegmentEnvelope e) =>
+      e.liftUntil.$1 + (e.liftUntil.$2 - e.liftUntil.$1) * _liftMix;
+
+  /// The side that keeps the area takes its value from it (spec §8.4).
+  void _followArea() {
+    final follow = _follow;
+    if (follow == null) return;
+    final (driver, follower) = switch (follow) {
+      _Follow.height => (_w, _h),
+      _Follow.width => (_h, _w),
+    };
+    final d = math.max(driver.value, 1);
+    follower.place(
+      _area.value / d,
+      (_area.velocity * d - _area.value * driver.velocity) / (d * d),
+    );
   }
 
   /// [pressed] squashed by the lens speed: narrower and taller above the

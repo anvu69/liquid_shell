@@ -52,10 +52,6 @@ double? debugSegmentLensPress;
 
 const BorderRadius _capsule = BorderRadius.all(Radius.circular(999));
 
-/// The segment lens's refracting ring (spec §7: 9 pt; Task 1 measured
-/// native's at 8.3 to 9.0).
-const double _lensBezel = 9;
-
 /// A held unselected segment's label fades to this opacity over
 /// [_pressedLabelFade] (Task 1, `pressOther`).
 const double _pressedLabelOpacity = 0.2;
@@ -496,6 +492,7 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl>
     // The rest thumb gives way to the lens as it engages, and fades in
     // under reduce motion.
     final rest = f.restOpacity * (1 - f.engage);
+    final lensDrawn = f.visible && f.engage > 0.001;
     return [
       Positioned.fromRect(
         key: const ValueKey<String>('track'),
@@ -520,7 +517,8 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl>
             ),
           ),
         ),
-      if (f.visible)
+      // While the lens is drawn it draws the rest fill itself, once (R8).
+      if (f.visible && !lensDrawn)
         Positioned.fromRect(
           key: const ValueKey<String>('thumb'),
           rect: lens,
@@ -542,7 +540,7 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl>
           child: _row(g, style, scaler, pressed: _pressed),
         ),
       ),
-      if (f.visible && f.engage > 0.001)
+      if (lensDrawn)
         Positioned.fromRect(
           key: const ValueKey<String>('lens'),
           rect: lens,
@@ -554,7 +552,7 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl>
             // Fades in with the rest thumb (reduce motion), as the tab
             // lens's.
             restFill: thumb.withValues(alpha: thumb.a * f.restOpacity),
-            bezel: _lensBezel,
+            look: _motion!.profile.look,
           ),
         ),
       if (f.visible)
@@ -571,6 +569,16 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl>
               child: _row(g, medium, scaler, lensCopy: true),
             ),
           ),
+        ),
+      // Builds the lens pipeline before the first press (Task 15).
+      if (!lensDrawn)
+        const Positioned(
+          key: ValueKey<String>('warm-up'),
+          left: 0,
+          top: 0,
+          width: 1,
+          height: 1,
+          child: LiquidLensWarmUp(),
         ),
       // A ring whose segment is gone (fewer segments) is not drawn.
       if (_focused case final i? when i < g.slots.length)

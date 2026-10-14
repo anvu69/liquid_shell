@@ -8,6 +8,7 @@ import 'package:liquid_shell/src/chrome/lens_profile.dart';
 import 'package:liquid_shell/src/chrome/lens_track.dart';
 import 'package:liquid_shell/src/chrome/tab_geometry.dart';
 import 'package:liquid_shell/src/chrome/tab_springs.dart';
+import 'package:liquid_shell/src/glass/lens_look.dart';
 
 import '../helpers/native_rows.dart';
 
@@ -53,6 +54,14 @@ void main() {
     expect(p.ghostFade, TabSprings.ghostFade);
     expect(p.programmatic, isNull, reason: 'tabs jump (VK-503 Q12)');
     expect(p.envelope, isA<TabEnvelope>());
+    expect(p.look, same(LensLook.tab), reason: "VK-503's lens, unchanged");
+  });
+
+  test('the segment profile draws the segment look: a lens on a flat '
+      'track, not on glass (spec VK-550 §7, R8)', () {
+    expect(LensProfile.segment.look, same(LensLook.segment));
+    expect(LensLook.segment.overGlass, isFalse);
+    expect(LensLook.tab.overGlass, isTrue);
   });
 
   test('TabBarGeometry is a LensTrack; only the top form inflates taps', () {

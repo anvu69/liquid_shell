@@ -123,6 +123,18 @@ void main() {
 
       final full3 = track('full3');
       final y = full3.center.dy;
+      // Task 15: the trace runs a debug (JIT) build, where the first run of
+      // the lens's tap code compiles it, and the first tap after launch
+      // dropped a frame (33-50 ms in every run) wherever its first new code
+      // path fell: warming the lens pipeline did not remove it, and a 1 x 1
+      // lens drawn at mount moved it from the engage to the release. One
+      // unrecorded tap there and back runs every tap path once before the
+      // recording, and before the strips' start marker. A release (AOT)
+      // build compiles nothing at run time.
+      for (final to in [1, 0]) {
+        await touches.press(centre('full3', to, 3), _tapHeld);
+        await settle(tester);
+      }
       // tool/segment_frames.sh cuts the recording here.
       debugPrint('SEGFID start');
       await idle();

@@ -47,6 +47,7 @@ class LiquidOpticsParams {
     this.bezel,
     this.rimWidth,
     this.veilFalloff = 0,
+    this.saturation,
   });
 
   /// The liquid fields of [theme]; the rim uses `rimHighlight`.
@@ -90,6 +91,10 @@ class LiquidOpticsParams {
   /// VK-503 §7.2, Task 16 part B).
   final double veilFalloff;
 
+  /// Vibrancy override; null uses [LiquidOptics.saturation]. The segment
+  /// lens keeps the page's colours (spec VK-550 §7).
+  final double? saturation;
+
   @override
   bool operator ==(Object other) =>
       other is LiquidOpticsParams &&
@@ -100,7 +105,8 @@ class LiquidOpticsParams {
       other.blurSigma == blurSigma &&
       other.bezel == bezel &&
       other.rimWidth == rimWidth &&
-      other.veilFalloff == veilFalloff;
+      other.veilFalloff == veilFalloff &&
+      other.saturation == saturation;
 
   @override
   int get hashCode => Object.hash(
@@ -112,6 +118,7 @@ class LiquidOpticsParams {
     bezel,
     rimWidth,
     veilFalloff,
+    saturation,
   );
 }
 
@@ -173,7 +180,7 @@ Float32List liquidUniforms({
     LiquidOptics.light.dx,
     LiquidOptics.light.dy,
     (params.rimWidth ?? LiquidOptics.rimWidth) * scale,
-    LiquidOptics.saturation,
+    params.saturation ?? LiquidOptics.saturation,
     params.veilFalloff.clamp(0.0, 1.0),
   ]);
 }

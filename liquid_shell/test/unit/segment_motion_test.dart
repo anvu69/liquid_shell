@@ -217,6 +217,63 @@ void main() {
       });
     }
 
+    // The size rows of the tap gate (spec §14.5, as
+    // tool/segment_trace_compare.dart reads them), for every capture: the
+    // peak height, and once x passes its rest, the extremes of w and h
+    // against native's at the same rows, each within 10 %. Task 15: the
+    // lift follows the distance (the 148 pt five-segment tap lifts as a
+    // one-segment tap, not as tap_3_1's 247 pt), and the landing wobble
+    // keeps the lens's area (tap_3_1 swells wide and flat as its height
+    // dips; a one-segment tap stays tall as it narrows).
+    for (final (key, rows, count, from, to) in captures) {
+      test('the size gate (spec §14.5), $key: peak h and the wobble '
+          'extremes within 10 %', () {
+        final g = controlOf(count);
+        final m = LensMotion(
+          geometry: g,
+          selected: from,
+          profile: LensProfile.segment,
+        );
+        final finger = Offset(g.centreOf(to), g.size.height / 2);
+        m
+          ..down(finger)
+          ..advance(dt);
+        expect(m.up(finger), to);
+        final frames = record(m, rows.last.t);
+        final ours = [for (final r in rows) at(frames, r.t)];
+        final nativePeak = rows.map((r) => r.h).reduce(math.max);
+        final peak = ours.map((f) => f.lens.height).reduce(math.max);
+        expect(peak, closeTo(nativePeak, nativePeak * 0.10), reason: 'peak h');
+        final sign = (to - from).sign;
+        final rest = rows.last.x;
+        final past = math.max(
+          0,
+          rows.indexWhere((r) => (r.x - rest) * sign > 0),
+        );
+        for (final (name, nativeOf, ourOf) in [
+          ('w', (NativeRow r) => r.w, (LensFrame f) => f.lens.width),
+          ('h', (NativeRow r) => r.h, (LensFrame f) => f.lens.height),
+        ]) {
+          final restValue = nativeOf(rows.last);
+          final extreme = rows
+              .skip(past)
+              .map(nativeOf)
+              .reduce(
+                (a, b) => (b - restValue).abs() > (a - restValue).abs() ? b : a,
+              );
+          final ourValues = ours.skip(past).map(ourOf);
+          final ourExtreme = extreme < restValue
+              ? ourValues.reduce(math.min)
+              : ourValues.reduce(math.max);
+          expect(
+            ourExtreme,
+            closeTo(extreme, extreme.abs() * 0.10),
+            reason: '$name wobble (native $extreme)',
+          );
+        }
+      });
+    }
+
     test('a tap on the selected segment grows in place and lets go '
         '(tapOnSelected)', () {
       final rows = rowsOf(ref, 'tapOnSelected');
@@ -243,6 +300,58 @@ void main() {
       }
       expect(m.committed, 0);
     });
+  });
+
+  // Task 15 (Task 13 review): on the simulator `flick overshoot` read 2.77
+  // / 2.96 / 3.11 against native's 3.86 ±1, its run-to-run spread from
+  // where the finger's last frame before the lift falls ("tune against the
+  // median of several flicks, not one run"). Driven as the simulator drives
+  // it (tool/segment_frames.sh, the shared driver's `arrive`: native's
+  // release time, 60 fps moves, the lift as it arrives, half a frame
+  // early), over every frame phase, the median landing must sit inside
+  // native's band. The phases themselves spread about 1 pt (reported in
+  // docs/qa/vk550/acceptance.md).
+  test('flickLanding, as the simulator drives it: the median overshoot over '
+      "the frame phases is within native's ±1 pt", () {
+    final landing = ref['flickLanding'] as Map<String, dynamic>;
+    final releaseAt = (landing['release_at'] as num).toDouble();
+    final to = (landing['landing'] as num).toDouble();
+    final native = (landing['overshoot'] as num).toDouble();
+    final thumb = (((ref['geometry'] as Map)['thumbs3'] as List)[2] as List)
+        .cast<num>();
+    final from = thumb[0] + thumb[2] / 2;
+    final pace = (from - to) / (releaseAt - 1 / 120);
+    final g = controlOf(3);
+    final y = g.size.height / 2;
+    final overshoots = <double>[];
+    for (var i = 0; i < 20; i++) {
+      final phase = i / 20;
+      final m = LensMotion(
+        geometry: g,
+        selected: 2,
+        profile: LensProfile.segment,
+      )..down(Offset(from, y));
+      var lifted = false;
+      for (var k = 1; !lifted; k++) {
+        final finger = from - pace * (k - phase) * dt;
+        if (finger <= to) {
+          expect(m.up(Offset(to, y)), 0);
+          lifted = true;
+        } else {
+          m.move(Offset(finger, y));
+        }
+        m.advance(dt);
+      }
+      var lowest = m.frame.lens.center.dx;
+      for (var j = 0; j < 90; j++) {
+        m.advance(dt);
+        lowest = math.min(lowest, m.frame.lens.center.dx);
+      }
+      overshoots.add(g.centreOf(0) - lowest);
+    }
+    overshoots.sort();
+    final median = (overshoots[9] + overshoots[10]) / 2;
+    expect(median, closeTo(native, 1), reason: 'phases $overshoots');
   });
 
   test('press on the selected segment: size and engage per native row, no '

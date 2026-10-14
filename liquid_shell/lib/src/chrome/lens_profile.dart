@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart' show Size;
 import 'package:flutter/physics.dart';
 import 'package:liquid_shell/src/chrome/tab_springs.dart';
+import 'package:liquid_shell/src/glass/lens_look.dart';
 
 /// The shape a lens takes in flight: which envelope `LensMotion` runs
 /// (spec VK-550 §8.1).
@@ -36,7 +37,9 @@ final class SegmentEnvelope extends LensEnvelope {
     required this.liftNear,
     required this.liftFar,
     required this.liftUntil,
+    required this.liftTravel,
     required this.wobble,
+    required this.wobbleArea,
     required this.squashKnee,
     required this.squashGain,
     required this.squashMax,
@@ -80,11 +83,22 @@ final class SegmentEnvelope extends LensEnvelope {
   /// The lift of a tap over two segments or more.
   final Size liftFar;
 
-  /// Seconds after the commit the lift lasts: (one segment, two or more).
+  /// Seconds after the commit the lift lasts: ([liftNear], [liftFar]).
   final (double, double) liftUntil;
 
-  /// The size spring after the lift (the landing wobble).
+  /// The lift follows the distance a tap travels, in points: [liftNear]
+  /// up to the first, [liftFar] from the second, linear between (gains and
+  /// [liftUntil] alike).
+  final (double, double) liftTravel;
+
+  /// The size spring after the lift (the landing wobble): it drives the
+  /// side the lift stretched most.
   final SpringDescription wobble;
+
+  /// After a tap's lift the lens keeps its area (spec §8.4): the area
+  /// returns to rest on this spring, and the side the lift stretched less
+  /// is the area over the other.
+  final SpringDescription wobbleArea;
 
   /// Lens speed (pt/s) above which a drag squashes the lens.
   final double squashKnee;
@@ -158,6 +172,7 @@ final class LensProfile {
     required this.ghostFade,
     required this.envelope,
     this.programmatic,
+    this.look = LensLook.tab,
   });
 
   /// Lens x after a tap; content pop.
@@ -208,6 +223,9 @@ final class LensProfile {
   /// The flight envelope.
   final LensEnvelope envelope;
 
+  /// What the engaged lens looks like (the shader's optics).
+  final LensLook look;
+
   /// Exactly TabSprings (spec VK-503 §8.1).
   static final LensProfile tab = LensProfile(
     tap: TabSprings.tap,
@@ -236,9 +254,15 @@ final class LensProfile {
     tap: fittedSpring(0.751, 0.577),
     // Spike §3: the drag lag, 6.77 pt at 82.2 pt/s, is VK-503's within 5 %.
     dragFollow: TabSprings.dragFollow,
-    // A drag's release (Task 8 review, Q-E): fitted to the `flick` landing
-    // after its release, overshoot 4.10 pt (native 4.04), lowest point
-    // +0.232 s (0.221), within 0.5 pt from +0.499 s (0.503); the
+    // A drag's release (Task 8 review, Q-E; Task 15): fitted to both
+    // native landings. `flick`: overshoot 4.40 pt (native 4.04), lowest
+    // point +0.229 s (0.221), within 0.5 pt from +0.493 s (0.503).
+    // `flickLanding` as the simulator drives it: median overshoot 3.11 pt
+    // over the frame phases (native 3.86; 2.71 to 3.65 by phase). One
+    // linear spring cannot hold both: native's overshoot barely changes
+    // with speed (4.04 at about 630 pt/s, 3.86 at about 450) and ours
+    // does, so the errors are shared; Task 8's 0.8 / 0.59 s put `flick`
+    // at 4.10 and `flickLanding` at 2.85 (on the edge of its ±1 pt). The
     // `slow_drag.release_rows` stay within 2 pt (x, w, h). Task 4's
     // 0.64 / 0.31 s bottomed out 31 % and settled 47 % early.
     snap: _segmentRelease,
@@ -260,6 +284,7 @@ final class LensProfile {
     ghostFade: TabSprings.ghostFade,
     // Spike §3: the programmatic slide (rms 0.67 pt).
     programmatic: fittedSpring(0.82, 0.41),
+    look: LensLook.segment,
     envelope: SegmentEnvelope(
       // Spike §3: 119 × 28 → 143 × 44 (`geometry.pressedGrow`).
       pressGrow: const Size(24, 16),
@@ -299,8 +324,21 @@ final class LensProfile {
       // then the wobble lowers it to 23.3 (native 23.35).
       liftFar: const Size(0.01, 0.78),
       liftUntil: (0.235, 0.215),
+      // Task 15: native's lift follows the distance, not the segment
+      // count. `tap_1_3_5seg` (two segments of five, 148 pt) lifts as a
+      // one-segment tap (peak h 38.9, native's ×1.39), `tap_3_1` (247 pt)
+      // as liftFar.
+      liftTravel: (148, 246.67),
       // The size spring after the lift, fitted with the lifts above.
       wobble: fittedSpring(0.42, 0.47),
+      // Task 15: after the lift native keeps the lens's area within 4 %
+      // of rest from +0.45 s (w × h of `tap_1_2`, `tap_3_1`,
+      // `tap_1_3_5seg`), so a lens that narrows grows taller and one that
+      // flattens grows wider: `tap_3_1`'s wide, flat landing. Fitted to
+      // those rows from +0.25 s: `tap_1_2` h within 1.3 pt (rms 0.8),
+      // `tap_3_1` w within 7 pt (rms 4.2; its swell 142.4 against 136.1),
+      // `tap_1_3_5seg` h within 2.6 pt (rms 1.3).
+      wobbleArea: fittedSpring(0.8, 0.36),
       // `flick` (rows before its release): from 200 pt/s the lens narrows
       // and rises with its speed; the flick's peaks are 135 × 48 (native
       // 138 × 49.7).
@@ -317,7 +355,7 @@ final class LensProfile {
 }
 
 /// The segment lens after a drag's release (see [LensProfile.segment]).
-final SpringDescription _segmentRelease = fittedSpring(0.8, 0.59);
+final SpringDescription _segmentRelease = fittedSpring(0.785, 0.585);
 
 // The `flick` landing (Task 8 review, Q-E), with [_segmentRelease] and the
 // tap's wobble: w swells ×1.099 (native ×1.103) and h dips ×0.872 (×0.877)
