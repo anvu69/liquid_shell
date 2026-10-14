@@ -8,20 +8,28 @@
 //
 // Every reference is the fixture's (owner Q3): the native column of a row
 // is a fixture number, or a quantity of fixture numbers only (an
-// overshoot, a settle time, an engage onset), printed with the fixture
-// numbers it is made of. No row compares Flutter with Flutter.
+// overshoot, a settle time), printed with the fixture numbers it is made
+// of. No row compares Flutter with Flutter.
 //
-// Kinds as tool/tab_trace_compare.dart's (spec VK-503 §17.4): `native`
-// rows can fail on the model; `native, constant` rows compare a value
-// Flutter takes from a constant typed in from the same native measurement
-// (the 32 pt track, the 2 pt inset, the case's 16 pt margins, the fill
-// colours), so only the plumbing can fail them.
+// Kinds as tool/tab_trace_compare.dart's (spec VK-503 §17.4), plus two:
+// - `native`: independent native data the model can fail;
+// - `native, constant`: Flutter takes the value from a constant typed in
+//   from the same measurement (the 32 pt track, the 2 pt inset, the
+//   case's 16 pt margins, the fill colours): only the plumbing can fail;
+// - `native, fitted`: the rows the model's springs were fitted to (the
+//   tap, press, release and programmatic rows, spec §8.2): in sample, so
+//   only the model's shape can fail them;
+// - `condition`: a precondition of other rows (the gesture against
+//   native's, the tap clock, dropped frames), not a comparison. A row
+//   whose condition fails is `n/a`, neither a pass nor a failure.
 //
 // The response:
 //   {'geometry': {id: {'track': [l, t, w, h], 'thumb' | 'thumbs': …}},
 //    'sequences': {name: [{t, x, y, w, h, engage, touch, finger}, …]},
+//    'drives': {'flick': {'seconds', 'from', 'to'}},
 //    'colours': {name: [r, g, b]}}
-// in screen points; the fixture's x is control-local (the track's left).
+// in screen points (drives control-local); the fixture's x is
+// control-local (the track's left).
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -29,11 +37,13 @@ import 'dart:math' as math;
 import 'trace_math.dart';
 
 /// One row of the table: the Flutter value and the native reference as
-/// printed.
+/// printed. A row that is not `comparable` (its condition failed) does not
+/// `pass` and does not fail.
 typedef SegmentRow = ({
   String name,
   Kind kind,
   bool pass,
+  bool comparable,
   String flutter,
   String native,
   String tolerance,
@@ -76,9 +86,23 @@ const List<_Capture> _taps = [
 /// Tap rows are compared every 0.05 s to here (spec §14.5).
 const double _tapRowsTo = 0.6;
 
-/// One display frame: the engage onset's tolerance and the most the tap
-/// clock may be shifted (spec §14.5, tap clock alignment).
+/// One display frame: the engage onset's tolerance, the flick drive's.
 const double _frame = 1 / 60;
+
+/// The tap clock's grid (0.5 ms) and its bound, the last grid step within
+/// one frame (spec §14.5, amended 2026-10-14).
+const double _clockStep = 0.0005;
+const int _clockSteps = 33;
+
+/// The longest gap between two frames a tap may have after its commit:
+/// one and a half frames (spec §14.5, amended 2026-10-14).
+const double _maxGap = 1.5 / 60;
+
+/// The app's change must find the ticker idle. A ticker already running
+/// would show its time since its own start, at least the second the driver
+/// rests before each sequence; frames dropped at the rebuild (50 ms seen
+/// under load) do not move the clock's origin.
+const double _maxTickerStart = 0.25;
 
 /// Row times are differences of fixture times: this absorbs their
 /// rounding.
@@ -91,19 +115,35 @@ List<SegmentRow> segmentRows(
   Map<String, dynamic> fixture,
 ) => _Table(response, fixture).rows();
 
-/// Prints [rows] as a Markdown table, then the counts per kind and the
-/// verdict, to [out]; returns how many failed.
+/// Prints [rows] as a Markdown table, then the counts per kind, the rows
+/// that could not be compared and the verdict, to [out]; returns how many
+/// failed.
 int printSegmentTable(List<SegmentRow> rows, StringSink out) {
   out
     ..writeln('| check | kind | result | flutter | native | tolerance |')
     ..writeln('|---|---|---|---|---|---|');
   for (final r in rows) {
+    final result = !r.comparable
+        ? 'n/a'
+        : r.pass
+        ? 'pass'
+        : 'FAIL';
     out.writeln(
-      '| ${r.name} | ${r.kind.label} | ${r.pass ? 'pass' : 'FAIL'} | '
+      '| ${r.name} | ${r.kind.label} | $result | '
       '${r.flutter} | ${r.native} | ${r.tolerance} |',
     );
   }
-  return writeSummary(out, [for (final r in rows) (r.kind, r.pass)]);
+  return writeSummary(
+    out,
+    [
+      for (final r in rows)
+        if (r.comparable) (r.kind, r.pass),
+    ],
+    notComparable: [
+      for (final r in rows)
+        if (!r.comparable) r.name,
+    ],
+  );
 }
 
 void main(List<String> args) {
@@ -125,11 +165,19 @@ void main(List<String> args) {
 String _n(double? v, [int digits = 2]) =>
     v == null || v.isNaN ? 'none' : v.toStringAsFixed(digits);
 
+String _msOf(double seconds) => '${(seconds * 1000).toStringAsFixed(1)} ms';
+
 double _d(Object? v) => (v! as num).toDouble();
+
+double? _maybe(Object? v) => (v as num?)?.toDouble();
 
 List<double> _list(Object? v) => [
   for (final e in v! as List<dynamic>) (e as num).toDouble(),
 ];
+
+/// [v] as a list of numbers, or null when it is not one.
+List<double>? _numbers(Object? v) =>
+    v is List<dynamic> && v.every((e) => e is num) ? _list(v) : null;
 
 class _Table {
   _Table(this._response, this._fixture);
@@ -150,7 +198,8 @@ class _Table {
   }
 
   /// [value] against [reference] within [abs] or [rel]; [note] follows
-  /// the reference (the fixture numbers a derived one is made of).
+  /// the reference (the fixture numbers a derived one is made of). Not
+  /// [comparable]: printed, neither passed nor failed.
   void _add(
     String name,
     Kind kind,
@@ -160,8 +209,10 @@ class _Table {
     double? rel,
     int digits = 2,
     String note = '',
+    bool comparable = true,
   }) {
     final ok =
+        comparable &&
         value != null &&
         reference != null &&
         near(value, reference, band(reference, abs: abs, rel: rel));
@@ -169,6 +220,7 @@ class _Table {
       name: name,
       kind: kind,
       pass: ok,
+      comparable: comparable,
       flutter: _n(value, digits),
       native: '${_n(reference, digits)}$note',
       tolerance: abs != null
@@ -177,11 +229,28 @@ class _Table {
     ));
   }
 
-  /// A part of the response that is not there: one failed row.
-  void _missing(String name) => _rows.add((
+  /// A condition: [pass] or not, both columns as printed.
+  void _condition(
+    String name, {
+    required bool pass,
+    required String flutter,
+    required String native,
+  }) => _rows.add((
     name: name,
-    kind: Kind.native,
+    kind: Kind.condition,
+    pass: pass,
+    comparable: true,
+    flutter: flutter,
+    native: native,
+    tolerance: '',
+  ));
+
+  /// A part of the response that is not there: one failed row.
+  void _missing(String name, {Kind kind = Kind.native}) => _rows.add((
+    name: name,
+    kind: kind,
     pass: false,
+    comparable: true,
     flutter: 'missing',
     native: 'recorded',
     tolerance: '',
@@ -211,10 +280,7 @@ class _Table {
           as Map<String, dynamic>?;
 
   /// The track rect of control [id]: left, top, width, height.
-  List<double>? _track(String id) {
-    final c = _control(id);
-    return c == null ? null : _list(c['track']);
-  }
+  List<double>? _track(String id) => _numbers(_control(id)?['track']);
 
   /// The Flutter trace [name], x and finger made control-local (the
   /// fixture's frame) on [control]'s track; null and a failed row when it
@@ -245,7 +311,7 @@ class _Table {
     void add(String name, Kind kind, double value, Object? reference) =>
         _add(name, kind, value, _d(reference), abs: tol);
     for (final id in ['full3', 'full2', 'full5', 'intrinsic3']) {
-      if (_control(id) == null) _missing('$id geometry');
+      if (_track(id) == null) _missing('$id geometry');
     }
     // The case lays the full-width controls between 16 pt margins and the
     // track is 32 pt (SegmentMetrics), both typed in from native.
@@ -258,24 +324,33 @@ class _Table {
     // x and w are the equal split of the track, W/n − 4 (spec §5), which
     // native rounds to whole points: the model can fail them. y and h are
     // the 2 pt inset of the 32 pt track: constants.
-    final full3 = _control('full3');
     final track3 = _track('full3');
-    if (full3 != null && track3 != null) {
-      final thumbs = full3['thumbs']! as List<dynamic>;
-      final want = g['thumbs3']! as List<dynamic>;
-      for (var i = 0; i < 3; i++) {
-        final got = _list(thumbs[i]);
-        final ref = _list(want[i]);
-        add('thumb$i x', Kind.native, got[0] - track3[0], ref[0]);
-        add('thumb$i y', Kind.constant, got[1] - track3[1], ref[1]);
-        add('thumb$i w', Kind.native, got[2], ref[2]);
-        add('thumb$i h', Kind.constant, got[3], ref[3]);
+    if (track3 != null) {
+      final thumbs = _control('full3')?['thumbs'];
+      final got = thumbs is List<dynamic> && thumbs.length == 3
+          ? [for (final t in thumbs) _numbers(t)]
+          : null;
+      if (got == null || got.contains(null)) {
+        _missing('full3 thumbs');
+      } else {
+        final want = g['thumbs3']! as List<dynamic>;
+        for (var i = 0; i < 3; i++) {
+          final rect = got[i]!;
+          final ref = _list(want[i]);
+          add('thumb$i x', Kind.native, rect[0] - track3[0], ref[0]);
+          add('thumb$i y', Kind.constant, rect[1] - track3[1], ref[1]);
+          add('thumb$i w', Kind.native, rect[2], ref[2]);
+          add('thumb$i h', Kind.constant, rect[3], ref[3]);
+        }
       }
     }
     for (final (id, key) in [('full2', 'thumb2'), ('full5', 'thumb5')]) {
-      final c = _control(id);
-      if (c == null) continue;
-      final got = _list(c['thumb']);
+      if (_track(id) == null) continue;
+      final got = _numbers(_control(id)?['thumb']);
+      if (got == null) {
+        _missing('$id thumb');
+        continue;
+      }
       final ref = _list(g[key]);
       add('$id thumb w', Kind.native, got[2], ref[0]);
       add('$id thumb h', Kind.constant, got[3], ref[1]);
@@ -288,14 +363,21 @@ class _Table {
     }
   }
 
-  /// A tap capture (spec §14.5): the engage onset, x every 0.05 s to
-  /// 0.6 s on the engage-aligned clock, the overshoot, the settle time, the
-  /// peak height and the wobble's extremes. The model's tap springs were
-  /// fitted to these rows (spec §8.2, Task 4): with two springs, a blend
-  /// and two delays for 65 rows, it can still fail them.
+  /// A tap capture (spec §14.5, amended 2026-10-14):
+  /// - `engage onset`: a latency row against native's onset at
+  ///   display-link resolution (`engageOnset`), ±1 frame;
+  /// - `clock`: the shift, within ±1 frame on a 0.5 ms grid, that best
+  ///   fits Flutter's x to the native rows (least squares to 0.6 s); a
+  ///   shift at the bound fails: more than a frame apart;
+  /// - `frames`: the longest gap between Flutter frames from the commit
+  ///   to 0.6 s, at most 1.5 frames;
+  /// - x every 0.05 s to 0.6 s on that clock, the overshoot, the settle
+  ///   time, the peak height and the wobble's extremes: the rows the
+  ///   model's tap springs were fitted to (spec §8.2, Task 4), in sample.
   void _tap(_Capture c) {
     final trace = _trace(c.sequence, c.control);
     if (trace == null) return;
+    final block = _fix(c.path);
     final native = _native(c.path);
     final lift = liftIndex(trace);
     if (lift == 0) {
@@ -307,36 +389,56 @@ class _Table {
     // (segment_motion_test.dart). Native's is valueChanged.
     final t0 = trace[lift - 1]['t']!;
     final after = trace.sublist(lift - 1);
+    final ourTs = [for (final s in after) s['t']! - t0];
     final ts = _times(native);
-    final ourOnset = onset(
-      [for (final s in after) s['t']! - t0],
-      [
-        for (final s in after) s['engage']!,
-      ],
-    );
-    final nativeOnset = onset(ts, [for (final r in native) r[4]]);
     _add(
       '${c.name} engage onset',
       Kind.native,
-      ourOnset,
-      nativeOnset,
+      onset(ourTs, [for (final s in after) s['engage']!]),
+      _maybe(block['engageOnset']),
       abs: _frame,
       digits: 3,
     );
-    // The tap clock alignment (spec §14.5): each capture's rows are read
-    // at t − shift, the onsets' difference, which the row above holds to
-    // one frame.
-    final shift = ourOnset != null && nativeOnset != null
-        ? nativeOnset - ourOnset
-        : 0.0;
-    double at(double t, String key) => valueAt(after, t - shift, key, zero: t0);
 
-    for (var i = 0; i < native.length; i++) {
-      if (ts[i] > _tapRowsTo + _eps) continue;
+    final rows = [
+      for (var i = 0; i < native.length; i++)
+        if (ts[i] <= _tapRowsTo + _eps) i,
+    ];
+    double at(double shift, double t, String key) =>
+        valueAt(after, t - shift, key, zero: t0);
+    final shift = bestShift(
+      (s) => rows.fold(
+        0,
+        (sum, i) => sum + math.pow(at(s, ts[i], 'x') - native[i][1], 2),
+      ),
+      from: -_clockSteps,
+      steps: 2 * _clockSteps,
+      step: _clockStep,
+    );
+    _condition(
+      '${c.name} clock',
+      pass: shift.abs() < _clockSteps * _clockStep - _eps,
+      flutter: _msOf(shift),
+      native:
+          'x rows to ${_ms(_tapRowsTo)}, '
+          'within ±${_msOf(_clockSteps * _clockStep)}',
+    );
+    final gap = longestGap([
+      for (final t in ourTs)
+        if (t <= _tapRowsTo + _eps) t,
+    ]);
+    _condition(
+      '${c.name} frames',
+      pass: gap.gap <= _maxGap + _eps,
+      flutter: 'longest ${_msOf(gap.gap)} at +${_msOf(gap.at)}',
+      native: 'at most ${_msOf(_maxGap)}',
+    );
+
+    for (final i in rows) {
       _add(
         '${c.name} x @${_ms(ts[i])}',
-        Kind.native,
-        at(ts[i], 'x'),
+        Kind.fitted,
+        at(shift, ts[i], 'x'),
         native[i][1],
         abs: 2,
       );
@@ -350,7 +452,7 @@ class _Table {
     final ourRest = after.last['x']!;
     _add(
       '${c.name} overshoot',
-      Kind.native,
+      Kind.fitted,
       overshoot([for (final s in after) s['x']!], after.first['x']!, ourRest),
       overshoot(xs, from, rest),
       abs: 1,
@@ -358,8 +460,8 @@ class _Table {
     );
     _add(
       '${c.name} settle',
-      Kind.native,
-      settle([for (final t in ts) at(t, 'x')], ourRest, ts: ts),
+      Kind.fitted,
+      settle([for (final t in ts) at(shift, t, 'x')], ourRest, ts: ts),
       settle(xs, rest, ts: ts),
       rel: 0.10,
       digits: 3,
@@ -367,29 +469,30 @@ class _Table {
     );
     _add(
       '${c.name} peak h',
-      Kind.native,
-      [for (final t in ts) at(t, 'h')].reduce(math.max),
+      Kind.fitted,
+      [for (final t in ts) at(shift, t, 'h')].reduce(math.max),
       [for (final r in native) r[3]].reduce(math.max),
       rel: 0.10,
     );
     // The wobble (spec §8.4): once x passes its rest, the size swings
     // past its own; the extreme of each, against native's at the same
     // rows.
-    final past = native.indexWhere((r) => (r[1] - rest) * sign > 0);
+    final past = math.max(
+      0,
+      native.indexWhere((r) => (r[1] - rest) * sign > 0),
+    );
     for (final (key, column) in [('w', 2), ('h', 3)]) {
       final restValue = native.last[column];
-      final nativeValues = [
-        for (final r in native.skip(math.max(past, 0))) r[column],
-      ];
+      final nativeValues = [for (final r in native.skip(past)) r[column]];
       final extreme = nativeValues.reduce(
         (a, b) => (b - restValue).abs() > (a - restValue).abs() ? b : a,
       );
       final ourValues = [
-        for (var i = math.max(past, 0); i < native.length; i++) at(ts[i], key),
+        for (var i = past; i < native.length; i++) at(shift, ts[i], key),
       ];
       _add(
         '${c.name} $key wobble',
-        Kind.native,
+        Kind.fitted,
         ourValues.reduce(extreme < restValue ? math.min : math.max),
         extreme,
         rel: 0.10,
@@ -399,8 +502,10 @@ class _Table {
 
   /// The press on the selected segment held 2 s, then its release in
   /// place (spec §14.5): size every native row (±2 pt), engage onset
-  /// against the light and dark captures (±1 frame), then the release's
-  /// size and engage to +0.2 s (±2 pt, ±0.12).
+  /// against the light and dark captures' onsets at display-link
+  /// resolution (±1 frame), then the release's size and engage to +0.2 s
+  /// (±2 pt, ±0.12). The press and release springs were fitted to these
+  /// rows (spike §3, Task 4): in sample.
   void _press() {
     final trace = _trace('press', 'full3');
     if (trace == null) return;
@@ -421,7 +526,7 @@ class _Table {
       for (final (key, column) in [('w', 2), ('h', 3)]) {
         _add(
           'press $key @${_ms(ts[i])}',
-          Kind.native,
+          Kind.fitted,
           valueAt(held, ts[i], key, zero: t0),
           press[i][column],
           abs: 2,
@@ -438,12 +543,11 @@ class _Table {
       ('press', ['press']),
       ('dark.press', ['dark', 'press']),
     ]) {
-      final rows = _native(path);
       _add(
         '$name engage onset',
         Kind.native,
         ours,
-        onset(_times(rows), [for (final r in rows) r[4]]),
+        _maybe(_fix(path)['engageOnset']),
         abs: _frame,
         digits: 3,
       );
@@ -462,7 +566,7 @@ class _Table {
       ]) {
         _add(
           'release $key @+${_ms(rts[i])}',
-          Kind.native,
+          Kind.fitted,
           valueAt(lifted, rts[i], key, zero: up),
           release[i][column],
           abs: tol,
@@ -473,7 +577,8 @@ class _Table {
 
   /// The slow drag's steady lag (spec §14.5, ±10 %): Flutter's, scaled
   /// from its own finger speed to native's (a spring's ramp lag is
-  /// proportional to the speed), against native's.
+  /// proportional to the speed), against native's. Out of sample: the
+  /// follow spring is VK-503's.
   void _drag() {
     final trace = _trace('slow_drag', 'full3');
     if (trace == null) return;
@@ -495,18 +600,52 @@ class _Table {
       name: 'drag lag',
       kind: Kind.native,
       pass: near(scaled, reference, band(reference, rel: 0.10)),
+      comparable: true,
       flutter: '${_n(scaled)} (${_n(ours)} at ${_n(ourSpeed, 1)} pt/s)',
       native: '${_n(reference)} at ${_n(speed, 1)} pt/s',
       tolerance: '±10 %',
     ));
   }
 
-  /// The flick (spec §14.5): it lands on the finger's segment (±0.5 pt)
-  /// and overshoots it as native's landing does (±1 pt).
+  /// The flick (spec §14.5) against native's `flickLanding` capture:
+  /// - `flick drive`: the gesture the Flutter run made (its driver's own
+  ///   clock, down to up, and the finger's travel) against native's
+  ///   (`release_at`; from segment 3's thumb centre to `landing`), ±1
+  ///   frame and ±2 pt. The overshoot depends on the release speed: when
+  ///   the drive differs, the overshoot row is not comparable;
+  /// - `flick lands` on the finger's segment (±0.5 pt);
+  /// - `flick overshoot` past it, as native's landing (±1 pt). Out of
+  ///   sample: the release spring was fitted to the other capture,
+  ///   `flick`.
   void _flick() {
     final trace = _trace('flick', 'full3');
-    if (trace == null) return;
     final landing = _fix(['flickLanding']);
+    final g = _fix(['geometry']);
+    final thumb = _list((g['thumbs3']! as List<dynamic>)[2]);
+    final seconds = _d(landing['release_at']);
+    final travel = thumb[0] + thumb[2] / 2 - _d(landing['landing']);
+    final drive =
+        (_response['drives'] as Map<String, dynamic>?)?['flick']
+            as Map<String, dynamic>?;
+    final ourSeconds = _maybe(drive?['seconds']);
+    final ourFrom = _maybe(drive?['from']);
+    final ourTo = _maybe(drive?['to']);
+    var driven = false;
+    if (ourSeconds == null || ourFrom == null || ourTo == null) {
+      _missing('flick drive', kind: Kind.condition);
+    } else {
+      driven =
+          near(ourSeconds, seconds, _frame) && near(ourFrom - ourTo, travel, 2);
+      _condition(
+        'flick drive',
+        pass: driven,
+        flutter: '${_n(ourSeconds, 3)} s over ${_n(ourFrom - ourTo)} pt',
+        native:
+            '${_n(seconds, 3)} s over ${_n(travel)} pt '
+            '(±1 frame, ±2 pt)',
+      );
+    }
+    if (trace == null) return;
     final lift = liftIndex(trace);
     final after = trace.sublist(lift == 0 ? 0 : lift - 1);
     final rest = trace.last['x']!;
@@ -523,6 +662,7 @@ class _Table {
       overshoot([for (final s in after) s['x']!], after.first['x']!, rest),
       _d(landing['overshoot']),
       abs: 1,
+      comparable: driven,
     );
   }
 
@@ -530,17 +670,29 @@ class _Table {
   /// is a two-segment control (185 pt of travel), the Flutter case's
   /// "Next segment" moves the three-segment one (123 pt): a spring's path
   /// scales with its distance, so the Flutter x is mapped onto native's
-  /// from and to.
+  /// from and to. The programmatic spring was fitted to these rows (spike
+  /// §3, Task 4): in sample.
   ///
   /// t is the ticker's own clock, 0 at the rebuild that applied the app's
   /// write: the control starts its ticker during that frame's layout, and
   /// a ticker started mid-frame takes that frame as its start, so its
-  /// first sample is already a frame in (and a frame advanced). The write
-  /// itself lands up to a frame before that rebuild; native's t0 is the
-  /// write.
+  /// first sample is already a frame in (and a frame advanced). That holds
+  /// only when the ticker was idle at the write: `programmatic clock`
+  /// checks that the first sample is within 0.25 s of 0 (a running ticker
+  /// would be a second or more in), and the rows are not comparable when
+  /// it is not. The write itself lands up to a
+  /// frame before that rebuild; native's t0 is the write.
   void _programmatic() {
     final trace = _trace('programmatic', 'full3');
     if (trace == null) return;
+    final start = trace.first['t']!;
+    final idle = start <= _maxTickerStart + _eps;
+    _condition(
+      'programmatic clock',
+      pass: idle,
+      flutter: 'first frame at ${_msOf(start)}',
+      native: 'within ${_msOf(_maxTickerStart)} of the write',
+    );
     final native = _native(['programmatic_2seg']);
     final ts = _times(native);
     final from = native.first[1];
@@ -551,10 +703,11 @@ class _Table {
       final x = valueAt(trace, ts[i], 'x', zero: 0);
       _add(
         'programmatic x @${_ms(ts[i])}',
-        Kind.native,
+        Kind.fitted,
         from + (x - ourFrom) / (ourTo - ourFrom) * (to - from),
         native[i][1],
         abs: 2,
+        comparable: idle,
       );
     }
   }
@@ -582,16 +735,17 @@ class _Table {
       'darkThumbOverTrack',
       'darkLabel',
     ]) {
-      if (sampled[name] == null) {
+      final got = _numbers(sampled[name]);
+      if (got == null) {
         _missing('colour $name');
         continue;
       }
-      final got = _list(sampled[name]);
       final ref = _list(want[name]);
       _rows.add((
         name: 'colour $name',
         kind: Kind.constant,
         pass: colourCheck(got, ref, tol).pass,
+        comparable: true,
         flutter: rgb(got),
         native: rgb(ref),
         tolerance: '±${tol.round()}',

@@ -22,8 +22,10 @@
 
 cap() { "$tool_dir/with_timeout.sh" "$@"; }
 
-# The status bar ticker's pid while a recording runs (cleanup kills it).
+# The status bar ticker's and the recorder's pids while a recording runs
+# (cleanup stops them).
 ticker=
+recorder=
 
 # Creates an iPhone 17 Pro simulator named <name> on IOS_RUNTIME (its id in
 # `udid`), deletes it when the script exits, boots it, light appearance.
@@ -36,7 +38,8 @@ start_simulator() { # <name>
 }
 
 cleanup() {
-  [ -z "$ticker" ] || kill "$ticker" 2>/dev/null || true
+  [ -z "$ticker" ] || stop_process "$ticker" TERM
+  [ -z "$recorder" ] || stop_process "$recorder" INT
   cap 120 xcrun simctl delete "$udid" || true
 }
 
@@ -58,11 +61,12 @@ tick() {
   done
 }
 
-# Stops `simctl io recordVideo`: SIGINT makes it write the file; a
-# recorder that has not exited after 30 s (a lost simulator) is killed.
-stop_recorder() {
+# Stops a background process: <signal> first (INT makes `simctl io
+# recordVideo` write its file), KILL when it has not exited after 30 s (a
+# lost simulator), then reaps it; never waits unbounded.
+stop_process() { # <pid> <signal>
   local pid=$1 i
-  kill -INT "$pid" 2>/dev/null || true
+  kill "-$2" "$pid" 2>/dev/null || true
   for i in $(seq 60); do
     kill -0 "$pid" 2>/dev/null || break
     sleep 0.5
@@ -82,7 +86,7 @@ record() { # <name> <command...>
   ticker=$!
   xcrun simctl io "$udid" recordVideo --codec=h264 --force "$out/$name.mp4" \
     > >(stamp > "$out/$name.rec") 2>&1 &
-  local rec=$!
+  recorder=$!
   for i in $(seq 60); do
     grep -q 'Recording started' "$out/$name.rec" 2>/dev/null && break
     sleep 0.5
@@ -92,9 +96,13 @@ record() { # <name> <command...>
   status=${PIPESTATUS[0]}
   set -e
   sleep 1
-  stop_recorder "$rec"
-  kill "$ticker"; wait "$ticker" 2>/dev/null || true
+  stop_process "$recorder" INT
+  recorder=
+  stop_process "$ticker" TERM
   ticker=
+  # Let an override the ticker had in flight land before the clear: they
+  # take well under a second (each is capped at 10 s, so not guaranteed).
+  sleep 1
   cap 60 xcrun simctl status_bar "$udid" clear
   [ "$status" = 0 ] || return "$status"
   local t0 mark

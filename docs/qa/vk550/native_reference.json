@@ -1,5 +1,6 @@
 {
   "source": "Spike 2026-10-12 (docs/qa/vk550/spike.md) + Task 1 2026-10-12 (spike.md section 4): pure-UIKit UISegmentedControl probe (SegFid), simulator iPhone 17 Pro, iOS 26.5 (23F77), Xcode 27.0, touches by idb (tap --duration 0.07, hold --duration 2, swipe --duration 2.5 --delta 3, flick swipe --duration 0.25); runs with any touch delivered more than 30 ms late discarded. CADisplayLink presentation frames of _UILiquidLensView; x = lens centre, control-local; engage = opacityPair.inputAmount; rows sampled and held at each step. Full width 370 at x 16 (3 segments; programmatic: 2; tap_1_3_5seg: 5). Light, -bg plain, unless under \"dark\". Taps: t from valueChanged (touch-up). press, pressOther, tapOnSelected, flick: t from touch-down. release, slow_drag.release_rows: t from touch-up. programmatic: t from the selectedSegmentIndex write. tap_1_2 is the Task 1 re-capture (the spike row had valueChanged 160 ms after touch-up, a main-thread stall, and its size/engage did not reproduce in four clean repeats).",
+  "engageOnsetMethod": "engageOnset (a block's t0 as its rows'): the first rise of engage (opacityPair.inputAmount) through 0.5, linear between the two CADisplayLink presentation frames around it (about 16.7 ms apart), from the raw per-frame logs the rows were sampled from (spike native_trace_full3_iphone265: tap_2_3, tap_3_1, press; Task 1 light2, dark1, five1: tap_1_2, dark.tap_1_2, dark.press, tap_1_3_5seg). Added 2026-10-14 (VK-550 Task 13 review): the rows hold each frame for 50 ms (press 33 ms), so an onset read from them lands anywhere in that step.",
   "columns": ["t", "x", "w", "h", "engage"],
   "geometry": {
     "width": 370,
@@ -54,6 +55,7 @@
     }
   },
   "tap_1_2": {
+    "engageOnset": 0.0336,
     "from": 0,
     "to": 1,
     "rows": [
@@ -79,6 +81,7 @@
     ]
   },
   "tap_2_3": {
+    "engageOnset": 0.034,
     "from": 1,
     "to": 2,
     "rows": [
@@ -104,6 +107,7 @@
     ]
   },
   "tap_3_1": {
+    "engageOnset": 0.0339,
     "from": 2,
     "to": 0,
     "rows": [
@@ -129,6 +133,7 @@
     ]
   },
   "press": {
+    "engageOnset": 0.0479,
     "rows": [
       [0.0, 61.5, 119.0, 28.0, 0.0],
       [0.033, 61.5, 119.0, 28.0, 0.0],
@@ -229,6 +234,7 @@
   },
   "dark": {
     "tap_1_2": {
+      "engageOnset": 0.034,
       "from": 0,
       "to": 1,
       "rows": [
@@ -254,6 +260,7 @@
       ]
     },
     "press": {
+      "engageOnset": 0.0462,
       "rows": [
         [0.0, 61.5, 119.0, 28.0, 0.0],
         [0.033, 61.5, 119.64, 28.43, 0.107],
@@ -269,6 +276,7 @@
     }
   },
   "tap_1_3_5seg": {
+    "engageOnset": 0.0337,
     "from": 0,
     "to": 2,
     "segments": 5,

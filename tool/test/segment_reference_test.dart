@@ -33,6 +33,26 @@ void main() {
     expect(j['columns'], ['t', 'x', 'w', 'h', 'engage']);
   });
 
+  test('every tap and press block has its engage onset at display-link '
+      'resolution, with the method', () {
+    final j = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+    expect(j['engageOnsetMethod'], isA<String>());
+    final dark = j['dark'] as Map<String, dynamic>;
+    for (final (key, block) in [
+      ('tap_1_2', j['tap_1_2']),
+      ('tap_2_3', j['tap_2_3']),
+      ('tap_3_1', j['tap_3_1']),
+      ('tap_1_3_5seg', j['tap_1_3_5seg']),
+      ('dark.tap_1_2', dark['tap_1_2']),
+      ('press', j['press']),
+      ('dark.press', dark['press']),
+    ]) {
+      final onset = (block as Map<String, dynamic>)['engageOnset'];
+      expect(onset, isA<num>(), reason: key);
+      expect(onset as num, inExclusiveRange(0, 0.1), reason: key);
+    }
+  });
+
   test('every row has five numbers and rising time', () {
     final j = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
     for (final key in ['tap_1_2', 'tap_2_3', 'tap_3_1', 'press', 'release']) {

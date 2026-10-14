@@ -18,8 +18,16 @@ enum Kind {
   /// the plumbing can fail.
   constant('native, constant'),
 
+  /// Native data the model's parameters were fitted to (in sample): the
+  /// model's shape can still fail it, its free numbers cannot.
+  fitted('native, fitted'),
+
   /// Flutter against a fitted spring: a bug detector, not native evidence.
-  fit('fit');
+  fit('fit'),
+
+  /// A precondition of other rows (the gesture against native's, the
+  /// clock, dropped frames), not a comparison with native.
+  condition('condition');
 
   const Kind(this.label);
 
@@ -131,6 +139,28 @@ Check within(double value, double reference, {double? abs, double? rel}) {
   );
 }
 
+/// The shift `k · step` (`k` from [from] to [from] + [steps]) that makes
+/// [error] smallest; the first of equal ones. A grid, not a solver: the
+/// error of a sampled trace is not smooth.
+double bestShift(
+  double Function(double shift) error, {
+  required int steps,
+  required double step,
+  int from = 0,
+}) {
+  var best = from * step;
+  var bestError = double.infinity;
+  for (var k = from; k <= from + steps; k++) {
+    final shift = k * step;
+    final e = error(shift);
+    if (e < bestError) {
+      bestError = e;
+      best = shift;
+    }
+  }
+  return best;
+}
+
 /// The tap delay that fits [trace] best: the start time of the reference
 /// spring (least squares over the first 0.3 s, searched in 0.5 ms steps
 /// from 0 to 75 ms). Spec VK-503 §17.4: 25 ms ± 1 frame.
@@ -140,11 +170,8 @@ double fitDelay(
   required double to,
   required double zeta,
   required double response,
-}) {
-  var best = 0.0;
-  var bestError = double.infinity;
-  for (var step = 0; step <= 150; step++) {
-    final delay = step * 0.0005;
+}) => bestShift(
+  (delay) {
     var error = 0.0;
     for (final s in trace) {
       final t = s['t']!;
@@ -154,12 +181,24 @@ double fitDelay(
           : from + springAt(to - from, zeta, response, t - delay);
       error += math.pow(s['x']! - ref, 2);
     }
-    if (error < bestError) {
-      bestError = error;
-      best = delay;
+    return error;
+  },
+  steps: 150,
+  step: 0.0005,
+);
+
+/// The longest time between two consecutive samples of [ts] (sorted), and
+/// where it starts; `(0, first)` for fewer than two.
+({double gap, double at}) longestGap(List<double> ts) {
+  var gap = 0.0;
+  var at = ts.isEmpty ? 0.0 : ts.first;
+  for (var i = 1; i < ts.length; i++) {
+    if (ts[i] - ts[i - 1] > gap) {
+      gap = ts[i] - ts[i - 1];
+      at = ts[i - 1];
     }
   }
-  return best;
+  return (gap: gap, at: at);
 }
 
 /// [got] against [want], every channel within [tolerance] (spec VK-503
@@ -228,23 +267,36 @@ int liftIndex(List<Map<String, double>> trace) {
   return 0;
 }
 
-/// Writes the table's last two lines (the rows per [Kind], then the
-/// verdict) for [rows] (each row's kind and pass) to [out]; returns how many
-/// failed.
-int writeSummary(StringSink out, List<(Kind, bool)> rows) {
+/// Writes the table's last lines for [rows] (each comparable row's kind
+/// and pass) to [out]: the rows per [Kind], the rows that could not be
+/// compared ([notComparable], when any), then the verdict; returns how
+/// many failed.
+int writeSummary(
+  StringSink out,
+  List<(Kind, bool)> rows, {
+  List<String> notComparable = const [],
+}) {
   final failed = rows.where((r) => !r.$2).length;
-  final counts = {
-    for (final k in Kind.values) k: rows.where((r) => r.$1 == k).length,
-  };
-  out
-    ..writeln(
-      '${counts[Kind.native]} native, ${counts[Kind.constant]} native but '
-      'constant, ${counts[Kind.fit]} against fitted springs',
-    )
-    ..writeln(
-      failed == 0
-          ? '✓ all ${rows.length} checks pass'
-          : '✗ $failed of ${rows.length} failed',
+  int count(Kind k) => rows.where((r) => r.$1 == k).length;
+  out.writeln(
+    [
+      '${count(Kind.native)} native',
+      '${count(Kind.constant)} native but constant',
+      if (count(Kind.fitted) > 0)
+        '${count(Kind.fitted)} native but fitted to them',
+      '${count(Kind.fit)} against fitted springs',
+      if (count(Kind.condition) > 0) '${count(Kind.condition)} conditions',
+    ].join(', '),
+  );
+  if (notComparable.isNotEmpty) {
+    out.writeln(
+      '${notComparable.length} not comparable: ${notComparable.join(', ')}',
     );
+  }
+  out.writeln(
+    failed == 0
+        ? '✓ all ${rows.length} checks pass'
+        : '✗ $failed of ${rows.length} failed',
+  );
   return failed;
 }

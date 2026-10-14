@@ -50,17 +50,56 @@ Map<String, double> _sample(
   'finger': row[1] + left,
 };
 
-/// A tap as the Flutter run records it: the finger held, the last frame
-/// before the up at the native commit (row 0), then the native rows.
-List<Map<String, double>> _tap(List<List<double>> rows, double left) => [
-  _sample(rows.first, -0.05, left: left, touch: true),
+/// [rows] at [t], linear between rows, held at the ends.
+List<double> _rowAt(List<List<double>> rows, double t) {
+  if (t <= rows.first[0]) return rows.first;
+  for (var i = 1; i < rows.length; i++) {
+    final a = rows[i - 1];
+    final b = rows[i];
+    if (t <= b[0]) {
+      final u = (t - a[0]) / (b[0] - a[0]);
+      return [for (var c = 0; c < 5; c++) a[c] + (b[c] - a[c]) * u];
+    }
+  }
+  return rows.last;
+}
+
+/// A tap as the Flutter run records it, on engine frames ([fps], 60 by
+/// default): the finger held, the last frame before the up at the native
+/// commit (row 0), then the native rows, linear between them, every frame.
+/// [late] delays the whole motion by that many seconds; a delay off the
+/// frame grid wants a dense [fps], or the rows' kinks fall between frames.
+List<Map<String, double>> _tap(
+  List<List<double>> rows,
+  double left, {
+  double late = 0,
+  int fps = 60,
+}) => [
+  _sample(rows.first, -1 / fps, left: left, touch: true),
   _sample(rows.first, 0, left: left, touch: true),
-  for (final r in rows.skip(1)) _sample(r, r[0], left: left, touch: false),
+  for (var f = 1; f / fps <= rows.last[0] + late; f++)
+    _sample(_rowAt(rows, f / fps - late), f / fps, left: left, touch: false),
 ];
 
+/// The flick drive the Flutter run reports: native's (`flickLanding`)
+/// unless [seconds] says otherwise. Control-local.
+Map<String, double> _drive(Map<String, dynamic> ref, {double? seconds}) {
+  final landing = _map(ref, 'flickLanding');
+  final from = _list((_map(ref, 'geometry')['thumbs3']! as List<dynamic>)[2]);
+  return {
+    'seconds': seconds ?? (landing['release_at']! as num).toDouble(),
+    'from': from[0] + from[2] / 2,
+    'to': (landing['landing']! as num).toDouble(),
+  };
+}
+
 /// A Flutter response equal to the fixture: every trace is the native
-/// rows, the geometry and the colours the native numbers.
-Map<String, dynamic> synthetic(Map<String, dynamic> ref) {
+/// rows, the geometry and the colours the native numbers. Decoded JSON, as
+/// the tool reads it.
+Map<String, dynamic> synthetic(Map<String, dynamic> ref) =>
+    _copy(_synthetic(ref));
+
+Map<String, dynamic> _synthetic(Map<String, dynamic> ref) {
   final geometry = _map(ref, 'geometry');
   final width = (geometry['width']! as num).toDouble();
   final height = (geometry['height']! as num).toDouble();
@@ -161,6 +200,7 @@ Map<String, dynamic> synthetic(Map<String, dynamic> ref) {
           {..._sample(r, r[0], left: _full3.left, touch: false), 't': r[0]},
       ],
     },
+    'drives': {'flick': _drive(ref)},
     'colours': {
       for (final e in _map(ref, 'colors').entries)
         if (e.key != 'tolerance') e.key: _list(e.value),
@@ -178,9 +218,13 @@ Object? mapNumbers(Object? json, num Function(num) f) => switch (json) {
   _ => json,
 };
 
+/// A deep copy of [response].
+Map<String, dynamic> _copy(Map<String, dynamic> response) =>
+    jsonDecode(jsonEncode(response)) as Map<String, dynamic>;
+
 /// [response] with tap_1_2's lens moved [dx] pt.
 Map<String, dynamic> shiftTap(Map<String, dynamic> response, double dx) {
-  final copy = jsonDecode(jsonEncode(response)) as Map<String, dynamic>;
+  final copy = _copy(response);
   final seqs = _map(copy, 'sequences');
   seqs['tap_1_2'] = [
     for (final s in seqs['tap_1_2']! as List<dynamic>)
@@ -189,15 +233,24 @@ Map<String, dynamic> shiftTap(Map<String, dynamic> response, double dx) {
   return copy;
 }
 
+/// The rows that failed (a row not comparable is neither).
+List<String> failed(List<SegmentRow> rows) => [
+  for (final r in rows)
+    if (r.comparable && !r.pass) r.name,
+];
+
+/// The row of [rows] named [name].
+SegmentRow row(List<SegmentRow> rows, String name) =>
+    rows.singleWhere((r) => r.name == name);
+
 void main() {
   test('(a) a Flutter trace equal to the native rows passes every row', () {
     final ref = fixture();
     final rows = segmentRows(synthetic(ref), ref);
-    final failed = [
+    expect([
       for (final r in rows)
-        if (!r.pass) '${r.name}: ${r.flutter} vs ${r.native}',
-    ];
-    expect(failed, isEmpty);
+        if (!r.pass || !r.comparable) '${r.name}: ${r.flutter} vs ${r.native}',
+    ], isEmpty);
     // Every spec §14.5 group is there.
     final names = rows.map((r) => r.name).join('\n');
     for (final group in [
@@ -206,6 +259,8 @@ void main() {
       'full2 thumb w',
       'full5 thumb w',
       'intrinsic3 width',
+      'tap_1_2 clock',
+      'tap_1_2 frames',
       'tap_1_2 x @',
       'tap_3_1 overshoot',
       'tap_2_3 settle',
@@ -219,8 +274,10 @@ void main() {
       'dark.press engage onset',
       'release engage @',
       'drag lag',
+      'flick drive',
       'flick lands',
       'flick overshoot',
+      'programmatic clock',
       'programmatic x @',
       'colour lightTrackOverWhite',
       'colour darkLabel',
@@ -230,34 +287,151 @@ void main() {
     }
   });
 
-  test('every row is native or native, constant: none is a fit', () {
+  test('kinds: native, native-constant, native-fitted (in sample), and the '
+      'conditions; none against a fitted spring', () {
     final ref = fixture();
-    final kinds = segmentRows(synthetic(ref), ref).map((r) => r.kind).toSet();
-    expect(kinds, {Kind.native, Kind.constant});
+    final rows = segmentRows(synthetic(ref), ref);
+    expect(rows.map((r) => r.kind).toSet(), {
+      Kind.native,
+      Kind.constant,
+      Kind.fitted,
+      Kind.condition,
+    });
+    // The model's springs were fitted to the tap, press, release and
+    // programmatic rows (spec §8.2); the onsets, the drag lag and the
+    // flick landing are out of sample.
+    expect(row(rows, 'tap_1_2 x @100ms').kind, Kind.fitted);
+    expect(row(rows, 'press w @100ms').kind, Kind.fitted);
+    expect(row(rows, 'programmatic x @100ms').kind, Kind.fitted);
+    expect(row(rows, 'tap_1_2 engage onset').kind, Kind.native);
+    expect(row(rows, 'drag lag').kind, Kind.native);
+    expect(row(rows, 'flick overshoot').kind, Kind.native);
+    expect(row(rows, 'flick drive').kind, Kind.condition);
   });
 
-  test('(b) one tap trace 3 pt off fails exactly its x rows', () {
+  test('(b) one tap trace 3 pt off fails its x rows and nothing else; the '
+      'clock may lean a frame toward it, so the rows at rest fail', () {
     final ref = fixture();
     final rows = segmentRows(shiftTap(synthetic(ref), 3), ref);
-    final failed = {
-      for (final r in rows)
-        if (!r.pass) r.name,
-    };
-    final xRows = {
-      for (final r in rows)
-        if (r.name.startsWith('tap_1_2 x @')) r.name,
-    };
-    expect(xRows, hasLength(13), reason: 'every 0.05 s to 0.6 s');
-    expect(failed, xRows);
+    final bad = failed(rows);
+    expect(bad, isNotEmpty);
+    for (final name in bad) {
+      expect(name, anyOf(startsWith('tap_1_2 x @'), 'tap_1_2 clock'));
+    }
+    // At rest no clock shift helps.
+    expect(bad, containsAll(['tap_1_2 x @0ms', 'tap_1_2 x @600ms']));
   });
 
   test('a tap off by 1.5 pt still passes its ±2 pt rows', () {
     final ref = fixture();
-    final rows = segmentRows(shiftTap(synthetic(ref), 1.5), ref);
-    expect([
-      for (final r in rows)
-        if (!r.pass) r.name,
-    ], isEmpty);
+    expect(failed(segmentRows(shiftTap(synthetic(ref), 1.5), ref)), isEmpty);
+  });
+
+  group('the tap clock: x aligned by least squares within ±1 frame', () {
+    Map<String, dynamic> late(double seconds) {
+      final ref = fixture();
+      final response = synthetic(ref);
+      _map(response, 'sequences')['tap_3_1'] = _tap(
+        _rows(_map(ref, 'tap_3_1')),
+        _full3.left,
+        late: seconds,
+        fps: 600,
+      );
+      return response;
+    }
+
+    test('a tap 10 ms late is aligned: its clock reads −10 ms and every x '
+        'row passes', () {
+      final ref = fixture();
+      final rows = segmentRows(late(0.010), ref);
+      expect(failed(rows), isEmpty);
+      expect(row(rows, 'tap_3_1 clock').flutter, '-10.0 ms');
+    });
+
+    test('a tap 25 ms late is more than a frame: the clock fails at its '
+        'bound', () {
+      final ref = fixture();
+      final rows = segmentRows(late(0.025), ref);
+      expect(failed(rows), contains('tap_3_1 clock'));
+      expect(row(rows, 'tap_3_1 clock').flutter, '-16.5 ms');
+    });
+
+    test('the clock fits x alone: a tap whose engage is a frame early but '
+        'whose x is on time is not shifted', () {
+      final ref = fixture();
+      final response = synthetic(ref);
+      final seqs = _map(response, 'sequences');
+      seqs['tap_2_3'] = [
+        for (final s in seqs['tap_2_3']! as List<dynamic>)
+          {
+            ...s as Map<String, dynamic>,
+            'engage': _rowAt(
+              _rows(_map(ref, 'tap_2_3')),
+              (s['t']! as num) - _clock + 1 / 60,
+            )[4],
+          },
+      ];
+      final rows = segmentRows(response, ref);
+      expect(row(rows, 'tap_2_3 clock').flutter, '0.0 ms');
+    });
+  });
+
+  test('the engage onset is a latency row against the fixture onset at '
+      'display-link resolution', () {
+    final ref = fixture();
+    final rows = segmentRows(synthetic(ref), ref);
+    expect(
+      row(rows, 'tap_3_1 engage onset').native,
+      (_map(ref, 'tap_3_1')['engageOnset']! as num).toStringAsFixed(3),
+    );
+    expect(
+      row(rows, 'dark.press engage onset').native,
+      (_map(_map(ref, 'dark'), 'press')['engageOnset']! as num).toStringAsFixed(
+        3,
+      ),
+    );
+  });
+
+  test('a dropped frame after the commit fails the frames row alone', () {
+    final ref = fixture();
+    final response = synthetic(ref);
+    final seqs = _map(response, 'sequences');
+    // The frame at +83 ms is gone: 33 ms between two frames, inside one
+    // native row step, where the synthetic trace is linear.
+    seqs['tap_1_2'] = [
+      for (final s in seqs['tap_1_2']! as List<dynamic>)
+        if ((((s as Map<String, dynamic>)['t']! as num) - _clock - 5 / 60)
+                .abs() >
+            1e-6)
+          s,
+    ];
+    final rows = segmentRows(response, ref);
+    expect(failed(rows), ['tap_1_2 frames']);
+    expect(row(rows, 'tap_1_2 frames').flutter, contains('33.3 ms'));
+  });
+
+  group('the flick drive gates the overshoot', () {
+    test('a drive of 0.25 s against native 0.548 s fails the drive row, and '
+        'the overshoot is not comparable', () {
+      final ref = fixture();
+      final response = synthetic(ref);
+      _map(response, 'drives')['flick'] = _drive(ref, seconds: 0.25);
+      final rows = segmentRows(response, ref);
+      expect(failed(rows), ['flick drive']);
+      final overshoot = row(rows, 'flick overshoot');
+      expect(overshoot.comparable, isFalse);
+      expect(overshoot.pass, isFalse);
+      expect(row(rows, 'flick lands').comparable, isTrue);
+    });
+
+    test('a run without its drive is a failed row, the overshoot not '
+        'comparable', () {
+      final ref = fixture();
+      final response = synthetic(ref)..remove('drives');
+      final rows = segmentRows(response, ref);
+      expect(failed(rows), ['flick drive']);
+      expect(row(rows, 'flick overshoot').comparable, isFalse);
+    });
   });
 
   test("the app's change is read on its ticker clock from 0: a ticker "
@@ -266,21 +440,60 @@ void main() {
     final response = synthetic(ref);
     final slide = _map(response, 'sequences')['programmatic']! as List<dynamic>;
     (slide.first as Map<String, dynamic>)['t'] = 1 / 60;
-    expect([
-      for (final r in segmentRows(response, ref))
-        if (!r.pass) '${r.name}: ${r.flutter} vs ${r.native}',
-    ], isEmpty);
+    expect(failed(segmentRows(response, ref)), isEmpty);
+  });
+
+  test('frames dropped at the rebuild (a first frame 50 ms in) do not move '
+      "the ticker clock's origin: the slide is still comparable", () {
+    final ref = fixture();
+    final response = synthetic(ref);
+    final slide = _map(response, 'sequences')['programmatic']! as List<dynamic>;
+    // Rows at 0 and 0.05 s: the first frame 50 ms in, at rest still.
+    (slide.first as Map<String, dynamic>)['t'] = 0.05;
+    final rows = segmentRows(response, ref);
+    expect(row(rows, 'programmatic clock').pass, isTrue);
+    expect(
+      rows
+          .where((r) => r.name.startsWith('programmatic x @'))
+          .every((r) => r.comparable),
+      isTrue,
+    );
+  });
+
+  test('a ticker already running at the write (its clock a second in, the '
+      "driver's rest) fails the programmatic clock and its rows are not "
+      'comparable', () {
+    final ref = fixture();
+    final response = synthetic(ref);
+    final seqs = _map(response, 'sequences');
+    seqs['programmatic'] = [
+      for (final s in seqs['programmatic']! as List<dynamic>)
+        {...s as Map<String, dynamic>, 't': (s['t']! as num) + 1.0},
+    ];
+    final rows = segmentRows(response, ref);
+    expect(failed(rows), ['programmatic clock']);
+    expect(
+      rows
+          .where((r) => r.name.startsWith('programmatic x @'))
+          .every((r) => !r.comparable),
+      isTrue,
+    );
   });
 
   test('a missing sequence is a failed row, not a crash', () {
     final ref = fixture();
     final response = synthetic(ref);
     _map(response, 'sequences').remove('flick');
-    final failed = [
-      for (final r in segmentRows(response, ref))
-        if (!r.pass) r.name,
-    ];
-    expect(failed, ['flick trace']);
+    expect(failed(segmentRows(response, ref)), ['flick trace']);
+  });
+
+  test('missing full3 thumbs is a failed row, not a crash', () {
+    final ref = fixture();
+    final response = synthetic(ref);
+    _map(_map(response, 'geometry'), 'full3').remove('thumbs');
+    expect(failed(segmentRows(response, ref)), ['full3 thumbs']);
+    _map(_map(response, 'geometry'), 'full3')['thumbs'] = [null, null, null];
+    expect(failed(segmentRows(response, ref)), ['full3 thumbs']);
   });
 
   test('(c) the tool exits 1 with a missing sequence, 0 on the fixture', () {
@@ -309,7 +522,7 @@ void main() {
   });
 
   test('(d) every reference comes from the fixture: +1000 on every fixture '
-      "number changes every row's native column", () {
+      "number changes every comparison row's native column", () {
     final ref = fixture();
     final response = synthetic(ref);
     final base = segmentRows(response, ref);
@@ -318,9 +531,11 @@ void main() {
       mapNumbers(ref, (n) => n + 1000)! as Map<String, dynamic>,
     );
     expect([for (final r in moved) r.name], [for (final r in base) r.name]);
+    // Conditions are not comparisons with native: the clock and frame
+    // bounds are the spec's (§14.5), not measurements.
     final unchanged = [
       for (var i = 0; i < base.length; i++)
-        if (base[i].native == moved[i].native)
+        if (base[i].kind != Kind.condition && base[i].native == moved[i].native)
           '${base[i].name}: ${base[i].native}',
     ];
     expect(unchanged, isEmpty);
@@ -349,28 +564,32 @@ void main() {
     );
   });
 
-  test('the table: a header, one line per row, the counts and a verdict', () {
+  test('the table: a header, one line per row, the counts, what is not '
+      'comparable and a verdict', () {
     final ref = fixture();
-    final rows = segmentRows(shiftTap(synthetic(ref), 3), ref);
+    final response = synthetic(ref);
+    _map(response, 'drives')['flick'] = _drive(ref, seconds: 0.25);
+    final rows = segmentRows(response, ref);
     final out = StringBuffer();
-    final failed = printSegmentTable(rows, out);
+    final count = printSegmentTable(rows, out);
     final lines = out.toString().trimRight().split('\n');
-    expect(failed, 13);
+    expect(count, 1);
     expect(
       lines.first,
-      '| check | kind | result | flutter | native | '
-      'tolerance |',
+      '| check | kind | result | flutter | native | tolerance |',
     );
-    expect(lines, contains(startsWith('| tap_1_2 x @100ms | native | FAIL |')));
-    expect(lines.length, rows.length + 4);
-    expect(lines.last, '✗ 13 of ${rows.length} failed');
+    expect(lines, contains(startsWith('| flick drive | condition | FAIL |')));
+    expect(lines, contains(startsWith('| flick overshoot | native | n/a |')));
+    expect(lines.length, rows.length + 5);
+    expect(lines[lines.length - 2], '1 not comparable: flick overshoot');
+    expect(lines.last, '✗ 1 of ${rows.length - 1} failed');
   });
 }
 
 /// [response] as another Flutter run might give it: positions, sizes,
 /// engage and colours all moved, the times and touches kept.
 Map<String, dynamic> _otherRun(Map<String, dynamic> response) {
-  final copy = jsonDecode(jsonEncode(response)) as Map<String, dynamic>;
+  final copy = _copy(response);
   final seqs = _map(copy, 'sequences');
   for (final key in seqs.keys.toList()) {
     seqs[key] = [
@@ -385,5 +604,6 @@ Map<String, dynamic> _otherRun(Map<String, dynamic> response) {
   }
   copy['geometry'] = mapNumbers(copy['geometry'], (n) => n + 0.4);
   copy['colours'] = mapNumbers(copy['colours'], (n) => n + 2);
+  copy['drives'] = mapNumbers(copy['drives'], (n) => n * 1.1);
   return copy;
 }

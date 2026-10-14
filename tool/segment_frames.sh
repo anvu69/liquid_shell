@@ -41,12 +41,22 @@ target=integration_test/segment_fidelity_test.dart
 # Traces-only runs add sequences the strips cannot pair with native's.
 traces_only=false
 [ "${TRACES_ONLY:-}" != 1 ] || traces_only=true
+# The flick native's flickLanding capture made, from the fixture (its only
+# source): seconds down to up, then from the last segment's thumb centre to
+# the landing, control-local. The trace compare gates the overshoot on it;
+# SegmentFidelityUITests reads the same numbers.
+fixture=$tool_dir/../docs/qa/vk550/native_reference.json
+fx() { plutil -extract "$1" raw -o - "$fixture"; }
+flick="$(fx flickLanding.release_at),$(echo \
+  "$(fx geometry.thumbs3.2.0) + $(fx geometry.thumbs3.2.2) / 2" | bc -l),$(fx \
+  flickLanding.landing)"
 # FLUTTER may be "fvm flutter": split on purpose.
 # shellcheck disable=SC2086
 flutter_run() { cap 1800 $FLUTTER drive \
   --driver=test_driver/integration_test.dart \
   --target="$target" -d "$udid" \
-  --dart-define=SEGFID_TRACES_ONLY="$traces_only"; }
+  --dart-define=SEGFID_TRACES_ONLY="$traces_only" \
+  --dart-define=SEGFID_FLICK="$flick"; }
 
 if [ "${TRACES_ONLY:-}" = 1 ]; then
   flutter_run

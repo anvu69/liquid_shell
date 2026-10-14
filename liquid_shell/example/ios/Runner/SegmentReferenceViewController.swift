@@ -1,5 +1,6 @@
 #if DEBUG
 import UIKit
+import UIKit.UIGestureRecognizerSubclass
 
 /// DEBUG only, public UIKit API only (spec VK-550 §13, §14.5): UIKit's own
 /// `UISegmentedControl`s at the frames of the Flutter segments case
@@ -21,6 +22,17 @@ final class SegmentReferenceViewController: UIViewController {
 
   /// The control "Next segment" moves, as the Flutter case's.
   private var full3: UISegmentedControl?
+
+  /// full3's last touch as UIKit delivered it, for SegmentFidelityUITests
+  /// (a requested XCUITest speed is not the speed delivered).
+  private let touchLog: UILabel = {
+    let label = UILabel(frame: CGRect(x: 0, y: 0, width: 2, height: 2))
+    label.textColor = .clear
+    label.isUserInteractionEnabled = false
+    label.accessibilityIdentifier = "segfid-touch"
+    label.accessibilityLabel = "none"
+    return label
+  }()
 
   override func loadView() {
     view = StripesView()
@@ -48,8 +60,12 @@ final class SegmentReferenceViewController: UIViewController {
         constraints.append(segmented.centerXAnchor.constraint(equalTo: view.centerXAnchor))
       }
       NSLayoutConstraint.activate(constraints)
-      if control.id == "full3" { full3 = segmented }
+      if control.id == "full3" {
+        full3 = segmented
+        segmented.addGestureRecognizer(TouchLog(label: touchLog))
+      }
     }
+    view.addSubview(touchLog)
     // The app's own change, as the Flutter case's "Next segment, from
     // code": UIKit slides the selection and sends no valueChanged.
     let next = UIButton(
@@ -91,6 +107,49 @@ final class SegmentReferenceViewController: UIViewController {
     screen.modalPresentationStyle = .fullScreen
     root.present(screen, animated: false)
   }
+}
+
+/// Writes each touch on its view to [label]'s accessibility label as
+/// "<seconds> <from x> <to x>": down to up on UIKit's touch clock, x in the
+/// view. Passive: it never recognizes, cancels or delays a touch, and
+/// recognizes alongside every other recognizer.
+private final class TouchLog: UIGestureRecognizer, UIGestureRecognizerDelegate {
+  private let label: UILabel
+  private var start: (time: TimeInterval, x: CGFloat)?
+
+  init(label: UILabel) {
+    self.label = label
+    super.init(target: nil, action: nil)
+    cancelsTouchesInView = false
+    delaysTouchesBegan = false
+    delaysTouchesEnded = false
+    delegate = self
+  }
+
+  override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+    guard let touch = touches.first, let view else { return }
+    start = (touch.timestamp, touch.location(in: view).x)
+  }
+
+  override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
+    if let start, let touch = touches.first, let view {
+      label.accessibilityLabel = String(
+        format: "%.3f %.1f %.1f", touch.timestamp - start.time, start.x,
+        touch.location(in: view).x)
+    }
+    start = nil
+    state = .failed
+  }
+
+  override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
+    start = nil
+    state = .failed
+  }
+
+  func gestureRecognizer(
+    _ gestureRecognizer: UIGestureRecognizer,
+    shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer
+  ) -> Bool { true }
 }
 
 /// The VK-550 spike's `PatternView` stripes: bands 20 pt tall every 40 pt,
