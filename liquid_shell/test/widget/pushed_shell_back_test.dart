@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
@@ -165,6 +166,33 @@ Widget Function(int, Widget) _popHandlers(_Pushed app) =>
       onPopWithResult: (_) => app.tabs[i].currentState?.maybePop(),
       child: navigator,
     );
+
+/// An indexed stack with no widget around its children, as `IndexedStack`
+/// is built from Flutter 3.47 on: only its render object (and a private
+/// scope) hides the others. Before, it wrapped each child in `Visibility`.
+class _BareIndexedStack extends Stack {
+  const _BareIndexedStack({required this.index, super.children})
+    : super(fit: StackFit.expand);
+
+  final int index;
+
+  @override
+  RenderIndexedStack createRenderObject(BuildContext context) =>
+      RenderIndexedStack(
+        index: index,
+        fit: fit,
+        textDirection: Directionality.maybeOf(context),
+      );
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    covariant RenderIndexedStack renderObject,
+  ) {
+    super.updateRenderObject(context, renderObject);
+    renderObject.index = index;
+  }
+}
 
 /// Branches kept as a router keeps them, but the one left goes offstage
 /// 300 ms after the selection (the end of a cross-fade), not in the same
@@ -478,6 +506,8 @@ void main() {
         await tester.pumpAndSettle();
         final home = app.tabs[0].currentState!;
         await app.outer.currentState!.maybePop();
+        // One frame: a pop it asked for has landed, the shell still mounted.
+        await tester.pump();
         expect(home.canPop(), isTrue, reason: "Home's page is kept");
         await tester.pumpAndSettle();
         expect(app.shellPopped, isTrue, reason: 'Library is at its root');
@@ -508,6 +538,39 @@ void main() {
           expect(app.shellPopped, isFalse);
         });
       }
+
+      // PR #13 on Flutter 3.47: IndexedStack no longer wraps its children
+      // in `Visibility`; its render object alone hides them.
+      testWidgets('a page kept in a tab an indexed stack hides: the swipe at '
+          'the selected root pops the shell', (tester) async {
+        final app = _Pushed(mode);
+        await app.pump(
+          tester,
+          body: (index, pages) =>
+              _BareIndexedStack(index: index, children: pages),
+        );
+        await app.push(tester, 1, 'Kept');
+        await _swipeFromTheEdge(tester);
+        expect(app.shellPopped, isTrue, reason: 'Home is at its root');
+      });
+
+      testWidgets('a page kept in a tab an indexed stack hides: back pops '
+          'the shell, never that page', (tester) async {
+        final app = _Pushed(mode);
+        await app.pump(
+          tester,
+          body: (index, pages) =>
+              _BareIndexedStack(index: index, children: pages),
+        );
+        await app.push(tester, 1, 'Kept');
+        final library = app.tabs[1].currentState!;
+        await app.outer.currentState!.maybePop();
+        // One frame: a pop it asked for has landed, the shell still mounted.
+        await tester.pump();
+        expect(library.canPop(), isTrue, reason: "Library's page is kept");
+        await tester.pumpAndSettle();
+        expect(app.shellPopped, isTrue, reason: 'Home is at its root');
+      });
 
       // VK-567 review M5: TickerMode alone hides a branch.
       testWidgets('a branch hidden by TickerMode alone does not hold back', (
