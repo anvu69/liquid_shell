@@ -144,6 +144,13 @@ void main() {
       expect(controller.scopeIndex, 0);
     });
 
+    // Task 10 review M6: the titles can change while a native tap is in
+    // flight, so an index past the last title reaches the bridge.
+    test('an index past the last scope from the platform is ignored', () {
+      nativeBridge().onNativeEvent(const LiquidNativeSearchScopeChanged(3));
+      expect(controller.scopeIndex, 0);
+    });
+
     test("the app's write goes to native once, only while native and "
         'selected', () {
       final search = nativeBridge();

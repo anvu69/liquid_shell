@@ -221,9 +221,17 @@ final class ShellSearch implements SearchDriver {
       case LiquidNativeSearchSubmitted(:final text):
         if (selected) _config?.onSubmitted?.call(text);
       case LiquidNativeSearchScopeChanged(:final index):
-        // Checked at the boundary: an index from the platform. Applied as
-        // the field's own edit, so it never goes back to native.
-        if (!selected || index < 0 || index == controller.scopeIndex) return;
+        // Checked at the boundary: an index from the platform, which may be
+        // past the titles when they changed while a native tap was in
+        // flight. Applied as the field's own edit, so it never goes back
+        // to native.
+        final count = _config?.scopes?.length ?? 0;
+        if (!selected ||
+            index < 0 ||
+            index >= count ||
+            index == controller.scopeIndex) {
+          return;
+        }
         applySearchEdit(
           controller,
           controller.value.copyWith(scopeIndex: index),
