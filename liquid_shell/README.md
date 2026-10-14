@@ -1438,8 +1438,8 @@ content viewer (see [Custom chrome](#custom-chrome)).
   at least 44pt wide (a 3-segment "A | B | C" is 132pt, native's 96pt),
   labels follow the system text size up to x2, below 44pt of width per
   segment the hit target is as wide as the segment, and the landing wobble
-  matches native's peaks and settle time, not every frame. Its lens is
-  still being tuned. Details in
+  matches native's peaks and settle time, not every frame. A short tap
+  toward the left lifts less than native's. Details in
   [doc/segmented_control.md](doc/segmented_control.md#what-is-not-identical-to-ios).
 
 ## More
