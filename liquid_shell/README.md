@@ -472,7 +472,10 @@ and the scroll-edge effect.
 Every back respects the page's `PopScope`. The button, the native back
 circle and its long-press history menu (each page in turn, top first) call
 `Navigator.maybePop`, and Flutter's back swipe is off while a page refuses.
-A refused pop leaves the page and the bar where they were. `LiquidBackButton` also
+A refused pop leaves the page and the bar where they were. System back and
+the iOS edge swipe pop the selected tab's top page first, also when the
+shell is itself a pushed page; only a tab at its root lets them pop the
+shell's route ([doc/router_integration.md](doc/router_integration.md#back-pops-the-tab-first)). `LiquidBackButton` also
 works on its own, with `onPressed` to replace `maybePop`.
 
 ### "Discard changes?" guard
@@ -1312,10 +1315,12 @@ content viewer (see [Custom chrome](#custom-chrome)).
   between text scale 1 and 1.6 a label that does not fit is drawn smaller
   than the size the user chose, down to 10pt. Icon-only cells and the
   large content viewer start at 1.6 (see [Narrow width](#narrow-width)).
-- **Back with the overlay sidebar open.** System back closes the overlay
-  sidebar first, but the route still calls your own `PopScope` handlers
-  with `didPop: false`. A handler that shows a dialog should return early
-  while `chromeKind` is `LiquidChromeKind.sidebarOverlay` (see
+- **Back with the overlay sidebar open, or a tab that can pop.** System
+  back closes the overlay sidebar first, then pops the selected tab's
+  page, but the route still calls your own `PopScope` handlers on the
+  shell's route with `didPop: false`. A handler that shows a dialog should
+  return early while `chromeKind` is `LiquidChromeKind.sidebarOverlay` or
+  your branch navigator can pop (see
   [doc/router_integration.md](doc/router_integration.md#system-back-and-the-overlay-sidebar)).
   How a router such as go_router orders back is not covered yet.
 - **Native chrome is opt-in.** It needs iOS 26,

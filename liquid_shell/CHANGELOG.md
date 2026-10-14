@@ -71,10 +71,23 @@
   above another page while the search is active (which left the
   keyboard with nothing to dismiss it). Only an active search does this:
   while it is active, the swipe on a page pushed in the search tab pops
-  that page; with the search inactive, a shell that is itself a pushed
-  page still loses the swipe on any tab's pushed page to its own route,
-  which pops the whole shell (VK-567). Hidden native chrome
-  (`LiquidHideChrome`) ends an active search and keeps its text.
+  that page (VK-567 below does the same with the search inactive, in
+  every tab). Hidden native chrome (`LiquidHideChrome`) ends an active
+  search and keeps its text.
+- **Fix (VK-567).** Back pops the tab first, as on iOS. In a shell that
+  is itself a pushed page, the iOS edge swipe on a page pushed in any tab
+  popped the whole shell, natively and with Flutter chrome: Flutter gives
+  the swipe to the shell's own route before the tab's. Now, while the
+  selected tab's navigator (the one on screen under `body`) can pop, the
+  shell blocks its own route: the swipe pops the tab's top page, and
+  system back pops it through `maybePop`, so the page's `PopScope` still
+  decides. A tab at its root lets the shell's route pop as before; a page
+  kept in another tab never holds it. Also new: a shell at the app's root
+  pops the tab's page on system back (Android) instead of leaving the app,
+  and an app's own `PopScope` on the shell's route hears `didPop: false`
+  while a tab's page pops (doc/router_integration.md). A
+  `NavigatorPopHandler` around a branch is no longer needed and still
+  pops one page per back.
 - **The search keyboard goes on a drag or a scope tap (VK-571).** As in
   Apple Music and Settings, a user drag that scrolls the shell's body (the
   results), or a tap on `LiquidSearchScopeBar`, puts the keyboard away and
