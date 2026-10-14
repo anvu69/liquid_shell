@@ -886,7 +886,20 @@ final class NativeTabsTests: XCTestCase {
     // with the circle and holds still, so both hits land on the settled
     // bar. Without the circle (iOS 27 with ⌕ in the pill) the asserts
     // below fail after the deadline.
-    let bar = stable({ compactBar(tabs) }, until: { $0.circle != nil && $0.find == nil })
+    var bar = stable({ compactBar(tabs) }, until: { $0.circle != nil && $0.find == nil })
+    // Drawn and still is not hit-testable (VK-569): on a slow runner UIKit
+    // enables the circle a few passes later, and the hit falls through to
+    // Flutter. Wait, capped, until a hit at the circle lands on native chrome.
+    let hitDeadline = Date().addingTimeInterval(10)
+    while Date() < hitDeadline {
+      if let ring = bar.circle,
+        isNative(try hit(tabs, CGPoint(x: ring.midX, y: ring.midY)), tabs)
+      {
+        break
+      }
+      RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+      bar = compactBar(tabs)
+    }
     XCTAssertNil(bar.find, "no Find item inside the pill; \(bar)")
     let inbox = try XCTUnwrap(bar.inbox, "the Inbox label; \(bar)")
     let pill = try XCTUnwrap(bar.pill, "the pill; \(bar)")
