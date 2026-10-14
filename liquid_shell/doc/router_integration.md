@@ -56,6 +56,49 @@ LiquidShell(
 )
 ```
 
+## Back pops the tab first
+
+As on iOS, system back and the iOS left-edge swipe pop the selected tab's
+top page first. Only a tab at its root lets them pop the route the shell
+is on. That matters when the shell is itself a pushed page (a flow that
+opens above a list or a sign-in page): there Flutter gives the edge swipe
+to the shell's own route before the tab's, and without the shell's say
+the swipe on any tab's pushed page popped the whole shell.
+
+- **The selected tab's navigator** is the `Navigator` nearest under the
+  shell's `body` that is on screen. A branch hidden with `Visibility` (an
+  `IndexedStack`), `Offstage` or `TickerMode` (a router's indexed-stack
+  shell route) is not the selected one, so a page kept in another tab
+  never holds back the shell's own pop.
+- **Every back goes through `maybePop`.** A page's `PopScope` keeps its
+  say: a refusing page stays, and the shell's route stays with it.
+- **The order** is the overlay sidebar, then an active search, then the
+  tab's page, then the shell's route.
+- **Remove a `NavigatorPopHandler` around a branch navigator**: the shell
+  does its job. One the app keeps answers back for its navigator, and the
+  shell then only blocks its own route, so one back is still one step: an
+  open drawer or sheet closes, and its page stays.
+- **A drawer or a persistent bottom sheet** on the tab's page counts too:
+  back closes it first, at the tab's root as well.
+- **Several navigators on screen** (an iPad detail beside its master, or a
+  `PageView` whose neighbours stay alive): back pops the last one in tree
+  order that can pop.
+- A shell at the app's root has no edge swipe of its own; there system
+  back (Android) pops the tab's page instead of leaving the app.
+
+Known limits:
+
+- **A navigator inside a tab's page** (a flow nested in a page, or a
+  go_router `ShellRoute` inside a `StatefulShellRoute` branch) is not
+  looked at: only the navigator nearest under `body` is. While that
+  navigator is at its root, the swipe on a page pushed in the nested one
+  still pops a pushed shell. A deeper scan is planned with the go_router
+  adapter.
+- **"On screen" for back is not quite `LiquidHideChrome`'s.** Back also
+  treats a bare `Offstage` as hidden; `LiquidHideChrome` needs
+  `Visibility` or `TickerMode`. Hide kept branches with `TickerMode` (or an
+  `IndexedStack`) and both agree.
+
 ## A search branch
 
 A search destination (`role: LiquidDestinationRole.search`, see
@@ -139,9 +182,9 @@ StatefulShellRoute.indexedStack(
 its `body`: a router's shell branch, or your own per-tab `Navigator` as
 above. `LiquidHideChrome` finds the shell above it, so a page on the app's
 root navigator cannot hide the chrome; it is above the shell and needs
-`LiquidNoChrome` instead. Wrap your own branch navigator in a
-`NavigatorPopHandler` so system back pops the branch first. The README's
-"Hide the chrome" case is a complete example.
+`LiquidNoChrome` instead. System back pops the branch first (see
+[Back pops the tab first](#back-pops-the-tab-first)). The README's "Hide
+the chrome" case is a complete example.
 
 "On screen" means no ancestor `Visibility` is hidden and tickers are on. An
 `IndexedStack` hides inactive branches with `Visibility`;
@@ -247,6 +290,10 @@ PopScope(
   child: page,
 )
 ```
+
+The same holds while the selected tab can pop: back pops that tab's page,
+and your handler is called with `didPop: false` too. Return early when
+your branch navigator can pop (`_keys[index].currentState!.canPop()`).
 
 `LiquidShellScope.maybeOf` only sees the shell from below it, so put such a
 `PopScope` inside the shell's `body`, or track the sidebar yourself. The

@@ -83,7 +83,7 @@ final class SearchUITests: XCTestCase {
     XCTAssertFalse(app.keyboards.firstMatch.exists, "selected, not focused (Q13)")
 
     field.tap()
-    XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
+    XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 30), "the keyboard")
     field.typeText("ho hoan")
     let result = flutterRow(app, "Hồ Hoàn Kiếm")
     XCTAssertTrue(result.waitForExistence(timeout: 10), "Flutter's live results")
@@ -111,6 +111,8 @@ final class SearchUITests: XCTestCase {
     let field = app.searchFields.firstMatch
     XCTAssertTrue(field.waitForExistence(timeout: 10))
     field.tap()
+    // Typing before the keyboard is up drops the text (seen under load).
+    XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 30), "the keyboard")
     field.typeText("ho hoan")
     let result = flutterRow(app, "Hồ Hoàn Kiếm")
     XCTAssertTrue(result.waitForExistence(timeout: 10))
@@ -212,6 +214,8 @@ final class SearchUITests: XCTestCase {
     let field = app.searchFields.firstMatch
     XCTAssertTrue(field.waitForExistence(timeout: 10))
     field.tap()
+    // Typing before the keyboard is up drops the text (seen under load).
+    XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 30), "the keyboard")
     field.typeText("ho hoan")
     let result = flutterRow(app, "Hồ Hoàn Kiếm")
     XCTAssertTrue(result.waitForExistence(timeout: 10))
@@ -430,5 +434,71 @@ extension SearchUITests {
     places.tap()
     expectTheKeyboardGoneAndTheSearchKept(app, field, activeFrame: activeFrame)
     XCTAssertTrue(places.isSelected, "the scope changed")
+  }
+}
+
+/// VK-567: the search case pushed above the case list, as a person opens
+/// it (a shell that is itself a pushed page), its search inactive. As on
+/// iOS the left-edge swipe pops the selected tab's top page, in Home (a
+/// Flutter page bar) and in the search tab (the native bar follows); only a
+/// tab at its root lets it pop the whole case. Flutter used to give the
+/// swipe to the case's route first: every swipe popped the whole case.
+extension SearchUITests {
+  /// A left-edge swipe that should pop [page]. A loaded runner can drop
+  /// the first drag's events: one more swipe, recorded, while [page] is
+  /// still there and the case list is not, so a swipe that popped the
+  /// whole case still fails.
+  fileprivate func swipeBack(_ app: XCUIApplication, popping page: XCUIElement) {
+    swipeFromTheLeftEdge(app)
+    if !page.waitForNonExistence(timeout: 5), !flutterRow(app, "Search tab").exists {
+      XCTContext.runActivity(named: "VK-567: retry the edge swipe (the first was dropped)") { _ in
+        print("SearchUITests: the first edge swipe was dropped; swiping again")
+        swipeFromTheLeftEdge(app)
+      }
+    }
+  }
+
+  func testNativeAPushedCaseTheEdgeSwipePopsTheTabsPageThenTheCase() throws {
+    try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .phone, "iPhone only")
+    let app = launch(demo: "search-above")
+    let caseList = flutterRow(app, "Search tab")
+
+    // Home: a song's page, pushed in Home's own navigator.
+    let song = flutterRow(app, "Diễm xưa")
+    XCTAssertTrue(song.waitForExistence(timeout: timeout), "Home's songs")
+    song.tap()
+    let songPage = app.staticTexts["Trịnh Công Sơn"].firstMatch
+    XCTAssertTrue(songPage.waitForExistence(timeout: 30), "the song's page")
+    swipeBack(app, popping: songPage)
+    XCTAssertTrue(songPage.waitForNonExistence(timeout: 10), "the song's page popped")
+    XCTAssertFalse(caseList.exists, "not the whole case")
+    XCTAssertTrue(song.waitForExistence(timeout: 10), "Home's songs again")
+
+    // The search tab, the search inactive: a category's page under the
+    // native bar.
+    searchTabButton(app).tap()
+    let category = flutterRow(app, "Bolero")
+    XCTAssertTrue(category.waitForExistence(timeout: 30), "the categories")
+    category.tap()
+    let back = app.navigationBars.buttons["BackButton"]
+    XCTAssertTrue(back.waitForExistence(timeout: 30), "the native glass back button")
+    let categoryPage = flutterRow(app, "Thành phố buồn")
+    XCTAssertTrue(categoryPage.waitForExistence(timeout: 10), "the category's page")
+    swipeBack(app, popping: categoryPage)
+    XCTAssertTrue(categoryPage.waitForNonExistence(timeout: 10), "the category's page popped")
+    XCTAssertFalse(caseList.exists, "not the whole case")
+    XCTAssertTrue(back.waitForNonExistence(timeout: 10), "the native bar followed")
+    XCTAssertTrue(flutterRow(app, "Nhạc Trịnh").waitForExistence(timeout: 10), "the categories again")
+    XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10), "the search inactive")
+
+    // At the tab's root the swipe pops the case.
+    swipeFromTheLeftEdge(app)
+    if !caseList.waitForExistence(timeout: 5) {
+      XCTContext.runActivity(named: "VK-567: retry the edge swipe (the first was dropped)") { _ in
+        print("SearchUITests: the first edge swipe was dropped; swiping again")
+        swipeFromTheLeftEdge(app)
+      }
+    }
+    XCTAssertTrue(caseList.waitForExistence(timeout: 10), "the case popped at the tab's root")
   }
 }
