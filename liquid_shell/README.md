@@ -480,12 +480,20 @@ works on its own, with `onPressed` to replace `maybePop`.
 
 ### Segmented control
 
-`LiquidSegmentedControl` draws iOS 26's `UISegmentedControl`: a 32pt track
-centred in a 44pt touch box, and a liquid lens that lifts under the
-finger, follows a drag across segments and lands with a wobble. It is
-controlled: rebuild it with the index `onChanged` gives. The search scopes
-use it. The example's segments case puts it at the frames of a native
-reference screen, over the same stripes.
+`LiquidSegmentedControl` is iOS 26's `UISegmentedControl`: a flat 32pt track
+centred in a 44pt touch box, a white thumb, and a liquid lens that lifts
+under the finger, follows a drag across segments, lands with a wobble and
+plays a selection click per segment crossed. It is controlled (rebuild it
+with the index `onChanged` gives), text-only, and each `LiquidSegment` can
+be `enabled: false`. `expand: true` (default) fills the width; `false`
+sizes to the labels. Colours and the label style are `segmentTrack`,
+`segmentThumb` and `segmentLabelStyle` of `LiquidGlassTheme`. The search
+scopes use it. Every segment keeps a 44pt tap target in height; below 44pt
+of width per segment the target is as wide as the segment. Details, the
+accessibility rules and what differs from iOS (a 3-segment "A | B | C" is
+132pt against native's 96, the wobble matches native's peaks and settle
+time, not every frame) are in
+[doc/segmented_control.md](doc/segmented_control.md).
 
 <?code-excerpt "segments.dart (segments)"?>
 ```dart
@@ -503,7 +511,12 @@ Widget _scopes() => LiquidSegmentedControl(
 );
 ```
 
-<img src="doc/images/case_segments_light.png" width="260" alt="Segmented controls of two, three and five segments over coloured stripes">
+<img src="doc/images/case_segments_light.png" width="260" alt="Segmented controls of two, three and five segments over coloured stripes"> <img src="doc/images/case_segments_dark.png" width="260" alt="The same controls in dark mode">
+
+The search tab's `LiquidSearch.scopes` takes the titles: on iOS 26+ with
+native chrome the scope bar is UIKit's own (shown while the search is
+active), and elsewhere `LiquidSearchScopeBar` draws this control. See
+[doc/search.md](doc/search.md#scopes).
 
 ### "Discard changes?" guard
 
@@ -1420,10 +1433,20 @@ content viewer (see [Custom chrome](#custom-chrome)).
   uses the iPhone measurements, and there is no iPad tab customization on
   long press. Details in
   [doc/tab_bar.md](doc/tab_bar.md#what-is-not-identical-to-ios).
+- **The segmented control is close to iOS 26, not identical.** The track
+  is flat (as iOS 26.5's), the box is 44pt (native's 32pt) with segments
+  at least 44pt wide (a 3-segment "A | B | C" is 132pt, native's 96pt),
+  labels follow the system text size up to x2, below 44pt of width per
+  segment the hit target is as wide as the segment, and the landing wobble
+  matches native's peaks and settle time, not every frame. Its lens is
+  still being tuned. Details in
+  [doc/segmented_control.md](doc/segmented_control.md#what-is-not-identical-to-ios).
 
 ## More
 
 - [doc/theming.md](doc/theming.md): `LiquidGlassTheme` fields and defaults
+- [doc/segmented_control.md](doc/segmented_control.md): the segmented control,
+  its API, motion, accessibility and what differs from iOS
 - [doc/tiers.md](doc/tiers.md): tiers, the policy, signals, writing a renderer
 - [doc/tab_bar.md](doc/tab_bar.md): the Flutter tab bar, its geometry,
   lens, icons, accessibility and what is not identical to iOS
@@ -1446,8 +1469,10 @@ content viewer (see [Custom chrome](#custom-chrome)).
 - **P4 (0.1.0-dev.4, done):** the liquid tier in the core package.
 - **P3b-1 (0.1.0-dev.5, done):** the search tab, `LiquidPage` and the
   glass back button.
-- **VK-503 (this release, 0.1.0-dev.6):** tab bar fidelity: the Flutter
-  tab bar measured against iOS 26.5.
+- **VK-503 (0.1.0-dev.6, done):** tab bar fidelity: the Flutter tab bar
+  measured against iOS 26.5.
+- **VK-550 (this release, 0.1.0-dev.7):** `LiquidSegmentedControl` and the
+  search scopes, with UIKit's scope bar on iOS 26+.
 - **P3b-2 (next):** the native navigation bar on every tab.
 - **P3a-2:** share sheet, haptics, date picker and text fields in alerts.
 - **P5:** a go_router adapter (`StatefulShellRoute` builder, route-driven

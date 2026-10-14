@@ -1,3 +1,8 @@
+## 0.1.0-dev.7
+
+- No changes; versioned with `liquid_shell`. Search scopes are drawn by
+  Flutter's `LiquidSearchScopeBar` on Android.
+
 ## 0.1.0-dev.6
 
 - No changes; versioned with `liquid_shell`. `dismissNativeSearchKeyboard`

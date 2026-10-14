@@ -1,3 +1,11 @@
+## 0.1.0-dev.7
+
+- UIKit's scope bar for the search tab (VK-550): `scopeBarActivation =
+  .manual`, shown in `willPresent` and hidden in `willDismiss`, titles
+  from `NativeSearchConfig.scopes`. The channel gains `scopes`,
+  `setSearchScope` and `onSearchScopeChanged` (Pigeon, generated). A
+  user's change is reported once; Dart's own writes are not echoed.
+
 ## 0.1.0-dev.6
 
 - A page stack applied with the config that selects or leaves a tab is a

@@ -390,21 +390,22 @@ The packages are at `0.1.0-dev.6`. This item ships as **`0.1.0-dev.7`** for all 
 
 ### 14.5 Acceptance (owner)
 
-**Numeric gate**, kinds as VK-503 §17.4 (**native**: independent native data the model can fail; **native, constant**: native data that Flutter sets from a constant; **fit**: Flutter against a fitted spring), plus two (amended 2026-10-14, Task 13 review): **native, fitted**: the native rows the model's springs were fitted to (tap, press, release, programmatic; §8.2), in sample, so only the model's shape can fail them; **condition**: a precondition of other rows (the gesture against native's, the tap clock, dropped frames), not a comparison. A row whose condition fails reads `n/a`, neither a pass nor a failure:
+**Numeric gate**, kinds as VK-503 §17.4 (**native**: independent native data the model can fail; **native, constant**: native data that Flutter sets from a constant; **fit**: Flutter against a fitted spring), plus two (amended 2026-10-14, Task 13 review): **native, fitted**: the native rows the model's springs were fitted to (tap, press, release, programmatic; §8.2), in sample, so only the model's shape can fail them; **condition**: a precondition of other rows (the gesture against native's, the tap clock, dropped frames), not a comparison. A row that depends on a condition (named in its row) reads `n/a` when that condition fails: neither a pass nor a failure. A failed condition shows in its own row and leaves every other row as it was:
 
 | Quantity | Reference | Tolerance | Kind |
 |---|---|---|---|
 | Track, segment and thumb rects (2, 3, 5 segments at 370; intrinsic 177) | spike §2 | ±1 pt | native |
-| Tap x (five captures: `tap_1_2`, `tap_2_3`, `tap_3_1`, `dark.tap_1_2`, `tap_1_3_5seg`), from the commit on the engage-aligned clock (below) | the native per-frame rows | ±2 pt per row at 0.05 s steps to 0.6 s; settle ±10 % | native |
-| Tap shape: one-segment peak h, two-segment peak h, wobble extremes | the native rows | ±10 % | native (`tap_3_1`'s late w swell, ×1.14, is −12 % in Task 4's model: Task 15 decides it) |
-| Overshoot (one, two segments) | 2.5 / 4.9 pt | ±1 pt | native |
-| Press size at +0.033 / 0.067 / 0.1 / 0.133 / 0.2 / 0.25 s | the native rows | ±2 pt | native |
-| Release size and engage at +0.033 … +0.2 s | the native rows | ±2 pt, ±0.12 | native |
+| Tap x (five captures: `tap_1_2`, `tap_2_3`, `tap_3_1`, `dark.tap_1_2`, `tap_1_3_5seg`), from the commit on the engage-aligned clock (below) | the native per-frame rows | ±2 pt per row at 0.05 s steps to 0.6 s; settle ±10 % | native, fitted (reads `n/a` when its `clock` or `frames` condition fails) |
+| Tap shape: one-segment peak h, two-segment peak h, wobble extremes | the native rows | ±10 % | native, fitted (`tap_3_1`'s late w swell, ×1.14, is −12 % in Task 4's model: Task 15 decides it) |
+| Overshoot (one, two segments) | 2.5 / 4.9 pt | ±1 pt | native, fitted |
+| Press size at +0.033 / 0.067 / 0.1 / 0.133 / 0.2 / 0.25 s | the native rows | ±2 pt | native, fitted |
+| Release size and engage at +0.033 … +0.2 s | the native rows | ±2 pt, ±0.12 | native, fitted |
 | Drag lag at the drag's speed | 6.77 pt at 82.2 pt/s | ±10 % | native |
-| Flick: lands on the finger's segment, overshoot | Task 1 (`flickLanding`) | ±0.5 pt, ±1 pt | native; the overshoot only when the flick drive matches native's (below) |
-| Programmatic slide | the native rows | ±2 pt per row | native |
+| Flick: lands on the finger's segment, overshoot | Task 1 (`flickLanding`) | ±0.5 pt, ±1 pt | native (landing); the overshoot is native, fitted, and reads `n/a` when the `flick drive` condition fails (below) |
+| Programmatic slide | the native rows | ±2 pt per row | native, fitted (reads `n/a` when its `programmatic clock` condition fails) |
 | Rest colours over white and black (track, thumb, label) | spike §2 | ±4 / 255 | native (label: native, constant) |
 | Engage in (taps and presses) | `engageOnset` at display-link resolution (taps 33.6–34.0 ms after `valueChanged`, presses 46–48 ms after the down) | ±1 frame | native |
+| Conditions: `clock` (x shift within ±1 frame), `frames` (longest gap ≤ 1.5 frames), `flick drive` (±1 frame, ±2 pt of native's gesture), `programmatic clock` (ticker idle at the write) | below | as stated below | condition (not a comparison) |
 
 Read-back rows (Flutter's own constants compared with themselves) are not allowed (Q3).
 
