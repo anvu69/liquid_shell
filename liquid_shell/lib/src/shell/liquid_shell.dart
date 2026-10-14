@@ -1695,8 +1695,11 @@ class _LiquidShellState extends State<LiquidShell>
           searchPhase: phase,
           nativePageBar: _nativePageBar,
           // UIKit's scope bar draws them (spec VK-550 §10.3). Native chrome
-          // engages on iOS 26+ only, so nothing else gates it.
-          nativeSearchScopes: engaged && widget.search?.scopes != null,
+          // engages on iOS 26+ only, so nothing else gates it. Pending and
+          // standby too: no Flutter chrome is drawn then, and a Flutter
+          // scope bar would show only to vanish when native engages
+          // (Task 10 review M3).
+          nativeSearchScopes: widget.search?.scopes != null,
           searchScopes: widget.search?.scopes,
           // UIKit's top bar, sidebar and navigation bars make room for the
           // cluster; the body starts below or beside them (spec P2 §8.3,

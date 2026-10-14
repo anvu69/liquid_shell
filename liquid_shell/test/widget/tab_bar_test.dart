@@ -335,6 +335,32 @@ void main() {
     });
   }
 
+  // The slots' focus nodes leave with the slots and do not report the
+  // loss: a minimize drops the ring, and an expand brings no ring back
+  // without focus (VK-503 leftover: cleared outside build).
+  for (final reduce in [false, true]) {
+    testWidgets('a focused slot loses its ring on a minimize and keeps none '
+        'after the expand (reduce motion $reduce)', (tester) async {
+      Widget bar({required bool minimized}) =>
+          _host(minimized: minimized, disableAnimations: reduce);
+      await tester.pumpWidget(bar(minimized: false));
+      final ring = find.byKey(kTabFocusKey);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      expect(ring, findsOneWidget, reason: 'focus on Inbox');
+
+      await tester.pumpWidget(bar(minimized: true));
+      await tester.pumpAndSettle();
+      expect(ring, findsNothing, reason: 'minimized: no slots');
+
+      await tester.pumpWidget(bar(minimized: false));
+      await tester.pumpAndSettle();
+      expect(ring, findsNothing, reason: 'expanded: no slot has focus');
+    });
+  }
+
   testWidgets('minimised circle: Tab focuses it with a visible highlight; '
       'Enter and Space expand it', (tester) async {
     final picked = <int>[];

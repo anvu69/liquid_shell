@@ -85,7 +85,9 @@ class LiquidShellScopeData {
   final bool nativePageBar;
 
   /// Native chrome draws the search scopes (iOS 26+, spec VK-550 §10.3):
-  /// `LiquidSearchScopeBar` builds nothing.
+  /// `LiquidSearchScopeBar` builds nothing. Also true while native chrome
+  /// is about to engage (no chrome is drawn yet), so the bar never shows
+  /// for a frame and then vanishes.
   final bool nativeSearchScopes;
 
   /// The shell's `LiquidSearch.scopes`; null without scopes or a shell

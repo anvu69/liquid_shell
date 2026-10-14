@@ -2024,12 +2024,14 @@ void main() {
   group('VK-550: the native scope bar', () {
     const scopes = ['All', 'Songs', 'Places'];
 
+    /// [gate]: native has not answered yet (pending) until it completes.
     Future<(FakeNativePlatform, LiquidSearchController)> scoped(
       WidgetTester tester, {
       List<String>? titles = scopes,
       int initialIndex = 2,
+      Completer<LiquidNativeShellState>? gate,
     }) async {
-      final fake = installFakeNative(state: _compact);
+      final fake = installFakeNative(state: _compact)..attachGate = gate;
       final controller = LiquidSearchController();
       addTearDown(controller.dispose);
       await pumpShell(
@@ -2048,9 +2050,75 @@ void main() {
           search: LiquidSearch(controller: controller, scopes: titles),
         ),
         padding: _compactPadding,
+        settle: gate == null,
       );
       return (fake, controller);
     }
+
+    // Task 10 review M3: while native has not answered (pending) or another
+    // shell owns it (standby), the shell draws no chrome; its page must not
+    // draw the scope bar either, or the bar shows and then vanishes (a
+    // jump of the results) when native engages.
+    testWidgets('pending: Flutter draws no scope bar before native answers', (
+      tester,
+    ) async {
+      final gate = Completer<LiquidNativeShellState>();
+      await scoped(tester, gate: gate);
+      await tester.pump();
+      expect(_scope(tester, 'Scopes').chromeKind, LiquidChromeKind.hidden);
+      expect(_scope(tester, 'Scopes').nativeSearchScopes, isTrue);
+      expect(find.byType(LiquidSegmentedControl), findsNothing);
+
+      gate.complete(_compact);
+      await tester.pumpAndSettle();
+      expect(_scope(tester, 'Scopes').nativeChrome, isTrue);
+      expect(find.byType(LiquidSegmentedControl), findsNothing);
+    });
+
+    testWidgets('pending, then not installed: Flutter draws the scope bar', (
+      tester,
+    ) async {
+      final gate = Completer<LiquidNativeShellState>();
+      await scoped(tester, gate: gate);
+      await tester.pump();
+      gate.complete(
+        const LiquidNativeShellState(
+          installed: false,
+          unavailableReason: LiquidNativeUnavailableReason.notEnabled,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(_scope(tester, 'Scopes').nativeSearchScopes, isFalse);
+      expect(find.byType(LiquidSegmentedControl), findsOneWidget);
+    });
+
+    testWidgets('standby: no scope bar while a shell pushed above owns the '
+        'chrome', (tester) async {
+      await scoped(tester);
+      final page = find.byKey(const ValueKey('list-Scopes'));
+      Navigator.of(tester.element(page), rootNavigator: true)
+          .push(
+            MaterialPageRoute<void>(
+              builder: (_) => const TestShell(
+                destinations: [
+                  LiquidDestination(
+                    icon: Icon(Icons.star),
+                    label: 'Starred',
+                    sfSymbol: 'star',
+                  ),
+                ],
+              ),
+            ),
+          )
+          .ignore();
+      // Mid-push the first shell is on screen without the chrome.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(_scope(tester, 'Scopes').nativeChrome, isFalse);
+      expect(_scope(tester, 'Scopes').nativeSearchScopes, isTrue);
+      expect(find.byType(LiquidSegmentedControl), findsNothing);
+      await tester.pumpAndSettle();
+    });
 
     testWidgets('the config carries the scopes; Flutter draws no scope bar', (
       tester,

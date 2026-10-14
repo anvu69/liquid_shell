@@ -151,7 +151,7 @@ class _GlassTabBarState extends State<GlassTabBar>
     vsync: this,
     motion: () => _motion,
     selected: () => _slotOf(widget.selectedIndex),
-    onFrame: () => setState(() {}),
+    onFrame: () => setState(_dropRingWhenCollapsed),
     extra: _minimize.advance,
     trace: _trace,
   );
@@ -207,8 +207,17 @@ class _GlassTabBarState extends State<GlassTabBar>
       _minimize
         ..reduceMotion = MediaQuery.disableAnimationsOf(context)
         ..set(widget.minimized, delayed: widget.collapseDelay);
+      // Reduce motion jumps: this build already draws the circle.
+      _dropRingWhenCollapsed();
       _ticker.kick();
     }
+  }
+
+  /// The slots' focus nodes leave with the slots (the circle replaces them
+  /// past the morph's midpoint) and do not report the loss: no ring is
+  /// left for the expand to bring back.
+  void _dropRingWhenCollapsed() {
+    if (_morph >= 0.5) _focusedSlot = null;
   }
 
   @override
@@ -743,8 +752,6 @@ class _GlassTabBarState extends State<GlassTabBar>
           child: _collapsedNode(shown[collapsedSlot]),
         ),
     ];
-    // The slots' focus nodes leave with the slots: no ring left behind.
-    if (morph >= 0.5) _focusedSlot = null;
     return Stack(clipBehavior: Clip.none, children: children);
   }
 
