@@ -208,6 +208,10 @@ abstract class NativeShellHostApi {
   /// Presents or dismisses the search; dismissing keeps the text.
   void setSearchActive(bool active);
 
+  /// Puts the search field's keyboard away: the field resigns first
+  /// responder, the search stays active and keeps its text.
+  void dismissSearchKeyboard();
+
   /// The top page's scroll offset of tab [tab] (proxy scroll view).
   void setPageScroll(int tab, double offset);
 

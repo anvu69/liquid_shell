@@ -51,6 +51,8 @@ glass, and your symbol replaces it when you give one.
 - `onChanged`: every text change the user makes, IME composition included.
   It is not called for text the app sets through the controller.
 - `onSubmitted`: the user pressed the keyboard's Search key.
+- `dismissKeyboardOnDrag` (default true): a user drag on the shell's body
+  puts the keyboard away while the search is active (below).
 
 **`LiquidSearchController`** is a `ValueNotifier<LiquidSearchValue>`. The
 app creates it, keeps it alive at least as long as the shell, and disposes
@@ -61,18 +63,20 @@ builds is fine: the shell re-attaches.
 |---|---|
 | `text` (get, set) | The field's text. Setting it shows it in the field (natively once no IME composition is in progress) and does not call `onChanged`. The same text is a no-op |
 | `scopeIndex` (get, set) | The selected scope, for `LiquidSearchScopeBar` |
-| `isActive` | Whether the field has focus |
+| `isActive` | Whether the search is active: the field has focus, or its keyboard was put away and the search stays up with its × |
 | `activate()` | Focuses the field, only while the search tab is selected (otherwise ignored, with one debug line). Unfocuses any Flutter text field first |
-| `deactivate()` | Unfocuses the field and keeps the text |
+| `deactivate()` | Ends the search: unfocuses the field and keeps the text |
+| `dismissKeyboard()` | Puts the keyboard away and keeps the search active, its text and its ×. Only while active |
 | `clear()` | Empties the text and keeps the focus |
 
 `LiquidSearchValue` carries `text`, `composing` (an IME composition is
-open), `active` and `scopeIndex`. `active` and `composing` belong to the
+open), `active` (the search is active) and `scopeIndex`. `active` and `composing` belong to the
 field: the app reads them and changes the focus with `activate` and
 `deactivate`.
 
 **`LiquidSearchPhase`** is where the search is: `idle` (another tab),
-`selected` (the search tab, no focus) and `active` (the field has focus).
+`selected` (the search tab, not searching) and `active` (searching: the
+field has focus, or the keyboard was put away and the × still shows).
 Read it from `LiquidShellScope.of(context).searchPhase`; it is null for a
 shell without a search tab.
 
@@ -80,7 +84,8 @@ shell without a search tab.
 control for search scopes ("All | Songs | Places"), bound to the
 controller's `scopeIndex`. Flutter draws it on every platform. Put it at
 the top of the search page's content while the phase is `active`, as Apple
-Music does.
+Music does. A tap on a scope selects it and puts the keyboard away
+(`dismissKeyboard()`); the search stays active.
 
 ## Phases per platform
 
@@ -113,6 +118,42 @@ fallback decides by width only, so there a narrow window gets the iPhone
 layout. iPadOS 26 always shows the ⌕ apart from the bar in a narrow
 window; iPadOS 27 puts it inside the bar.
 
+## The keyboard goes, the search stays
+
+As in Apple Music and Settings, the keyboard is put away and the search
+stays active (the query, the results, the × and Cancel) when:
+
+- **The user drags the results.** The shell watches its body's scroll
+  notifications: the first scroll of a user drag (a `ScrollUpdate` or
+  `Overscroll` notification with drag details, the rule of Flutter's
+  `ScrollViewKeyboardDismissBehavior.onDrag`) calls `dismissKeyboard()`,
+  once per drag, while the search is active, as soon as the finger has
+  moved at least as far along the list's axis as across it. Every
+  scrollable in the search page does it, nested ones and pages pushed in
+  the tab included; you add nothing. A programmatic scroll (`jumpTo`,
+  `animateTo`) has no drag details and keeps the keyboard. So does a
+  near-horizontal swipe over a vertical list, such as the iOS edge swipe:
+  it may scroll the list by the thumb's drift, but it moves mostly across
+  it. Opt out with `LiquidSearch(dismissKeyboardOnDrag: false)`.
+- **The user taps a scope** of `LiquidSearchScopeBar`.
+- **The app calls `controller.dismissKeyboard()`**, for a control of its
+  own (a filter chip, a custom scope bar).
+
+Natively the field resigns first responder: UIKit's search stays
+presented, nothing is written into the field, and marked text the
+resignation commits reaches `onChanged` once. In the Flutter field the
+field unfocuses, which ends an IME composition with its text as composed
+(Vietnamese diacritics included) and writes nothing; the phase stays
+`active`, the field moves down to the bottom row with its × (on a
+regular width it keeps the bar row and its inline ×). A tap on the
+field brings the keyboard back; × clears and ends the search;
+`deactivate()`, system back, another tab or hidden chrome end it and keep
+the text.
+
+Natively, an iPhone shows the active search with the keyboard down as
+UIKit's × beside the field; an iPad has no ×: its stacked field stays
+risen into the title row, with its ⓧ for the kept text.
+
 ## The controller is the truth
 
 The app owns the controller, so the query lives as long as you keep it,
@@ -122,7 +163,7 @@ whatever the tabs do.
   never go back to the field. Only text the app sets (`controller.text =`,
   `clear()`) is sent to the field.
 - **× clears.** The user's × clears the text for good, as UIKit's does,
-  and unfocuses the field.
+  and ends the search.
 - **The query is kept across tab switches.** Leaving the search tab (or a
   dialog over it) unfocuses the field and keeps the text; coming back shows
   it again. UIKit empties its field when the tab is left: the shell does
@@ -136,7 +177,10 @@ whatever the tabs do.
   route: the swipe pops the whole shell (VK-567).
 - **Dialogs and pages above the shell.** While a Flutter dialog, sheet or
   page covers the shell, an active search is deactivated first (the
-  keyboard would sit above the barrier). The text is kept.
+  keyboard would sit above the barrier). The text is kept. One difference
+  in the Flutter field: a search whose keyboard was already put away
+  (`dismissKeyboard()`) has no focus to lose, so it stays active under the
+  dialog, keyboard down, and is there as it was when the dialog closes.
 - **Hidden chrome.** While the chrome is hidden (`LiquidHideChrome`, a
   covering page), the search is not active: hiding it ends an active
   search and keeps its text, and `activate()` is ignored natively until
@@ -223,6 +267,9 @@ included, goes through `Navigator.maybePop`, so `PopScope` runs.
   `controller.deactivate()` before you show it.
 - **The text is gone after ×.** By design: × clears the query, as UIKit's
   does. Leaving the tab, a dialog and `deactivate()` keep it.
+- **The keyboard goes when the results scroll.** By design, as in Apple
+  Music: the search stays active. Keep the keyboard with
+  `LiquidSearch(dismissKeyboardOnDrag: false)`.
 - **`activate()` does nothing.** It works only while the search tab is
   selected: select the tab first, and activate once the shell has built
   with it (for example in a post-frame callback).

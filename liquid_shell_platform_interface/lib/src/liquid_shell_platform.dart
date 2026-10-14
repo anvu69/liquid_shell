@@ -59,6 +59,12 @@ abstract class LiquidShellPlatform extends PlatformInterface {
   /// the text. Default: does nothing.
   Future<void> setNativeSearchActive({required bool active}) async {}
 
+  /// Puts the native search field's keyboard away (it resigns first
+  /// responder) and keeps the search active with its text: no
+  /// presentation change, no text write. Default: does nothing (Android,
+  /// no native search).
+  Future<void> dismissNativeSearchKeyboard() async {}
+
   /// The scroll offset of tab [tab]'s top page, for the native large title
   /// and scroll-edge effect. Default: does nothing.
   Future<void> setNativePageScroll({

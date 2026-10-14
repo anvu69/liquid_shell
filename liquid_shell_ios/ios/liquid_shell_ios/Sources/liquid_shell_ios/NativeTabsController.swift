@@ -609,6 +609,13 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     }
   }
 
+  /// Dart's dismissKeyboard (VK-571): a drag on the results or a scope
+  /// tap. The keyboard goes, the search stays active with its text.
+  func dismissSearchKeyboard() {
+    guard isSearchSelected else { return }
+    searchBridge.dismissKeyboard()
+  }
+
   // MARK: - Pages (spec P3b §7.6, §7.7)
 
   /// The top page of tab [index], when it has a native navigation bar.

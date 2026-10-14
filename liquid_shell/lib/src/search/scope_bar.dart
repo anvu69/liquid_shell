@@ -19,6 +19,12 @@ class LiquidSearchScopeBar extends StatelessWidget {
   /// Scope titles, at least two.
   final List<String> scopes;
 
+  /// Selects scope [i] and puts the keyboard away, keeping the search
+  /// active, as a tap on UIKit's scope bar does (VK-571).
+  void _select(int i) => controller
+    ..scopeIndex = i
+    ..dismissKeyboard();
+
   @override
   Widget build(BuildContext context) {
     assert(
@@ -43,7 +49,7 @@ class LiquidSearchScopeBar extends StatelessWidget {
                     selected: value.scopeIndex == i,
                     inMutuallyExclusiveGroup: true,
                     label: title,
-                    onTap: () => controller.scopeIndex = i,
+                    onTap: () => _select(i),
                     excludeSemantics: true,
                     child: Material(
                       type: MaterialType.transparency,
@@ -51,7 +57,7 @@ class LiquidSearchScopeBar extends StatelessWidget {
                         borderRadius: const BorderRadius.all(
                           Radius.circular(999),
                         ),
-                        onTap: () => controller.scopeIndex = i,
+                        onTap: () => _select(i),
                         child: AnimatedContainer(
                           duration: MediaQuery.disableAnimationsOf(context)
                               ? Duration.zero

@@ -68,6 +68,12 @@ class _FakeHost extends NativeShellHostApi {
   }
 
   @override
+  Future<void> dismissSearchKeyboard() async {
+    calls.add('dismissSearchKeyboard');
+    _maybeFail();
+  }
+
+  @override
   Future<void> setPageScroll(int tab, double offset) async {
     calls.add('setPageScroll($tab, $offset)');
     _maybeFail();
@@ -389,10 +395,12 @@ void main() {
     final platform = liquidShellIOSWithHost(host);
     await platform.setNativeSearchText('hồ');
     await platform.setNativeSearchActive(active: true);
+    await platform.dismissNativeSearchKeyboard();
     await platform.setNativePageScroll(tab: 2, offset: 48.5);
     expect(host.calls, [
       'setSearchText(hồ)',
       'setSearchActive(true)',
+      'dismissSearchKeyboard',
       'setPageScroll(2, 48.5)',
     ]);
   });
@@ -412,8 +420,14 @@ void main() {
     await platform.setNativeSearchText('a');
     await platform.setNativeSearchText('b');
     await platform.setNativeSearchActive(active: false);
+    await platform.dismissNativeSearchKeyboard();
+    await platform.dismissNativeSearchKeyboard();
     expect(logs.where((l) => l.contains('setSearchText')), hasLength(1));
     expect(logs.where((l) => l.contains('setSearchActive')), hasLength(1));
+    expect(
+      logs.where((l) => l.contains('dismissSearchKeyboard')),
+      hasLength(1),
+    );
   });
 
   test('debugSnapshot passes the native snapshot through', () async {
