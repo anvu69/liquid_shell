@@ -483,10 +483,11 @@ works on its own, with `onPressed` to replace `maybePop`.
 
 ### Segmented control
 
-`LiquidSegmentedControl` is iOS 26's `UISegmentedControl`: a flat 32pt track
-centred in a 44pt touch box, a white thumb, and a liquid lens that lifts
-under the finger, follows a drag across segments, lands with a wobble and
-plays a selection click per segment crossed. It is controlled (rebuild it
+`LiquidSegmentedControl` is modelled on iOS 26's `UISegmentedControl`, close
+to it but not identical: a flat 32pt track centred in a 44pt touch box, a
+white thumb, and a liquid lens that lifts under the finger, follows a drag
+across segments, lands with a wobble and plays a selection click per
+segment crossed. It is controlled (rebuild it
 with the index `onChanged` gives), text-only, and each `LiquidSegment` can
 be `enabled: false`. `expand: true` (default) fills the width; `false`
 sizes to the labels. Colours and the label style are `segmentTrack`,

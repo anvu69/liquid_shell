@@ -1,11 +1,13 @@
 # The segmented control
 
-`LiquidSegmentedControl` is iOS 26's `UISegmentedControl` for Flutter: a
-flat track with a white thumb, and a liquid lens that lifts under the
-finger, follows a drag across the segments and lands with a wobble. The
-search scopes use it ([search.md](search.md)); it is public so the rest of
-your app can too. It is text-only: icons and momentary segments are not
-part of it.
+`LiquidSegmentedControl` is modelled on iOS 26's `UISegmentedControl`,
+for Flutter, and approximates it (see
+[What is not identical to iOS](#what-is-not-identical-to-ios)): a flat
+track with a white thumb, and a liquid lens that lifts under the finger,
+follows a drag across the segments and lands with a wobble. The search
+scopes use it ([search.md](search.md)); it is public so the rest of your
+app can too. It is text-only: icons and momentary segments are not part
+of it.
 
 ![Segmented controls of two, three and five segments](images/case_segments_light.png)
 
@@ -132,14 +134,16 @@ the acceptance notes of VK-550.
   system text size up to x2, which is the Flutter convention.
 - **Wobble (Q-E).** The lens lifts and lands with springs matched to
   native's peaks, overshoot and settle time within 10 %, not frame by
-  frame: on 31 native taps it was fitted to and on 73 it was not (two,
-  three and five segments, left and right, LTR and RTL). What differs: on
-  five segments a tap over three or four segments slides with a larger
-  overshoot (4.2 to 5.6 pt against 3.0 to 4.3) and, to the right, narrows
-  more after its lift; on two segments the slide is 2 pt off for a frame
-  or two. The overshoot after a fast release changes with its speed here,
+  frame: on the 31 native taps it was fitted to, which cover every kind of
+  tap measured (two, three and five segments, left and right, LTR and
+  RTL), and on 73 more captures that repeat the same kinds of tap. The 73
+  show that the fit repeats, not that it holds for new kinds of tap. What
+  differs: on five segments a tap over three or four segments slides with
+  a larger overshoot (4.2 to 5.6 pt against 3.0 to 4.3) and, to the right,
+  narrows more after its lift; on two segments the slide is 2 pt off for a
+  frame or two. The overshoot after a fast release changes with its speed here,
   where native's barely does: 4.4 pt against 4.04 at about 630 pt/s, 3.1
-  to 3.3 against 3.86 at about 450.
+  to 3.4 against 3.86 at about 450.
 - **Lens look.** Clear glass with a thin rim, a refracting ring with a
   colour fringe, and the page under it squeezed to about 0.8 across its
   height, as native's. Native's lens also bends the labels it passes; here

@@ -18,7 +18,10 @@
   must be equal (debug assert). An app write of
   `LiquidSearchController.scopeIndex` now reaches the shell, so the native
   scope bar can follow it. `LiquidShellScopeData.nativeSearchScopes` is
-  true while UIKit draws the scope bar. See `doc/search.md`.
+  true while UIKit draws the scope bar, and the new
+  `LiquidShellScopeData.searchScopes` holds the shell's
+  `LiquidSearch.scopes` (null without scopes or a shell search). See
+  `doc/search.md`.
 - **Native scope bar on iOS 26+.** With native chrome and
   `LiquidSearch.scopes`, the scope bar is UIKit's own (`.manual`
   activation, shown while the search is active, hidden when it ends). It
@@ -46,6 +49,9 @@
     read from `textTheme.labelLarge`); size and weights follow
     `UISegmentedControl` (13 pt, w400 / w500 when selected). Set
     `LiquidGlassTheme.segmentLabelStyle.fontFamily` to choose another.
+    In the system font on iOS and macOS (no family, or SF Pro) the labels
+    take SF Pro's tracking for the drawn size, as UIKit does (−0.08 pt at
+    13 pt); an app's own font keeps its spacing.
   - `LiquidSearchScopeBar.scopes` changed from `List<String>` to
     `List<String>?`. Every constructor call still compiles; only code that
     reads `bar.scopes` as non-null needs a `!`. Allowed before 1.0.

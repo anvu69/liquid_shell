@@ -106,9 +106,12 @@ void main() {
     // the fixture's five captures (light and dark, three and five
     // segments; Task 4), and the fitting split of the discriminating taps
     // (docs/qa/vk550/native_taps.json, pass 0: two, three and five
-    // segments, left and right, LTR and RTL; Task 15 review). On the
-    // engage-aligned clock: on 1 ms model samples the engine's onset is
-    // exact (§14.5).
+    // segments, left and right, LTR and RTL; Task 15 review). The engage
+    // onset is checked on its own, within a frame (on 1 ms model samples
+    // the engine's onset is exact). The rows are read on the device table's
+    // clock since f1a4cb8: the gate's best-fit `tapClock`, which lets each
+    // capture pick its own x shift within ±16.5 ms (§14.5), not the
+    // engage-aligned clock.
     final discriminating = segmentTaps();
     final fitted = [
       ('tap_1_2', tapRowsOf(ref, 'tap_1_2'), 3, 0, 1, false),

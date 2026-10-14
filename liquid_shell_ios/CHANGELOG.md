@@ -5,6 +5,13 @@
   from `NativeSearchConfig.scopes`. The channel gains `scopes`,
   `setSearchScope` and `onSearchScopeChanged` (Pigeon, generated). A
   user's change is reported once; Dart's own writes are not echoed.
+- A tap on a native scope puts the search keyboard away and keeps the
+  search active (UIKit keeps the keyboard up), as Flutter's scope bar does.
+- The selected scope is carried across a scene reconnect, as the search
+  text is.
+- **Breaking for fakes:** the exported `NativeDebugSnapshot` gains four
+  required fields, `scopeTitles`, `scopeShown`, `selectedScope` and
+  `scopeFrame`. Code that constructs one (a test fake) must pass them.
 
 ## 0.1.0-dev.6
 

@@ -359,9 +359,11 @@ final SpringDescription _segmentRelease = fittedSpring(0.785, 0.585);
 
 // The `flick` landing (Task 8 review, Q-E), with [_segmentRelease] and the
 // tap's wobble: w swells ×1.099 (native ×1.103) and h dips ×0.872 (×0.877)
-// at +0.335 / +0.339 s after the up (native +0.335 / +0.335). At the
-// flick's lens speed these gains apply at about two thirds; a slow drag
-// (below the squash knee) has none, as `slow_drag`.
+// at +0.335 / +0.339 s after the up (native +0.335 / +0.335). Measured with
+// the wobble at ζ 0.42, before the Task 15 review refitted it to 0.48, and
+// not measured again since. At the flick's lens speed these gains apply at
+// about two thirds; a slow drag (below the squash knee) has none, as
+// `slow_drag`.
 const double _landingW = 0.16;
 const double _landingH = -0.21;
 const double _landingHold = 0.2;

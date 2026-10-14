@@ -473,9 +473,13 @@ void main() {
   // `native_reference.json` `lens.look`, measured the same way on the
   // native segment strips): the page passes almost as is, a thin rim,
   // and no dark ring. The lens pressed on segment 0, then the same pixels
-  // with the lens on segment 2 as the page.
+  // with the lens on segment 2 as the page. Native, fitted (in sample):
+  // `LensLook.segment` was tuned to these numbers, so this gate pins the
+  // fit; `ringBend` includes the squeeze, so it checks the bezel's own
+  // bend only weakly and does not see the fringe.
   for (final brightness in Brightness.values) {
-    testWidgets('segment lens look against native, ${brightness.name}', (
+    testWidgets('segment lens look against native (fitted, in sample), '
+        '${brightness.name}', (
       tester,
     ) async {
       final reference =

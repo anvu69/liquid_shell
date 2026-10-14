@@ -1,10 +1,13 @@
-// The segment model against native taps it was never fitted to (spec VK-550
-// §14.5): the tap gate (tool/segment_gate.dart, the device table's own) on
+// The segment model against native captures it was not fitted to (spec
+// VK-550 §14.5): the tap gate (tool/segment_gate.dart, the device table's
+// own) on
 // - `native_holdout.json`, Task 15's 21 taps: a validation set now, since
 //   it showed the lift rule wrong (the lift follows the direction on
 //   screen, not the distance) before the rule was chosen;
 // - the holdout split of `native_taps.json` (passes 1 and 2, 52 taps),
-//   split before any capture was looked at: the true test.
+//   split before any capture was looked at. They repeat the fitted
+//   sequences (pass 0), so they check repeatability, not new kinds of tap;
+//   the fit split covers every kind of tap.
 // Every check on the device table's clock, tolerances unchanged.
 import 'dart:ui';
 
