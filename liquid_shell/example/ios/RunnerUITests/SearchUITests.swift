@@ -432,3 +432,74 @@ extension SearchUITests {
     XCTAssertTrue(places.isSelected, "the scope changed")
   }
 }
+
+/// VK-550: UIKit's scope bar while the search is active (spec VK-550 §10,
+/// §14.3), at the top on an iPhone and under the risen field on an iPad.
+/// Real touches change Flutter's results: a tap on "Songs" leaves only
+/// songs, and a drag from "Songs" to "Places" commits "Places" on release.
+/// Turned to landscape, the bar stays over the results (Task 10 review;
+/// iPadOS turns a resizable app only with the device, so the iPad's
+/// rotation is checked here rather than in native_search_test).
+extension SearchUITests {
+  /// Polls [condition] until it holds or [timeout] passes: UIKit animates a
+  /// rotation over several passes, which a loaded runner stretches.
+  fileprivate func wait(
+    timeout: TimeInterval = 10, until condition: () -> Bool
+  ) -> Bool {
+    let deadline = Date().addingTimeInterval(timeout)
+    repeat {
+      if condition() { return true }
+      RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+    } while Date() < deadline
+    return condition()
+  }
+
+  func testTheNativeScopeBar() {
+    let app = launch()
+    let tab = searchTabButton(app)
+    XCTAssertTrue(tab.waitForExistence(timeout: timeout))
+    tab.tap()
+    let field = app.searchFields.firstMatch
+    XCTAssertTrue(field.waitForExistence(timeout: 10), "the native field")
+    field.tap()
+    XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 30), "the keyboard")
+    field.typeText("pho")
+    let song = flutterRow(app, "Thành phố buồn")
+    let place = flutterRow(app, "Phố cổ Hà Nội")
+    XCTAssertTrue(song.waitForExistence(timeout: 10), "All: a song")
+    XCTAssertTrue(place.exists, "All: a place")
+
+    let scopes = app.segmentedControls.firstMatch
+    XCTAssertTrue(scopes.waitForExistence(timeout: 10), "UIKit's scope bar")
+    if UIDevice.current.userInterfaceIdiom == .pad {
+      XCTAssertGreaterThanOrEqual(
+        scopes.frame.minY, field.frame.maxY - 1, "under the field \(field.frame): \(scopes.frame)")
+    } else {
+      XCTAssertLessThan(scopes.frame.minY, 120, "at the top: \(scopes.frame)")
+    }
+
+    let songs = scopes.buttons["Songs"]
+    let places = scopes.buttons["Places"]
+    songs.tap()
+    XCTAssertTrue(place.waitForNonExistence(timeout: 10), "Songs: no place")
+    XCTAssertTrue(song.exists, "Songs: the song")
+
+    songs.press(forDuration: 0.3, thenDragTo: places)
+    XCTAssertTrue(song.waitForNonExistence(timeout: 10), "Places: no song")
+    XCTAssertTrue(place.waitForExistence(timeout: 10), "Places: the place")
+    XCTAssertTrue(places.isSelected, "the bar shows Places")
+
+    addTeardownBlock { XCUIDevice.shared.orientation = .portrait }
+    XCUIDevice.shared.orientation = .landscapeLeft
+    XCTAssertTrue(wait { app.frame.width > app.frame.height }, "landscape: \(app.frame)")
+    XCTAssertTrue(
+      wait { scopes.exists && place.exists && place.frame.minY >= scopes.frame.maxY },
+      "landscape: the results under the bar \(scopes.frame): \(place.frame)")
+    if UIDevice.current.userInterfaceIdiom == .pad {
+      XCTAssertGreaterThanOrEqual(
+        scopes.frame.minY, field.frame.maxY - 1,
+        "landscape: under the field \(field.frame): \(scopes.frame)")
+    }
+    XCTAssertTrue(places.isSelected, "landscape: still Places")
+  }
+}

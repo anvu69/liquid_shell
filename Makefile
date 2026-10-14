@@ -164,7 +164,10 @@ ios-unit: ## XCTest of liquid_shell_ios (example RunnerTests) on an iPad or iPho
 # iPad Pro 11 (14 run, 3 iPhone-only skipped), both iOS 26.5; scaled to
 # the slow runner, about 1250 s, too close to the old 1500 s. 1800 s keeps
 # ~550 s in hand, inside the job's 40 minutes; a stalled test still stops
-# at its 300 s.
+# at its 300 s. VK-550 adds the native scope bar test (18): locally 410 s
+# on an iPhone 17 Pro and 343 s on an iPad Air 11 (M4) (15 run), iOS
+# 26.5, the new test 26-37 s of it; scaled the same way, about 1350 s, so
+# 1800 s still keeps ~450 s in hand.
 IOS_UI_TIMEOUT ?= 1800
 
 ios-ui: ## XCUITest: real taps on native dialogs and the search tab (example RunnerUITests) on a simulator; IOS_UNIT_DEVICE=<udid>
