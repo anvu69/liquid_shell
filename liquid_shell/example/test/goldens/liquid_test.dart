@@ -281,6 +281,13 @@ void main() {
   // straddling the first two (spec VK-550 §14.4), on the full-width
   // three-segment control: (393 − 2 × 16) / 3 = 120.3 pt per segment, so
   // half of one moves the lens onto the boundary.
+  //
+  // KNOWN WRONG, regenerate in Task 15 (VK-550, spec R8): these images pin
+  // the current look, not an approved one. Native's held lens is clear
+  // glass with the stripes refracted and a thin rim; ours has a milky core
+  // and a thick black rim at its top and bottom. Task 15 tunes the lens
+  // against the segment strips (make segment-frames), then regenerates
+  // both through make goldens-update and compares them with native's.
   for (final (name, shift) in [
     ('segment_lens_pressed', 0.0),
     ('segment_lens_straddle', (393 - 2 * 16) / 3 / 2),
