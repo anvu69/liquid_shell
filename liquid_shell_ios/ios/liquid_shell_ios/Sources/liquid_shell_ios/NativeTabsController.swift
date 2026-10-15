@@ -871,6 +871,10 @@ final class TabHostController: UIViewController {
   /// A host goes with its tabs (a rebuild, the shell's release) while its
   /// pan may still be on the Flutter view, which outlives it: UIKit leaves
   /// a dead scroll view's pan where it is. Take it back first.
+  ///
+  /// Swift 6: this `deinit` is nonisolated and calls main-actor UIKit API,
+  /// which Swift 5 mode allows. The Swift 6 language mode needs
+  /// `isolated deinit` (SE-0371) or `MainActor.assumeIsolated` here.
   deinit {
     minimizeProxy.addGestureRecognizer(minimizeProxy.panGestureRecognizer)
   }
