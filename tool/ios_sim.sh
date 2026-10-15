@@ -5,32 +5,44 @@
 # stalled, against 8 of 197 later ones. These helpers keep that launch away
 # from every suite and record what the simulator knows when one stalls.
 #
-#   tool/ios_sim.sh warmup UDID [APP]
+#   tool/ios_sim.sh warmup UDID [APP | --build]
 #   tool/ios_sim.sh diagnose UDID LABEL [WINDOW]
+#   tool/ios_sim.sh guard UDID LABEL SECONDS command [args...]
 #
 # warmup    Boots UDID and waits for it (simctl boot, bootstatus -b),
 #           installs APP when given, launches the example once and waits
 #           until it logs "The Dart VM service is listening on" (at most
-#           IOS_WARMUP_TIMEOUT seconds), then terminates it. It never fails:
-#           a timeout is diagnosed, any other problem is reported, and it
-#           exits 0.
+#           IOS_WARMUP_TIMEOUT seconds), then terminates it. --build first
+#           builds the example for UDID (flutter build ios --config-only,
+#           xcodebuild build into liquid_shell/example/build/ios-derived)
+#           and installs that. It never fails: a timeout is diagnosed, any
+#           other problem is reported, and it exits 0.
 # diagnose  Writes IOS_DIAG_DIR/<UTC time>-<LABEL>/: meta.txt (timestamps,
 #           load), vm-service.log (`log show --last WINDOW`, default 15m, of
 #           the app's VM service line), launchctl.txt (the app in the
 #           simulator's launchd) and sample.txt (`sample` of the app for
 #           5 s when it is alive). Every step is capped; it exits 0.
+# guard     The stall guard. Runs the command under tool/with_timeout.sh for
+#           at most SECONDS. A stall (124) is diagnosed before the stop; then
+#           the app is terminated and the command runs once more on the same
+#           booted simulator, never a rebooted one (a retry after a reboot
+#           stalled 13 times in 38). Any other status is the command's own
+#           and is never retried.
 #
 # IOS_APP_BUNDLE_ID   the app (default vn.lasoai.liquidShellExample)
 # IOS_WARMUP_TIMEOUT  seconds the warm-up waits for the VM service line
 #                     (default 180; passing first launches after a boot
 #                     logged their first line within 85 s on CI)
+# IOS_BUILD_TIMEOUT   seconds each step of --build may take (default 900)
 # IOS_DIAG_DIR        diagnostics root
 #                     (default liquid_shell/example/build/ios-diagnostics)
+# FLUTTER             flutter command for --build (default: flutter)
 set -uo pipefail
 tool_dir=$(cd "$(dirname "$0")" && pwd)
 example=$(cd "$tool_dir/../liquid_shell/example" && pwd)
 bundle=${IOS_APP_BUNDLE_ID:-vn.lasoai.liquidShellExample}
 warmup_timeout=${IOS_WARMUP_TIMEOUT:-180}
+build_timeout=${IOS_BUILD_TIMEOUT:-900}
 diag_root=${IOS_DIAG_DIR:-$example/build/ios-diagnostics}
 # The line flutter_tools waits for after `simctl launch` (simulators.dart),
 # from the app's own process. The predicate leaves out the trailing " on",
@@ -53,8 +65,9 @@ warn() {
 
 usage() {
   cat >&2 <<'EOF'
-usage: tool/ios_sim.sh warmup UDID [APP]
+usage: tool/ios_sim.sh warmup UDID [APP | --build]
        tool/ios_sim.sh diagnose UDID LABEL [WINDOW]
+       tool/ios_sim.sh guard UDID LABEL SECONDS command [args...]
 EOF
   exit 2
 }
@@ -93,11 +106,33 @@ diagnose() { # <udid> <label> [window]
   note "diagnostics in $dir"
 }
 
-warmup() { # <udid> [app]
-  local udid=$1 app=${2:-} tmp stream launched waited
+# Builds the example for <udid>; prints the app's path.
+build_app() { # <udid>
+  local derived="$example/build/ios-derived"
+  (
+    cd "$example" || exit 1
+    # shellcheck disable=SC2086 # FLUTTER may be "fvm flutter"
+    cap "$build_timeout" ${FLUTTER:-flutter} build ios --config-only --simulator --debug \
+      && cd ios \
+      && cap "$build_timeout" xcodebuild build -workspace Runner.xcworkspace \
+        -scheme Runner -configuration Debug -destination "id=$1" \
+        -derivedDataPath "$derived" -quiet
+  ) >&2 || return 1
+  echo "$derived/Build/Products/Debug-iphonesimulator/Runner.app"
+}
+
+warmup() { # <udid> [app | --build]
+  local udid=$1 app=${2:-} build_failed= tmp stream launched waited
+  if [ "$app" = --build ]; then
+    app=$(build_app "$udid") || build_failed=1
+  fi
   cap 600 xcrun simctl boot "$udid" > /dev/null 2>&1
   if ! cap 600 xcrun simctl bootstatus "$udid" -b > /dev/null; then
     warn "warm-up skipped: $udid did not finish booting"
+    return 0
+  fi
+  if [ -n "$build_failed" ]; then
+    warn "warm-up skipped: the build failed"
     return 0
   fi
   if [ -n "$app" ] && ! cap 300 xcrun simctl install "$udid" "$app"; then
@@ -139,10 +174,34 @@ warmup() { # <udid> [app]
   return 0
 }
 
+guard() { # <udid> <label> <seconds> command [args...]
+  local udid=$1 label=$2 secs=$3 attempt status window
+  shift 3
+  # The log window covers the whole attempt: a 1200 s drive launched its
+  # app about 19 minutes before the dump.
+  window=$(((secs + 59) / 60 + 5))
+  [ "$window" -ge 15 ] || window=15
+  for attempt in 1 2; do
+    status=0
+    WITH_TIMEOUT_ON_STALL="$(printf '%q ' "$tool_dir/ios_sim.sh" diagnose \
+      "$udid" "$label stall $attempt" "${window}m")" \
+      "$tool_dir/with_timeout.sh" "$secs" "$@" || status=$?
+    [ "$status" -eq 124 ] || return "$status"
+    if [ "$attempt" -eq 1 ]; then
+      warn "stall guard fired: $label (attempt 1 of 2); terminating the app and retrying on the same simulator"
+    else
+      warn "stall guard fired: $label (attempt 2 of 2); giving up"
+    fi
+    cap 60 xcrun simctl terminate "$udid" "$bundle" > /dev/null 2>&1
+  done
+  return 124
+}
+
 command=${1:-}
 [ $# -eq 0 ] || shift
 case "$command" in
   warmup) [ $# -ge 1 ] && [ $# -le 2 ] || usage; warmup "$@" ;;
   diagnose) [ $# -ge 2 ] && [ $# -le 3 ] || usage; diagnose "$@" ;;
+  guard) [ $# -ge 4 ] || usage; guard "$@" ;;
   *) usage ;;
 esac

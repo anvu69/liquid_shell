@@ -16,10 +16,12 @@
 # FLUTTER         flutter command (default: flutter).
 # IOS_DRIVE_TIMEOUT  seconds one `flutter drive` may run (default 1200).
 #
-# Stall guard, as in tool/integration_ios.sh: a drive (one target on one
-# device) that outlives IOS_DRIVE_TIMEOUT is stopped (tool/with_timeout.sh),
-# the simulator is restarted and that drive is retried once. A test failure
-# is never retried.
+# Warm-up and stall guard, as in tool/integration_ios.sh (VK-625): each
+# simulator is booted, and the example built and launched once, before its
+# first drive (tool/ios_sim.sh warmup --build). A drive (one target on one
+# device) that outlives IOS_DRIVE_TIMEOUT is diagnosed and stopped, the app
+# is terminated, and that drive is retried once on the same booted simulator
+# (tool/ios_sim.sh guard). A test failure is never retried.
 #
 # Screenshots land in liquid_shell/example/build/integration_screenshots/:
 # native_<run>_*.png (home, sidebar, guard, cases), dialogs_<run>_*.png
@@ -29,7 +31,7 @@
 set -euo pipefail
 tool_dir=$(cd "$(dirname "$0")" && pwd)
 cd "$tool_dir/../liquid_shell/example"
-FLUTTER=${FLUTTER:-flutter}
+export FLUTTER=${FLUTTER:-flutter}
 IOS_DRIVE_TIMEOUT=${IOS_DRIVE_TIMEOUT:-1200}
 IOS_RUNTIME=${IOS_RUNTIME-iOS 26.5}
 NATIVE_DEVICES=${NATIVE_DEVICES:-iPad Air 11-inch (M4)=true;iPhone 17 Pro=true}
@@ -43,15 +45,11 @@ udid_of() {
     | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/'
 }
 
-boot() {
-  xcrun simctl boot "$1" 2>/dev/null || true
-  xcrun simctl bootstatus "$1" -b >/dev/null
-}
-
 drive() {
   local udid=$1 expect=$2 run=$3 target=$4
   # shellcheck disable=SC2086 # FLUTTER may be "fvm flutter"
-  "$tool_dir/with_timeout.sh" "$IOS_DRIVE_TIMEOUT" $FLUTTER drive \
+  "$tool_dir/ios_sim.sh" guard "$udid" "$target on $run" \
+    "$IOS_DRIVE_TIMEOUT" $FLUTTER drive \
     --driver=test_driver/integration_test.dart \
     --target="integration_test/$target" \
     -d "$udid" \
@@ -70,19 +68,10 @@ for pair in "${pairs[@]}"; do
   fi
   run=${name//[^A-Za-z0-9]/_}
   echo "▸ $name ($udid), native expected: $expect"
-  boot "$udid"
+  "$tool_dir/ios_sim.sh" warmup "$udid" --build
   for target in $NATIVE_TARGETS; do
     echo "▸ $name: $target"
-    status=0
-    drive "$udid" "$expect" "$run" "$target" || status=$?
-    if [ "$status" -eq 124 ]; then
-      echo "▸ flutter drive stalled; restarting $name and retrying once" >&2
-      xcrun simctl shutdown "$udid" 2>/dev/null || true
-      boot "$udid"
-      status=0
-      drive "$udid" "$expect" "$run" "$target" || status=$?
-    fi
-    [ "$status" -eq 0 ] || exit "$status"
+    drive "$udid" "$expect" "$run" "$target" || exit $?
   done
 done
 echo "✓ native shell integration passed"

@@ -301,31 +301,21 @@ jobs:
           NATIVE_TARGETS: native_shell_test.dart native_dialogs_test.dart native_search_test.dart
       - name: Native vs Flutter liquid on the newest ${{ matrix.device }} simulator (${{ matrix.runtime }})
         if: steps.sim.outputs.udid != ''
-        # A drive stuck in its Xcode build held this step until the job's
-        # 140 minutes (PR #15, run 38734664025): stopped after 20 min and
-        # retried once on a restarted simulator, as the native drives are
-        # (tool/integration_ios_native.sh).
+        # A drive held this step until the job's 140 minutes (PR #15, run
+        # 38734664025). Its Xcode build was done: `simctl launch` had
+        # returned, and flutter_tools waited, with no timeout of its own, for
+        # the app's VM service URL (VK-625). tool/ios_sim.sh guard stops it
+        # after 20 min, dumps diagnostics, terminates the app and retries
+        # once on the same simulator, as the native drives are.
         run: |
           udid="${{ steps.sim.outputs.udid }}"
           cd liquid_shell/example
-          compare() {
-            ../../tool/with_timeout.sh 1200 flutter drive --driver=test_driver/integration_test.dart \
-              --target=integration_test/liquid_compare_test.dart -d "$udid" \
-              --dart-define=COMPARE_PLATFORM=ios \
-              --dart-define=COMPARE_DEVICE=$(echo "${{ matrix.device }}" | tr '[:upper:]' '[:lower:]') \
-              --dart-define=EXPECT_NATIVE=true
-          }
-          status=0
-          compare || status=$?
-          if [ "$status" -eq 124 ]; then
-            echo "::warning::the native vs Flutter liquid drive stalled; restarting the simulator and retrying once"
-            xcrun simctl shutdown "$udid" 2>/dev/null || true
-            xcrun simctl boot "$udid" 2>/dev/null || true
-            xcrun simctl bootstatus "$udid" -b >/dev/null
-            status=0
-            compare || status=$?
-          fi
-          [ "$status" -eq 0 ] || exit "$status"
+          ../../tool/ios_sim.sh guard "$udid" "liquid_compare_test.dart on ${{ matrix.device }}" 1200 \
+            flutter drive --driver=test_driver/integration_test.dart \
+            --target=integration_test/liquid_compare_test.dart -d "$udid" \
+            --dart-define=COMPARE_PLATFORM=ios \
+            --dart-define=COMPARE_DEVICE=$(echo "${{ matrix.device }}" | tr '[:upper:]' '[:lower:]') \
+            --dart-define=EXPECT_NATIVE=true
           mkdir -p build/compare
           for n in build/integration_screenshots/ios_*_native.png; do
             dart run ../../tool/side_by_side.dart "$n" "${n%_native.png}_flutterLiquid.png" "build/compare/$(basename "${n%_native.png}").png"
