@@ -203,9 +203,11 @@ final class MinimizeUITests: XCTestCase {
   }
 
   /// A programmatic scroll to the top expands the bar (Q3): the status-bar
-  /// tap reaches Flutter's own scroll view (no proxy competes for it, Q10),
-  /// the Scaffold animates the list to the top, and Dart asks native to
-  /// expand. UIKit alone would keep it minimized (spike §3.2).
+  /// tap reaches Flutter's own scroll view, the Scaffold animates the list
+  /// to the top, and Dart asks native to expand. UIKit alone would keep it
+  /// minimized (spike §3.2). Q10 (the proxies' scrollsToTop off) is
+  /// XCTest's: with up to two taps this test cannot tell who took the
+  /// first.
   func testAStatusBarTapScrollsToTheTopAndExpands() throws {
     try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .phone, "compact bar")
     let app = launch("minimize")
@@ -218,11 +220,13 @@ final class MinimizeUITests: XCTestCase {
 
     // On the status bar, clear of the Dynamic Island. The first tap can
     // land on Flutter's accessibility mirror of the list instead
-    // (FlutterSemanticsScrollView, scrollsToTop on while semantics are, as
-    // under XCUITest or VoiceOver): UIKit scrolls the mirror to the top and
-    // Flutter does not move. The next tap reaches Flutter's status-bar view
-    // (lldb, docs/qa/vk600/acceptance.md). Native chrome or not, the same;
-    // liquid_shell's proxies never take it (scrollsToTop off, Q10).
+    // (FlutterSemanticsScrollView, scrollsToTop on; it exists while
+    // semantics are on, always on a simulator, on a device under
+    // VoiceOver, Switch Control or Speak Screen): UIKit scrolls the mirror
+    // to the top and Flutter does not move. A tap after that reaches
+    // Flutter's status-bar view (lldb, docs/qa/vk600/acceptance.md §3), so
+    // the test taps again when the list is not at the top within 3 s.
+    // Native chrome or not, the same.
     let statusBar = app.windows.firstMatch.coordinate(withNormalizedOffset: .zero)
       .withOffset(CGVector(dx: app.windows.firstMatch.frame.width * 0.85, dy: 15))
     let atTop = { abs(row.frame.minY - top) < 2 }
