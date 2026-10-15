@@ -87,7 +87,8 @@ badges are `badgeColor` (#FF383C, #FF4245 in dark). See
 
 Scrolling down shrinks the bar to a 48 pt circle with the current tab's
 icon. Tap it to bring the bar back. Scrolling back toward the top does
-not, as on iOS 26. A selection change brings it back too. A `chromeBuilder` reads the same
+not, as on iOS 26. A fling or a programmatic scroll (a status-bar tap,
+`animateTo(0)`) that reaches the top does expand it; a drag back never does. A selection change brings it back too. A `chromeBuilder` reads the same
 state in `LiquidChromeDetails.minimized` and expands with
 `details.expand`.
 

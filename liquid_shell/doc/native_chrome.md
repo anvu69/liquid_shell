@@ -103,7 +103,7 @@ without native chrome (Android, web, desktop) answer at once.
   the Flutter bar; `onSelectedDestinationHidden` tells you when it was the
   selected one. UIKit always highlights a tab, so while the selection is
   hidden the bar highlights its first destination; a tap on it still
-  selects it. `minimizeOnScroll` applies to the Flutter bar only.
+  selects it. The compact bar minimizes on scroll (see *Minimize on scroll*).
 - **Trailing action.** `tabBarTrailing` becomes a search-role tab
   (`UISearchTab`) with your label and symbol: a separate round button at
   the end of the compact bar, the trailing end of the top bar, the first
@@ -131,6 +131,32 @@ without native chrome (Android, web, desktop) answer at once.
 - **Style.** The tint is the theme's `colorScheme.primary`. Light or dark
   follows the theme's brightness, and the direction follows the shell's
   `Directionality`.
+
+## Minimize on scroll
+
+With `minimizeOnScroll` on (the default), scrolling the body down shrinks
+UIKit's compact tab bar to a circle, as on the Flutter bar. A hidden scroll
+view per tab follows your body's scrolling, and UIKit animates the bar.
+
+| Trigger | Native bar |
+|---|---|
+| Scroll the body down (about 20 to 40 pt) | Minimizes |
+| Drag back up in mid-content | Stays minimized |
+| A fling reaches the top edge | Expands |
+| A programmatic scroll ends at the top (status-bar tap, `animateTo(0)`) | Expands |
+| Tap the minimized circle | Expands |
+| The selected destination changes (not into search) | Expands |
+| The search tab is selected | Does not minimize |
+| Regular width (top bar, sidebar) | Never minimizes |
+| `minimizeOnScroll: false` | Never minimizes |
+
+Limits: it does not minimize at regular width (a wide iPad), in the search
+tab, from a platform view (web view, native map), from trackpad or mouse
+scrolling, or from VoiceOver scrolling. `bottomAccessory` is not covered. A
+very long feed is handled by growing the proxy's content. Entering search
+does not expand the bar.
+
+`minimizeOnScroll: false` turns it off.
 
 ## Search tab
 
@@ -275,6 +301,8 @@ resize changes it, and jumps when the platform asks to reduce motion.
 
 ## Troubleshooting
 
+- **The native bar never minimizes**: `minimizeOnScroll` is false, the
+  width is regular, or the search tab is selected.
 - **`notEnabled`**: add the Info.plist key.
 - **`registeredLate`**: the app registers plugins after the scene connected,
   for example on a custom engine; native chrome needs the default

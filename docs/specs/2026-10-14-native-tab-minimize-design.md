@@ -193,7 +193,7 @@ Its deceleration after a release is left running, without overriding `scrollView
 
 ### 8.3 Pan attachment
 
-`NativeTabsController.updateMinimizePan()` moves exactly one pan onto `flutter.view`. It runs at the end of `apply`, after `select`, on a horizontal-size-class change and in `setChromeVisible`.
+`NativeTabsController.updateMinimizePan()` moves exactly one pan onto `flutter.view`. It runs at the end of `apply` (after `select` and `setChromeVisible`, so both are covered) and on a horizontal-size-class change.
 
 - **Attached** when all of these hold:
   - `chromeVisible`, the config is `interactive`, and `isCompact`;
@@ -326,7 +326,7 @@ The Flutter bar (kind `bottomBar`) uses the same tracker result. With `minimizeO
 | A vertical slider or a text-selection drag | Flutter's list does not move, so the offset does not change and nothing minimizes |
 | A drag that starts over a platform view | The pan does not begin (§8.3). The platform view scrolls as before (spike §4) |
 | A drag that starts on the native bar | Not on the Flutter view: the pan never sees it |
-| Tab switch while minimized | The bar expands (Q4). The new tab's proxy takes the pan and Dart sends its offset |
+| Tab switch while minimized | The bar expands (Q4), except into the search tab (Q5). The new tab's proxy takes the pan and Dart sends its offset |
 | A dialog, sheet or pushed page above the shell | The chrome is hidden or inert: pan detached, nothing sent. UIKit keeps its state; when the cover goes, the pan comes back |
 | `LiquidHideChrome` | The same as hidden |
 | Rotation or size-class change | Regular: pan detached, proxies reset to 0. Back to compact: re-attached; Dart sends the offset |
