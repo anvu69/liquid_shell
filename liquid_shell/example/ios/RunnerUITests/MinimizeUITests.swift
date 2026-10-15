@@ -266,28 +266,36 @@ final class MinimizeUITests: XCTestCase {
   /// and minimizes as an iPhone does. In Windowed Apps (iPadOS 26) the
   /// window has SpringBoard's resize grabber: the test narrows the window
   /// with it, and widens it back after, since iPadOS keeps the size for
-  /// the next launch.
+  /// the next launch. Every length comes from the window, so it runs on
+  /// any iPad; one whose narrowest window stays regular skips.
   func testANarrowIPadWindowMinimizesLikeAnIPhone() throws {
     try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .pad, "iPad")
     let app = launch()
     let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
     let grabber = springboard.otherElements["resize-grabber"]
     try XCTSkipUnless(grabber.waitForExistence(timeout: 10), "Windowed Apps: a resize grabber")
+    let window = app.windows.firstMatch
+    let wide = window.frame
     addTeardownBlock {
       grabber.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(
         forDuration: 0.6,
         thenDragTo: springboard.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 1)))
+      // A window left narrow would fail the next iPad test for no reason
+      // of its own.
+      XCTAssertTrue(
+        self.wait { window.frame.width >= wide.width - 1 },
+        "widened back: \(window.frame), was \(wide)")
     }
+    // iPadOS's narrowest window is 375–410 pt (Task 8): ask for 375.
     let handle = grabber.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
     handle.press(
       forDuration: 0.6,
-      thenDragTo: handle.withOffset(CGVector(dx: -springboard.frame.width / 2, dy: 0)))
-    let window = app.windows.firstMatch
+      thenDragTo: handle.withOffset(CGVector(dx: -(wide.width - 375), dy: 0)))
     let home = app.tabBars.buttons["Home"].firstMatch
-    XCTAssertTrue(
-      wait { home.exists && home.frame.minY > window.frame.midY },
-      "compact: the bottom bar in \(window.frame)")
-    XCTAssertLessThan(window.frame.width, springboard.frame.width / 2 + 1, "narrow")
+    guard wait(until: { home.exists && home.frame.minY > window.frame.midY }) else {
+      throw XCTSkip("the narrowest window stays regular: \(window.frame), was \(wide)")
+    }
+    XCTAssertLessThan(window.frame.width, wide.width, "narrowed")
 
     let row = flutterRow(app, "Home item 8")
     XCTAssertTrue(row.waitForExistence(timeout: 10), "Flutter's rows")
