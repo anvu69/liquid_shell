@@ -107,24 +107,23 @@ final class TabFidelityUITests: XCTestCase {
       withVelocity: XCUIGestureVelocity(1500), thenHoldForDuration: 0)
     idle()
     expectSelected("Home", among: tabs, after: "fast_flick")
-    // The Flutter run's minimize, then its expand by a tap on the circle.
-    // Native chrome does not minimize on a Flutter scroll (UIKit sees no
-    // scroll view; `minimizeOnScroll` is the Flutter bar's,
-    // doc/native_chrome.md), so here the swipe only scrolls the page and
-    // the bar stays whole: native strip 7 is a scroll and strip 8 a tap
-    // where the Flutter circle is (docs/qa/vk503/acceptance.md). The
-    // state is asserted (VK-503 review), so a native minimize shows here.
+    // The minimize, then the expand by a tap on the circle. Since VK-600
+    // the native bar minimizes on a Flutter scroll too (`minimizeOnScroll`
+    // drives both bars), so native strips 7 and 8 are UIKit's own minimize
+    // and expand, as the Flutter run's are. Before VK-600 the native swipe
+    // only scrolled the page (docs/qa/vk503/acceptance.md).
     app.swipeUp(); idle()
     XCTAssertTrue(
-      shown(tabs["Explore"]!) && shown(tabs["Settings"]!),
-      "native: the swipe scrolls the page and the bar does not minimize")
+      wait { !shown(tabs["Explore"]!) && !shown(tabs["Settings"]!) },
+      "native: the swipe minimizes the bar (VK-600)")
     // The bar sits as far from the screen's side as from its bottom, so
-    // the Flutter circle's centre is that far in from the leading edge.
+    // the circle's centre is that far in from the leading edge: the
+    // Flutter circle's, and UIKit's minimized one's (VK-600).
     let window = app.windows.firstMatch.frame
     let inset = window.maxY - home.y
     point(app, CGPoint(x: window.minX + inset, y: home.y)).tap()
     idle()
     expectSelected("Home", among: tabs, after: "the tap at the circle")
-    XCTAssertTrue(wait { shown(tabs["Explore"]!) }, "still whole: Explore")
+    XCTAssertTrue(wait { shown(tabs["Explore"]!) }, "whole again: Explore")
   }
 }
