@@ -122,6 +122,21 @@ final class MinimizeUITests: XCTestCase {
     return condition()
   }
 
+  /// [element]'s frame once two reads 0.5 s apart agree, or nil after
+  /// 10 s: an element that morphs in (the search field from the ⌕) is
+  /// still moving when it first exists.
+  private func restingFrame(_ element: XCUIElement) -> CGRect? {
+    var last = element.frame
+    let deadline = Date().addingTimeInterval(10)
+    while Date() < deadline {
+      RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+      let now = element.frame
+      if now == last { return now }
+      last = now
+    }
+    return nil
+  }
+
   func testAScrollMinimizesAndAFlingToTheTopExpands() throws {
     try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .phone, "compact bar")
     let app = launch()
@@ -231,7 +246,7 @@ final class MinimizeUITests: XCTestCase {
     XCTAssertFalse(app.keyboards.firstMatch.exists, "selected, not focused (Q13)")
 
     // A drag on the search page minimizes nothing: the bar keeps its form.
-    let fieldFrame = field.frame
+    let fieldFrame = try XCTUnwrap(restingFrame(field), "the field comes to rest")
     drag(app, dy: -300)
     sleep(2)
     XCTAssertEqual(field.frame, fieldFrame, "the search keeps its bar")
