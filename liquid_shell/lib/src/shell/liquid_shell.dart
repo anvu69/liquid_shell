@@ -163,10 +163,12 @@ class LiquidShell extends StatefulWidget {
   /// Sidebar width. `0 < sidebarWidth < breakpoints.regular`.
   final double sidebarWidth;
 
-  /// Compact bottom bar only: shrink to the selected tab while content
-  /// scrolls down. As on iOS 26, scrolling back up does not expand it: a tap
-  /// on the minimized circle or a selection change (a tab change from the
-  /// app included) does.
+  /// Compact bottom bar only, Flutter-drawn or native (iOS 26+): shrink to
+  /// the selected tab while the body scrolls down. Scrolling back up in
+  /// mid-content does not expand it; a fling or a programmatic scroll that
+  /// ends at the top does, as do a tap on the minimized circle and a change
+  /// of the selected destination. The native bar never minimizes while the
+  /// search destination is selected, nor at regular width.
   final bool minimizeOnScroll;
 
   /// Every user-visible string.
@@ -978,7 +980,15 @@ class _LiquidShellState extends State<LiquidShell>
   /// minimizes the Flutter bar.
   bool _onBodyScroll(ScrollNotification notification, LiquidChromeKind? kind) {
     _search.onBodyScroll(notification);
-    _trackMinimize(notification, kind);
+    final result = _trackMinimize(notification, kind);
+    // A fling or a programmatic scroll that reached the top expands the
+    // Flutter bar (VK-600 Q2, Q3); a drag back there does not (VK-503 Q7).
+    if (kind == LiquidChromeKind.bottomBar &&
+        widget.minimizeOnScroll &&
+        !_search.selected &&
+        result == MinimizeScrollResult.expand) {
+      _expand();
+    }
     if (notification is UserScrollNotification && kind != null) {
       _onScroll(notification, kind);
     }
@@ -988,11 +998,14 @@ class _LiquidShellState extends State<LiquidShell>
   /// Feeds the selected tab's minimize offset, in both chrome modes. Only a
   /// view on screen counts: an `IndexedStack` keeps the other tabs' lists,
   /// and the app may scroll one of them.
-  void _trackMinimize(ScrollNotification notification, LiquidChromeKind? kind) {
+  MinimizeScrollResult _trackMinimize(
+    ScrollNotification notification,
+    LiquidChromeKind? kind,
+  ) {
     final context = notification.context;
     final body = _bodyKey.currentContext;
     if (context != null && body != null && !isOnScreenUnder(context, body)) {
-      return;
+      return MinimizeScrollResult.none;
     }
     final tab = resolveSelectedIndex(
       widget.selectedIndex,
@@ -1005,6 +1018,7 @@ class _LiquidShellState extends State<LiquidShell>
       _scheduleMinimizeSend();
       if (result == MinimizeScrollResult.expand) _claim?.expandTabBar();
     }
+    return result;
   }
 
   bool _onScroll(UserScrollNotification notification, LiquidChromeKind kind) {

@@ -488,6 +488,57 @@ void main() {
   });
 
   group('minimise on scroll (§5.7)', () {
+    testWidgets('a fling that reaches the top expands (VK-600 Q2)', (
+      tester,
+    ) async {
+      await pumpShell(tester, const TestShell());
+      final list = find.byKey(const ValueKey('list-Home'));
+      await tester.drag(list, const Offset(0, -600));
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byKey(kTabPillKey)), const Size(48, 48));
+      await tester.fling(list, const Offset(0, 500), 4000);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byKey(kTabPillKey)).height, 62);
+    });
+
+    testWidgets(
+      'a drag back to the top keeps it minimized (VK-600, as UIKit)',
+      (
+        tester,
+      ) async {
+        await pumpShell(tester, const TestShell());
+        final list = find.byKey(const ValueKey('list-Home'));
+        await tester.drag(list, const Offset(0, -600));
+        await tester.pumpAndSettle();
+        await tester.drag(list, const Offset(0, 900));
+        await tester.pumpAndSettle();
+        expect(tester.getSize(find.byKey(kTabPillKey)), const Size(48, 48));
+      },
+    );
+
+    testWidgets('a programmatic scroll to the top expands (VK-600 Q3)', (
+      tester,
+    ) async {
+      await pumpShell(tester, const TestShell());
+      final list = find.byKey(const ValueKey('list-Home'));
+      await tester.drag(list, const Offset(0, -600));
+      await tester.pumpAndSettle();
+      final position = tester
+          .state<ScrollableState>(
+            find.descendant(of: list, matching: find.byType(Scrollable)),
+          )
+          .position;
+      unawaited(
+        position.animateTo(
+          0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byKey(kTabPillKey)).height, 62);
+    });
+
     testWidgets('reverse minimises; forward does not expand; a tap does '
         '(spec VK-503 §10, Q7)', (tester) async {
       await pumpShell(tester, const TestShell());
