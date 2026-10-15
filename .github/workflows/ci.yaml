@@ -186,6 +186,22 @@ jobs:
         run: |
           udid=$(xcrun simctl list devices available | grep -F "    ${{ matrix.device }}" | tail -n1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
           make ios-unit IOS_UNIT_DEVICE="$udid"
+      # A test host crash leaves no stack in the log ("Test crashed with
+      # signal segv"): the simulator writes the app's crash report on the
+      # host, so a red run keeps it with the bundle.
+      - if: failure()
+        run: |
+          mkdir -p crash-reports
+          cp ~/Library/Logs/DiagnosticReports/Runner-*.ips crash-reports/ 2>/dev/null \
+            || echo "no Runner crash report"
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-unit-${{ matrix.device }}-diagnostics
+          path: |
+            liquid_shell/example/build/ios-unit.xcresult
+            crash-reports/
+          retention-days: 7
 
   ios-ui:
     # Real taps on native dialogs and the native search tab (XCUITest, specs
@@ -215,13 +231,20 @@ jobs:
         run: |
           udid=$(xcrun simctl list devices available | grep -F "    ${{ matrix.device }}" | tail -n1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
           make ios-ui IOS_UNIT_DEVICE="$udid"
-      # A red run's bundle: its summary is in the log above, the failure's
-      # screenshot is in here.
+      # A red run's bundle (its summary is in the log above, the failure's
+      # screenshot is in here) and the app's crash report, if it crashed.
+      - if: failure()
+        run: |
+          mkdir -p crash-reports
+          cp ~/Library/Logs/DiagnosticReports/Runner-*.ips crash-reports/ 2>/dev/null \
+            || echo "no Runner crash report"
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: ios-ui-${{ matrix.device }}-xcresult
-          path: liquid_shell/example/build/ios-ui.xcresult
+          name: ios-ui-${{ matrix.device }}-diagnostics
+          path: |
+            liquid_shell/example/build/ios-ui.xcresult
+            crash-reports/
           retention-days: 7
 
   integration-ios-native:
