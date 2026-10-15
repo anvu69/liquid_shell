@@ -133,7 +133,8 @@ class LiquidShellIOS extends EventChannelLiquidShellPlatform {
     required int tab,
     required double offset,
   }) async {
-    // Checked at the boundary: nothing non-finite or negative crosses.
+    // Checked at the boundary: no non-finite offset and no negative tab
+    // cross. A negative offset does: an overscroll at the top.
     if (!offset.isFinite || tab < 0) return;
     await _send(
       'setMinimizeScroll',

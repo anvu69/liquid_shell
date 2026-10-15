@@ -208,6 +208,9 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     setFooter(new.footer)
     let behavior: UITabBarController.MinimizeBehavior = new.minimizeOnScroll ? .onScrollDown : .never
     if tabBarMinimizeBehavior != behavior { tabBarMinimizeBehavior = behavior }
+    // Q14: the policy is `MinimizeProxy.hidesBottomEdgeEffect`'s.
+    let hidesEdge = MinimizeProxy.hidesBottomEdgeEffect(minimizeOnScroll: new.minimizeOnScroll)
+    for host in minimizeHosts.values { host.minimizeProxy.bottomEdgeEffect.isHidden = hidesEdge }
     view.tintColor = UIColor(argb: new.tintArgb)
     traitOverrides.userInterfaceStyle = new.dark ? .dark : .light
     traitOverrides.layoutDirection = new.rtl ? .rightToLeft : .leftToRight
@@ -703,13 +706,19 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   /// The proxy whose pan is on the Flutter view, if any (spec §8.3).
   private(set) weak var attachedMinimizeProxy: MinimizeProxy?
 
+  /// This shell's scene went (`retire`): the Flutter view may be a new
+  /// shell's now. A flag, not a window check: the old window lives on, with
+  /// this shell in it, until UIKit lets it go.
+  private(set) var retired = false
+
   /// Puts the selected tab's proxy pan on the Flutter view when the native
   /// bar may minimize, and takes it back otherwise. Leaving compact resets
   /// every proxy, so the top bar's edge effect never sees an old offset.
   func updateMinimizePan() {
     var want: MinimizeProxy?
-    if let config, chromeVisible, config.interactive, config.minimizeOnScroll, isCompact,
-      let host = selectedViewController as? TabHostController, let content = flutter.viewIfLoaded
+    if !retired, let config, chromeVisible, config.interactive, config.minimizeOnScroll,
+      isCompact, let host = selectedViewController as? TabHostController,
+      let content = flutter.viewIfLoaded
     {
       host.minimizeProxy.contentView = content
       want = host.minimizeProxy
@@ -726,12 +735,20 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     attachedMinimizeProxy = proxy
   }
 
-  /// Gives the attached pan back to its proxy. Also when this shell's scene
-  /// goes (`NativeShellInstaller`): a new shell may take the Flutter view.
+  /// Gives the attached pan back to its proxy.
   func detachMinimizePan() {
     // A recognizer has one view: adding it elsewhere moves it.
     if let old = attachedMinimizeProxy { old.addGestureRecognizer(old.panGestureRecognizer) }
     attachedMinimizeProxy = nil
+  }
+
+  /// This shell's scene went (`NativeShellInstaller`): its pan leaves the
+  /// Flutter view now, not when the shell is released, and never comes
+  /// back, since a new shell may take the Flutter view. Its size-class
+  /// handler and a late apply can still run (final review M1).
+  func retire() {
+    retired = true
+    detachMinimizePan()
   }
 
   func minimizeHost(_ index: Int) -> TabHostController? { minimizeHosts[index] }

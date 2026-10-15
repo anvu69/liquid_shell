@@ -453,14 +453,19 @@ final class MinimizeProxyTests: XCTestCase {
   }
 
   /// Spec §8.4, Q8: never the status-bar target, invisible to VoiceOver,
-  /// direct touches only.
-  func testItLeavesTheStatusBarAccessibilityAndTrackpadAlone() {
+  /// direct touches only: no trackpad or wheel scroll, no Apple Pencil (a
+  /// narrow iPad window, where Scribble writes into Flutter's fields) and
+  /// no pointer drag.
+  func testItLeavesTheStatusBarAccessibilityTrackpadAndPencilAlone() {
     let proxy = proxy()
     XCTAssertFalse(proxy.scrollsToTop)
     XCTAssertFalse(proxy.isUserInteractionEnabled)
     XCTAssertFalse(proxy.isAccessibilityElement)
     XCTAssertTrue(proxy.accessibilityElementsHidden)
     XCTAssertEqual(proxy.panGestureRecognizer.allowedScrollTypesMask, [])
+    XCTAssertEqual(
+      proxy.panGestureRecognizer.allowedTouchTypes,
+      [NSNumber(value: UITouch.TouchType.direct.rawValue)], "direct touches only")
     XCTAssertGreaterThan(proxy.contentSize.height, 10_000)
   }
 
@@ -1642,6 +1647,30 @@ final class NativeTabsTests: XCTestCase {
     XCTAssertTrue(stable({ panIsOnFlutter(shell, host: 0) }, until: { $0 }), "the new shell's")
   }
 
+  /// Final review M1: once its scene went, the old shell never puts its pan
+  /// back on the Flutter view, which a new shell may own by then. Its
+  /// size-class handler can still run while its window is torn down, and
+  /// so can a late apply.
+  func testAShellWhoseSceneWentNeverPutsItsPanBack() throws {
+    let (installer, window) = try installedByInstaller()
+    _ = try installer.attach()
+    try installer.update(config: config(minimize: true))
+    let old = try tabs(in: window)
+    let container = try XCTUnwrap(old.parent)
+    container.traitOverrides.horizontalSizeClass = .compact
+    XCTAssertTrue(stable({ panIsOnFlutter(old, host: 0) }, until: { $0 }), "precondition")
+
+    installer.sceneDisconnected()
+    XCTAssertEqual(pans(on: old.flutter.view), 0, "precondition: detached")
+    container.traitOverrides.horizontalSizeClass = .regular
+    container.traitOverrides.horizontalSizeClass = .compact
+    old.updateMinimizePan()
+    old.apply(config(minimize: true))
+    settle()
+    XCTAssertEqual(pans(on: old.flutter.view), 0, "never back on the Flutter view")
+    XCTAssertNil(old.attachedMinimizeProxy)
+  }
+
   /// Never a pan without its proxy on the Flutter view: a shell released
   /// while the Flutter view lives on (an app replacing the root) takes
   /// its pan back first.
@@ -1705,6 +1734,25 @@ final class NativeTabsTests: XCTestCase {
     page.loadViewIfNeeded()
     XCTAssertFalse(page.proxy.scrollsToTop)
     XCTAssertTrue(page.proxy.accessibilityElementsHidden)
+  }
+
+  /// Q14 (acceptance §7): the proxies, the bottom edge's content scroll
+  /// views, turn on UIKit's bottom scroll-edge effect. Every proxy follows
+  /// `MinimizeProxy.hidesBottomEdgeEffect`, also after a rebuild. The
+  /// owner's choice is pending; until then option A, shown with minimize on
+  /// and off. A′ (hidden while off) or B (hidden always) changes the
+  /// policy and the last assert.
+  func testEveryProxyFollowsTheBottomEdgeEffectPolicy() throws {
+    let tabs = try installedShell(sizeClass: .compact)
+    for (minimize, trailing) in [(true, false), (false, false), (false, true), (true, true)] {
+      tabs.apply(config(trailing: trailing, minimize: minimize))
+      let hides = MinimizeProxy.hidesBottomEdgeEffect(minimizeOnScroll: minimize)
+      for index in [0, 1] {
+        let proxy = try XCTUnwrap(tabs.minimizeHost(index)?.minimizeProxy)
+        XCTAssertEqual(proxy.bottomEdgeEffect.isHidden, hides, "tab \(index), minimize \(minimize)")
+      }
+      XCTAssertFalse(hides, "option A: shown, minimize \(minimize)")
+    }
   }
 }
 

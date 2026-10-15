@@ -489,6 +489,35 @@ void main() {
     expect(host.calls, ['setMinimizeScroll(1, 240.5)', 'expandTabBar']);
   });
 
+  test(
+    'a negative minimize offset crosses: an overscroll at the top',
+    () async {
+      final host = _FakeHost();
+      await liquidShellIOSWithHost(
+        host,
+      ).setNativeMinimizeScroll(tab: 0, offset: -12.5);
+      expect(host.calls, ['setMinimizeScroll(0, -12.5)']);
+    },
+  );
+
+  test(
+    'failed minimize calls are swallowed and logged once each (VK-600)',
+    () async {
+      final logs = captureLogs();
+      final host = _FakeHost()..failure = PlatformException(code: 'gone');
+      final platform = liquidShellIOSWithHost(host);
+      for (var i = 0; i < 2; i++) {
+        await platform.setNativeMinimizeScroll(tab: 0, offset: 40.0 * i);
+        await platform.expandNativeTabBar();
+      }
+      expect(host.calls, hasLength(4));
+      expect(logs, [
+        'liquid_shell native: setMinimizeScroll failed (gone); falling back',
+        'liquid_shell native: expandTabBar failed (gone); falling back',
+      ]);
+    },
+  );
+
   test('the config carries minimizeOnScroll (VK-600)', () async {
     final host = _FakeHost();
     final platform = liquidShellIOSWithHost(host);
@@ -524,6 +553,8 @@ void main() {
     expect(snapshot.scopeShown, isTrue);
     expect(snapshot.selectedScope, 1);
     expect(snapshot.scopeFrame.y, 64);
+    expect(snapshot.minimizeBehavior, 'onScrollDown');
+    expect(snapshot.minimizePanAttached, isTrue);
     expect(host.calls, ['debugSnapshot']);
   });
 

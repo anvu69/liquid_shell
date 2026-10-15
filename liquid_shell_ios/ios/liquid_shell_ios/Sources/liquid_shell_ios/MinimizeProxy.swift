@@ -24,7 +24,11 @@ final class MinimizeProxy: UIScrollView {
     contentSize = CGSize(width: 1, height: 2 * Self.contentAhead)
     isAccessibilityElement = false
     accessibilityElementsHidden = true
+    // Q8: direct touches only. No trackpad or wheel scroll events, and no
+    // Apple Pencil or pointer drag: on a narrow iPad window the pan sits
+    // beside Scribble on the Flutter view.
     panGestureRecognizer.allowedScrollTypesMask = []
+    panGestureRecognizer.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
   }
 
   @available(*, unavailable)
@@ -73,6 +77,15 @@ final class MinimizeProxy: UIScrollView {
     super.adjustedContentInsetDidChange()
     apply()
   }
+
+  /// Whether UIKit's bottom scroll-edge effect is hidden. The proxy is the
+  /// bottom edge's content scroll view, which turns the effect on whatever
+  /// `minimizeOnScroll` says (acceptance §7, R3). Q14 is the owner's:
+  /// - A, the native look: never hidden (now);
+  /// - A′: hidden while minimize is off, `!minimizeOnScroll`;
+  /// - B, the look before VK-600: always hidden, `true`.
+  /// `NativeTabsController.apply` sets it on every proxy.
+  static func hidesBottomEdgeEffect(minimizeOnScroll: Bool) -> Bool { false }
 
   /// Whether the pan may begin over [hit], the content's hit view.
   static func begins(over hit: UIView?, content: UIView?) -> Bool {

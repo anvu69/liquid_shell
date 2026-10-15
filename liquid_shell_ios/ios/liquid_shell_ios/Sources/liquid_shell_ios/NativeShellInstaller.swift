@@ -197,8 +197,8 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
       carriedSearchText = old.carriedSearchText
       carriedSearchScope = old.carriedSearchScope
       // Its minimize pan leaves the Flutter view now, not when the old
-      // shell is released (spec VK-600 §8.3).
-      old.detachMinimizePan()
+      // shell is released, and for good (spec VK-600 §8.3).
+      old.retire()
     }
     shell = nil
     flutter = nil
