@@ -105,8 +105,8 @@ Compact width, native chrome engaged, `minimizeOnScroll: true`.
   /// the selected tab while the body scrolls down. Scrolling back up in
   /// mid-content does not expand it; a fling or a programmatic scroll that
   /// ends at the top does, as do a tap on the minimized circle and a change
-  /// of the selected destination. The native bar never minimizes while the
-  /// search destination is selected, nor at regular width.
+  /// of the selected destination. Neither bar minimizes while the search
+  /// destination is selected, nor at regular width.
   final bool minimizeOnScroll;
   ```
 
@@ -383,7 +383,8 @@ The Flutter bar (kind `bottomBar`) uses the same tracker result. With `minimizeO
 
 - a fling that ends at the top expands;
 - a drag back to the top does not;
-- `animateTo(0)` expands.
+- `animateTo(0)` expands;
+- with `minimizeOnScroll: false`, or in the search tab, a fling to the top does not clear the kept flag (Task 7 review; as built in `shell_behaviour_test.dart`).
 
 ### 12.4 XCTest (`make ios-unit`, RunnerTests)
 

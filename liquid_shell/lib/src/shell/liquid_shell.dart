@@ -167,8 +167,8 @@ class LiquidShell extends StatefulWidget {
   /// the selected tab while the body scrolls down. Scrolling back up in
   /// mid-content does not expand it; a fling or a programmatic scroll that
   /// ends at the top does, as do a tap on the minimized circle and a change
-  /// of the selected destination. The native bar never minimizes while the
-  /// search destination is selected, nor at regular width.
+  /// of the selected destination. Neither bar minimizes while the search
+  /// destination is selected, nor at regular width.
   final bool minimizeOnScroll;
 
   /// Every user-visible string.
