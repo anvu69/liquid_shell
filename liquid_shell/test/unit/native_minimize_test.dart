@@ -114,7 +114,7 @@ void main() {
       expect(fling(0, -300), MinimizeScrollResult.expand);
     });
 
-    test("at rest the offset is the view's own: drift is dropped", () {
+    test("at rest the offset drops to the view's own: drift is dropped", () {
       t.start(tab: 0);
       drag(500, 500);
       // Pixels corrected without a notification (content shrank above),
@@ -132,6 +132,40 @@ void main() {
       expect(t.offsetOf(0), kMinimizeAwayFromTop);
       t.end(tab: 0, pixels: -100, minScrollExtent: -100);
       expect(t.offsetOf(0), 0);
+    });
+
+    test('at rest the offset never rises: UIKit may still be decelerating', () {
+      // Two lists in one tab (a TabBarView): A rests at 50, B at 3000. A
+      // flick up B's middle floors the offset at the top's edge; B rests
+      // at 2700. Raised there, inside UIKit's deceleration after the flick
+      // (spike C11), the jump would read as a scroll down and minimize.
+      t.start(tab: 0);
+      drag(50, 50); // list A
+      t
+        ..end(tab: 0, pixels: 50, minScrollExtent: 0)
+        ..start(tab: 0);
+      fling(2700, -300); // list B, from 3000
+      expect(t.offsetOf(0), kMinimizeAwayFromTop);
+      expect(
+        t.end(tab: 0, pixels: 2700, minScrollExtent: 0),
+        MinimizeScrollResult.none,
+      );
+      expect(t.offsetOf(0), kMinimizeAwayFromTop);
+      // At its top the view's own still wins, from an overscroll too.
+      t.start(tab: 1);
+      drag(-30, -30, tab: 1);
+      expect(
+        t.end(tab: 1, pixels: 0, minScrollExtent: 0),
+        MinimizeScrollResult.moved,
+      );
+      expect(t.offsetOf(1), 0);
+      // The offset at the top, the view below its own at rest (pixels
+      // corrected): just off the top, never the view's own.
+      expect(
+        t.end(tab: 1, pixels: 2700, minScrollExtent: 0),
+        MinimizeScrollResult.moved,
+      );
+      expect(t.offsetOf(1), kMinimizeAwayFromTop);
     });
 
     test('a nested view moves the offset but is never the top', () {

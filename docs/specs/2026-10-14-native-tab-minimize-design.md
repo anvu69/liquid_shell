@@ -272,7 +272,10 @@ Rules. Only `n.metrics.axis == Axis.vertical` counts, at every depth, as for the
      - The bounce back from an overscroll has `scrollDelta > 0`, so it never expands either.
    - Otherwise the result is `moved` if the offset changed, else `none`.
    - A view **nested** in another vertical scroll view (a small list in a card, a `NestedScrollView`'s inner list) moves the offset like any other, but `atTop` is false for it. So it never snaps the offset to the top and never expands: its own top is not the page's. The adapter finds it from `n.depth` (the viewports passed on the way up). At depth 0, the common case, there is no walk. Otherwise it walks that many enclosing `ScrollableState`s and looks for a vertical one, so a list in a horizontal `PageView` is still the page. As built in Task 6.
-3. `ScrollEndNotification` from a view that is not nested: at rest the offset becomes that view's own, `m.pixels - m.minScrollExtent`, floored at `kMinimizeAwayFromTop` while below the top. Deltas that the tracker missed then do not outlive one scroll: a view replaced, or pixels corrected without a notification. The continuity between views gives way only at rest, where UIKit ignores a move it does not track (spike §2). As built in Task 6.
+3. `ScrollEndNotification` from a view that is not nested: at rest the offset **drops** to that view's own, `m.pixels - m.minScrollExtent`, floored at `kMinimizeAwayFromTop` while below the top. Deltas that the tracker missed then do not outlive one scroll: a view replaced, or pixels corrected without a notification. As built in Task 6, made lower-only by the Task 6 review.
+   - **It never rises.** UIKit ignores a move it does not track only while no touch and no deceleration is in flight (spike §2, §3.2). After a flick, UIKit's own deceleration on the locked proxy is still running and reads Dart's writes (C11, which the fling-to-top expand relies on). Flutter's end can land inside that window. A raise there, for example with several lists in one tab (a `TabBarView`) or after `correctPixels`, would read as a scroll down and minimize the bar while the user scrolled up. A drop at rest is safe: it moves toward the top, and an expand needs the top itself, which the snap of rule 2 governs.
+   - So: a view at its top gives its own (zero or less, a raise only within the top region, which UIKit ignores). A view below its top keeps the lower of its own and the current offset, and lifts an offset at the top only to `kMinimizeAwayFromTop`.
+   - **`NestedScrollView`:** both coordinator positions send a start and an end (`nested_scroll_view.dart`, Flutter 3.44.6). The outer's end is at depth 0; the inner's is nested and ignored. So at rest the offset drops to the **outer** view's pixels (at most the header's extent), not the page's. That is a drop, so it is harmless.
 4. Every other notification: `none`.
 
 The `expand` result is the same rule UIKit applies (spike §3.1: the deceleration that reaches the top expands). Dart sends it to native too, for two reasons:
@@ -347,6 +350,7 @@ The Flutter bar (kind `bottomBar`) uses the same tracker result. With `minimizeO
   - horizontal notifications are ignored;
   - a non-drag movement up to the top gives `expand`, once per scroll;
   - a drag to the top does not, and neither does the bounce back from an overscroll;
+  - at rest the offset drops to the view's own and never rises to it;
 - `nativeMinimizeActive` truth table.
 
 ### 12.2 Platform interface and iOS Dart

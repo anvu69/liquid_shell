@@ -1667,7 +1667,9 @@ Also run `make ios-ui` on an iPhone 17 Pro with iOS 27.0, a simulator of your ow
   - Reduce Motion;
   - iPhone landscape;
   - an iPad in a narrow window (minimizes) and in full screen (does not);
-  - Stage Manager resize while minimized.
+  - Stage Manager resize while minimized;
+  - several lists in one tab (a `TabBarView`): scroll list A deep, switch to list B, flick B up mid-content; after it stops there is no spurious minimize (Task 6 review, §9.1 rule 3);
+  - a long feed scrolled past 100 000 pt still minimizes on a scroll down after a tap on the circle (`MinimizeProxy` grows its content, §8.1).
 - [ ] **Step 4: Clean up.** Delete your simulators (`xcrun simctl delete <udid>` for each one you created). Remove `liquid_shell/example/build`. Run `df -h /`.
 - [ ] **Step 5: Commit, then review.**
 

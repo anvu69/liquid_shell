@@ -25,9 +25,9 @@ const double kMinimizeAwayFromTop = 1;
 /// One virtual scroll offset per destination for the native tab bar's
 /// minimize (spec VK-600 §9.1): the pixels of a single scroll view, kept
 /// continuous across several while they scroll, snapped to the top edge
-/// when the scrolled view reaches its own, and that view's own again at
-/// the end of each scroll. A view nested in another vertical one moves it
-/// but is never its top.
+/// when the scrolled view reaches its own, and lowered to that view's own
+/// at the end of each scroll, never raised. A view nested in another
+/// vertical one moves it but is never its top.
 final class MinimizeScrollTracker {
   final Map<int, double> _offsets = {};
   final Set<int> _expanded = {};
@@ -70,11 +70,16 @@ final class MinimizeScrollTracker {
         : MinimizeScrollResult.moved;
   }
 
-  /// The scroll of [tab]'s view ended at [pixels]. At rest the offset
-  /// becomes that view's own, so what the deltas missed (a view replaced,
-  /// pixels corrected without a notification) does not outlive one scroll.
-  /// The continuity between views gives way only here, at rest, where
-  /// UIKit ignores a move it does not track.
+  /// The scroll of [tab]'s view ended at [pixels]. At rest the offset drops
+  /// to that view's own, so what the deltas missed (a view replaced, pixels
+  /// corrected without a notification) does not outlive one scroll.
+  ///
+  /// It never rises to it. After a flick UIKit's own deceleration on the
+  /// proxy may still be running and reads Dart's writes (spike C11), so a
+  /// jump down there (several views in one tab, corrected pixels) would read
+  /// as a scroll down and minimize. A view at its top still gives its own
+  /// (zero or less); a view below its top lifts an offset at the top only
+  /// to [kMinimizeAwayFromTop].
   MinimizeScrollResult end({
     required int tab,
     required double pixels,
@@ -82,7 +87,12 @@ final class MinimizeScrollTracker {
   }) {
     final before = offsetOf(tab);
     final extent = pixels - minScrollExtent;
-    final next = extent <= 0 ? extent : math.max(extent, kMinimizeAwayFromTop);
+    final next = extent <= 0
+        ? extent
+        : math.min(
+            math.max(extent, kMinimizeAwayFromTop),
+            math.max(before, kMinimizeAwayFromTop),
+          );
     _offsets[tab] = next;
     return next == before
         ? MinimizeScrollResult.none
