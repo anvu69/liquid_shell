@@ -17,6 +17,7 @@ import 'package:liquid_shell/src/glass/scroll_pocket.dart';
 import 'package:liquid_shell/src/native/native_chrome.dart';
 import 'package:liquid_shell/src/native/native_host.dart';
 import 'package:liquid_shell/src/native/native_layout.dart';
+import 'package:liquid_shell/src/native/native_minimize.dart';
 import 'package:liquid_shell/src/native/window_controls.dart';
 import 'package:liquid_shell/src/pages/page_registry.dart';
 import 'package:liquid_shell/src/search/search.dart';
@@ -232,6 +233,16 @@ class _LiquidShellState extends State<LiquidShell>
   double? _barBottom;
   Size? _barSize;
 
+  // --- the native bar's minimize (spec VK-600 §9) --------------------------
+  final MinimizeScrollTracker _minimizeScroll = MinimizeScrollTracker();
+  bool _minimizeActive = false;
+  bool _minimizeSendScheduled = false;
+  bool _minimizeForce = false;
+  (int, double)? _minimizeSent;
+  // The last config handed to the claim: a new one with other tabs may
+  // rebuild the native tab hosts, at offset 0.
+  LiquidNativeChromeConfig? _minimizeConfig;
+
   // --- search and pages (spec P3b §8) --------------------------------------
   late final ShellSearch _search = ShellSearch(
     claim: () => _claim,
@@ -287,6 +298,16 @@ class _LiquidShellState extends State<LiquidShell>
     if (oldWidget.selectedIndex != widget.selectedIndex) {
       _minimized.value = false;
       _scheduleBranchScan();
+      // The new tab's proxy takes the pan: native gets its offset (§9.2).
+      _minimizeForce = true;
+      _scheduleMinimizeSend();
+    }
+    for (
+      var i = widget.destinations.length;
+      i < oldWidget.destinations.length;
+      i++
+    ) {
+      _minimizeScroll.forget(i);
     }
     _configureSearch();
   }
@@ -403,6 +424,9 @@ class _LiquidShellState extends State<LiquidShell>
         // After the host's forced resend. The same state as the last build
         // saw is a reconnected scene, whose field lost the text.
         _search.replay(reconnect: state == _nativeState);
+        // A reconnected scene's tab hosts start at offset 0, too.
+        _minimizeForce = true;
+        _scheduleMinimizeSend();
         _rebuild();
       case LiquidWindowControlsChanged():
         break;
@@ -422,8 +446,16 @@ class _LiquidShellState extends State<LiquidShell>
       final force = _forceNativeSend;
       _forceNativeSend = false;
       if (mounted && latest != null) {
-        _claim?.update(latest(), force: force);
+        final config = latest();
+        _claim?.update(config, force: force);
         _search.afterConfigSent();
+        // New native tab hosts start at offset 0: the offset follows the
+        // config that may have built them, never precedes it.
+        if (nativeTabsMayRebuild(_minimizeConfig, config)) {
+          _minimizeForce = true;
+          _sendMinimize();
+        }
+        _minimizeConfig = config;
       }
     });
   }
@@ -612,6 +644,46 @@ class _LiquidShellState extends State<LiquidShell>
       ),
       offset: offset,
     );
+  }
+
+  /// Whether the shell drives the native bar's minimize now (spec VK-600
+  /// §9.2). On becoming active, the selected tab's offset is sent once,
+  /// even if unchanged: the native side may have reset it.
+  void _setMinimizeActive(bool active) {
+    if (active && !_minimizeActive) {
+      _minimizeForce = true;
+      _scheduleMinimizeSend();
+    }
+    _minimizeActive = active;
+  }
+
+  /// Sends the selected tab's minimize offset after the frame: one message
+  /// per frame at most, like [_scheduleScrollSync].
+  void _scheduleMinimizeSend() {
+    if (_minimizeSendScheduled) return;
+    _minimizeSendScheduled = true;
+    SchedulerBinding.instance
+      ..addPostFrameCallback((_) {
+        _minimizeSendScheduled = false;
+        _sendMinimize();
+      })
+      ..ensureVisualUpdate();
+  }
+
+  /// Sends (selected tab, its offset) while active, when forced or when it
+  /// differs from the last one sent.
+  void _sendMinimize() {
+    final force = _minimizeForce;
+    _minimizeForce = false;
+    if (!mounted || !_minimizeActive) return;
+    final tab = resolveSelectedIndex(
+      widget.selectedIndex,
+      widget.destinations.length,
+    );
+    final sent = (tab, _minimizeScroll.offsetOf(tab));
+    if (!force && sent == _minimizeSent) return;
+    _minimizeSent = sent;
+    _claim?.setMinimizeScroll(tab: sent.$1, offset: sent.$2);
   }
 
   /// After every native destination tap, whatever came of it (accepted,
@@ -901,14 +973,38 @@ class _LiquidShellState extends State<LiquidShell>
   }
 
   /// The body's scrolling: a user drag puts the search keyboard away
-  /// (VK-571, [ShellSearch.onBodyScroll]); a user scroll minimizes the
-  /// Flutter bar ([kind] null: native chrome, which minimizes itself).
+  /// (VK-571, [ShellSearch.onBodyScroll]); it drives the native bar's
+  /// minimize ([kind] null: native chrome, spec VK-600 §9.2); a user scroll
+  /// minimizes the Flutter bar.
   bool _onBodyScroll(ScrollNotification notification, LiquidChromeKind? kind) {
     _search.onBodyScroll(notification);
+    _trackMinimize(notification, kind);
     if (notification is UserScrollNotification && kind != null) {
       _onScroll(notification, kind);
     }
     return false;
+  }
+
+  /// Feeds the selected tab's minimize offset, in both chrome modes. Only a
+  /// view on screen counts: an `IndexedStack` keeps the other tabs' lists,
+  /// and the app may scroll one of them.
+  void _trackMinimize(ScrollNotification notification, LiquidChromeKind? kind) {
+    final context = notification.context;
+    final body = _bodyKey.currentContext;
+    if (context != null && body != null && !isOnScreenUnder(context, body)) {
+      return;
+    }
+    final tab = resolveSelectedIndex(
+      widget.selectedIndex,
+      widget.destinations.length,
+    );
+    final result = _minimizeScroll.handleNotification(notification, tab: tab);
+    if (kind == null &&
+        _minimizeActive &&
+        result != MinimizeScrollResult.none) {
+      _scheduleMinimizeSend();
+      if (result == MinimizeScrollResult.expand) _claim?.expandTabBar();
+    }
   }
 
   bool _onScroll(UserScrollNotification notification, LiquidChromeKind kind) {
@@ -1684,18 +1780,19 @@ class _LiquidShellState extends State<LiquidShell>
         if (mounted) _search.deactivate();
       });
     }
+    // The compact bar is drawn above the Flutter view: it would cover the
+    // bottom of a sheet or dialog drawn there, so it hides while one is
+    // above the shell. The top bar and sidebar only turn inert (§7.4).
+    final hidden =
+        _hideRequests > 0 ||
+        _covered ||
+        ((state?.compact ?? false) && !_routeCurrent);
     if (owner) {
       final theme = Theme.of(context);
       final destinations = widget.destinations;
       final trailing = widget.tabBarTrailing;
       final footer = widget.nativeSidebarFooter;
-      // The compact bar is drawn above the Flutter view: it would cover
-      // the bottom of a sheet or dialog drawn there, so it hides while one
-      // is above the shell. The top bar and sidebar only turn inert (§7.4).
-      final hidden =
-          _hideRequests > 0 ||
-          _covered ||
-          ((state?.compact ?? false) && !_routeCurrent);
+      final minimizeOnScroll = widget.minimizeOnScroll;
       final interactive = _routeCurrent && !_guardPending;
       final placeholder = widget.search?.placeholder;
       final scopes = widget.search?.scopes;
@@ -1716,12 +1813,26 @@ class _LiquidShellState extends State<LiquidShell>
           rtl: rtl,
           hidden: hidden,
           interactive: interactive,
+          minimizeOnScroll: minimizeOnScroll,
           searchPlaceholder: placeholder,
           searchScopes: scopes,
           pageStacks: _pageStacks,
         );
       });
     }
+    // An offset that must follow a config (new native tab hosts) is sent
+    // from the config's own callback ([_scheduleNativeSend]).
+    _setMinimizeActive(
+      nativeMinimizeActive(
+        owner: owner,
+        engaged: engaged,
+        compact: state?.compact ?? false,
+        minimizeOnScroll: widget.minimizeOnScroll,
+        searchSelected: _search.selected,
+        hidden: hidden,
+        routeCurrent: _routeCurrent,
+      ),
+    );
     // Pending: the platform may install native chrome (any iOS 26 iPhone
     // or iPad, owner D1) but has not answered yet, and this shell would use
     // it. Draw no chrome rather than flash the Flutter one (a frame or

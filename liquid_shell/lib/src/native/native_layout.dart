@@ -145,6 +145,7 @@ LiquidNativeChromeConfig nativeConfigFor({
   required bool rtl,
   required bool hidden,
   required bool interactive,
+  required bool minimizeOnScroll,
   String? searchPlaceholder,
   List<String>? searchScopes,
   Map<int, List<LiquidNativePage>> pageStacks = const {},
@@ -183,6 +184,7 @@ LiquidNativeChromeConfig nativeConfigFor({
     rtl: rtl,
     hidden: hidden,
     interactive: interactive,
+    minimizeOnScroll: minimizeOnScroll,
     search: searchIndex == null
         ? null
         : LiquidNativeSearchConfig(
