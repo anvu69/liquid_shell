@@ -275,6 +275,69 @@ final class PassThroughTests: XCTestCase {
   }
 }
 
+@available(iOS 26.0, *)
+final class MinimizeProxyTests: XCTestCase {
+  private func proxy() -> MinimizeProxy {
+    let host = UIView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
+    let proxy = MinimizeProxy(frame: host.bounds)
+    host.addSubview(proxy)
+    return proxy
+  }
+
+  /// Spike C8: only Dart moves it; UIKit's own writes (its pan, its
+  /// deceleration, an inset adjustment) are dropped.
+  func testOnlySetOffsetMovesIt() {
+    let proxy = proxy()
+    proxy.setOffset(120)
+    let y = proxy.contentOffset.y
+    XCTAssertEqual(y, -proxy.adjustedContentInset.top + 120)
+    proxy.contentOffset = CGPoint(x: 0, y: 999)
+    proxy.setContentOffset(CGPoint(x: 0, y: 555), animated: false)
+    XCTAssertEqual(proxy.contentOffset.y, y)
+    XCTAssertEqual(proxy.offset, 120)
+  }
+
+  func testANonFiniteOffsetIsIgnored() {
+    let proxy = proxy()
+    proxy.setOffset(40)
+    proxy.setOffset(.nan)
+    proxy.setOffset(.infinity)
+    XCTAssertEqual(proxy.offset, 40)
+  }
+
+  /// Spike §2: the lock also drops UIKit's inset adjustment, so an inset
+  /// change re-applies Dart's offset.
+  func testAnInsetChangeKeepsDartsOffset() {
+    let proxy = proxy()
+    proxy.setOffset(50)
+    proxy.contentInset.top = 30
+    XCTAssertEqual(proxy.contentOffset.y, -proxy.adjustedContentInset.top + 50)
+  }
+
+  /// Spec §8.4, Q8: never the status-bar target, invisible to VoiceOver,
+  /// direct touches only.
+  func testItLeavesTheStatusBarAccessibilityAndTrackpadAlone() {
+    let proxy = proxy()
+    XCTAssertFalse(proxy.scrollsToTop)
+    XCTAssertFalse(proxy.isUserInteractionEnabled)
+    XCTAssertFalse(proxy.isAccessibilityElement)
+    XCTAssertTrue(proxy.accessibilityElementsHidden)
+    XCTAssertEqual(proxy.panGestureRecognizer.allowedScrollTypesMask, [])
+    XCTAssertGreaterThan(proxy.contentSize.height, 10_000)
+  }
+
+  /// Q7: a pan that starts over a platform view (a subview of the Flutter
+  /// view) does not begin.
+  func testThePanBeginsOnlyOverTheContentItself() {
+    let content = UIView()
+    let platformView = UIView()
+    content.addSubview(platformView)
+    XCTAssertTrue(MinimizeProxy.begins(over: content, content: content))
+    XCTAssertFalse(MinimizeProxy.begins(over: platformView, content: content))
+    XCTAssertTrue(MinimizeProxy.begins(over: platformView, content: nil))
+  }
+}
+
 /// Records every native → Dart call; every send succeeds.
 final class RecordingEvents: NativeShellFlutterApiProtocol {
   var sent: [String] = []
