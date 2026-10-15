@@ -36,6 +36,12 @@ final class MinimizeProxy: UIScrollView {
     set {}
   }
 
+  /// Animated moves too: none starts UIKit's scroll animation, whose frames
+  /// need not pass the setter above. Only `setOffset` moves the proxy.
+  override func setContentOffset(_ contentOffset: CGPoint, animated: Bool) {}
+
+  override func scrollRectToVisible(_ rect: CGRect, animated: Bool) {}
+
   func setOffset(_ value: Double) {
     guard value.isFinite else { return }
     offset = value

@@ -277,11 +277,100 @@ final class PassThroughTests: XCTestCase {
 
 @available(iOS 26.0, *)
 final class MinimizeProxyTests: XCTestCase {
+  private var window: UIWindow?
+
+  override func tearDown() {
+    window?.isHidden = true
+    window?.rootViewController = nil
+    window = nil
+    super.tearDown()
+  }
+
   private func proxy() -> MinimizeProxy {
     let host = UIView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
     let proxy = MinimizeProxy(frame: host.bounds)
     host.addSubview(proxy)
     return proxy
+  }
+
+  /// A proxy in a shown window: UIKit runs a scroll animation only on screen.
+  private func proxyOnScreen() throws -> MinimizeProxy {
+    let scene = try XCTUnwrap(
+      UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+    let window = UIWindow(windowScene: scene)
+    window.frame = CGRect(x: 0, y: 0, width: 400, height: 800)
+    window.rootViewController = UIViewController()
+    window.isHidden = false
+    self.window = window
+    let root = try XCTUnwrap(window.rootViewController?.view)
+    let proxy = MinimizeProxy(frame: root.bounds)
+    root.addSubview(proxy)
+    return proxy
+  }
+
+  /// Counts the scroll animations UIKit finishes.
+  private final class AnimationRecorder: NSObject, UIScrollViewDelegate {
+    var ended = 0
+    func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) { ended += 1 }
+  }
+
+  /// Runs the run loop until [done] holds or [timeout] passes: a wait, so
+  /// a slow host still lets an animation that does start finish.
+  private func wait(timeout: TimeInterval = 3, until done: () -> Bool) {
+    let deadline = Date().addingTimeInterval(timeout)
+    while Date() < deadline, !done() {
+      RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    }
+  }
+
+  /// Task 3 review: an animated move is dropped too, so only Dart moves
+  /// the proxy. UIKit's scroll animation could move the bounds without the
+  /// `contentOffset` setter; no animation starts at all.
+  func testAnAnimatedOffsetChangeDoesNotMoveIt() throws {
+    let proxy = try proxyOnScreen()
+    proxy.setOffset(120)
+    let y = proxy.contentOffset.y
+    let recorder = AnimationRecorder()
+    proxy.delegate = recorder
+    proxy.setContentOffset(CGPoint(x: 0, y: 555), animated: true)
+    wait { recorder.ended > 0 || proxy.contentOffset.y != y }
+    XCTAssertEqual(proxy.contentOffset.y, y)
+    XCTAssertEqual(recorder.ended, 0, "no scroll animation ran")
+    XCTAssertEqual(proxy.offset, 120)
+  }
+
+  /// Likewise `scrollRectToVisible`, animated or not.
+  func testScrollRectToVisibleDoesNotMoveIt() throws {
+    let proxy = try proxyOnScreen()
+    proxy.setOffset(120)
+    let y = proxy.contentOffset.y
+    let recorder = AnimationRecorder()
+    proxy.delegate = recorder
+    proxy.scrollRectToVisible(CGRect(x: 0, y: 5_000, width: 1, height: 1), animated: true)
+    wait { recorder.ended > 0 || proxy.contentOffset.y != y }
+    proxy.scrollRectToVisible(CGRect(x: 0, y: 9_000, width: 1, height: 1), animated: false)
+    XCTAssertEqual(proxy.contentOffset.y, y)
+    XCTAssertEqual(recorder.ended, 0, "no scroll animation ran")
+    XCTAssertEqual(proxy.offset, 120)
+  }
+
+  /// Q7, the wiring of `begins(over:content:)`: the proxy's own pan does
+  /// not begin where the content's hit view is a platform view; with the
+  /// content itself hit, UIKit decides as without a content view; another
+  /// recognizer is never gated.
+  func testThePanGateAsksTheContentsHitView() {
+    let proxy = proxy()
+    let pan = proxy.panGestureRecognizer
+    let unGated = proxy.gestureRecognizerShouldBegin(pan)
+    let content = UIView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
+    proxy.contentView = content
+    XCTAssertEqual(proxy.gestureRecognizerShouldBegin(pan), unGated, "over the content itself")
+    let platformView = UIView(frame: content.bounds)
+    content.addSubview(platformView)
+    XCTAssertFalse(proxy.gestureRecognizerShouldBegin(pan), "over a platform view")
+    let tap = UITapGestureRecognizer()
+    proxy.addGestureRecognizer(tap)
+    XCTAssertTrue(proxy.gestureRecognizerShouldBegin(tap), "only the proxy's own pan is gated")
   }
 
   /// Spike C8: only Dart moves it; UIKit's own writes (its pan, its
