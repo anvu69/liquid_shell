@@ -27,28 +27,57 @@ final class MinimizeUITests: XCTestCase {
       ? app.tabBars.buttons[name] : app.buttons[name].firstMatch
   }
 
-  /// The signal Step 1 recorded (it flips on 26.5 and 27): [other], an
-  /// unselected tab, is gone or covered, or [selected] is the circle.
-  /// Mid-animation UIKit shows both forms of a tab (two "Home" buttons, the
-  /// circle and the full one), so every match counts.
+  /// The bottom bar's [selected] tab, every match of it (mid-animation
+  /// UIKit shows both forms of a tab: two "Home" buttons, the circle and
+  /// the full one), and whether [other], an unselected tab, is shown.
+  private func bar(
+    _ app: XCUIApplication, selected: String, other: String
+  ) -> (selected: [XCUIElement], otherShown: Bool) {
+    let tabs = app.tabBars.buttons
+    return (
+      tabs.matching(identifier: selected).allElementsBoundByIndex.filter { $0.exists },
+      tabs.matching(identifier: other).allElementsBoundByIndex
+        .contains { $0.exists && $0.isHittable }
+    )
+  }
+
+  /// The signal Step 1 recorded (it flips on 26.5 and 27): [selected] is
+  /// the circle, and [other] is gone or covered or every match of
+  /// [selected] is the circle. Positive evidence only: with no bar (hidden,
+  /// gone, the iPad's top bar) it is false.
   private func isMinimized(
     _ app: XCUIApplication, selected: String = "Home", other: String = "Explore"
   ) -> Bool {
-    let others = app.tabBars.buttons.matching(identifier: other).allElementsBoundByIndex
-    if !others.contains(where: { $0.exists && $0.isHittable }) { return true }
-    return app.tabBars.buttons.matching(identifier: selected).allElementsBoundByIndex
-      .allSatisfy { !$0.exists || $0.frame.width < 60 }
+    let bar = bar(app, selected: selected, other: other)
+    let circles = bar.selected.filter { $0.frame.width < 60 }
+    return !circles.isEmpty && (!bar.otherShown || circles.count == bar.selected.count)
   }
 
+  /// The whole bar: [other] is shown and every match of [selected] is
+  /// wider than the circle. False with no bar, as [isMinimized] is.
+  private func isExpanded(
+    _ app: XCUIApplication, selected: String = "Home", other: String = "Explore"
+  ) -> Bool {
+    let bar = bar(app, selected: selected, other: other)
+    return bar.otherShown && !bar.selected.isEmpty
+      && bar.selected.allSatisfy { $0.frame.width >= 60 }
+  }
+
+  /// Waits for the minimized bar ([want] true) or the whole one (false). A
+  /// missing bar is neither, so it fails both.
   private func waitMinimized(
     _ app: XCUIApplication, _ want: Bool, _ why: String,
     selected: String = "Home", other: String = "Explore",
     file: StaticString = #filePath, line: UInt = #line
   ) {
-    let minimized = { self.isMinimized(app, selected: selected, other: other) }
+    let reached = {
+      want
+        ? self.isMinimized(app, selected: selected, other: other)
+        : self.isExpanded(app, selected: selected, other: other)
+    }
     let deadline = Date().addingTimeInterval(5)
-    while Date() < deadline, minimized() != want { usleep(100_000) }
-    XCTAssertEqual(minimized(), want, why, file: file, line: line)
+    while Date() < deadline, !reached() { usleep(100_000) }
+    XCTAssertTrue(reached(), why, file: file, line: line)
   }
 
   /// Like [waitMinimized], but the state must also hold for a while: an
@@ -125,6 +154,9 @@ final class MinimizeUITests: XCTestCase {
     XCTAssertLessThan(row.frame.minY, before - 200, "the drag scrolled the list")
     XCTAssertTrue(tabButton(app, "Explore").isHittable)
     XCTAssertGreaterThan(tabButton(app, "Home").frame.width, 60, "Home is not a circle")
+    // On iPad 27 the top bar is not a tab bar in the tree (acceptance.md
+    // §2): no bottom bar is not a minimized one.
+    XCTAssertFalse(isMinimized(app), "the top bar is not read as minimized")
   }
 
   /// The pan on the Flutter view only observes: Flutter still gets the
