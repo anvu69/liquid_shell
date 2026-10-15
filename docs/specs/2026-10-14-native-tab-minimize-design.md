@@ -2,7 +2,7 @@
 
 - **Plane:** VK-600
 - **Date:** 2026-10-14
-- **Status:** draft for the owner. The owner approves this spec and the plan `docs/plans/2026-10-14-native-tab-minimize.md` together. Open choices are in the last section, "Quyết định cần chủ sản phẩm xác nhận". Every row has a recommended default; if the owner says nothing, the default applies.
+- **Status:** approved with the plan `docs/plans/2026-10-14-native-tab-minimize.md`, and built on this branch (PR #15). The choices are in the last section, "Quyết định cần chủ sản phẩm xác nhận". One question came up in acceptance and is still the owner's: Q14, the bottom scroll-edge effect (`docs/qa/vk600/acceptance.md` §7).
 - **Branch:** `VK-600-native-tab-minimize`, from `main` at `c531be0`. It holds docs only until VK-550 (`VK-550-liquid-segmented-control`) merges. VK-550 also edits `NativeTabsController.swift` (the search scope bar), the Pigeon source and `liquid_shell.dart`. The branch is rebased onto that merge before any code is written (§13).
 - **Floor:** Flutter ≥ 3.44.0 / Dart ^3.12.0 (fvm pins 3.44.6), iOS deployment target 15.0. The native chrome stays iOS 26+. `very_good_analysis` 10.3.0, `pigeon` 27.3.0. There are no new runtime dependencies.
 - **Owner input (binding),** verbatim:
@@ -51,7 +51,7 @@ On iOS 26+, with native chrome engaged at compact width (every iPhone and a narr
 - `bottomAccessory` (a mini player). It is out of P3b's scope too. Its measured behaviour is noted for later in §10 (Q9).
 - Minimize while the search tab is selected (Q5).
 - Reading the minimized state back in Dart. No public API exposes it (spike §1.2), and nothing in the shell needs it: the Flutter body's insets do not change (§8.6).
-- Trackpad, mouse and VoiceOver scrolling as triggers (Q8). They scroll Flutter but do not minimize the native bar.
+- Trackpad, mouse, Apple Pencil and VoiceOver scrolling as triggers (Q8). They scroll Flutter but do not minimize the native bar.
 
 ## 3. What the spike found
 
@@ -201,12 +201,12 @@ Its deceleration after a release is left running, without overriding `scrollView
   - the selected view controller is a `TabHostController`.
 - **Otherwise none is attached.** A detached pan goes back to its own proxy (`proxy.addGestureRecognizer(proxy.panGestureRecognizer)`), as UIKit expects. Leaving compact also resets every proxy to offset 0, so the iPad top bar's scroll-edge effect never sees a stale offset.
 - **No pan outlives its proxy on the Flutter view.** UIKit leaves a released scroll view's pan where it is, so a `TabHostController` takes its pan back as it goes (a structure rebuild, the shell's release), and a scene disconnect detaches the old shell's pan at once (`NativeShellInstaller.sceneDisconnected`).
-- While attached: `cancelsTouchesInView = false`, `delaysTouchesBegan = false`, `delaysTouchesEnded = false`, `allowedScrollTypesMask = []` (direct touches only). `MinimizeProxy.contentView = flutter.view`, so a pan that starts over a platform view does not begin.
+- While attached: `cancelsTouchesInView = false`, `delaysTouchesBegan = false`, `delaysTouchesEnded = false`. Direct touches only: `allowedScrollTypesMask = []` (no trackpad or wheel scroll events) and `allowedTouchTypes = [.direct]` (no Apple Pencil, no pointer drag; final review I5). `MinimizeProxy.contentView = flutter.view`, so a pan that starts over a platform view does not begin.
 - Hit testing (`PassThroughView`, P2 §5.3) is unchanged. The proxy is not hit-testable, and the pan only *observes* touches that already go to Flutter.
 
 ### 8.4 `scrollsToTop` and accessibility
 
-- iOS runs the status-bar scroll-to-top only when one scroll view on screen has `scrollsToTop` set. Flutter's own hidden scroll view needs to be that one, so every proxy has `scrollsToTop = false`. That covers the new `MinimizeProxy` and the search page's existing proxy (`PageHostController.proxy`, which today keeps the default `true`; Q10).
+- The status-bar tap scrolls one scroll view on screen that has `scrollsToTop` set. Flutter's own hidden scroll view needs to be a candidate, and no proxy may be one, so every proxy has `scrollsToTop = false`. That covers the new `MinimizeProxy` and the search page's existing proxy (`PageHostController.proxy`, which kept the default `true`; Q10). As built (acceptance §3): while Flutter's semantics are on, its accessibility mirror of the list (`FlutterSemanticsScrollView`) is a candidate too, and the first tap after a scroll can go to it; that is the engine's, not VK-600's.
 - Proxies are hidden from accessibility: `isAccessibilityElement = false`, `accessibilityElementsHidden = true`.
 
 ### 8.5 Behaviour and expand

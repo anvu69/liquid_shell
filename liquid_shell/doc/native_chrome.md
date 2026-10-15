@@ -146,17 +146,27 @@ view per tab follows your body's scrolling, and UIKit animates the bar.
 | A programmatic scroll ends at the top (status-bar tap, `animateTo(0)`) | Expands |
 | Tap the minimized circle | Expands |
 | The selected destination changes (not into search) | Expands |
+| A new shell takes the chrome (a new key, a hot restart) | Expands |
 | The search tab is selected | Does not minimize |
 | Regular width (top bar, sidebar) | Never minimizes |
 | `minimizeOnScroll: false` | Never minimizes |
 
 Limits: it does not minimize at regular width (a wide iPad), in the search
-tab, from a platform view (web view, native map), from trackpad or mouse
-scrolling, or from VoiceOver scrolling. `bottomAccessory` is not covered. A
-very long feed is handled by growing the proxy's content. Entering search
-does not expand the bar.
+tab, from a platform view (web view, native map), from trackpad, mouse or
+Apple Pencil scrolling (direct touches only), or from VoiceOver scrolling.
+A sidebar-only destination selected in compact width does not minimize the
+bar either: UIKit shows a fallback tab there, and the bar stays whole.
+`bottomAccessory` is not covered. A very long feed is handled by growing the
+proxy's content. Entering search does not expand the bar.
 
 `minimizeOnScroll: false` turns it off.
+
+**The bottom scroll-edge effect.** The hidden scroll views are the tab bar's
+bottom content scroll views, so UIKit draws its bottom scroll-edge effect
+under the compact bar: the body near the bottom edge is softly blurred, as
+in a native app. It shows with `minimizeOnScroll: false` too.
+**[Q14 PLACEHOLDER: owner decision pending (A, A′ or B). Rewrite this
+paragraph for the chosen option before publishing.]**
 
 ## Search tab
 

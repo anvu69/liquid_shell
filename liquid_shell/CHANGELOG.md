@@ -2,19 +2,28 @@
 
 - **Behaviour change (VK-600).** With native chrome on iOS 26+,
   `minimizeOnScroll` (default `true`) now also minimizes UIKit's compact tab
-  bar when the body scrolls down. Set it to `false` to keep the old
-  behaviour (the native bar never minimized).
+  bar when the body scrolls down. With `false` the native bar never
+  minimizes, as before.
+- **Visual change (VK-600).** With native chrome on iOS 26+, UIKit now draws
+  its bottom scroll-edge effect: the body near the bottom edge, under and
+  beside the compact bar, is softly blurred, as under a native
+  `UITabBarController` over a scroll view. It shows whatever
+  `minimizeOnScroll` says, so `false` does not bring back the old look.
+  **[Q14 PLACEHOLDER: owner decision pending (A, A′ or B). Rewrite this
+  bullet for the chosen option before publishing.]**
 - Both bars expand when a fling or a programmatic scroll (a status-bar tap,
   `animateTo(0)`) reaches the top. A drag back never does. This is new for
   the Flutter bar too.
-- Entering the search tab does not expand the bar (UIKit keeps its own
-  form there); any other selection change still does.
+- A change of the selected destination expands both bars, except that the
+  native bar keeps its form when the change selects the search tab (UIKit's
+  own form there). Neither bar minimizes while the search tab is selected.
+- A new shell (a new key, a hot restart) expands a native bar that an
+  earlier one left minimized.
 - A wide iPad (regular width: top bar, sidebar) never minimizes.
-- Known limits: platform views (web view, native map) do not minimize the
-  bar; trackpad and mouse scrolling do not; `bottomAccessory` is out of
-  scope. A very long feed is handled by growing the hidden proxy's content.
-- CI note: `IOS_UI_TIMEOUT` is now 2100 s (was 1800 s) for the larger UI
-  suite; the `ios-ui` job allows 45 minutes.
+- Known limits of the native bar: platform views (web view, native map) do
+  not minimize it; trackpad, mouse and Apple Pencil scrolling do not;
+  `bottomAccessory` is out of scope. A very long feed is handled by growing
+  the hidden proxy's content.
 
 ## 0.1.0-dev.7
 

@@ -7,8 +7,11 @@
   follows `minimizeOnScroll`; an expand toggle serves a selection change
   (not into search) and `expandNativeTabBar`; `scrollsToTop = false` on the
   proxies and on the search page proxy, so the status-bar tap reaches
-  Flutter. The channel gains `minimizeOnScroll`, `setMinimizeScroll`,
-  `expandTabBar` and two snapshot fields.
+  Flutter. The channel gains `minimizeOnScroll`, `setMinimizeScroll` and
+  `expandTabBar`.
+- **Breaking for fakes:** the exported `NativeDebugSnapshot` gains two
+  required fields, `minimizeBehavior` and `minimizePanAttached`. Code that
+  constructs one (a test fake) must pass them.
 
 ## 0.1.0-dev.7
 
