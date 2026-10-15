@@ -10,6 +10,11 @@
 # xcodebuild children behind, so the command runs in its own process group.
 # That group gets no terminal or CI signal of its own: SIGINT (Ctrl-C, a CI
 # cancel) and SIGTERM to the wrapper are passed on to it.
+#
+# WITH_TIMEOUT_ON_STALL, when set, is a shell command run once when the
+# deadline passes, before the stop: a diagnostics dump while the command
+# still hangs (tool/ios_sim.sh diagnose, VK-625). Its status is ignored, so
+# it caps its own steps. Neither the command nor the hook inherits it.
 set -uo pipefail
 
 if [ $# -lt 2 ]; then
@@ -18,6 +23,8 @@ if [ $# -lt 2 ]; then
 fi
 secs=$1
 shift
+on_stall=${WITH_TIMEOUT_ON_STALL:-}
+unset WITH_TIMEOUT_ON_STALL
 
 set -m # background jobs get their own process group
 "$@" &
@@ -45,6 +52,7 @@ deadline=$((SECONDS + secs))
 while kill -0 "$pid" 2>/dev/null; do
   if [ "$SECONDS" -ge "$deadline" ]; then
     echo "✗ stalled: still running after ${secs}s: $*" >&2
+    [ -z "$on_stall" ] || bash -c "$on_stall"
     stop TERM 124
   fi
   sleep 1

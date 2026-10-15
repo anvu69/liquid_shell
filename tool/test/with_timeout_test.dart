@@ -72,6 +72,44 @@ void main() {
     });
   }
 
+  // VK-625: the stall guard dumps diagnostics while the command still hangs.
+  test('WITH_TIMEOUT_ON_STALL runs at the deadline, before the stop', () {
+    final dir = Directory.systemTemp.createTempSync('with_timeout_');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final pidFile = '${dir.path}/command.pid';
+    final hookFile = '${dir.path}/hook';
+    final result = Process.runSync(
+      'bash',
+      [script, '1', 'bash', '-c', r'echo $$ > "$0"; sleep 60', pidFile],
+      environment: {
+        'WITH_TIMEOUT_ON_STALL':
+            'kill -0 "\$(cat $pidFile)" '
+            '&& echo "alive \${WITH_TIMEOUT_ON_STALL-unset}" > $hookFile',
+      },
+    );
+    expect(result.exitCode, 124);
+    expect(File(hookFile).readAsStringSync().trim(), 'alive unset');
+  });
+
+  test('the command never inherits the hook; a failing hook keeps 124', () {
+    final env = {'WITH_TIMEOUT_ON_STALL': 'false'};
+    final passed = Process.runSync('bash', [
+      script,
+      '5',
+      'bash',
+      '-c',
+      r'echo "${WITH_TIMEOUT_ON_STALL-unset}"',
+    ], environment: env);
+    expect((passed.stdout as String).trim(), 'unset');
+    final stalled = Process.runSync('bash', [
+      script,
+      '1',
+      'sleep',
+      '60',
+    ], environment: env);
+    expect(stalled.exitCode, 124);
+  });
+
   test('without a deadline and a command it prints usage and exits 2', () {
     expect(run(['5']).exitCode, 2);
   });
