@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell_example/cases/basic_tabs.dart';
 import 'package:liquid_shell_example/cases/search.dart';
 import 'package:liquid_shell_example/cases/segments.dart';
 import 'package:liquid_shell_example/main.dart';
+import 'package:liquid_shell_example/support/demo_page.dart';
 
 void main() {
   testWidgets('no demo: the case list', (tester) async {
@@ -135,6 +137,59 @@ void main() {
       LiquidGlassTier.liquid,
     );
   });
+
+  // The minimize UI tests (spec VK-600 §12.5): a status-bar tap scrolls the
+  // page to the top (a programmatic scroll), and "Next tab" selects the
+  // next destination from the app, not from the bar. Semantics are on, so
+  // XCUITest reads Flutter's rows.
+  testWidgets(
+    'demo minimize: a status-bar tap scrolls to the top; Next tab selects '
+    'the next destination',
+    (tester) async {
+      tester.view
+        ..devicePixelRatio = 1
+        ..physicalSize = const Size(402, 874)
+        ..padding = const FakeViewPadding(top: 62, bottom: 34);
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(const ExampleApp(demo: 'minimize'));
+      await tester.pumpAndSettle();
+      final semantics = tester.binding.semanticsEnabled;
+      debugReleaseDemoSemantics();
+      expect(semantics, isTrue);
+      expect(find.byType(CaseList), findsNothing);
+      String title() => tester.widget<DemoPage>(find.byType(DemoPage)).title;
+      expect(title(), 'Home');
+
+      final list = find.descendant(
+        of: find.byType(DemoPage),
+        matching: find.byType(Scrollable),
+      );
+      await tester.drag(list, const Offset(0, -300));
+      await tester.pumpAndSettle();
+      final position = tester.state<ScrollableState>(list).position;
+      expect(position.pixels, greaterThan(100));
+      await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+        SystemChannels.statusBar.name,
+        SystemChannels.statusBar.codec.encodeMethodCall(
+          const MethodCall('handleScrollToTop'),
+        ),
+        (_) {},
+      );
+      await tester.pumpAndSettle();
+      expect(position.pixels, 0);
+
+      await tester.tap(find.text('Next tab'));
+      await tester.pumpAndSettle();
+      expect(title(), 'Explore');
+      await tester.tap(find.text('Next tab'));
+      await tester.pumpAndSettle();
+      expect(title(), 'Settings');
+      await tester.tap(find.text('Next tab'));
+      await tester.pumpAndSettle();
+      expect(title(), 'Home');
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+  );
 
   testWidgets('an unknown demo falls back to the case list', (tester) async {
     await tester.pumpWidget(const ExampleApp(demo: 'nope'));

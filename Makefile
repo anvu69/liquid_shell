@@ -186,18 +186,34 @@ ios-unit: ## XCTest of liquid_shell_ios (example RunnerTests) on an iPad or iPho
 # PR #13's 18 in about 850 s per device (the whole XCUITest step), so
 # 1800 s keeps ~400 s in hand even on the slow-runner scale. On a shared
 # host at load ~850 one run stalled past 1800 s; IOS_UI_TIMEOUT=3600 gets
-# such a host through.
-IOS_UI_TIMEOUT ?= 1800
+# such a host through. VK-600 adds MinimizeUITests (7: five iPhone-only,
+# two iPad-only; 28 in the suite): locally 534 s on an iPhone 17 Pro (26 run,
+# the five 81 s of it) and 357 s on an iPad Air 11 (M4) (18 run), iOS 26.5,
+# load 6-11. Scaled as above (443 s, about 1400 s), about 1700 s, which
+# 1800 s would keep only ~100 s ahead of; VK-571 raised the cap at 250 s.
+# 2100 s keeps ~400 s in hand, as before; CI's job allows 45 minutes.
+# CI ran those 26 iPhone tests in 1092-1156 s and the iPad's 18 in 847-849 s
+# (PR #15). The final review's lock test (one more iPhone launch, 35 s
+# locally) makes 27 of 29: well inside the cap.
+IOS_UI_TIMEOUT ?= 2100
+# As for ios-unit: a red run prints the bundle's summary, the failed
+# assertion and its line, which `-quiet` leaves out. CI uploads the bundle
+# (the failure's screenshot) from here.
+IOS_UI_RESULT := $(CURDIR)/$(EXAMPLE)/build/ios-ui.xcresult
 
 ios-ui: ## XCUITest: real taps on native dialogs and the search tab (example RunnerUITests) on a simulator; IOS_UNIT_DEVICE=<udid>
 	cd $(EXAMPLE) && $(FLUTTER) build ios --config-only --simulator --debug
+	rm -rf $(IOS_UI_RESULT)
 	cd $(EXAMPLE)/ios && $(CURDIR)/tool/with_timeout.sh $(IOS_UI_TIMEOUT) \
 	  xcodebuild test -workspace Runner.xcworkspace -scheme Runner \
 	  -destination "id=$${IOS_UNIT_DEVICE:?set IOS_UNIT_DEVICE to a simulator UDID}" \
 	  -only-testing:RunnerUITests -parallel-testing-enabled NO \
 	  -collect-test-diagnostics never \
 	  -test-timeouts-enabled YES -default-test-execution-time-allowance 180 \
-	  -maximum-test-execution-time-allowance 300 -quiet
+	  -maximum-test-execution-time-allowance 300 \
+	  -resultBundlePath $(IOS_UI_RESULT) -quiet \
+	  || { status=$$?; [ ! -d $(IOS_UI_RESULT) ] || \
+	    xcrun xcresulttool get test-results summary --path $(IOS_UI_RESULT); exit $$status; }
 
 integration-ios: ## Signal channel round-trip on an iOS simulator
 	FLUTTER="$(FLUTTER)" tool/integration_ios.sh

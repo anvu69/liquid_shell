@@ -852,6 +852,19 @@ void main() {
       expect(fake.pageScrolls, [(2, 180.0)]);
     });
 
+    testWidgets(
+      'no minimize offsets while the search tab is selected (VK-600 Q5)',
+      (tester) async {
+        final (native, _, _) = await _pump(tester); // initialIndex 2: search
+        await tester.drag(
+          find.byKey(const ValueKey('list-Search')),
+          const Offset(0, -300),
+        );
+        await tester.pumpAndSettle();
+        expect(native.minimizeScrolls, isEmpty);
+      },
+    );
+
     testWidgets('nothing for a tab without a native bar or a covered page', (
       tester,
     ) async {

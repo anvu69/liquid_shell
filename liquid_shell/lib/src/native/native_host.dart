@@ -227,6 +227,24 @@ final class NativeChromeClaim {
     );
   }
 
+  /// Sends [tab]'s body scroll offset for the native minimize, when this
+  /// claim owns the chrome (spec VK-600 §9.2).
+  void setMinimizeScroll({required int tab, required double offset}) {
+    if (!isOwner) return;
+    unawaited(
+      LiquidShellPlatform.instance.setNativeMinimizeScroll(
+        tab: tab,
+        offset: offset,
+      ),
+    );
+  }
+
+  /// Expands the minimized native bar, when this claim owns the chrome.
+  void expandTabBar() {
+    if (!isOwner) return;
+    unawaited(LiquidShellPlatform.instance.expandNativeTabBar());
+  }
+
   /// Gives the chrome back. Idempotent.
   void release() {
     if (_released) return;

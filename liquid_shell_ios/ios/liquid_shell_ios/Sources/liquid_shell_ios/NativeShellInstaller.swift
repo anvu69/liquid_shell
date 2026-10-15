@@ -196,6 +196,9 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
     if #available(iOS 26.0, *), let old = shell as? NativeTabsController {
       carriedSearchText = old.carriedSearchText
       carriedSearchScope = old.carriedSearchScope
+      // Its minimize pan leaves the Flutter view now, not when the old
+      // shell is released, and for good (spec VK-600 §8.3).
+      old.retire()
     }
     shell = nil
     flutter = nil
@@ -263,6 +266,14 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
 
   func setPageScroll(tab: Int64, offset: Double) throws {
     if #available(iOS 26.0, *) { tabs?.setPageScroll(tab: Int(tab), offset: offset) }
+  }
+
+  func setMinimizeScroll(tab: Int64, offset: Double) throws {
+    if #available(iOS 26.0, *) { tabs?.setMinimizeScroll(tab: Int(tab), offset: offset) }
+  }
+
+  func expandTabBar() throws {
+    if #available(iOS 26.0, *) { tabs?.expandMinimizedBar() }
   }
 
   func debugSnapshot() throws -> NativeDebugSnapshot {

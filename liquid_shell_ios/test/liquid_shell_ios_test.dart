@@ -17,6 +17,7 @@ class _FakeHost extends NativeShellHostApi {
   );
   NativeWindowControls controls = NativeWindowControls(leading: 66, top: 24);
   PlatformException? failure;
+  NativeChromeConfig? lastConfig;
 
   void _maybeFail() {
     final error = failure;
@@ -33,6 +34,7 @@ class _FakeHost extends NativeShellHostApi {
   @override
   Future<void> update(NativeChromeConfig config) async {
     calls.add(config);
+    lastConfig = config;
     _maybeFail();
   }
 
@@ -85,6 +87,18 @@ class _FakeHost extends NativeShellHostApi {
     _maybeFail();
   }
 
+  @override
+  Future<void> setMinimizeScroll(int tab, double offset) async {
+    calls.add('setMinimizeScroll($tab, $offset)');
+    _maybeFail();
+  }
+
+  @override
+  Future<void> expandTabBar() async {
+    calls.add('expandTabBar');
+    _maybeFail();
+  }
+
   NativeDebugSnapshot snapshot = NativeDebugSnapshot(
     selectedTab: 'destination2',
     searchActive: true,
@@ -97,6 +111,8 @@ class _FakeHost extends NativeShellHostApi {
     scopeShown: true,
     selectedScope: 1,
     scopeFrame: NativeRect(x: 16, y: 64, width: 370, height: 32),
+    minimizeBehavior: 'onScrollDown',
+    minimizePanAttached: true,
   );
 
   @override
@@ -463,6 +479,54 @@ void main() {
     expect(host.calls, isEmpty);
   });
 
+  test('minimize scroll and expand reach the host (VK-600)', () async {
+    final host = _FakeHost();
+    final platform = liquidShellIOSWithHost(host);
+    await platform.setNativeMinimizeScroll(tab: 1, offset: 240.5);
+    await platform.setNativeMinimizeScroll(tab: 0, offset: double.nan);
+    await platform.setNativeMinimizeScroll(tab: -1, offset: 10);
+    await platform.expandNativeTabBar();
+    expect(host.calls, ['setMinimizeScroll(1, 240.5)', 'expandTabBar']);
+  });
+
+  test(
+    'a negative minimize offset crosses: an overscroll at the top',
+    () async {
+      final host = _FakeHost();
+      await liquidShellIOSWithHost(
+        host,
+      ).setNativeMinimizeScroll(tab: 0, offset: -12.5);
+      expect(host.calls, ['setMinimizeScroll(0, -12.5)']);
+    },
+  );
+
+  test(
+    'failed minimize calls are swallowed and logged once each (VK-600)',
+    () async {
+      final logs = captureLogs();
+      final host = _FakeHost()..failure = PlatformException(code: 'gone');
+      final platform = liquidShellIOSWithHost(host);
+      for (var i = 0; i < 2; i++) {
+        await platform.setNativeMinimizeScroll(tab: 0, offset: 40.0 * i);
+        await platform.expandNativeTabBar();
+      }
+      expect(host.calls, hasLength(4));
+      expect(logs, [
+        'liquid_shell native: setMinimizeScroll failed (gone); falling back',
+        'liquid_shell native: expandTabBar failed (gone); falling back',
+      ]);
+    },
+  );
+
+  test('the config carries minimizeOnScroll (VK-600)', () async {
+    final host = _FakeHost();
+    final platform = liquidShellIOSWithHost(host);
+    await platform.updateNativeChrome(
+      const LiquidNativeChromeConfig(engaged: true, minimizeOnScroll: true),
+    );
+    expect(host.lastConfig!.minimizeOnScroll, isTrue);
+  });
+
   test('failed search commands are swallowed and logged once each', () async {
     final logs = captureLogs();
     final host = _FakeHost()..failure = PlatformException(code: 'gone');
@@ -489,6 +553,8 @@ void main() {
     expect(snapshot.scopeShown, isTrue);
     expect(snapshot.selectedScope, 1);
     expect(snapshot.scopeFrame.y, 64);
+    expect(snapshot.minimizeBehavior, 'onScrollDown');
+    expect(snapshot.minimizePanAttached, isTrue);
     expect(host.calls, ['debugSnapshot']);
   });
 

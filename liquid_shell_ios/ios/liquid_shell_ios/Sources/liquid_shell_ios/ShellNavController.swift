@@ -194,6 +194,11 @@ final class PageHostController: UIViewController {
     proxy.showsVerticalScrollIndicator = false
     proxy.contentInsetAdjustmentBehavior = .always
     proxy.contentSize = CGSize(width: 1, height: 100_000)
+    // Spec VK-600 §8.4 (Q10): iOS scrolls to the top on a status-bar tap
+    // only while one scroll view on screen may; that one is Flutter's.
+    proxy.scrollsToTop = false
+    proxy.isAccessibilityElement = false
+    proxy.accessibilityElementsHidden = true
     view.addSubview(proxy)
     setContentScrollView(proxy, for: .top)
   }

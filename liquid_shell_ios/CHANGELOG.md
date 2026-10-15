@@ -1,3 +1,21 @@
+## 0.1.0-dev.8
+
+- Native minimize on scroll (VK-600): a hidden `MinimizeProxy` scroll view
+  per tab host, set as the bottom content scroll view, that follows the
+  offset Dart sends; its pan sits on the Flutter view (direct touches only,
+  not over platform views) while the bar may minimize; `tabBarMinimizeBehavior`
+  follows `minimizeOnScroll`; an expand toggle serves a selection change
+  (not into search) and `expandNativeTabBar`; `scrollsToTop = false` on the
+  proxies and on the search page proxy, so the status-bar tap reaches
+  Flutter. The channel gains `minimizeOnScroll`, `setMinimizeScroll` and
+  `expandTabBar`.
+- The proxies turn on UIKit's bottom scroll-edge effect under the compact
+  bar. It shows while `minimizeOnScroll` is on and is hidden
+  (`bottomEdgeEffect.isHidden`) while it is off.
+- **Breaking for fakes:** the exported `NativeDebugSnapshot` gains two
+  required fields, `minimizeBehavior` and `minimizePanAttached`. Code that
+  constructs one (a test fake) must pass them.
+
 ## 0.1.0-dev.7
 
 - UIKit's scope bar for the search tab (VK-550): `scopeBarActivation =

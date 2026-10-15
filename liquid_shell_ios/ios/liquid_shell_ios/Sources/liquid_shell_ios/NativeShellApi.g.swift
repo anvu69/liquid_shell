@@ -605,6 +605,11 @@ struct NativeDebugSnapshot: Hashable, CustomStringConvertible {
   var selectedScope: Int64
   /// The scope bar's frame in the Flutter view; zero when it is not shown.
   var scopeFrame: NativeRect
+  /// `tabBarMinimizeBehavior`: "automatic", "never", "onScrollDown" or
+  /// "onScrollUp".
+  var minimizeBehavior: String
+  /// Whether a tab's minimize proxy pan is on the Flutter view.
+  var minimizePanAttached: Bool
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -620,6 +625,8 @@ struct NativeDebugSnapshot: Hashable, CustomStringConvertible {
     let scopeShown = pigeonVar_list[8] as! Bool
     let selectedScope = pigeonVar_list[9] as! Int64
     let scopeFrame = pigeonVar_list[10] as! NativeRect
+    let minimizeBehavior = pigeonVar_list[11] as! String
+    let minimizePanAttached = pigeonVar_list[12] as! Bool
 
     return NativeDebugSnapshot(
       selectedTab: selectedTab,
@@ -632,7 +639,9 @@ struct NativeDebugSnapshot: Hashable, CustomStringConvertible {
       scopeTitles: scopeTitles,
       scopeShown: scopeShown,
       selectedScope: selectedScope,
-      scopeFrame: scopeFrame
+      scopeFrame: scopeFrame,
+      minimizeBehavior: minimizeBehavior,
+      minimizePanAttached: minimizePanAttached
     )
   }
   func toList() -> [Any?] {
@@ -648,13 +657,15 @@ struct NativeDebugSnapshot: Hashable, CustomStringConvertible {
       scopeShown,
       selectedScope,
       scopeFrame,
+      minimizeBehavior,
+      minimizePanAttached,
     ]
   }
   static func == (lhs: NativeDebugSnapshot, rhs: NativeDebugSnapshot) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return NativeShellApiPigeonInternal.deepEquals(lhs.selectedTab, rhs.selectedTab) && NativeShellApiPigeonInternal.deepEquals(lhs.searchActive, rhs.searchActive) && NativeShellApiPigeonInternal.deepEquals(lhs.searchText, rhs.searchText) && NativeShellApiPigeonInternal.deepEquals(lhs.placement, rhs.placement) && NativeShellApiPigeonInternal.deepEquals(lhs.pageTitles, rhs.pageTitles) && NativeShellApiPigeonInternal.deepEquals(lhs.fieldFrame, rhs.fieldFrame) && NativeShellApiPigeonInternal.deepEquals(lhs.firstResponderIsSearch, rhs.firstResponderIsSearch) && NativeShellApiPigeonInternal.deepEquals(lhs.scopeTitles, rhs.scopeTitles) && NativeShellApiPigeonInternal.deepEquals(lhs.scopeShown, rhs.scopeShown) && NativeShellApiPigeonInternal.deepEquals(lhs.selectedScope, rhs.selectedScope) && NativeShellApiPigeonInternal.deepEquals(lhs.scopeFrame, rhs.scopeFrame)
+    return NativeShellApiPigeonInternal.deepEquals(lhs.selectedTab, rhs.selectedTab) && NativeShellApiPigeonInternal.deepEquals(lhs.searchActive, rhs.searchActive) && NativeShellApiPigeonInternal.deepEquals(lhs.searchText, rhs.searchText) && NativeShellApiPigeonInternal.deepEquals(lhs.placement, rhs.placement) && NativeShellApiPigeonInternal.deepEquals(lhs.pageTitles, rhs.pageTitles) && NativeShellApiPigeonInternal.deepEquals(lhs.fieldFrame, rhs.fieldFrame) && NativeShellApiPigeonInternal.deepEquals(lhs.firstResponderIsSearch, rhs.firstResponderIsSearch) && NativeShellApiPigeonInternal.deepEquals(lhs.scopeTitles, rhs.scopeTitles) && NativeShellApiPigeonInternal.deepEquals(lhs.scopeShown, rhs.scopeShown) && NativeShellApiPigeonInternal.deepEquals(lhs.selectedScope, rhs.selectedScope) && NativeShellApiPigeonInternal.deepEquals(lhs.scopeFrame, rhs.scopeFrame) && NativeShellApiPigeonInternal.deepEquals(lhs.minimizeBehavior, rhs.minimizeBehavior) && NativeShellApiPigeonInternal.deepEquals(lhs.minimizePanAttached, rhs.minimizePanAttached)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -670,10 +681,12 @@ struct NativeDebugSnapshot: Hashable, CustomStringConvertible {
     NativeShellApiPigeonInternal.deepHash(value: scopeShown, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: selectedScope, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: scopeFrame, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: minimizeBehavior, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: minimizePanAttached, hasher: &hasher)
   }
 
   public var description: String {
-    return "NativeDebugSnapshot(selectedTab: \(String(describing: selectedTab)), searchActive: \(String(describing: searchActive)), searchText: \(String(describing: searchText)), placement: \(String(describing: placement)), pageTitles: \(String(describing: pageTitles)), fieldFrame: \(String(describing: fieldFrame)), firstResponderIsSearch: \(String(describing: firstResponderIsSearch)), scopeTitles: \(String(describing: scopeTitles)), scopeShown: \(String(describing: scopeShown)), selectedScope: \(String(describing: selectedScope)), scopeFrame: \(String(describing: scopeFrame)))"
+    return "NativeDebugSnapshot(selectedTab: \(String(describing: selectedTab)), searchActive: \(String(describing: searchActive)), searchText: \(String(describing: searchText)), placement: \(String(describing: placement)), pageTitles: \(String(describing: pageTitles)), fieldFrame: \(String(describing: fieldFrame)), firstResponderIsSearch: \(String(describing: firstResponderIsSearch)), scopeTitles: \(String(describing: scopeTitles)), scopeShown: \(String(describing: scopeShown)), selectedScope: \(String(describing: selectedScope)), scopeFrame: \(String(describing: scopeFrame)), minimizeBehavior: \(String(describing: minimizeBehavior)), minimizePanAttached: \(String(describing: minimizePanAttached)))"
   }
 }
 
@@ -693,6 +706,8 @@ struct NativeChromeConfig: Hashable, CustomStringConvertible {
   var rtl: Bool
   var hidden: Bool
   var interactive: Bool
+  /// The compact tab bar minimizes while the body scrolls down (VK-600).
+  var minimizeOnScroll: Bool
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -708,6 +723,7 @@ struct NativeChromeConfig: Hashable, CustomStringConvertible {
     let rtl = pigeonVar_list[8] as! Bool
     let hidden = pigeonVar_list[9] as! Bool
     let interactive = pigeonVar_list[10] as! Bool
+    let minimizeOnScroll = pigeonVar_list[11] as! Bool
 
     return NativeChromeConfig(
       engaged: engaged,
@@ -720,7 +736,8 @@ struct NativeChromeConfig: Hashable, CustomStringConvertible {
       dark: dark,
       rtl: rtl,
       hidden: hidden,
-      interactive: interactive
+      interactive: interactive,
+      minimizeOnScroll: minimizeOnScroll
     )
   }
   func toList() -> [Any?] {
@@ -736,13 +753,14 @@ struct NativeChromeConfig: Hashable, CustomStringConvertible {
       rtl,
       hidden,
       interactive,
+      minimizeOnScroll,
     ]
   }
   static func == (lhs: NativeChromeConfig, rhs: NativeChromeConfig) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return NativeShellApiPigeonInternal.deepEquals(lhs.engaged, rhs.engaged) && NativeShellApiPigeonInternal.deepEquals(lhs.tabs, rhs.tabs) && NativeShellApiPigeonInternal.deepEquals(lhs.selectedIndex, rhs.selectedIndex) && NativeShellApiPigeonInternal.deepEquals(lhs.trailing, rhs.trailing) && NativeShellApiPigeonInternal.deepEquals(lhs.footer, rhs.footer) && NativeShellApiPigeonInternal.deepEquals(lhs.search, rhs.search) && NativeShellApiPigeonInternal.deepEquals(lhs.tintArgb, rhs.tintArgb) && NativeShellApiPigeonInternal.deepEquals(lhs.dark, rhs.dark) && NativeShellApiPigeonInternal.deepEquals(lhs.rtl, rhs.rtl) && NativeShellApiPigeonInternal.deepEquals(lhs.hidden, rhs.hidden) && NativeShellApiPigeonInternal.deepEquals(lhs.interactive, rhs.interactive)
+    return NativeShellApiPigeonInternal.deepEquals(lhs.engaged, rhs.engaged) && NativeShellApiPigeonInternal.deepEquals(lhs.tabs, rhs.tabs) && NativeShellApiPigeonInternal.deepEquals(lhs.selectedIndex, rhs.selectedIndex) && NativeShellApiPigeonInternal.deepEquals(lhs.trailing, rhs.trailing) && NativeShellApiPigeonInternal.deepEquals(lhs.footer, rhs.footer) && NativeShellApiPigeonInternal.deepEquals(lhs.search, rhs.search) && NativeShellApiPigeonInternal.deepEquals(lhs.tintArgb, rhs.tintArgb) && NativeShellApiPigeonInternal.deepEquals(lhs.dark, rhs.dark) && NativeShellApiPigeonInternal.deepEquals(lhs.rtl, rhs.rtl) && NativeShellApiPigeonInternal.deepEquals(lhs.hidden, rhs.hidden) && NativeShellApiPigeonInternal.deepEquals(lhs.interactive, rhs.interactive) && NativeShellApiPigeonInternal.deepEquals(lhs.minimizeOnScroll, rhs.minimizeOnScroll)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -758,10 +776,11 @@ struct NativeChromeConfig: Hashable, CustomStringConvertible {
     NativeShellApiPigeonInternal.deepHash(value: rtl, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: hidden, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: interactive, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: minimizeOnScroll, hasher: &hasher)
   }
 
   public var description: String {
-    return "NativeChromeConfig(engaged: \(String(describing: engaged)), tabs: \(String(describing: tabs)), selectedIndex: \(String(describing: selectedIndex)), trailing: \(String(describing: trailing)), footer: \(String(describing: footer)), search: \(String(describing: search)), tintArgb: \(String(describing: tintArgb)), dark: \(String(describing: dark)), rtl: \(String(describing: rtl)), hidden: \(String(describing: hidden)), interactive: \(String(describing: interactive)))"
+    return "NativeChromeConfig(engaged: \(String(describing: engaged)), tabs: \(String(describing: tabs)), selectedIndex: \(String(describing: selectedIndex)), trailing: \(String(describing: trailing)), footer: \(String(describing: footer)), search: \(String(describing: search)), tintArgb: \(String(describing: tintArgb)), dark: \(String(describing: dark)), rtl: \(String(describing: rtl)), hidden: \(String(describing: hidden)), interactive: \(String(describing: interactive)), minimizeOnScroll: \(String(describing: minimizeOnScroll)))"
   }
 }
 
@@ -1224,6 +1243,11 @@ protocol NativeShellHostApi {
   func dismissSearchKeyboard() throws
   /// The top page's scroll offset of tab [tab] (proxy scroll view).
   func setPageScroll(tab: Int64, offset: Double) throws
+  /// The body scroll offset of destination [tab] for the tab bar's
+  /// minimize (proxy scroll view, spec VK-600 §8).
+  func setMinimizeScroll(tab: Int64, offset: Double) throws
+  /// Expands a minimized tab bar (spec VK-600 §8.5).
+  func expandTabBar() throws
   /// Debug builds: the native search and page state. Release: empty.
   func debugSnapshot() throws -> NativeDebugSnapshot
 }
@@ -1387,6 +1411,38 @@ class NativeShellHostApiSetup {
       }
     } else {
       setPageScrollChannel.setMessageHandler(nil)
+    }
+    /// The body scroll offset of destination [tab] for the tab bar's
+    /// minimize (proxy scroll view, spec VK-600 §8).
+    let setMinimizeScrollChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.liquid_shell_ios.NativeShellHostApi.setMinimizeScroll\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      setMinimizeScrollChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let tabArg = args[0] as! Int64
+        let offsetArg = args[1] as! Double
+        do {
+          try api.setMinimizeScroll(tab: tabArg, offset: offsetArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      setMinimizeScrollChannel.setMessageHandler(nil)
+    }
+    /// Expands a minimized tab bar (spec VK-600 §8.5).
+    let expandTabBarChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.liquid_shell_ios.NativeShellHostApi.expandTabBar\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      expandTabBarChannel.setMessageHandler { _, reply in
+        do {
+          try api.expandTabBar()
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      expandTabBarChannel.setMessageHandler(nil)
     }
     /// Debug builds: the native search and page state. Release: empty.
     let debugSnapshotChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.liquid_shell_ios.NativeShellHostApi.debugSnapshot\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)

@@ -1,3 +1,11 @@
+## 0.1.0-dev.8
+
+- Native minimize on scroll (VK-600): `LiquidNativeChromeConfig.minimizeOnScroll`
+  (default `false`; the shell passes `LiquidShell.minimizeOnScroll`, which
+  defaults to `true`), `setNativeMinimizeScroll(tab, offset)` and
+  `expandNativeTabBar()`. Both methods have no-op defaults, so other
+  platform implementations keep working.
+
 ## 0.1.0-dev.7
 
 - Native search scopes (VK-550): `LiquidNativeSearchConfig.scopes` (the

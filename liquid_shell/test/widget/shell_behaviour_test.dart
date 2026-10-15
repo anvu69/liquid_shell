@@ -15,6 +15,13 @@ Future<void> _openSidebar(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// The scroll position of the [list] view.
+ScrollPosition _positionOf(WidgetTester tester, Finder list) => tester
+    .state<ScrollableState>(
+      find.descendant(of: list, matching: find.byType(Scrollable)),
+    )
+    .position;
+
 void main() {
   group('selection', () {
     testWidgets('a tap selects; reselect calls back too', (tester) async {
@@ -488,6 +495,115 @@ void main() {
   });
 
   group('minimise on scroll (§5.7)', () {
+    testWidgets('a fling that reaches the top expands (VK-600 Q2)', (
+      tester,
+    ) async {
+      await pumpShell(tester, const TestShell());
+      final list = find.byKey(const ValueKey('list-Home'));
+      await tester.drag(list, const Offset(0, -600));
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byKey(kTabPillKey)), const Size(48, 48));
+      await tester.fling(list, const Offset(0, 500), 4000);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byKey(kTabPillKey)).height, 62);
+    });
+
+    testWidgets(
+      'a drag back to the top keeps it minimized (VK-600, as UIKit)',
+      (
+        tester,
+      ) async {
+        await pumpShell(tester, const TestShell());
+        final list = find.byKey(const ValueKey('list-Home'));
+        await tester.drag(list, const Offset(0, -600));
+        await tester.pumpAndSettle();
+        await tester.drag(list, const Offset(0, 900));
+        await tester.pumpAndSettle();
+        expect(tester.getSize(find.byKey(kTabPillKey)), const Size(48, 48));
+      },
+    );
+
+    testWidgets('a programmatic scroll to the top expands (VK-600 Q3)', (
+      tester,
+    ) async {
+      await pumpShell(tester, const TestShell());
+      final list = find.byKey(const ValueKey('list-Home'));
+      await tester.drag(list, const Offset(0, -600));
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byKey(kTabPillKey)), const Size(48, 48));
+      unawaited(
+        _positionOf(tester, list).animateTo(
+          0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byKey(kTabPillKey)).height, 62);
+    });
+
+    testWidgets('minimizeOnScroll off: a fling to the top does not clear '
+        'the kept flag (VK-600 Task 7 review)', (tester) async {
+      await pumpShell(tester, const TestShell());
+      final list = find.byKey(const ValueKey('list-Home'));
+      await tester.drag(list, const Offset(0, -600));
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byKey(kTabPillKey)), const Size(48, 48));
+      // Off, the flag is kept and only stops applying (§5.7).
+      await pumpShell(tester, const TestShell(minimizeOnScroll: false));
+      expect(tester.getSize(find.byKey(kTabPillKey)).height, 62);
+      await tester.fling(list, const Offset(0, 500), 4000);
+      await tester.pumpAndSettle();
+      expect(_positionOf(tester, list).pixels, 0, reason: 'at the top');
+      await pumpShell(tester, const TestShell());
+      expect(tester.getSize(find.byKey(kTabPillKey)), const Size(48, 48));
+    });
+
+    testWidgets('the search tab: a fling to the top does not expand '
+        '(VK-600 Task 7 review)', (tester) async {
+      const home = LiquidDestination(icon: Icon(Icons.home), label: 'Home');
+      const inbox = LiquidDestination(icon: Icon(Icons.inbox), label: 'Inbox');
+      const search = LiquidDestination(
+        icon: Icon(Icons.search),
+        label: 'Search',
+        role: LiquidDestinationRole.search,
+      );
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      await pumpShell(
+        tester,
+        const TestShell(destinations: [home, inbox], initialIndex: 1),
+      );
+      await tester.drag(
+        find.byKey(const ValueKey('list-Inbox')),
+        const Offset(0, -600),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byKey(kTabPillKey)), const Size(48, 48));
+      // Search comes in under the selected index: no selection change, so
+      // nothing clears the flag on the way in or out. Every selection of
+      // search clears it anyway.
+      await pumpShell(
+        tester,
+        TestShell(
+          destinations: const [home, search],
+          initialIndex: 1,
+          search: LiquidSearch(controller: controller),
+        ),
+      );
+      final list = find.byKey(const ValueKey('list-Search'));
+      await tester.drag(list, const Offset(0, -600));
+      await tester.pumpAndSettle();
+      await tester.fling(list, const Offset(0, 500), 4000);
+      await tester.pumpAndSettle();
+      expect(_positionOf(tester, list).pixels, 0, reason: 'at the top');
+      await pumpShell(
+        tester,
+        const TestShell(destinations: [home, inbox], initialIndex: 1),
+      );
+      expect(tester.getSize(find.byKey(kTabPillKey)), const Size(48, 48));
+    });
+
     testWidgets('reverse minimises; forward does not expand; a tap does '
         '(spec VK-503 §10, Q7)', (tester) async {
       await pumpShell(tester, const TestShell());

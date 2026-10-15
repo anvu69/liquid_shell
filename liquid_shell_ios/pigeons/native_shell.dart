@@ -132,6 +132,8 @@ class NativeDebugSnapshot {
     required this.scopeShown,
     required this.selectedScope,
     required this.scopeFrame,
+    required this.minimizeBehavior,
+    required this.minimizePanAttached,
   });
 
   /// The selected `UITab`'s identifier ("destination<i>", or "" when none).
@@ -158,6 +160,13 @@ class NativeDebugSnapshot {
 
   /// The scope bar's frame in the Flutter view; zero when it is not shown.
   NativeRect scopeFrame;
+
+  /// `tabBarMinimizeBehavior`: "automatic", "never", "onScrollDown" or
+  /// "onScrollUp".
+  String minimizeBehavior;
+
+  /// Whether a tab's minimize proxy pan is on the Flutter view.
+  bool minimizePanAttached;
 }
 
 /// The whole chrome. Applied in order: tabs, selection, footer, tint,
@@ -172,6 +181,7 @@ class NativeChromeConfig {
     required this.rtl,
     required this.hidden,
     required this.interactive,
+    required this.minimizeOnScroll,
     this.trailing,
     this.footer,
     this.search,
@@ -188,6 +198,9 @@ class NativeChromeConfig {
   bool rtl;
   bool hidden;
   bool interactive;
+
+  /// The compact tab bar minimizes while the body scrolls down (VK-600).
+  bool minimizeOnScroll;
 }
 
 class NativeWindowControls {
@@ -237,6 +250,13 @@ abstract class NativeShellHostApi {
 
   /// The top page's scroll offset of tab [tab] (proxy scroll view).
   void setPageScroll(int tab, double offset);
+
+  /// The body scroll offset of destination [tab] for the tab bar's
+  /// minimize (proxy scroll view, spec VK-600 §8).
+  void setMinimizeScroll(int tab, double offset);
+
+  /// Expands a minimized tab bar (spec VK-600 §8.5).
+  void expandTabBar();
 
   /// Debug builds: the native search and page state. Release: empty.
   NativeDebugSnapshot debugSnapshot();

@@ -260,6 +260,7 @@ void main() {
       rtl: true,
       hidden: true,
       interactive: false,
+      minimizeOnScroll: true,
     );
     expect(
       config,
@@ -289,6 +290,7 @@ void main() {
         rtl: true,
         hidden: true,
         interactive: false,
+        minimizeOnScroll: true,
       ),
     );
   });
@@ -321,6 +323,7 @@ void main() {
         rtl: false,
         hidden: false,
         interactive: true,
+        minimizeOnScroll: false,
         searchPlaceholder: 'Songs, places',
         pageStacks: const {
           1: [LiquidNativePage(title: 'Search'), LiquidNativePage(title: 'Hồ')],
@@ -345,6 +348,7 @@ void main() {
         rtl: false,
         hidden: false,
         interactive: true,
+        minimizeOnScroll: false,
         searchScopes: const ['All', 'Songs', 'Places'],
       );
       expect(config.search?.scopes, ['All', 'Songs', 'Places']);
@@ -362,6 +366,7 @@ void main() {
         rtl: false,
         hidden: false,
         interactive: true,
+        minimizeOnScroll: false,
         searchPlaceholder: 'ignored',
       );
       expect(config.search, isNull);
@@ -383,6 +388,7 @@ void main() {
           rtl: false,
           hidden: false,
           interactive: true,
+          minimizeOnScroll: false,
         );
         expect(
           config.search != null,
@@ -411,6 +417,7 @@ void main() {
           rtl: false,
           hidden: false,
           interactive: true,
+          minimizeOnScroll: false,
           pageStacks: const {
             2: [LiquidNativePage(title: 'Ignored')],
           },

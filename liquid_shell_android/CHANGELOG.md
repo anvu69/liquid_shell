@@ -1,3 +1,7 @@
+## 0.1.0-dev.8
+
+- No changes; versioned with `liquid_shell`.
+
 ## 0.1.0-dev.7
 
 - No changes; versioned with `liquid_shell`. Search scopes are drawn by

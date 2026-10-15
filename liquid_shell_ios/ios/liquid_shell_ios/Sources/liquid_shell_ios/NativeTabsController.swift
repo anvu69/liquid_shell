@@ -34,6 +34,9 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   /// Tabs with a native navigation bar, by destination index (P3b-1: the
   /// search tab only).
   private(set) var navControllers: [Int: ShellNavController] = [:]
+  /// The host of every non-search destination, by index: its proxy takes
+  /// Dart's minimize offset (spec VK-600 §8.2). Built with the tabs.
+  private var minimizeHosts: [Int: TabHostController] = [:]
   /// The search field and its delegates; one per shell, re-hosted when the
   /// tabs are rebuilt.
   let searchBridge = SearchBridge()
@@ -146,6 +149,9 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
         self.showTabs(config)
         self.select(Int(config.selectedIndex))
       }
+      // Regular takes the pan back and resets the proxies; compact again
+      // puts it back (spec VK-600 §8.3).
+      self.updateMinimizePan()
       // Defensive: the layout pass that follows a size-class change syncs
       // too (`viewDidLayoutSubviews`), and no test tells the two apart.
       self.syncFlutter()
@@ -200,6 +206,11 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       select(Int(new.selectedIndex))
     }
     setFooter(new.footer)
+    let behavior: UITabBarController.MinimizeBehavior = new.minimizeOnScroll ? .onScrollDown : .never
+    if tabBarMinimizeBehavior != behavior { tabBarMinimizeBehavior = behavior }
+    // Q14: the policy is `MinimizeProxy.hidesBottomEdgeEffect`'s.
+    let hidesEdge = MinimizeProxy.hidesBottomEdgeEffect(minimizeOnScroll: new.minimizeOnScroll)
+    for host in minimizeHosts.values { host.minimizeProxy.bottomEdgeEffect.isHidden = hidesEdge }
     view.tintColor = UIColor(argb: new.tintArgb)
     traitOverrides.userInterfaceStyle = new.dark ? .dark : .light
     traitOverrides.layoutDirection = new.rtl ? .rightToLeft : .leftToRight
@@ -221,6 +232,7 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     if !chromeVisible { searchBridge.dismissKeepingText() }
     if chromeVisible != wasVisible { setChromeVisible(chromeVisible, closingOverlay: overlayOpen) }
     syncFlutter()
+    updateMinimizePan()
   }
 
   func setSidebarVisible(_ visible: Bool) {
@@ -243,6 +255,7 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     searchTab = nil
     searchIndex = nil
     navControllers = [:]
+    minimizeHosts = [:]
     destinationTabs = new.tabs.enumerated().map { index, spec in
       if spec.search {
         let root = PageHostController()
@@ -257,9 +270,11 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
         searchIndex = index
         return tab
       }
-      let tab = UITab(title: "", image: nil, identifier: "destination\(index)") { _ in
-        TabHostController()
-      }
+      // Created now, not in the provider: Dart's minimize offset reaches
+      // a host UIKit has not asked for yet. The provider runs once per tab.
+      let host = TabHostController()
+      minimizeHosts[index] = host
+      let tab = UITab(title: "", image: nil, identifier: "destination\(index)") { _ in host }
       // `.fixed`: nothing to add, remove or reorder, so no sidebar "Edit".
       tab.preferredPlacement = spec.sidebarOnly ? .sidebarOnly : .fixed
       return tab
@@ -368,6 +383,10 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     if isSearchSelected { searchBridge.dismissKeepingText() }
     applyingFromDart = true
     selectedTab = tab
+    // Q4: UIKit keeps a minimized bar through a programmatic change. Not
+    // into search, which keeps UIKit's own form (Q5; spike §3.2, as with a
+    // real scroll view): the toggle stays out of the scope bar's way.
+    if !isSearchSelected { expandMinimizedBar() }
     applyingFromDart = false
     if isSearchSelected, let held = heldSearchText {
       heldSearchText = nil
@@ -679,6 +698,76 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     syncFlutter()
   }
 
+  // MARK: - Minimize on scroll (spec VK-600 §8)
+
+  /// Number of expand toggles (tests).
+  private(set) var minimizeExpands = 0
+
+  /// The proxy whose pan is on the Flutter view, if any (spec §8.3).
+  private(set) weak var attachedMinimizeProxy: MinimizeProxy?
+
+  /// This shell's scene went (`retire`): the Flutter view may be a new
+  /// shell's now. A flag, not a window check: the old window lives on, with
+  /// this shell in it, until UIKit lets it go.
+  private(set) var retired = false
+
+  /// Puts the selected tab's proxy pan on the Flutter view when the native
+  /// bar may minimize, and takes it back otherwise. Leaving compact resets
+  /// every proxy, so the top bar's edge effect never sees an old offset.
+  func updateMinimizePan() {
+    var want: MinimizeProxy?
+    if !retired, let config, chromeVisible, config.interactive, config.minimizeOnScroll,
+      isCompact, let host = selectedViewController as? TabHostController,
+      let content = flutter.viewIfLoaded
+    {
+      host.minimizeProxy.contentView = content
+      want = host.minimizeProxy
+    }
+    if !isCompact { for host in minimizeHosts.values { host.minimizeProxy.setOffset(0) } }
+    guard want !== attachedMinimizeProxy else { return }
+    detachMinimizePan()
+    guard let proxy = want, let content = flutter.viewIfLoaded else { return }
+    let pan = proxy.panGestureRecognizer
+    pan.cancelsTouchesInView = false
+    pan.delaysTouchesBegan = false
+    pan.delaysTouchesEnded = false
+    content.addGestureRecognizer(pan)
+    attachedMinimizeProxy = proxy
+  }
+
+  /// Gives the attached pan back to its proxy.
+  func detachMinimizePan() {
+    // A recognizer has one view: adding it elsewhere moves it.
+    if let old = attachedMinimizeProxy { old.addGestureRecognizer(old.panGestureRecognizer) }
+    attachedMinimizeProxy = nil
+  }
+
+  /// This shell's scene went (`NativeShellInstaller`): its pan leaves the
+  /// Flutter view now, not when the shell is released, and never comes
+  /// back, since a new shell may take the Flutter view. Its size-class
+  /// handler and a late apply can still run (final review M1).
+  func retire() {
+    retired = true
+    detachMinimizePan()
+  }
+
+  func minimizeHost(_ index: Int) -> TabHostController? { minimizeHosts[index] }
+
+  /// Dart's body offset for destination [tab] (spec §8.6).
+  func setMinimizeScroll(tab: Int, offset: Double) {
+    guard offset.isFinite, let host = minimizeHosts[tab] else { return }
+    host.minimizeProxy.setOffset(offset)
+  }
+
+  /// Expands a minimized bar: `.never` then `.onScrollDown` (spike §3.2;
+  /// nothing changes on an expanded bar). Only while minimize is on.
+  func expandMinimizedBar() {
+    guard tabBarMinimizeBehavior == .onScrollDown else { return }
+    minimizeExpands += 1
+    tabBarMinimizeBehavior = .never
+    tabBarMinimizeBehavior = .onScrollDown
+  }
+
   // MARK: - Search field frame (spec P3b §7.5)
 
   private var lastField: NativeRect?
@@ -759,6 +848,14 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       case .integratedButton?: placement = "integratedButton"
       default: placement = ""
       }
+      let minimizeBehavior: String
+      switch tabBarMinimizeBehavior {
+      case .automatic: minimizeBehavior = "automatic"
+      case .never: minimizeBehavior = "never"
+      case .onScrollDown: minimizeBehavior = "onScrollDown"
+      case .onScrollUp: minimizeBehavior = "onScrollUp"
+      @unknown default: minimizeBehavior = ""
+      }
       return NativeDebugSnapshot(
         selectedTab: selectedDestination.map { "destination\($0)" } ?? "",
         searchActive: searchBridge.controller.isActive,
@@ -770,7 +867,9 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
         scopeTitles: searchBridge.controller.searchBar.scopeButtonTitles ?? [],
         scopeShown: searchBridge.controller.searchBar.showsScopeBar,
         selectedScope: Int64(searchBridge.controller.searchBar.selectedScopeButtonIndex),
-        scopeFrame: currentScopeFrame())
+        scopeFrame: currentScopeFrame(),
+        minimizeBehavior: minimizeBehavior,
+        minimizePanAttached: attachedMinimizeProxy != nil)
     #else
       return .empty
     #endif
@@ -783,9 +882,27 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
 final class TabHostController: UIViewController {
   private var shell: NativeTabsController? { tabBarController as? NativeTabsController }
 
+  /// The proxy UIKit's tab bar minimize follows (spec VK-600 §8.2).
+  let minimizeProxy = MinimizeProxy()
+
+  /// A host goes with its tabs (a rebuild, the shell's release) while its
+  /// pan may still be on the Flutter view, which outlives it: UIKit leaves
+  /// a dead scroll view's pan where it is. Take it back first.
+  ///
+  /// Swift 6: this `deinit` is nonisolated and calls main-actor UIKit API,
+  /// which Swift 5 mode allows. The Swift 6 language mode needs
+  /// `isolated deinit` (SE-0371) or `MainActor.assumeIsolated` here.
+  deinit {
+    minimizeProxy.addGestureRecognizer(minimizeProxy.panGestureRecognizer)
+  }
+
   override func viewDidLoad() {
     super.viewDidLoad()
     view.backgroundColor = .clear
+    minimizeProxy.frame = view.bounds
+    minimizeProxy.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    view.addSubview(minimizeProxy)
+    setContentScrollView(minimizeProxy, for: .bottom)
   }
 
   override func viewIsAppearing(_ animated: Bool) {
@@ -836,6 +953,7 @@ extension NativeDebugSnapshot {
       selectedTab: "", searchActive: false, searchText: "", placement: "", pageTitles: [],
       fieldFrame: NativeRect(x: 0, y: 0, width: 0, height: 0), firstResponderIsSearch: false,
       scopeTitles: [], scopeShown: false, selectedScope: 0,
-      scopeFrame: NativeRect(x: 0, y: 0, width: 0, height: 0))
+      scopeFrame: NativeRect(x: 0, y: 0, width: 0, height: 0), minimizeBehavior: "",
+      minimizePanAttached: false)
   }
 }

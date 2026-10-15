@@ -64,4 +64,10 @@ void main() {
     // No binding, no channel: reaching here without a MissingPluginException
     // is the assertion.
   });
+
+  test('the VK-600 members default to nothing and touch no channel', () async {
+    final platform = _ExtendsFake();
+    await platform.setNativeMinimizeScroll(tab: 0, offset: 120);
+    await platform.expandNativeTabBar();
+  });
 }

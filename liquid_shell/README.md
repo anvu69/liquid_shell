@@ -1375,7 +1375,8 @@ content viewer (see [Custom chrome](#custom-chrome)).
   `LiquidShellNativeChrome` in Info.plist, and an SF Symbol on every
   destination. Strings the system draws (the sidebar button's VoiceOver
   label) follow the device language, not your app's. The compact native
-  bar does not minimise on scroll (`minimizeOnScroll` is Flutter-only), and
+  bar minimizes on scroll, with limits of its own (see
+  [doc/native_chrome.md](doc/native_chrome.md#minimize-on-scroll)), and
   it hides while a Flutter dialog or sheet is up (the body keeps its
   inset); a native alert leaves it in place.
 - **A frame or two without chrome at start on iOS.** Whether the app opted

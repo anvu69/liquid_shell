@@ -128,6 +128,24 @@ class LiquidShellIOS extends EventChannelLiquidShellPlatform {
     await _send('setPageScroll', () => _host.setPageScroll(tab, offset));
   }
 
+  @override
+  Future<void> setNativeMinimizeScroll({
+    required int tab,
+    required double offset,
+  }) async {
+    // Checked at the boundary: no non-finite offset and no negative tab
+    // cross. A negative offset does: an overscroll at the top.
+    if (!offset.isFinite || tab < 0) return;
+    await _send(
+      'setMinimizeScroll',
+      () => _host.setMinimizeScroll(tab, offset),
+    );
+  }
+
+  @override
+  Future<void> expandNativeTabBar() =>
+      _send('expandTabBar', _host.expandTabBar);
+
   /// Debug builds of the plugin report the native search and page state;
   /// release builds an empty snapshot. For integration tests.
   @visibleForTesting

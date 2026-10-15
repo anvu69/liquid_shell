@@ -9,6 +9,7 @@ import 'package:liquid_shell_example/cases/segments.dart';
 import 'package:liquid_shell_example/support/chrome_mode.dart';
 import 'package:liquid_shell_example/support/drawn_by_flutter.dart';
 import 'package:liquid_shell_example/support/launch_demo.dart';
+import 'package:liquid_shell_example/support/minimize_demo.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -41,7 +42,9 @@ class ExampleApp extends StatefulWidget {
   /// `tabs` and `tabs-liquid` open the basic case, `segments` and
   /// `segments-liquid` the segments case (the frame strips; the Runner
   /// answers `segments-native` with its own UIKit screen, over the case
-  /// list). Every `-liquid` demo starts in the Flutter liquid tier.
+  /// list); `minimize` opens the basic tabs with a status-bar scroll to the
+  /// top and an app-driven tab change (VK-600). Every `-liquid` demo starts
+  /// in the Flutter liquid tier.
   const ExampleApp({this.demo, super.key});
 
   /// The demo to open at launch, or null for the case list. Any other
@@ -85,11 +88,12 @@ class _ExampleAppState extends State<ExampleApp> {
       'alert' || 'sheet' => NativeAlertsCase(autorun: demo),
       'tabs' || 'tabs-liquid' => const CaseFrame(child: BasicTabsCase()),
       'segments' || 'segments-liquid' => const CaseFrame(child: SegmentsCase()),
+      'minimize' => const CaseFrame(child: MinimizeDemo()),
       _ => const CaseList(),
     };
-    // XCUITest reads the search case's Flutter rows through the
-    // accessibility tree (the alerts are native).
-    if (search || above) {
+    // XCUITest reads the search case's and the minimize demo's Flutter
+    // rows through the accessibility tree (the alerts are native).
+    if (search || above || demo == 'minimize') {
       _demoSemantics ??= SemanticsBinding.instance.ensureSemantics();
     }
     return ChromeModeScope(
