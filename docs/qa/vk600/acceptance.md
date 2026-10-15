@@ -113,3 +113,18 @@ The `minimize` demo (`liquid_shell/example/lib/support/minimize_demo.dart`) adds
 | iPad Air 11-inch (M4), 26.5, regular | `minimize onScrollDown pan false compact false` | `search onScrollDown pan false compact false` |
 | iPhone 17 Pro, 26.5 | `minimize onScrollDown pan true compact true` | `search onScrollDown pan false compact true` |
 
+
+## 6. Gates and the UI suite's time (Task 8)
+
+| Gate | Device | Result |
+|---|---|---|
+| `MinimizeUITests` alone | iPhone 26.5, iPhone 27.0, iPad 26.5, iPad 27.0 | all pass; the iPhone tests skip on an iPad and the iPad tests on an iPhone. Load average up to ~270 |
+| `make ios-ui` | iPhone 17 Pro, 26.5 | 28 tests, 26 run, all pass; 534 s (511 s of tests). An earlier run had one failure, `SegmentFidelityUITests.testSequences`. It drives the Runner's own UIKit screen (`segments-native`), with no shell on screen, and passed alone (48.5 s) and in the rerun |
+| `make ios-ui` | iPad Air 11-inch (M4), 26.5 | 28 tests, 18 run, all pass; 357 s (326 s of tests). The narrow-window test ran (19.8 s), and the iPad tests after it found the full-size window again |
+| `make ios-unit` | iPhone 17 Pro, 26.5 | 180 tests: 162 pass, 18 skipped, 0 failed |
+| `make integration-ios-native` | iPad and iPhone, 26.5 | passed, §5 |
+| `make verify` | | passed: coverage 97.67 % (`liquid_shell`), 96.49 %, 99.01 %, 100 % |
+
+The `MinimizeUITests` iPhone tests took 81 s of the iPhone run, and its iPad tests 29 s of the iPad run. By the Makefile's earlier scaling (443 s locally was about 1400 s on a slow runner), the iPhone suite is now about 1700 s. That is ~100 s under the old 1800 s cap, where VK-571 had raised the cap at 250 s. `IOS_UI_TIMEOUT` is now 2100 s, and CI's `ios-ui` job allows 45 minutes (commit "the UI suite's cap").
+
+**Red before VK-600 (plan Step 3).** The check on `main` at the rebase base (22830ab) was not run: disk on the shared host was 3.6–8 GB free during this task, below the 10 GB floor, so this task did not do a second build of the example. The same evidence comes from `TabFidelityUITests`. On `main` it asserts that `app.swipeUp()` on the `tabs` demo leaves the native bar whole, and it passes there (CI). With VK-600 that assertion failed, because the same swipe now minimizes the bar (§4). So `testAScrollMinimizesAndAFlingToTheTopExpands` would fail on "a swipe up minimizes" before Tasks 3–6.
