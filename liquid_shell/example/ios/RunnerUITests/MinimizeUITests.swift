@@ -27,40 +27,46 @@ final class MinimizeUITests: XCTestCase {
       ? app.tabBars.buttons[name] : app.buttons[name].firstMatch
   }
 
-  /// The bottom bar's [selected] tab, every match of it (mid-animation
-  /// UIKit shows both forms of a tab: two "Home" buttons, the circle and
-  /// the full one), and whether [other], an unselected tab, is shown.
+  /// One read of the bottom bar: the frames of every match of [selected]
+  /// (mid-animation UIKit shows both forms of a tab: two "Home" buttons,
+  /// the circle and the full one), and whether [other], an unselected tab,
+  /// is in the bar. A snapshot, so a button that leaves the tree between
+  /// two queries cannot fail the read. No bar: no frames.
   private func bar(
     _ app: XCUIApplication, selected: String, other: String
-  ) -> (selected: [XCUIElement], otherShown: Bool) {
-    let tabs = app.tabBars.buttons
-    return (
-      tabs.matching(identifier: selected).allElementsBoundByIndex.filter { $0.exists },
-      tabs.matching(identifier: other).allElementsBoundByIndex
-        .contains { $0.exists && $0.isHittable }
-    )
+  ) -> (selected: [CGRect], otherShown: Bool) {
+    guard let tree = try? app.tabBars.firstMatch.snapshot() else { return ([], false) }
+    var buttons: [XCUIElementSnapshot] = []
+    func collect(_ node: XCUIElementSnapshot) {
+      if node.elementType == .button { buttons.append(node) }
+      node.children.forEach(collect)
+    }
+    collect(tree)
+    let named = { (name: String) in
+      buttons.filter { $0.identifier == name || $0.label == name }.map(\.frame)
+    }
+    return (named(selected), named(other).contains { !$0.isEmpty })
   }
 
   /// The signal Step 1 recorded (it flips on 26.5 and 27): [selected] is
-  /// the circle, and [other] is gone or covered or every match of
-  /// [selected] is the circle. Positive evidence only: with no bar (hidden,
-  /// gone, the iPad's top bar) it is false.
+  /// the circle, and [other] is gone or every match of [selected] is the
+  /// circle. Positive evidence only: with no bar (hidden, gone, the iPad's
+  /// top bar) it is false.
   private func isMinimized(
     _ app: XCUIApplication, selected: String = "Home", other: String = "Explore"
   ) -> Bool {
     let bar = bar(app, selected: selected, other: other)
-    let circles = bar.selected.filter { $0.frame.width < 60 }
+    let circles = bar.selected.filter { $0.width < 60 }
     return !circles.isEmpty && (!bar.otherShown || circles.count == bar.selected.count)
   }
 
-  /// The whole bar: [other] is shown and every match of [selected] is
+  /// The whole bar: [other] is in it and every match of [selected] is
   /// wider than the circle. False with no bar, as [isMinimized] is.
   private func isExpanded(
     _ app: XCUIApplication, selected: String = "Home", other: String = "Explore"
   ) -> Bool {
     let bar = bar(app, selected: selected, other: other)
-    return bar.otherShown && !bar.selected.isEmpty
-      && bar.selected.allSatisfy { $0.frame.width >= 60 }
+    return bar.otherShown && !bar.selected.isEmpty && bar.selected.allSatisfy { $0.width >= 60 }
   }
 
   /// Waits for the minimized bar ([want] true) or the whole one (false). A
