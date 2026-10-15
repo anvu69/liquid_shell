@@ -590,8 +590,8 @@ final class NativeTabsTests: XCTestCase {
 
   private func config(
     engaged: Bool = true, hidden: Bool = false, interactive: Bool = true,
-    footer: Bool = false, trailing: Bool = false, reports: Bool = false, minimize: Bool = false,
-    selected: Int64 = 0
+    footer: Bool = false, trailing: Bool = false, reports: Bool = false, selected: Int64 = 0,
+    minimize: Bool = false
   ) -> NativeChromeConfig {
     NativeChromeConfig(
       engaged: engaged,
@@ -1492,17 +1492,18 @@ final class NativeTabsTests: XCTestCase {
     XCTAssertTrue(tabs.debugSnapshot().minimizePanAttached)
   }
 
-  /// The pan only watches (spike C6): with it on the Flutter view a touch
-  /// on the body still lands there, it takes no trackpad or mouse scroll
-  /// (Q8), and it stays the only one.
-  func testWithThePanAttachedATouchOnTheBodyStillReachesFlutter() throws {
+  /// The attached pan takes no trackpad or mouse scroll (Q8), and it stays
+  /// the only one. Whether a real touch still reaches Flutter with it there
+  /// is MinimizeUITests' (a hit test never consults gesture recognizers).
+  func testTheAttachedPanIsAloneAndTakesNoScrollEvents() throws {
     let tabs = try installedShell(sizeClass: .compact)
     tabs.apply(config(minimize: true))
     settle()
     XCTAssertTrue(panIsOnFlutter(tabs, host: 0), "precondition: attached")
     let root = try XCTUnwrap(tabs.parent?.view)
     XCTAssertTrue(
-      try hit(tabs, CGPoint(x: root.bounds.midX, y: root.bounds.midY)) === tabs.flutter.view)
+      try hit(tabs, CGPoint(x: root.bounds.midX, y: root.bounds.midY)) === tabs.flutter.view,
+      "PassThroughView guard: the body's point still hit-tests to the Flutter view")
     let pan = try XCTUnwrap(tabs.minimizeHost(0)?.minimizeProxy.panGestureRecognizer)
     XCTAssertEqual(pan.allowedScrollTypesMask, [])
     XCTAssertEqual(pans(on: tabs.flutter.view), 1)
@@ -1516,7 +1517,7 @@ final class NativeTabsTests: XCTestCase {
     let tabs = try installedShell(sizeClass: .regular)
     tabs.apply(config(minimize: true))
     tabs.setMinimizeScroll(tab: 0, offset: 300)
-    tabs.apply(config(minimize: true, selected: 1))
+    tabs.apply(config(selected: 1, minimize: true))
     settle()
     XCTAssertFalse(panIsOnFlutter(tabs, host: 0))
     XCTAssertFalse(panIsOnFlutter(tabs, host: 1))
@@ -1579,7 +1580,7 @@ final class NativeTabsTests: XCTestCase {
   func testThePanFollowsTheSelection() throws {
     let tabs = try installedShell(sizeClass: .compact)
     tabs.apply(config(minimize: true))
-    tabs.apply(config(minimize: true, selected: 1))
+    tabs.apply(config(selected: 1, minimize: true))
     settle()
     XCTAssertTrue(panIsOnFlutter(tabs, host: 1))
     XCTAssertFalse(panIsOnFlutter(tabs, host: 0))
@@ -1667,7 +1668,7 @@ final class NativeTabsTests: XCTestCase {
     let before = tabs.minimizeExpands
     tabs.apply(config(minimize: true))
     XCTAssertEqual(tabs.minimizeExpands, before)
-    tabs.apply(config(minimize: true, selected: 1))
+    tabs.apply(config(selected: 1, minimize: true))
     XCTAssertEqual(tabs.minimizeExpands, before + 1)
   }
 
