@@ -36,6 +36,12 @@ class FakeNativePlatform extends FakeSignalsPlatform {
   /// Every `setNativeSearchScope`.
   final searchScopes = <int>[];
 
+  /// Every `setNativeMinimizeScroll`, as (tab, offset).
+  final minimizeScrolls = <(int, double)>[];
+
+  /// Number of `expandNativeTabBar` calls.
+  int tabBarExpands = 0;
+
   /// Every `setNativePageScroll`, as (tab, offset).
   final pageScrolls = <(int, double)>[];
 
@@ -97,6 +103,15 @@ class FakeNativePlatform extends FakeSignalsPlatform {
     required int tab,
     required double offset,
   }) async => pageScrolls.add((tab, offset));
+
+  @override
+  Future<void> setNativeMinimizeScroll({
+    required int tab,
+    required double offset,
+  }) async => minimizeScrolls.add((tab, offset));
+
+  @override
+  Future<void> expandNativeTabBar() async => tabBarExpands++;
 
   @override
   Future<LiquidWindowControls> readWindowControls() async {

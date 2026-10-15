@@ -300,6 +300,7 @@ class LiquidNativeChromeConfig {
     this.rtl = false,
     this.hidden = false,
     this.interactive = true,
+    this.minimizeOnScroll = false,
   });
 
   /// No shell uses native chrome: hidden, and Flutter gets the whole window.
@@ -341,6 +342,10 @@ class LiquidNativeChromeConfig {
   /// the shell).
   final bool interactive;
 
+  /// Whether the compact native tab bar minimizes while the body scrolls
+  /// down (`LiquidShell.minimizeOnScroll`, spec VK-600).
+  final bool minimizeOnScroll;
+
   /// Whether the native chrome is on screen.
   bool get visible => engaged && !hidden;
 
@@ -357,7 +362,8 @@ class LiquidNativeChromeConfig {
       other.dark == dark &&
       other.rtl == rtl &&
       other.hidden == hidden &&
-      other.interactive == interactive;
+      other.interactive == interactive &&
+      other.minimizeOnScroll == minimizeOnScroll;
 
   @override
   int get hashCode => Object.hash(
@@ -372,6 +378,7 @@ class LiquidNativeChromeConfig {
     rtl,
     hidden,
     interactive,
+    minimizeOnScroll,
   );
 
   @override
@@ -380,7 +387,8 @@ class LiquidNativeChromeConfig {
       'selectedIndex: $selectedIndex, trailing: $trailing, footer: $footer, '
       'search: $search, '
       'tintArgb: 0x${tintArgb.toRadixString(16).padLeft(8, '0')}, '
-      'dark: $dark, rtl: $rtl, hidden: $hidden, interactive: $interactive)';
+      'dark: $dark, rtl: $rtl, hidden: $hidden, interactive: $interactive, '
+      'minimizeOnScroll: $minimizeOnScroll)';
 }
 
 /// Something the native side reports.

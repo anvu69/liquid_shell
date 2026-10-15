@@ -76,6 +76,18 @@ abstract class LiquidShellPlatform extends PlatformInterface {
     required double offset,
   }) async {}
 
+  /// The selected destination [tab]'s body scroll offset for the native
+  /// tab bar's minimize (spec VK-600 §9): positive below the top, zero or
+  /// negative at it. Default: does nothing.
+  Future<void> setNativeMinimizeScroll({
+    required int tab,
+    required double offset,
+  }) async {}
+
+  /// Expands a minimized native tab bar now (a programmatic scroll reached
+  /// the top). Default: does nothing.
+  Future<void> expandNativeTabBar() async {}
+
   /// Native taps, native shell changes and window-control changes, as a
   /// broadcast stream. Default: no events.
   Stream<LiquidNativeEvent> get nativeEvents => const Stream.empty();

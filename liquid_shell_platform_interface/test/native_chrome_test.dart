@@ -558,4 +558,18 @@ void main() {
       }
     });
   });
+
+  test('minimizeOnScroll: off by default, part of equality (VK-600)', () {
+    const off = LiquidNativeChromeConfig(engaged: true);
+    const on = LiquidNativeChromeConfig(engaged: true, minimizeOnScroll: true);
+    expect(off.minimizeOnScroll, isFalse);
+    expect(LiquidNativeChromeConfig.dormant.minimizeOnScroll, isFalse);
+    expect(on, isNot(off));
+    expect(on.hashCode, isNot(off.hashCode));
+    expect(
+      on,
+      const LiquidNativeChromeConfig(engaged: true, minimizeOnScroll: true),
+    );
+    expect(on.toString(), contains('minimizeOnScroll: true'));
+  });
 }
