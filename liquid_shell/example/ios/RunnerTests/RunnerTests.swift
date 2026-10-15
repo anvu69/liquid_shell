@@ -323,17 +323,41 @@ final class MinimizeProxyTests: XCTestCase {
     }
   }
 
-  /// Task 3 review: an animated move is dropped too, so only Dart moves
-  /// the proxy. UIKit's scroll animation could move the bounds without the
-  /// `contentOffset` setter; no animation starts at all.
-  func testAnAnimatedOffsetChangeDoesNotMoveIt() throws {
+  /// A plain scroll view beside [proxy], of the same size and content: the
+  /// lock tests' clock. Started right after the proxy's, its animation of a
+  /// longer move ends no sooner than the proxy's would, so a passing test
+  /// waits for UIKit, not for a timeout.
+  private func referenceClock(
+    beside proxy: MinimizeProxy
+  ) throws -> (UIScrollView, AnimationRecorder) {
+    let reference = UIScrollView(frame: proxy.frame)
+    reference.contentSize = proxy.contentSize
+    try XCTUnwrap(proxy.superview).addSubview(reference)
+    let recorder = AnimationRecorder()
+    reference.delegate = recorder
+    return (reference, recorder)
+  }
+
+  /// Waits until the [clock]'s animation has ended, then one more turn.
+  private func waitForTheClock(_ clock: AnimationRecorder) {
+    wait { clock.ended > 0 }
+    XCTAssertEqual(clock.ended, 1, "precondition: UIKit animated the reference")
+    RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+  }
+
+  /// Task 3 review: an animated move starts no UIKit scroll animation (one
+  /// would run with every frame dropped by the setter lock), so only Dart
+  /// moves the proxy.
+  func testAnAnimatedOffsetChangeStartsNoScrollAnimation() throws {
     let proxy = try proxyOnScreen()
     proxy.setOffset(120)
     let y = proxy.contentOffset.y
     let recorder = AnimationRecorder()
     proxy.delegate = recorder
+    let (reference, clock) = try referenceClock(beside: proxy)
     proxy.setContentOffset(CGPoint(x: 0, y: 555), animated: true)
-    wait { recorder.ended > 0 || proxy.contentOffset.y != y }
+    reference.setContentOffset(CGPoint(x: 0, y: 2_000), animated: true)
+    waitForTheClock(clock)
     XCTAssertEqual(proxy.contentOffset.y, y)
     XCTAssertEqual(recorder.ended, 0, "no scroll animation ran")
     XCTAssertEqual(proxy.offset, 120)
@@ -346,8 +370,10 @@ final class MinimizeProxyTests: XCTestCase {
     let y = proxy.contentOffset.y
     let recorder = AnimationRecorder()
     proxy.delegate = recorder
+    let (reference, clock) = try referenceClock(beside: proxy)
     proxy.scrollRectToVisible(CGRect(x: 0, y: 5_000, width: 1, height: 1), animated: true)
-    wait { recorder.ended > 0 || proxy.contentOffset.y != y }
+    reference.scrollRectToVisible(CGRect(x: 0, y: 9_000, width: 1, height: 1), animated: true)
+    waitForTheClock(clock)
     proxy.scrollRectToVisible(CGRect(x: 0, y: 9_000, width: 1, height: 1), animated: false)
     XCTAssertEqual(proxy.contentOffset.y, y)
     XCTAssertEqual(recorder.ended, 0, "no scroll animation ran")
