@@ -123,7 +123,13 @@ final class TabFidelityUITests: XCTestCase {
     let inset = window.maxY - home.y
     point(app, CGPoint(x: window.minX + inset, y: home.y)).tap()
     idle()
+    // Mid-expand UIKit shows both forms of Home (the circle and the whole
+    // tab, docs/qa/vk600/acceptance.md §2), and `bar.buttons["Home"]`
+    // would match two: wait for the whole bar first.
+    XCTAssertTrue(
+      wait(timeout: 10) {
+        bar.buttons.matching(identifier: "Home").count == 1 && shown(tabs["Explore"]!)
+      }, "whole again: one Home, and Explore")
     expectSelected("Home", among: tabs, after: "the tap at the circle")
-    XCTAssertTrue(wait { shown(tabs["Explore"]!) }, "whole again: Explore")
   }
 }
