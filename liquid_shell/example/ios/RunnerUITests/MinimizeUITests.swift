@@ -75,9 +75,9 @@ final class MinimizeUITests: XCTestCase {
         ? self.isMinimized(app, selected: selected, other: other)
         : self.isExpanded(app, selected: selected, other: other)
     }
-    let deadline = Date().addingTimeInterval(5)
-    while Date() < deadline, !reached() { usleep(100_000) }
-    XCTAssertTrue(reached(), why, file: file, line: line)
+    // The suite's 10 s, as every other wait: a slow runner stretches
+    // UIKit's animations.
+    XCTAssertTrue(wait(until: reached), why, file: file, line: line)
   }
 
   /// Like [waitMinimized], but the state must also hold for a while: an
