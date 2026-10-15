@@ -89,7 +89,7 @@ Compact width, native chrome engaged, `minimizeOnScroll: true`.
 | A fling reaches the top edge | expands (UIKit, plus Dart's expand request as a backstop, §9.1) | **expands (new, Q2)** |
 | A programmatic scroll ends at the top (status-bar tap, `animateTo(0)`) | **expands (new, Q3: Dart asks, native toggles the behaviour)** | **expands (new, Q2/Q3)** |
 | Tap on the minimized circle | expands (UIKit) | expands (unchanged) |
-| The selected destination changes (a tap, the app, the guard's answer) | **expands (new, Q4: native toggles on select)** | expands (unchanged) |
+| The selected destination changes (a tap, the app, the guard's answer) | **expands (new, Q4: native toggles on select; not into search, Q5)** | expands (unchanged) |
 | The search tab is selected | no minimize (Q5) | no minimize (unchanged) |
 | Regular width (top bar, sidebar) | never minimizes (UIKit) | not applicable (unchanged) |
 | `minimizeOnScroll: false` | never (`.never`) | never (unchanged) |
@@ -197,6 +197,7 @@ Its deceleration after a release is left running, without overriding `scrollView
   - `config.minimizeOnScroll`;
   - the selected view controller is a `TabHostController`.
 - **Otherwise none is attached.** A detached pan goes back to its own proxy (`proxy.addGestureRecognizer(proxy.panGestureRecognizer)`), as UIKit expects. Leaving compact also resets every proxy to offset 0, so the iPad top bar's scroll-edge effect never sees a stale offset.
+- **No pan outlives its proxy on the Flutter view.** UIKit leaves a released scroll view's pan where it is, so a `TabHostController` takes its pan back as it goes (a structure rebuild, the shell's release), and a scene disconnect detaches the old shell's pan at once (`NativeShellInstaller.sceneDisconnected`).
 - While attached: `cancelsTouchesInView = false`, `delaysTouchesBegan = false`, `delaysTouchesEnded = false`, `allowedScrollTypesMask = []` (direct touches only). `MinimizeProxy.contentView = flutter.view`, so a pan that starts over a platform view does not begin.
 - Hit testing (`PassThroughView`, P2 §5.3) is unchanged. The proxy is not hit-testable, and the pan only *observes* touches that already go to Flutter.
 
@@ -209,13 +210,13 @@ Its deceleration after a release is left running, without overriding `scrollView
 
 - `apply` sets `tabBarMinimizeBehavior = new.minimizeOnScroll ? .onScrollDown : .never`, only on change.
 - `expandMinimizedBar()`: if the behaviour is `.onScrollDown`, set `.never`, then `.onScrollDown`. Spike §3.2: this expands a minimized bar with the normal animation, and does nothing to an expanded one.
-- `select(_:)` calls it whenever it changes the selected tab (Q4).
+- `select(_:)` calls it whenever it changes the selected tab (Q4), except into the search tab: search keeps UIKit's own form there, as with a real scroll view (Q5, spike §3.2), and the toggle stays out of the VK-550 scope bar's and the keyboard's way. Leaving search expands as any change does.
 - The host API `expandTabBar()` calls it (Q3).
 
 ### 8.6 Offsets and insets
 
-- `setMinimizeScroll(tab:offset:)`: drop a non-finite offset or an unknown tab. Find the destination's host (`destinationTabs[tab].viewController as? TabHostController`) and call `host.proxy.setOffset(offset)`. No `syncFlutter`: the minimize changes no frame and no safe area. Without an accessory the bottom safe area stays 83 pt (iPhone), 82 pt (iPad 26.5) or 77 pt (iPad 27.0) in both states (spike §3.3–3.4).
-- A host that is not loaded yet keeps nothing. Dart sends the selected tab's offset again whenever the selection or the attachment conditions change (§9.2).
+- `setMinimizeScroll(tab:offset:)`: drop a non-finite offset or an unknown tab. Look up `minimizeHosts[tab]`. The hosts are built with the tabs (§8.2), so an unknown or search index finds nothing. Call `host.minimizeProxy.setOffset(offset)`. No `syncFlutter`: the minimize changes no frame and no safe area. Without an accessory the bottom safe area stays 83 pt (iPhone), 82 pt (iPad 26.5) or 77 pt (iPad 27.0) in both states (spike §3.3–3.4).
+- A host that is not shown yet keeps the offset and applies it when its view loads. A structure rebuild makes new hosts at offset 0. Dart sends the selected tab's offset again whenever the selection or the attachment conditions change (§9.2).
 
 ### 8.7 Debug snapshot
 
