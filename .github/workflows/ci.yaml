@@ -4,9 +4,15 @@ on:
   push:
     branches: [main]
   pull_request:
+  # VK-625: re-runs on demand (`gh workflow run ci.yaml --ref <branch>`),
+  # for measuring flaky jobs.
+  workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # A push or a PR update cancels the older run of its ref. A dispatched run
+  # has a group of its own (its run id), so it neither cancels nor is
+  # cancelled by another run.
+  group: ci-${{ github.event_name == 'workflow_dispatch' && format('dispatch-{0}', github.run_id) || github.ref }}
   cancel-in-progress: true
 
 # Flutter 3.44.x is the supported floor and blocks merges. Latest stable runs
@@ -145,9 +151,11 @@ jobs:
 
   integration-ios:
     runs-on: macos-latest
-    # A stuck simctl once held this job for the full 6 h limit. The script
-    # kills a drive after 10 min and retries once; this caps the whole job.
-    timeout-minutes: 35
+    # A hung drive once held this job for the full 6 h limit. The script
+    # warms the simulator up, then stops a drive after 10 min and retries it
+    # once on the same simulator (tool/ios_sim.sh, VK-625): two drive caps
+    # plus 30 minutes for setup, the warm-up build and the warm-up.
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -160,16 +168,26 @@ jobs:
         env:
           IOS_RUNTIME: ""
           IOS_DEVICES: auto
+      # VK-625: tool/ios_sim.sh's dumps after a warm-up timeout or a stall
+      # (spec 2026-10-16-ci-cold-launch §10); nothing to upload otherwise.
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cold-launch-integration-ios-a${{ github.run_attempt }}
+          path: liquid_shell/example/build/ios-diagnostics/
+          if-no-files-found: ignore
+          retention-days: 14
 
   ios-unit:
     # One job per idiom: the iPhone leg (compact, owner D1) runs the
     # compact and phone-only XCTests, the iPad leg the top bar and sidebar.
     name: ios-unit (${{ matrix.device }})
     runs-on: macos-latest
-    # `make ios-unit` stops a stalled xcodebuild after IOS_UNIT_TIMEOUT
-    # (tool/with_timeout.sh) and never collects test diagnostics, which
-    # stalled a red run for minutes; this caps the whole job.
-    timeout-minutes: 30
+    # `make ios-unit` builds, warms the simulator up (VK-625), then stops a
+    # stalled suite after IOS_UNIT_TIMEOUT (900 s) and never collects test
+    # diagnostics, which stalled a red run for minutes. The job is that cap
+    # plus 30 minutes for setup, the build and the warm-up.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -202,19 +220,27 @@ jobs:
             liquid_shell/example/build/ios-unit.xcresult
             crash-reports/
           retention-days: 7
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cold-launch-ios-unit-${{ matrix.device }}-a${{ github.run_attempt }}
+          path: liquid_shell/example/build/ios-diagnostics/
+          if-no-files-found: ignore
+          retention-days: 14
 
   ios-ui:
     # Real taps on native dialogs and the native search tab (XCUITest, specs
     # P3a §9.4, P3b §12.6). Non-blocking:
     # simulator UI tests are slow and can flake on shared runners.
-    # `make ios-ui` stops xcodebuild after IOS_UI_TIMEOUT (2100 s, build
-    # included): the iPhone suite (27 of 29 tests run since VK-600) is
-    # estimated at about 1700 s on a slow runner and took 1092-1156 s on CI
-    # (Makefile). 45 minutes covers setup and that cap.
+    # `make ios-ui` builds, warms the simulator up (VK-625), then stops the
+    # suite after IOS_UI_TIMEOUT (2100 s): the iPhone suite (27 of 29 tests
+    # run since VK-600) is estimated at about 1700 s on a slow runner and
+    # took 1092-1156 s on CI, build included (Makefile). The job is that cap
+    # plus 30 minutes for setup, the build and the warm-up.
     name: ios-ui (${{ matrix.device }})
     runs-on: macos-latest
     continue-on-error: true
-    timeout-minutes: 45
+    timeout-minutes: 65
     strategy:
       fail-fast: false
       matrix:
@@ -246,6 +272,65 @@ jobs:
             liquid_shell/example/build/ios-ui.xcresult
             crash-reports/
           retention-days: 7
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cold-launch-ios-ui-${{ matrix.device }}-a${{ github.run_attempt }}
+          path: liquid_shell/example/build/ios-diagnostics/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  ios-minimize:
+    # M7 of VK-600's review (VK-625): the native tab bar's minimize follows a
+    # UIKit trigger Apple does not document, so its real-swipe guard,
+    # MinimizeUITests, blocks merges here on one iPhone. ios-ui still runs
+    # it, non-blocking, on both idioms. iPhone 17 on iOS 26, pinned as
+    # integration-ios-native pins its runtime: the image often lacks iOS 27.
+    # `make ios-minimize` builds, warms the simulator up, then stops the
+    # suite after IOS_MINIMIZE_TIMEOUT (900 s); the job is that cap plus 30
+    # minutes for setup, the build and the warm-up.
+    name: ios-minimize (iPhone)
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.44.x
+          cache: true
+      - name: iPhone 17 on iOS 26
+        id: sim
+        run: |
+          udid=$(xcrun simctl list devices available "iOS 26" | grep -F "    iPhone 17 (" | tail -n1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          if [ -z "$udid" ]; then
+            echo "::error::no iPhone 17 simulator on iOS 26"
+            exit 1
+          fi
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+      - run: make get
+      - name: MinimizeUITests on iPhone 17 (iOS 26)
+        run: make ios-minimize IOS_UNIT_DEVICE="${{ steps.sim.outputs.udid }}"
+      - if: failure()
+        run: |
+          mkdir -p crash-reports
+          cp ~/Library/Logs/DiagnosticReports/Runner-*.ips crash-reports/ 2>/dev/null \
+            || echo "no Runner crash report"
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-minimize-iPhone-diagnostics
+          path: |
+            liquid_shell/example/build/ios-minimize.xcresult
+            crash-reports/
+          retention-days: 7
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cold-launch-ios-minimize-iPhone-a${{ github.run_attempt }}
+          path: liquid_shell/example/build/ios-diagnostics/
+          if-no-files-found: ignore
+          retention-days: 14
 
   integration-ios-native:
     # Every iOS 26 iPhone and iPad installs the native chrome (owner D1):
@@ -259,11 +344,13 @@ jobs:
     continue-on-error: ${{ matrix.runtime == 'iOS 27' }}
     # Three drives per leg (NATIVE_TARGETS: native_shell_test.dart,
     # native_dialogs_test.dart, native_search_test.dart; about 15 min each,
-    # build included). The script stops a stalled drive after 20 min
-    # (IOS_DRIVE_TIMEOUT 1200 s) and retries it once, per target: up to
-    # 120 min, plus the setup and the native vs Flutter liquid drive (a few
-    # minutes; stopped after 20 and retried once the same way).
-    timeout-minutes: 140
+    # build included). The script first builds the example and warms the
+    # simulator up (about 10 min at most, VK-625), then stops a stalled
+    # drive after 20 min (IOS_DRIVE_TIMEOUT 1200 s) and retries it once on
+    # the same simulator, per target: up to 120 min, plus the setup and the
+    # native vs Flutter liquid drive (a few minutes; stopped after 20 and
+    # retried once the same way).
+    timeout-minutes: 150
     strategy:
       fail-fast: false
       matrix:
@@ -327,6 +414,13 @@ jobs:
           path: |
             liquid_shell/example/build/integration_screenshots/
             liquid_shell/example/build/compare/
+      - if: always() && steps.sim.outputs.udid != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: cold-launch-native-${{ matrix.device }}-${{ strategy.job-index }}-a${{ github.run_attempt }}
+          path: liquid_shell/example/build/ios-diagnostics/
+          if-no-files-found: ignore
+          retention-days: 14
 
   goldens:
     name: goldens (${{ matrix.flutter }})
