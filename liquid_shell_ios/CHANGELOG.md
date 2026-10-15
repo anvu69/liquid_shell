@@ -9,6 +9,9 @@
   proxies and on the search page proxy, so the status-bar tap reaches
   Flutter. The channel gains `minimizeOnScroll`, `setMinimizeScroll` and
   `expandTabBar`.
+- The proxies turn on UIKit's bottom scroll-edge effect under the compact
+  bar. It shows while `minimizeOnScroll` is on and is hidden
+  (`bottomEdgeEffect.isHidden`) while it is off.
 - **Breaking for fakes:** the exported `NativeDebugSnapshot` gains two
   required fields, `minimizeBehavior` and `minimizePanAttached`. Code that
   constructs one (a test fake) must pass them.

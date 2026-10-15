@@ -2,7 +2,7 @@
 
 - **Plane:** VK-600
 - **Date:** 2026-10-14
-- **Status:** approved with the plan `docs/plans/2026-10-14-native-tab-minimize.md`, and built on this branch (PR #15). The choices are in the last section, "Quyết định cần chủ sản phẩm xác nhận". One question came up in acceptance and is still the owner's: Q14, the bottom scroll-edge effect (`docs/qa/vk600/acceptance.md` §7).
+- **Status:** approved with the plan `docs/plans/2026-10-14-native-tab-minimize.md`, and built on this branch (PR #15). The choices are in the last section, "Quyết định cần chủ sản phẩm xác nhận". One question came up in acceptance: Q14, the bottom scroll-edge effect (`docs/qa/vk600/acceptance.md` §7). The owner chose A′ on 2026-10-15.
 - **Branch:** `VK-600-native-tab-minimize`, from `main` at `c531be0`. It holds docs only until VK-550 (`VK-550-liquid-segmented-control`) merges. VK-550 also edits `NativeTabsController.swift` (the search scope bar), the Pigeon source and `liquid_shell.dart`. The branch is rebased onto that merge before any code is written (§13).
 - **Floor:** Flutter ≥ 3.44.0 / Dart ^3.12.0 (fvm pins 3.44.6), iOS deployment target 15.0. The native chrome stays iOS 26+. `very_good_analysis` 10.3.0, `pigeon` 27.3.0. There are no new runtime dependencies.
 - **Owner input (binding),** verbatim:
@@ -487,4 +487,5 @@ Mỗi dòng có đề xuất mặc định. Nếu chủ sản phẩm trả lời
 | Q9 | `bottomAccessory` (thanh mini player như Apple Music)? | **Ngoài phạm vi VK-600.** Đã ghi lại hành vi để làm sau: khi thu nhỏ, accessory nằm cùng hàng với hình tròn, và safe area dưới đổi 139 → 83pt nên nội dung sẽ dịch |
 | Q10 | Đặt `scrollsToTop = false` luôn cho proxy cũ của trang Tìm (hiện để mặc định true) trong cùng nhánh? | **Có.** Thay đổi một dòng, có XCTest kèm theo. Mục đích là để chạm thanh trạng thái luôn đến được Flutter |
 | Q11 | Phiên bản? | **`0.1.0-dev.8`** cho cả 4 gói, nối tiếp dev.7 của VK-550, kèm CHANGELOG |
-| Q12 | Hiệu ứng mờ mép dưới của UIKit (scroll edge effect) nay chạy theo proxy. Nếu khác trước thì sao? | **Chấp nhận nếu ảnh chụp trước/sau trông như nhau** (kiểm ở bước kiểm tay). Nếu khác rõ thì mở câu hỏi mới trước khi merge |
+| Q12 | Hiệu ứng mờ mép dưới của UIKit (scroll edge effect) nay chạy theo proxy. Nếu khác trước thì sao? | **Chấp nhận nếu ảnh chụp trước/sau trông như nhau** (kiểm ở bước kiểm tay). Nếu khác rõ thì mở câu hỏi mới trước khi merge. *Kết quả:* khác rõ (acceptance §7), nên mở Q14 |
+| Q14 | (Mở trong nghiệm thu) Hiệu ứng mờ mép dưới hiện ra cả khi `minimizeOnScroll: false`. Giữ (A), giữ khi thu nhỏ bật và ẩn khi tắt (A′), hay ẩn luôn (B)? | **A′** (chủ sản phẩm chọn ngày 2026-10-15): bật thu nhỏ thì giữ hiệu ứng như app native; `minimizeOnScroll: false` thì ẩn (`bottomEdgeEffect.isHidden = true` trên proxy), trông như trước VK-600 |

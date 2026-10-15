@@ -4,13 +4,12 @@
   `minimizeOnScroll` (default `true`) now also minimizes UIKit's compact tab
   bar when the body scrolls down. With `false` the native bar never
   minimizes, as before.
-- **Visual change (VK-600).** With native chrome on iOS 26+, UIKit now draws
-  its bottom scroll-edge effect: the body near the bottom edge, under and
-  beside the compact bar, is softly blurred, as under a native
-  `UITabBarController` over a scroll view. It shows whatever
-  `minimizeOnScroll` says, so `false` does not bring back the old look.
-  **[Q14 PLACEHOLDER: owner decision pending (A, A′ or B). Rewrite this
-  bullet for the chosen option before publishing.]**
+- **Visual change (VK-600).** With native chrome on iOS 26+ and
+  `minimizeOnScroll: true` (the default), UIKit now draws its bottom
+  scroll-edge effect: the body near the bottom edge, under and beside the
+  compact bar, is softly blurred, as under a native `UITabBarController` over
+  a scroll view. With `minimizeOnScroll: false` the effect is hidden and the
+  body there stays sharp, as before.
 - Both bars expand when a fling or a programmatic scroll (a status-bar tap,
   `animateTo(0)`) reaches the top. A drag back never does. This is new for
   the Flutter bar too.

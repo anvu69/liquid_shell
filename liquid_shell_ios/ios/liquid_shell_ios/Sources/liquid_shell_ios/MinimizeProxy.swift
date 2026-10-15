@@ -80,12 +80,11 @@ final class MinimizeProxy: UIScrollView {
 
   /// Whether UIKit's bottom scroll-edge effect is hidden. The proxy is the
   /// bottom edge's content scroll view, which turns the effect on whatever
-  /// `minimizeOnScroll` says (acceptance §7, R3). Q14 is the owner's:
-  /// - A, the native look: never hidden (now);
-  /// - A′: hidden while minimize is off, `!minimizeOnScroll`;
-  /// - B, the look before VK-600: always hidden, `true`.
+  /// `minimizeOnScroll` says (acceptance §7, R3). Q14, the owner's choice
+  /// A′: shown while the bar may minimize (the native look), hidden with
+  /// `minimizeOnScroll: false`, which then looks as before VK-600.
   /// `NativeTabsController.apply` sets it on every proxy.
-  static func hidesBottomEdgeEffect(minimizeOnScroll: Bool) -> Bool { false }
+  static func hidesBottomEdgeEffect(minimizeOnScroll: Bool) -> Bool { !minimizeOnScroll }
 
   /// Whether the pan may begin over [hit], the content's hit view.
   static func begins(over hit: UIView?, content: UIView?) -> Bool {

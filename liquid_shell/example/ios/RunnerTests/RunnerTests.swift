@@ -1741,22 +1741,21 @@ final class NativeTabsTests: XCTestCase {
     XCTAssertTrue(page.proxy.accessibilityElementsHidden)
   }
 
-  /// Q14 (acceptance §7): the proxies, the bottom edge's content scroll
-  /// views, turn on UIKit's bottom scroll-edge effect. Every proxy follows
-  /// `MinimizeProxy.hidesBottomEdgeEffect`, also after a rebuild. The
-  /// owner's choice is pending; until then option A, shown with minimize on
-  /// and off. A′ (hidden while off) or B (hidden always) changes the
-  /// policy and the last assert.
-  func testEveryProxyFollowsTheBottomEdgeEffectPolicy() throws {
+  /// Q14 = A′ (owner, acceptance §7): the proxies, the bottom edge's
+  /// content scroll views, turn on UIKit's bottom scroll-edge effect. With
+  /// minimize on it shows, the native look; with `minimizeOnScroll: false`
+  /// every proxy hides it, so the bar looks as before VK-600. Also after a
+  /// rebuild (new hosts) and back again.
+  func testTheBottomEdgeEffectShowsOnlyWhileTheBarMayMinimize() throws {
     let tabs = try installedShell(sizeClass: .compact)
     for (minimize, trailing) in [(true, false), (false, false), (false, true), (true, true)] {
       tabs.apply(config(trailing: trailing, minimize: minimize))
-      let hides = MinimizeProxy.hidesBottomEdgeEffect(minimizeOnScroll: minimize)
       for index in [0, 1] {
         let proxy = try XCTUnwrap(tabs.minimizeHost(index)?.minimizeProxy)
-        XCTAssertEqual(proxy.bottomEdgeEffect.isHidden, hides, "tab \(index), minimize \(minimize)")
+        XCTAssertEqual(
+          proxy.bottomEdgeEffect.isHidden, !minimize,
+          "tab \(index), minimize \(minimize), trailing \(trailing)")
       }
-      XCTAssertFalse(hides, "option A: shown, minimize \(minimize)")
     }
   }
 }

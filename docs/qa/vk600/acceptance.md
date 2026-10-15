@@ -165,6 +165,13 @@ All three scrolled to the same rows (Home item 3 at the top). The band compared 
 | **A** (recommended) | Keep UIKit's bottom scroll-edge effect: the native look | None in code; one CHANGELOG line ("the native bar now draws UIKit's bottom scroll-edge effect") |
 | **B** | Hide it: `minimizeProxy.bottomEdgeEffect.isHidden = true` in `TabHostController.viewDidLoad` | A small TDD task (XCTest red first), then `make ios-unit` and `make ios-ui` again; `MinimizeUITests` shows whether the minimize still works with the effect hidden |
 
+The final review added **A′**: keep the effect while the bar may minimize, and hide it when `minimizeOnScroll` is `false`, so that `false` is a real way back to the old look.
+
+**Decision (owner, 2026-10-15): A′** ("làm theo đề xuất"). `MinimizeProxy.hidesBottomEdgeEffect(minimizeOnScroll:)` returns `!minimizeOnScroll`, and `NativeTabsController.apply` sets `bottomEdgeEffect.isHidden` on every proxy, also on hosts a rebuild creates. XCTest `testTheBottomEdgeEffectShowsOnlyWhileTheBarMayMinimize` went red first (with A, hidden was false for `minimizeOnScroll: false`), then green.
+- **Minimize on (the default):** the native look, as measured above (VK-600 on vs `main`: 3.4 % of the band at rest).
+- **`minimizeOnScroll: false`:** the effect is hidden. That is the scratch build in the table above (`main` vs VK-600 with the effect hidden), which matched `main` everywhere outside the bar; 1.4 % of the band still differed inside the bar (the selected pill's glass and the bar's top highlight). The committed A′ build was not screenshotted again.
+- Q12 is closed for the default by the owner's acceptance of the native look, and for `false` by the match outside the bar.
+
 ## 8. Gates (Task 10)
 
 - **Code:** `12a9ba1` (the carried review fixes on top of `3bad9e6`). Task 10 then adds only this file, `manual.md` and the two R3 images.

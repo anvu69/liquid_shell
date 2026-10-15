@@ -170,7 +170,9 @@ class LiquidShell extends StatefulWidget {
   /// of the selected destination expands the Flutter bar, and the native
   /// bar too unless the change selects the search destination (UIKit keeps
   /// its own form there). Neither bar minimizes while the search
-  /// destination is selected, nor at regular width.
+  /// destination is selected, nor at regular width. With native chrome,
+  /// `true` also shows UIKit's bottom scroll-edge effect under the compact
+  /// bar (a soft blur of the body there); `false` hides it.
   final bool minimizeOnScroll;
 
   /// Every user-visible string.

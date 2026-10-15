@@ -11,13 +11,13 @@ The checks of spec `docs/specs/2026-10-14-native-tab-minimize-design.md` §12.6 
 - **The `minimize` demo:** the three tabs under a `Scaffold`, which handles the status-bar tap, and a "Next tab" button that changes the tab from the app. Open it with the scheme's environment variable `LIQUID_SHELL_EXAMPLE_DEMO=minimize` (Xcode › Product › Scheme › Edit Scheme › Run › Arguments). The cases opened from the list have no `Scaffold` of their own, so a status-bar tap there does not scroll the case.
 - **Rows 11–13, 15 and 16** need a page the example does not have: a web view or a native map in the body, a `TabBarView` of several lists, a feed longer than 100 000 pt, a Flutter `TextField` above a list on a non-search tab (the example's text fields are on pages pushed above the shell, where the bar is hidden). Check them in an app that has such a page, or mark them "not checked".
 
-**Open question first: Q14 (R3, the bottom scroll-edge effect).** Since VK-600, UIKit draws its bottom scroll-edge effect under the native bar: the content near the bottom edge is softly blurred, as under a native `UITabBarController` with a scroll view. Before VK-600 it was not drawn. It shows with `minimizeOnScroll: false` too. See `acceptance.md` §7 and `r3_bands.png`, `r3_zoom.png`. Spec Q12 accepts the change only if before and after look the same, and they do not, so the owner decides (see `acceptance.md` §7):
+**Q14 (R3, the bottom scroll-edge effect): decided, A′.** Since VK-600, UIKit draws its bottom scroll-edge effect under the native bar while the bar may minimize: the content near the bottom edge is softly blurred, as under a native `UITabBarController` with a scroll view. With `minimizeOnScroll: false` it is hidden, as before VK-600. See `acceptance.md` §7 and `r3_bands.png`, `r3_zoom.png`. The choices the owner had:
 
 - **A:** keep it always, as native apps look;
 - **A′:** keep it while the bar may minimize, and hide it (the public `bottomEdgeEffect.isHidden`) when `minimizeOnScroll` is `false`, so `false` brings back the look before VK-600;
 - **B:** hide it always. Outside the bar this matches the look before VK-600.
 
-Each is one line in `MinimizeProxy.hidesBottomEdgeEffect` plus its XCTest (`testEveryProxyFollowsTheBottomEdgeEffectPolicy`), then a rerun of the iOS suites.
+The owner chose **A′** (`MinimizeProxy.hidesBottomEdgeEffect` is `!minimizeOnScroll`; XCTest `testTheBottomEdgeEffectShowsOnlyWhileTheBarMayMinimize`).
 
 ## The checks
 
@@ -55,7 +55,7 @@ Mark each one ✅ as expected, ❌ with what happened, or "not checked".
 - [ ] **11. A web view or a native map in the body:** a drag that starts on it scrolls it as before, and the native bar does not minimize (Q7).
 - [ ] **12. Several lists in one tab** (a `TabBarView`): scroll list A deep, switch to list B, flick B up in mid-content. After it stops, the bar does not minimize on its own (spec §9.1 rule 3).
 - [ ] **13. A long feed** scrolled past 100 000 pt: tap the circle to expand, then scroll down → the bar still minimizes (`MinimizeProxy` grows its content, spec §8.1).
-- [ ] **14. Q14 by eye** (iPhone, "Basic 3 tabs", at rest and scrolled): the soft blur of the content near the bottom edge, under and beside the bar. Answer A, A′ or B above.
+- [ ] **14. Q14 = A′ by eye** (iPhone, "Basic 3 tabs", at rest and scrolled): with minimize on (the default), the content near the bottom edge, under and beside the bar, is softly blurred; with `minimizeOnScroll: false` (a scratch edit of `basic_tabs.dart`) it stays sharp, as before VK-600.
 - [ ] **15. Vietnamese IME while dragging** (iPhone, a Flutter `TextField` above a list on a non-search tab, keyboard up, Telex): type `vieej` and do not commit (the marked text `viê` is underlined), then drag the list under the field up and down → the bar minimizes as usual, the marked text stays intact and underlined, nothing is committed twice; then type `t` → `viết`, once. Repeat with the bar already minimized. VK-600 attaches a real `UIScrollView` pan to the Flutter view, the view that holds the marked text.
 - [ ] **16. Apple Pencil on a narrow iPad** (a compact window, the bottom bar): in "Basic 3 tabs", scroll the list with the Pencil → it scrolls as before and the bar does not minimize (Q8, direct touches only; a finger drag still minimizes). On a page with a Flutter `TextField` above a list, write into the field with Scribble → the handwriting goes in, the list does not scroll, the bar keeps its form.
 

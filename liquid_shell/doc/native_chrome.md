@@ -162,11 +162,10 @@ proxy's content. Entering search does not expand the bar.
 `minimizeOnScroll: false` turns it off.
 
 **The bottom scroll-edge effect.** The hidden scroll views are the tab bar's
-bottom content scroll views, so UIKit draws its bottom scroll-edge effect
-under the compact bar: the body near the bottom edge is softly blurred, as
-in a native app. It shows with `minimizeOnScroll: false` too.
-**[Q14 PLACEHOLDER: owner decision pending (A, A′ or B). Rewrite this
-paragraph for the chosen option before publishing.]**
+bottom content scroll views, so with minimize on UIKit draws its bottom
+scroll-edge effect under the compact bar: the body near the bottom edge is
+softly blurred, as in a native app. With `minimizeOnScroll: false` it is
+hidden, and the body there stays sharp, as before minimize on scroll.
 
 ## Search tab
 
