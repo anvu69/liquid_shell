@@ -191,14 +191,14 @@ jobs:
     # Real taps on native dialogs and the native search tab (XCUITest, specs
     # P3a §9.4, P3b §12.6). Non-blocking:
     # simulator UI tests are slow and can flake on shared runners.
-    # `make ios-ui` stops xcodebuild after IOS_UI_TIMEOUT (1800 s, build
-    # included): the iPhone suite (17 tests since VK-571) is estimated at
-    # about 1250 s on a slow runner (15 took about 1100 s). 40 minutes
+    # `make ios-ui` stops xcodebuild after IOS_UI_TIMEOUT (2100 s, build
+    # included): the iPhone suite (26 of 28 tests run since VK-600) is
+    # estimated at about 1700 s on a slow runner (Makefile). 45 minutes
     # covers setup and that cap.
     name: ios-ui (${{ matrix.device }})
     runs-on: macos-latest
     continue-on-error: true
-    timeout-minutes: 40
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:

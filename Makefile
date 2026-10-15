@@ -186,8 +186,13 @@ ios-unit: ## XCTest of liquid_shell_ios (example RunnerTests) on an iPad or iPho
 # PR #13's 18 in about 850 s per device (the whole XCUITest step), so
 # 1800 s keeps ~400 s in hand even on the slow-runner scale. On a shared
 # host at load ~850 one run stalled past 1800 s; IOS_UI_TIMEOUT=3600 gets
-# such a host through.
-IOS_UI_TIMEOUT ?= 1800
+# such a host through. VK-600 adds MinimizeUITests (28 tests: five
+# iPhone-only, two iPad-only): locally 534 s on an iPhone 17 Pro (26 run,
+# the five 81 s of it) and 357 s on an iPad Air 11 (M4) (18 run), iOS 26.5,
+# load 6-11. Scaled as above (443 s, about 1400 s), about 1700 s, which
+# 1800 s would keep only ~100 s ahead of; VK-571 raised the cap at 250 s.
+# 2100 s keeps ~400 s in hand, as before; CI's job allows 45 minutes.
+IOS_UI_TIMEOUT ?= 2100
 
 ios-ui: ## XCUITest: real taps on native dialogs and the search tab (example RunnerUITests) on a simulator; IOS_UNIT_DEVICE=<udid>
 	cd $(EXAMPLE) && $(FLUTTER) build ios --config-only --simulator --debug
