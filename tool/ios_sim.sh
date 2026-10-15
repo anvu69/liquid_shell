@@ -16,10 +16,13 @@
 #           builds the example for UDID (flutter build ios --config-only,
 #           xcodebuild build into liquid_shell/example/build/ios-derived)
 #           and installs that. It never fails: a timeout is diagnosed, any
-#           other problem is reported, and it exits 0.
+#           other problem is reported, and it exits 0. Its log reader is
+#           stopped on every path, also when the script is terminated. A
+#           timeout dump adds warm-up-reader.log (what the reader saw) and
+#           `launched:` and `reader ready:` to meta.txt.
 # diagnose  Writes IOS_DIAG_DIR/<UTC time>-<LABEL>/: meta.txt (timestamps,
-#           load), vm-service.log (`log show --last WINDOW`, default 15m, of
-#           the app's VM service line), launchctl.txt (the app in the
+#           load, the app's pid), vm-service.log (`log show --last WINDOW`,
+#           default 15m, of the app's VM service line), launchctl.txt (the app in the
 #           simulator's launchd) and sample.txt (`sample` of the app for
 #           5 s when it is alive). Every step is capped; it exits 0.
 # guard     The stall guard. Runs the command under tool/with_timeout.sh for
@@ -33,6 +36,9 @@
 # IOS_WARMUP_TIMEOUT  seconds the warm-up waits for the VM service line
 #                     (default 180; passing first launches after a boot
 #                     logged their first line within 85 s on CI)
+# IOS_WARMUP_READY_TIMEOUT
+#                     seconds the warm-up waits for its log reader to
+#                     attach before it launches (default 30)
 # IOS_BUILD_TIMEOUT   seconds each step of --build may take (default 900)
 # IOS_DIAG_DIR        diagnostics root
 #                     (default liquid_shell/example/build/ios-diagnostics)
@@ -43,6 +49,8 @@ example=$(cd "$tool_dir/../liquid_shell/example" && pwd)
 bundle=${IOS_APP_BUNDLE_ID:-vn.lasoai.liquidShellExample}
 warmup_timeout=${IOS_WARMUP_TIMEOUT:-180}
 build_timeout=${IOS_BUILD_TIMEOUT:-900}
+ready_timeout=${IOS_WARMUP_READY_TIMEOUT:-30}
+last_dump=
 diag_root=${IOS_DIAG_DIR:-$example/build/ios-diagnostics}
 # The line flutter_tools waits for after `simctl launch` (simulators.dart),
 # from the app's own process. The predicate leaves out the trailing " on",
@@ -82,6 +90,7 @@ diagnose() { # <udid> <label> [window]
   local udid=$1 label=$2 window=${3:-15m} dir pid
   dir="$diag_root/$(date -u +%Y%m%dT%H%M%SZ)-${label//[^A-Za-z0-9._-]/_}"
   mkdir -p "$dir"
+  last_dump=$dir
   {
     echo "label: $label"
     echo "udid: $udid"
@@ -96,6 +105,7 @@ diagnose() { # <udid> <label> [window]
   [ -s "$dir/launchctl.txt" ] \
     || echo "no $bundle in the simulator's launchctl list" > "$dir/launchctl.txt"
   pid=$(app_pid "$dir/launchctl.txt")
+  echo "app pid: ${pid:-none}" >> "$dir/meta.txt"
   if [ -n "$pid" ]; then
     cap 60 sample "$pid" 5 -file "$dir/sample.txt" > /dev/null 2>&1 \
       || echo "sample $pid failed" >> "$dir/sample.txt"
@@ -121,8 +131,16 @@ build_app() { # <udid>
   echo "$derived/Build/Products/Debug-iphonesimulator/Runner.app"
 }
 
+# Stops warmup's log reader (its with_timeout.sh wrapper) and waits for it.
+stop_reader() {
+  [ -z "${stream:-}" ] || kill -TERM "$stream" 2> /dev/null
+  [ -z "${stream:-}" ] || wait "$stream" 2> /dev/null
+  stream=
+}
+
 warmup() { # <udid> [app | --build]
-  local udid=$1 app=${2:-} build_failed= tmp stream launched waited
+  local udid=$1 app=${2:-} build_failed= tmp stream= launched waited ready
+  local launched_at
   if [ "$app" = --build ]; then
     app=$(build_app "$udid") || build_failed=1
   fi
@@ -140,18 +158,32 @@ warmup() { # <udid> [app | --build]
     return 0
   fi
   tmp=$(mktemp -d)
-  # The reader starts before the launch, so it cannot miss the line.
-  cap $((warmup_timeout + 120)) xcrun simctl spawn "$udid" log stream \
+  # The reader is stopped on every path, also when the script is killed.
+  # shellcheck disable=SC2064 # $tmp is fixed here
+  trap "stop_reader; rm -rf '$tmp'" EXIT
+  trap 'exit 143' TERM
+  trap 'exit 130' INT
+  # The reader starts before the launch, so it cannot miss the line. It is
+  # started without `cap` (a function, so $! would be a subshell): $! is the
+  # with_timeout.sh process, whose TERM trap stops the reader's group.
+  "$tool_dir/with_timeout.sh" $((warmup_timeout + 120)) \
+    xcrun simctl spawn "$udid" log stream \
     --style compact --predicate "$vm_predicate" > "$tmp/stream" 2>&1 &
   stream=$!
-  for _ in $(seq 30); do
+  for _ in $(seq "$ready_timeout"); do
     [ ! -s "$tmp/stream" ] || break
     sleep 1
   done
+  # Whether the reader had attached before the launch, and when the launch
+  # was (UTC, and the local time `log show` prints), for reading a timeout
+  # dump (spec §10.2).
+  if [ -s "$tmp/stream" ]; then ready=yes; else ready=no; fi
+  launched_at="$(now) (local $(date '+%Y-%m-%d %H:%M:%S%z'))"
+  note "launching $bundle at $launched_at; reader ready: $ready"
   launched=$SECONDS
   if ! cap 120 xcrun simctl launch "$udid" "$bundle" > /dev/null; then
-    kill -TERM "$stream" 2> /dev/null
-    wait "$stream" 2> /dev/null
+    stop_reader
+    trap - EXIT TERM INT
     rm -rf "$tmp"
     warn "warm-up skipped: could not launch $bundle"
     return 0
@@ -161,14 +193,19 @@ warmup() { # <udid> [app | --build]
     sleep 1
   done
   waited=$((SECONDS - launched))
-  kill -TERM "$stream" 2> /dev/null
-  wait "$stream" 2> /dev/null
+  stop_reader
   if grep -q "$vm_line" "$tmp/stream"; then
     note "warm-up ok after ${waited}s on $udid"
   else
     warn "warm-up timeout after ${warmup_timeout}s on $udid"
     diagnose "$udid" "warm-up"
+    cp "$tmp/stream" "$last_dump/warm-up-reader.log"
+    {
+      echo "launched: $launched_at"
+      echo "reader ready: $ready"
+    } >> "$last_dump/meta.txt"
   fi
+  trap - EXIT TERM INT
   rm -rf "$tmp"
   cap 60 xcrun simctl terminate "$udid" "$bundle" > /dev/null 2>&1
   return 0

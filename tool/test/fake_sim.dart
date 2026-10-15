@@ -9,9 +9,13 @@ import 'package:test/test.dart';
 ///
 /// - `FAKE_VM_DELAY`: seconds after which `log stream` logs the app's VM
 ///   service line; unset, it never does.
+/// - `FAKE_NO_HEADER`: `log stream` prints nothing at all, not even its
+///   header.
 /// - `FAKE_LAUNCH_FAILS`: `simctl launch` fails.
 /// - `FAKE_LAUNCHCTL`: what `launchctl list` prints (default: the app,
 ///   pid 4242).
+/// - `FAKE_TOTAL`: the `totalTestCount` that `xcresulttool` reports
+///   (default 6).
 /// - `FAKE_BUILD`: `fail` makes `xcodebuild build` and `build-for-testing`
 ///   fail.
 /// - `FAKE_TEST`: `fail` or `stall` for `xcodebuild test-without-building`.
@@ -37,6 +41,18 @@ class FakeSim {
     final log = File('${dir.path}/calls');
     return log.existsSync() ? log.readAsLinesSync() : const [];
   }
+
+  /// The pids of every `log stream` reader started so far (each fake reader
+  /// appends its own pid to `readers`).
+  List<int> get readerPids {
+    final file = File('${dir.path}/readers');
+    if (!file.existsSync()) return const [];
+    return file.readAsLinesSync().map(int.parse).toList();
+  }
+
+  /// Whether process [pid] still exists.
+  static bool alive(int pid) =>
+      Process.runSync('kill', ['-0', '$pid']).exitCode == 0;
 
   /// The calls that contain [part], in order.
   List<String> callsWith(String part) =>
@@ -103,6 +119,8 @@ case "$*" in
     [ -z "${FAKE_LAUNCH_FAILS:-}" ] || exit 1
     echo "$4: 4242" ;;
   simctl\ spawn\ *\ log\ stream*)
+    echo $$ >> "$FAKE_DIR/readers"
+    [ -z "${FAKE_NO_HEADER:-}" ] || exec sleep 300
     echo 'Filtering the log data using "process == ..."'
     if [ -n "${FAKE_VM_DELAY:-}" ]; then
       sleep "$FAKE_VM_DELAY"
@@ -113,7 +131,9 @@ case "$*" in
     echo '2026-10-16 10:00:00.000 Df Runner[4242:1] (Flutter) flutter: The Dart VM service is listening on http://127.0.0.1:1/a=/' ;;
   simctl\ spawn\ *\ launchctl\ list)
     printf '%b\n' "${FAKE_LAUNCHCTL-4242\t0\tUIKitApplication:vn.lasoai.liquidShellExample[b61d][rb-legacy]}" ;;
-  'xcresulttool get test-results summary'*) echo 'FAKE SUMMARY' ;;
+  'xcresulttool get test-results summary'*)
+    echo 'FAKE SUMMARY'
+    echo "{ \"totalTestCount\" : ${FAKE_TOTAL:-6} }" ;;
 esac
 exit 0
 ''';
@@ -129,6 +149,9 @@ case "$1" in
         mkdir -p "$2"
         exit 65 ;;
       stall) sleep 300 ;;
+      *)
+        while [ $# -gt 0 ] && [ "$1" != -resultBundlePath ]; do shift; done
+        [ $# -lt 2 ] || mkdir -p "$2" ;;
     esac ;;
 esac
 exit 0

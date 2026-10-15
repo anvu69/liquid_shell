@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:test/test.dart';
@@ -86,6 +87,107 @@ void main() {
       expect(sim.dumps, isEmpty);
     });
 
+    group('the log stream reader', () {
+      // The reader is started through tool/with_timeout.sh, so its pid is the
+      // wrapper's and a TERM stops its whole group (T1-m2, I-1).
+      void expectReaderStopped() {
+        expect(sim.readerPids, hasLength(1));
+        expect(FakeSim.alive(sim.readerPids.single), isFalse);
+      }
+
+      test('is dead after a warm-up that passed', () {
+        final r = sim.run(
+          script,
+          ['warmup', udid],
+          env: {'FAKE_VM_DELAY': '0'},
+        );
+        expect(r.exitCode, 0, reason: outputOf(r));
+        expectReaderStopped();
+      });
+
+      test('is dead after a warm-up timeout', () {
+        final r = sim.run(
+          script,
+          ['warmup', udid],
+          env: {'IOS_WARMUP_TIMEOUT': '1'},
+        );
+        expect(r.exitCode, 0, reason: outputOf(r));
+        expectReaderStopped();
+      });
+
+      test('is dead after a failed launch', () {
+        final r = sim.run(
+          script,
+          ['warmup', udid],
+          env: {'FAKE_LAUNCH_FAILS': '1'},
+        );
+        expect(r.exitCode, 0, reason: outputOf(r));
+        expectReaderStopped();
+      });
+
+      test('is dead when the script is terminated mid warm-up', () async {
+        final p = await Process.start(
+          'bash',
+          [
+            File(script).absolute.path,
+            'warmup',
+            udid,
+          ],
+          environment: {
+            'PATH': '${sim.dir.path}:${Platform.environment['PATH']}',
+            'FAKE_DIR': sim.dir.path,
+            'IOS_DIAG_DIR': sim.diagDir,
+            'IOS_WARMUP_TIMEOUT': '60',
+          },
+        );
+        unawaited(p.stdout.drain<void>());
+        unawaited(p.stderr.drain<void>());
+        for (var i = 0; i < 100 && sim.indexOf('simctl launch') < 0; i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        }
+        expect(sim.indexOf('simctl launch'), isNot(-1));
+        p.kill();
+        await p.exitCode.timeout(const Duration(seconds: 30));
+        expectReaderStopped();
+      });
+    });
+
+    test('a timeout dump keeps the reader log and when the launch was', () {
+      final r = sim.run(
+        script,
+        ['warmup', udid],
+        env: {'IOS_WARMUP_TIMEOUT': '1'},
+      );
+      expect(r.exitCode, 0, reason: outputOf(r));
+      final dump = sim.dumps.single.path;
+      expect(
+        File('$dump/warm-up-reader.log').readAsStringSync(),
+        contains('Filtering the log data'),
+      );
+      final meta = File('$dump/meta.txt').readAsStringSync();
+      expect(meta, contains(RegExp(r'launched: 20\d\d-\d\d-\d\dT\S+Z')));
+      expect(meta, contains('(local 20'));
+      expect(meta, contains('reader ready: yes'));
+      expect(meta, contains('app pid: 4242'));
+    });
+
+    test('a reader that printed no header is recorded as not ready', () {
+      final r = sim.run(
+        script,
+        ['warmup', udid],
+        env: {
+          'IOS_WARMUP_TIMEOUT': '1',
+          'IOS_WARMUP_READY_TIMEOUT': '1',
+          'FAKE_NO_HEADER': '1',
+        },
+      );
+      expect(r.exitCode, 0, reason: outputOf(r));
+      expect(
+        File('${sim.dumps.single.path}/meta.txt').readAsStringSync(),
+        contains('reader ready: no'),
+      );
+    });
+
     test('--build builds the example for the simulator and installs it', () {
       final r = sim.run(
         script,
@@ -137,6 +239,7 @@ void main() {
       expect(read('sample.txt'), contains('FAKE SAMPLE'));
       expect(read('meta.txt'), contains('dump started: 20'));
       expect(read('meta.txt'), contains('dump finished: 20'));
+      expect(read('meta.txt'), contains('app pid: 4242'));
       expect(sim.callsWith('log show --last 15m'), hasLength(1));
       expect(sim.callsWith('sample 4242 5'), hasLength(1));
     });
@@ -152,6 +255,29 @@ void main() {
       expect(
         File('${sim.dumps.single.path}/sample.txt').readAsStringSync(),
         contains('not running'),
+      );
+    });
+
+    test('the app pid is the app, never the XCTest runner', () {
+      final r = sim.run(
+        script,
+        ['diagnose', udid, 'x'],
+        env: {
+          'FAKE_LAUNCHCTL':
+              r'5555\t0\tUIKitApplication:vn.lasoai.liquidShellExample.RunnerUITests.xctrunner[a][b]\n'
+              r'4242\t0\tUIKitApplication:vn.lasoai.liquidShellExample[b61d][rb-legacy]',
+        },
+      );
+      expect(r.exitCode, 0, reason: outputOf(r));
+      expect(sim.callsWith('sample 4242 5'), hasLength(1));
+      expect(sim.callsWith('sample 5555'), isEmpty);
+    });
+
+    test('app pid is none when the app is not running', () {
+      sim.run(script, ['diagnose', udid, 'x'], env: {'FAKE_LAUNCHCTL': ''});
+      expect(
+        File('${sim.dumps.single.path}/meta.txt').readAsStringSync(),
+        contains('app pid: none'),
       );
     });
 

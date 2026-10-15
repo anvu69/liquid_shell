@@ -16,7 +16,8 @@
 #    example -only-testing:RunnerUITests), capped at SUITE_SECONDS by
 #    tool/with_timeout.sh. A stall (124) is diagnosed before the stop
 #    (tool/ios_sim.sh diagnose). A red run prints RESULT's summary: `-quiet`
-#    names a failing test but not its failed assertion.
+#    names a failing test but not its failed assertion. A green run that ran
+#    0 tests (the selection matched nothing) exits 1.
 #
 # `-collect-test-diagnostics never`: with xcodebuild's default (on-failure,
 # a sysdiagnose-like bundle after a failure) a red run stalled past 7
@@ -59,4 +60,17 @@ if [ "$status" -ne 0 ]; then
   [ ! -d "$result" ] \
     || xcrun xcresulttool get test-results summary --path "$result" || true
   exit "$status"
+fi
+# A selection that matches nothing (a renamed or moved test class) makes
+# xcodebuild exit 0 having run nothing, and a blocking job would then guard
+# nothing. totalTestCount counts passed, failed and skipped tests alike. A
+# result that cannot be read is a warning, not a failure.
+total=$(xcrun xcresulttool get test-results summary --path "$result" 2> /dev/null \
+  | grep -Eo '"totalTestCount"[[:space:]]*:[[:space:]]*[0-9]+' \
+  | grep -Eo '[0-9]+$' || true)
+if [ -z "$total" ]; then
+  echo "::warning::ios_xctest: could not read the test count of $result" >&2
+elif [ "$total" -eq 0 ]; then
+  echo "✗ ios_xctest: the selection ran 0 tests: $*" >&2
+  exit 1
 fi

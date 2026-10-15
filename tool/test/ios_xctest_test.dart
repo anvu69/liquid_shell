@@ -88,6 +88,17 @@ void main() {
     expect(sim.dumps.single.path, endsWith('-ios-ui_stall'));
   });
 
+  test('a green run that selected no test is red', () {
+    final r = run(env: {'FAKE_TOTAL': '0'});
+    expect(r.exitCode, 1, reason: outputOf(r));
+    expect(outputOf(r), contains('ran 0 tests'));
+  });
+
+  test('a green run that ran tests stays green', () {
+    final r = run(env: {'FAKE_TOTAL': '3'});
+    expect(r.exitCode, 0, reason: outputOf(r));
+  });
+
   test('a failed build stops before the warm-up', () {
     final r = run(env: {'FAKE_BUILD': 'fail'});
     expect(r.exitCode, 65);
