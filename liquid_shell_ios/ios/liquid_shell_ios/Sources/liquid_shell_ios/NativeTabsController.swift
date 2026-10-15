@@ -149,6 +149,9 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
         self.showTabs(config)
         self.select(Int(config.selectedIndex))
       }
+      // Regular takes the pan back and resets the proxies; compact again
+      // puts it back (spec VK-600 §8.3).
+      self.updateMinimizePan()
       // Defensive: the layout pass that follows a size-class change syncs
       // too (`viewDidLayoutSubviews`), and no test tells the two apart.
       self.syncFlutter()
@@ -226,6 +229,7 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     if !chromeVisible { searchBridge.dismissKeepingText() }
     if chromeVisible != wasVisible { setChromeVisible(chromeVisible, closingOverlay: overlayOpen) }
     syncFlutter()
+    updateMinimizePan()
   }
 
   func setSidebarVisible(_ visible: Bool) {
@@ -376,6 +380,10 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     if isSearchSelected { searchBridge.dismissKeepingText() }
     applyingFromDart = true
     selectedTab = tab
+    // Q4: UIKit keeps a minimized bar through a programmatic change. Not
+    // into search, which keeps UIKit's own form (Q5; spike §3.2, as with a
+    // real scroll view): the toggle stays out of the scope bar's way.
+    if !isSearchSelected { expandMinimizedBar() }
     applyingFromDart = false
     if isSearchSelected, let held = heldSearchText {
       heldSearchText = nil
@@ -692,6 +700,40 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   /// Number of expand toggles (tests).
   private(set) var minimizeExpands = 0
 
+  /// The proxy whose pan is on the Flutter view, if any (spec §8.3).
+  private(set) weak var attachedMinimizeProxy: MinimizeProxy?
+
+  /// Puts the selected tab's proxy pan on the Flutter view when the native
+  /// bar may minimize, and takes it back otherwise. Leaving compact resets
+  /// every proxy, so the top bar's edge effect never sees an old offset.
+  func updateMinimizePan() {
+    var want: MinimizeProxy?
+    if let config, chromeVisible, config.interactive, config.minimizeOnScroll, isCompact,
+      let host = selectedViewController as? TabHostController, let content = flutter.viewIfLoaded
+    {
+      host.minimizeProxy.contentView = content
+      want = host.minimizeProxy
+    }
+    if !isCompact { for host in minimizeHosts.values { host.minimizeProxy.setOffset(0) } }
+    guard want !== attachedMinimizeProxy else { return }
+    detachMinimizePan()
+    guard let proxy = want, let content = flutter.viewIfLoaded else { return }
+    let pan = proxy.panGestureRecognizer
+    pan.cancelsTouchesInView = false
+    pan.delaysTouchesBegan = false
+    pan.delaysTouchesEnded = false
+    content.addGestureRecognizer(pan)
+    attachedMinimizeProxy = proxy
+  }
+
+  /// Gives the attached pan back to its proxy. Also when this shell's scene
+  /// goes (`NativeShellInstaller`): a new shell may take the Flutter view.
+  func detachMinimizePan() {
+    // A recognizer has one view: adding it elsewhere moves it.
+    if let old = attachedMinimizeProxy { old.addGestureRecognizer(old.panGestureRecognizer) }
+    attachedMinimizeProxy = nil
+  }
+
   func minimizeHost(_ index: Int) -> TabHostController? { minimizeHosts[index] }
 
   /// Dart's body offset for destination [tab] (spec §8.6).
@@ -810,8 +852,7 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
         selectedScope: Int64(searchBridge.controller.searchBar.selectedScopeButtonIndex),
         scopeFrame: currentScopeFrame(),
         minimizeBehavior: minimizeBehavior,
-        // The pan is attached in Task 5 (spec §8.3).
-        minimizePanAttached: false)
+        minimizePanAttached: attachedMinimizeProxy != nil)
     #else
       return .empty
     #endif
@@ -826,6 +867,13 @@ final class TabHostController: UIViewController {
 
   /// The proxy UIKit's tab bar minimize follows (spec VK-600 §8.2).
   let minimizeProxy = MinimizeProxy()
+
+  /// A host goes with its tabs (a rebuild, the shell's release) while its
+  /// pan may still be on the Flutter view, which outlives it: UIKit leaves
+  /// a dead scroll view's pan where it is. Take it back first.
+  deinit {
+    minimizeProxy.addGestureRecognizer(minimizeProxy.panGestureRecognizer)
+  }
 
   override func viewDidLoad() {
     super.viewDidLoad()

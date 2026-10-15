@@ -196,6 +196,9 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
     if #available(iOS 26.0, *), let old = shell as? NativeTabsController {
       carriedSearchText = old.carriedSearchText
       carriedSearchScope = old.carriedSearchScope
+      // Its minimize pan leaves the Flutter view now, not when the old
+      // shell is released (spec VK-600 §8.3).
+      old.detachMinimizePan()
     }
     shell = nil
     flutter = nil

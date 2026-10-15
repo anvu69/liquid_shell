@@ -567,8 +567,8 @@ final class NativeTabsTests: XCTestCase {
 
   private func config(
     engaged: Bool = true, hidden: Bool = false, interactive: Bool = true,
-    footer: Bool = false, trailing: Bool = false, reports: Bool = false, selected: Int64 = 0,
-    minimize: Bool = false
+    footer: Bool = false, trailing: Bool = false, reports: Bool = false, minimize: Bool = false,
+    selected: Int64 = 0
   ) -> NativeChromeConfig {
     NativeChromeConfig(
       engaged: engaged,
@@ -1441,6 +1441,247 @@ final class NativeTabsTests: XCTestCase {
     XCTAssertEqual(shell.minimizeHost(0)?.minimizeProxy.offset, 77)
     XCTAssertEqual(shell.minimizeExpands, 1)
   }
+
+  private func panIsOnFlutter(_ tabs: NativeTabsController, host index: Int) -> Bool {
+    guard let pan = tabs.minimizeHost(index)?.minimizeProxy.panGestureRecognizer else { return false }
+    return tabs.flutter.view.gestureRecognizers?.contains(pan) ?? false
+  }
+
+  /// The pan recognizers on [view]: the test's stand-in Flutter view has
+  /// none of its own, so every one is a proxy's.
+  private func pans(on view: UIView) -> Int {
+    view.gestureRecognizers?.filter { $0 is UIPanGestureRecognizer }.count ?? 0
+  }
+
+  /// Spec VK-600 §8.3: compact, shown, interactive, minimize on, a
+  /// non-search tab → the selected tab's pan is on the Flutter view and
+  /// never cancels or delays a touch.
+  func testTheSelectedTabsPanSitsOnTheFlutterViewInCompact() throws {
+    let tabs = try installedShell(sizeClass: .compact)
+    tabs.apply(config(minimize: true))
+    settle()
+    XCTAssertTrue(panIsOnFlutter(tabs, host: 0))
+    let pan = try XCTUnwrap(tabs.minimizeHost(0)?.minimizeProxy.panGestureRecognizer)
+    XCTAssertFalse(pan.cancelsTouchesInView)
+    XCTAssertFalse(pan.delaysTouchesBegan)
+    XCTAssertFalse(pan.delaysTouchesEnded)
+    XCTAssertTrue(tabs.minimizeHost(0)?.minimizeProxy.contentView === tabs.flutter.view)
+    XCTAssertTrue(tabs.debugSnapshot().minimizePanAttached)
+  }
+
+  /// The pan only watches (spike C6): with it on the Flutter view a touch
+  /// on the body still lands there, it takes no trackpad or mouse scroll
+  /// (Q8), and it stays the only one.
+  func testWithThePanAttachedATouchOnTheBodyStillReachesFlutter() throws {
+    let tabs = try installedShell(sizeClass: .compact)
+    tabs.apply(config(minimize: true))
+    settle()
+    XCTAssertTrue(panIsOnFlutter(tabs, host: 0), "precondition: attached")
+    let root = try XCTUnwrap(tabs.parent?.view)
+    XCTAssertTrue(
+      try hit(tabs, CGPoint(x: root.bounds.midX, y: root.bounds.midY)) === tabs.flutter.view)
+    let pan = try XCTUnwrap(tabs.minimizeHost(0)?.minimizeProxy.panGestureRecognizer)
+    XCTAssertEqual(pan.allowedScrollTypesMask, [])
+    XCTAssertEqual(pans(on: tabs.flutter.view), 1)
+    tabs.apply(config(minimize: true))
+    XCTAssertEqual(pans(on: tabs.flutter.view), 1, "a repeated config adds none")
+  }
+
+  /// An iPhone is always compact (`isCompact`), so regular needs an iPad.
+  func testNoPanAtRegularWidthAndTheProxiesGoBackToTheTop() throws {
+    try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .pad, "regular needs an iPad")
+    let tabs = try installedShell(sizeClass: .regular)
+    tabs.apply(config(minimize: true))
+    tabs.setMinimizeScroll(tab: 0, offset: 300)
+    tabs.apply(config(minimize: true, selected: 1))
+    settle()
+    XCTAssertFalse(panIsOnFlutter(tabs, host: 0))
+    XCTAssertFalse(panIsOnFlutter(tabs, host: 1))
+    XCTAssertEqual(tabs.minimizeHost(0)?.minimizeProxy.offset, 0)
+  }
+
+  /// Spec §10: a window narrowed to compact takes the pan; widened to
+  /// regular it gives it back and every proxy returns to the top.
+  func testASizeClassChangeMovesThePan() throws {
+    try requireIPad()  // An iPhone stays compact at a regular size class.
+    let tabs = try installedShell(sizeClass: .regular)
+    let container = try XCTUnwrap(tabs.parent)
+    tabs.apply(config(minimize: true))
+    XCTAssertFalse(panIsOnFlutter(tabs, host: 0), "precondition: regular")
+
+    container.traitOverrides.horizontalSizeClass = .compact
+    XCTAssertTrue(stable({ panIsOnFlutter(tabs, host: 0) }, until: { $0 }), "narrowed")
+    tabs.setMinimizeScroll(tab: 0, offset: 120)
+
+    container.traitOverrides.horizontalSizeClass = .regular
+    XCTAssertFalse(stable({ panIsOnFlutter(tabs, host: 0) }, until: { !$0 }), "widened")
+    XCTAssertEqual(tabs.minimizeHost(0)?.minimizeProxy.offset, 0)
+    XCTAssertEqual(pans(on: tabs.flutter.view), 0)
+  }
+
+  func testNoPanWhenMinimizeIsOffHiddenOrInert() throws {
+    let tabs = try installedShell(sizeClass: .compact)
+    tabs.apply(config(minimize: false))
+    XCTAssertFalse(panIsOnFlutter(tabs, host: 0))
+    tabs.apply(config(hidden: true, minimize: true))
+    XCTAssertFalse(panIsOnFlutter(tabs, host: 0))
+    tabs.apply(config(interactive: false, minimize: true))
+    XCTAssertFalse(panIsOnFlutter(tabs, host: 0))
+    tabs.apply(config(minimize: true))
+    XCTAssertTrue(panIsOnFlutter(tabs, host: 0))
+  }
+
+  /// Task 3 review: every end of eligibility takes the pan off the Flutter
+  /// view, back to its proxy: minimize off, hidden, inert, dormant.
+  func testEveryEndOfEligibilityGivesThePanBack() throws {
+    let tabs = try installedShell(sizeClass: .compact)
+    let home = try XCTUnwrap(tabs.minimizeHost(0)?.minimizeProxy)
+    for (label, ineligible) in [
+      ("minimize off", config(minimize: false)),
+      ("hidden", config(hidden: true, minimize: true)),
+      ("inert", config(interactive: false, minimize: true)),
+      ("dormant", config(engaged: false, minimize: true)),
+    ] {
+      tabs.apply(config(minimize: true))
+      XCTAssertTrue(panIsOnFlutter(tabs, host: 0), "precondition before \(label)")
+      tabs.apply(ineligible)
+      XCTAssertEqual(pans(on: tabs.flutter.view), 0, label)
+      XCTAssertTrue(home.gestureRecognizers?.contains(home.panGestureRecognizer) ?? false, label)
+      XCTAssertNil(tabs.attachedMinimizeProxy, label)
+      XCTAssertFalse(tabs.debugSnapshot().minimizePanAttached, label)
+    }
+  }
+
+  /// The pan follows the selection; the old one goes back to its proxy.
+  func testThePanFollowsTheSelection() throws {
+    let tabs = try installedShell(sizeClass: .compact)
+    tabs.apply(config(minimize: true))
+    tabs.apply(config(minimize: true, selected: 1))
+    settle()
+    XCTAssertTrue(panIsOnFlutter(tabs, host: 1))
+    XCTAssertFalse(panIsOnFlutter(tabs, host: 0))
+    let home = try XCTUnwrap(tabs.minimizeHost(0)?.minimizeProxy)
+    XCTAssertTrue(home.gestureRecognizers?.contains(home.panGestureRecognizer) ?? false)
+  }
+
+  /// Q5: no pan while the search destination is selected; back on an
+  /// ordinary tab it returns.
+  func testNoPanWhileTheSearchTabIsSelected() throws {
+    let tabs = try installedSearchShell(sizeClass: .compact)
+    tabs.apply(searchConfig(minimize: true))
+    settle()
+    XCTAssertTrue(panIsOnFlutter(tabs, host: 0), "precondition: Home")
+
+    tabs.apply(searchConfig(selected: 2, minimize: true))
+    settle()
+    XCTAssertEqual(pans(on: tabs.flutter.view), 0)
+    XCTAssertNil(tabs.attachedMinimizeProxy)
+    XCTAssertFalse(tabs.debugSnapshot().minimizePanAttached)
+
+    tabs.apply(searchConfig(selected: 1, minimize: true))
+    settle()
+    XCTAssertTrue(panIsOnFlutter(tabs, host: 1))
+  }
+
+  /// A structure change builds new hosts: the old host's pan leaves the
+  /// Flutter view with it, and the new selected host's takes its place.
+  func testARebuildLeavesOnlyTheNewHostsPan() throws {
+    let tabs = try installedShell(sizeClass: .compact)
+    weak var old: MinimizeProxy?
+    autoreleasepool {
+      tabs.apply(config(minimize: true))
+      old = tabs.minimizeHost(0)?.minimizeProxy
+      XCTAssertTrue(panIsOnFlutter(tabs, host: 0), "precondition")
+      tabs.apply(config(trailing: true, minimize: true))
+    }
+    settle()
+    XCTAssertFalse(tabs.minimizeHost(0)?.minimizeProxy === old, "precondition: a new host")
+    XCTAssertTrue(panIsOnFlutter(tabs, host: 0))
+    XCTAssertEqual(pans(on: tabs.flutter.view), 1)
+  }
+
+  /// A scene reconnect: the old shell gives its pan back as its scene
+  /// goes, whether or not it is released; the new shell attaches its own.
+  func testASceneReconnectTakesTheOldShellsPanOff() throws {
+    let (installer, window) = try installedByInstaller()
+    _ = try installer.attach()
+    try installer.update(config: config(minimize: true))
+    let old = try tabs(in: window)
+    try XCTUnwrap(old.parent).traitOverrides.horizontalSizeClass = .compact
+    XCTAssertTrue(stable({ panIsOnFlutter(old, host: 0) }, until: { $0 }), "precondition")
+
+    let next = try reconnect(installer, from: window)
+    XCTAssertEqual(pans(on: old.flutter.view), 0)
+    XCTAssertNil(old.attachedMinimizeProxy)
+    let shell = try tabs(in: next)
+    try XCTUnwrap(shell.parent).traitOverrides.horizontalSizeClass = .compact
+    XCTAssertTrue(stable({ panIsOnFlutter(shell, host: 0) }, until: { $0 }), "the new shell's")
+  }
+
+  /// Never a pan without its proxy on the Flutter view: a shell released
+  /// while the Flutter view lives on (an app replacing the root) takes
+  /// its pan back first.
+  func testAReleasedShellLeavesNoPanOnTheFlutterView() throws {
+    weak var shell: NativeTabsController?
+    // Inside a pool: UIKit autoreleases the controllers it hands out.
+    let flutterView = try autoreleasepool { () throws -> UIView in
+      let tabs = try installedShell(sizeClass: .compact)
+      tabs.apply(config(minimize: true))
+      XCTAssertTrue(panIsOnFlutter(tabs, host: 0), "precondition")
+      shell = tabs
+      window?.rootViewController = UIViewController()
+      return tabs.flutter.view
+    }
+    settle()
+    XCTAssertNil(shell, "precondition: released with the window's root")
+    XCTAssertEqual(pans(on: flutterView), 0)
+  }
+
+  /// Q4: a selection change expands; re-applying the same one does not.
+  func testASelectionChangeExpandsTheBar() throws {
+    let tabs = try installedShell(sizeClass: .compact)
+    tabs.apply(config(minimize: true))
+    let before = tabs.minimizeExpands
+    tabs.apply(config(minimize: true))
+    XCTAssertEqual(tabs.minimizeExpands, before)
+    tabs.apply(config(minimize: true, selected: 1))
+    XCTAssertEqual(tabs.minimizeExpands, before + 1)
+  }
+
+  /// Task 4 review: Q4's expand is for the ordinary tabs. Entering search
+  /// toggles nothing (Q5: search keeps UIKit's own form, spike §3.2, as a
+  /// real scroll view does), so the VK-550 scope bar and the keyboard come
+  /// and go with the search as before. Leaving search expands.
+  func testEnteringSearchTogglesNothingAndLeavesTheScopeBarAndKeyboardAlone() throws {
+    let tabs = try installedSearchShell(sizeClass: .compact, scopes: Self.scopes)
+    let bar = tabs.searchBridge.controller.searchBar
+    let field = bar.searchTextField
+    tabs.apply(searchConfig(scopes: Self.scopes, minimize: true))
+    let before = tabs.minimizeExpands
+
+    tabs.apply(searchConfig(selected: 2, scopes: Self.scopes, minimize: true))
+    XCTAssertEqual(tabs.minimizeExpands, before, "no toggle into search")
+    XCTAssertEqual(tabs.tabBarMinimizeBehavior, .onScrollDown)
+    XCTAssertFalse(field.isFirstResponder, "entering search raises no keyboard")
+    // Dart's activation right after the selection, as a deep link sends it.
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    XCTAssertTrue(field.isFirstResponder, "the keyboard comes with the search")
+    XCTAssertTrue(bar.showsScopeBar)
+    let scope = stable { tabs.debugSnapshot().scopeFrame } until: { $0.width > 0 }
+    XCTAssertGreaterThan(scope.width, 100, "the scope bar is drawn: \(scope)")
+
+    tabs.apply(searchConfig(scopes: Self.scopes, minimize: true))
+    XCTAssertEqual(tabs.minimizeExpands, before + 1, "leaving search expands")
+    XCTAssertFalse(stable({ field.isFirstResponder }, until: { !$0 }), "the keyboard went")
+  }
+
+  /// Q10: no proxy competes with Flutter for the status-bar tap.
+  func testThePageProxyLeavesTheStatusBarTapToFlutter() {
+    let page = PageHostController()
+    page.loadViewIfNeeded()
+    XCTAssertFalse(page.proxy.scrollsToTop)
+    XCTAssertTrue(page.proxy.accessibilityElementsHidden)
+  }
 }
 
 /// What `attach` reports when no scene of this engine connected after the
@@ -1590,7 +1831,7 @@ extension NativeTabsTests {
   fileprivate func searchConfig(
     selected: Int64 = 0, pages: [NativePage] = [], placeholder: String? = nil,
     reports: Bool = false, hidden: Bool = false, interactive: Bool = true,
-    scopes: [String]? = nil
+    scopes: [String]? = nil, minimize: Bool = false
   ) -> NativeChromeConfig {
     var tabs = [
       NativeTab(title: "Home", sfSymbol: "house", sidebarOnly: false, search: false, pages: []),
@@ -1606,7 +1847,7 @@ extension NativeTabsTests {
       engaged: true, tabs: tabs, selectedIndex: selected,
       search: NativeSearchConfig(placeholder: placeholder, scopes: scopes), tintArgb: 0xFF00_7AFF,
       dark: false,
-      rtl: false, hidden: hidden, interactive: interactive, minimizeOnScroll: false)
+      rtl: false, hidden: hidden, interactive: interactive, minimizeOnScroll: minimize)
   }
 
   fileprivate func installedSearchShell(
