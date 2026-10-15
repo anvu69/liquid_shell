@@ -59,6 +59,12 @@ class _OrderedNative extends FakeNativePlatform {
     calls.add('offset $tab');
     return super.setNativeMinimizeScroll(tab: tab, offset: offset);
   }
+
+  @override
+  Future<void> expandNativeTabBar() {
+    calls.add('expand');
+    return super.expandNativeTabBar();
+  }
 }
 
 void main() {
@@ -122,6 +128,29 @@ void main() {
       expect(native.minimizeScrolls.length, sent);
     });
 
+    testWidgets('LiquidHideChrome stops the sends (spec §12.3)', (
+      tester,
+    ) async {
+      final native = installFakeNative(state: _compact);
+      await pumpShell(
+        tester,
+        TestShell(
+          destinations: kNative,
+          pageBuilder: (i) => i == 0
+              ? LiquidHideChrome(child: TestPage(label: kNative[i].label))
+              : TestPage(label: kNative[i].label),
+        ),
+        padding: _compactPadding,
+      );
+      expect(native.last.hidden, isTrue, reason: 'precondition: hidden');
+      await tester.drag(
+        find.byKey(const ValueKey('list-Home')),
+        const Offset(0, -300),
+      );
+      await tester.pumpAndSettle();
+      expect(native.minimizeScrolls, isEmpty);
+    });
+
     testWidgets('a selection change sends the new tab its offset', (
       tester,
     ) async {
@@ -135,12 +164,14 @@ void main() {
       tester,
     ) async {
       final native = await _pump(tester);
+      // The shell's first activation expands once (M4).
+      final launch = native.tabBarExpands;
       final list = find.byKey(const ValueKey('list-Home'));
       await tester.drag(list, const Offset(0, -600));
       await tester.pumpAndSettle();
       await tester.drag(list, const Offset(0, 900)); // drag to the top
       await tester.pumpAndSettle();
-      expect(native.tabBarExpands, 0);
+      expect(native.tabBarExpands, launch);
       await tester.drag(list, const Offset(0, -600));
       await tester.pumpAndSettle();
       // Not awaited: its future completes on a frame, and only pumps make
@@ -153,12 +184,12 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(native.tabBarExpands, 1);
+      expect(native.tabBarExpands, launch + 1);
       await tester.drag(list, const Offset(0, -600));
       await tester.pumpAndSettle();
       await tester.fling(list, const Offset(0, 500), 4000);
       await tester.pumpAndSettle();
-      expect(native.tabBarExpands, 2);
+      expect(native.tabBarExpands, launch + 2);
     });
   });
 
@@ -245,6 +276,7 @@ void main() {
       tester,
     ) async {
       final native = await _pump(tester);
+      final launch = native.tabBarExpands;
       await tester.drag(
         find.byKey(const ValueKey('list-Home')),
         const Offset(0, -600),
@@ -263,7 +295,7 @@ void main() {
       // The app scrolls the hidden Home list back to its top.
       home.jumpTo(0);
       await tester.pumpAndSettle();
-      expect(native.tabBarExpands, 0);
+      expect(native.tabBarExpands, launch);
       expect(native.minimizeScrolls.length, sent);
       expect(native.minimizeScrolls.last, (1, inbox));
     });
@@ -324,6 +356,93 @@ void main() {
       shell.select(3);
       await tester.pumpAndSettle();
       expect(native.minimizeScrolls.last, (3, 0.0));
+    });
+  });
+
+  group('native minimize: final review items', () {
+    testWidgets('the chrome handed back: its config comes before the offset '
+        '(M2)', (tester) async {
+      final native = _OrderedNative();
+      final original = LiquidShellPlatform.instance;
+      LiquidShellPlatform.instance = native;
+      addTearDown(() => LiquidShellPlatform.instance = original);
+      await pumpShell(
+        tester,
+        const TestShell(destinations: kNative),
+        padding: _compactPadding,
+      );
+      await tester.drag(
+        find.byKey(const ValueKey('list-Home')),
+        const Offset(0, -300),
+      );
+      await tester.pumpAndSettle();
+      final pixels = _position(tester, 'Home').pixels;
+      // Another shell owns the chrome a while, with other tabs: new native
+      // hosts, at offset 0.
+      final other = NativeChromeHost.instance.claim((_) {})
+        ..update(
+          const LiquidNativeChromeConfig(
+            engaged: true,
+            tabs: [LiquidNativeTab(title: 'Other', sfSymbol: 'star')],
+            minimizeOnScroll: true,
+          ),
+        );
+      await tester.pumpAndSettle();
+      native.calls.clear();
+      // It lets go in the frame a state report queues an offset send. The
+      // host sends the shell's config at once (`_release`), before any
+      // offset, which goes after the frame.
+      other.release();
+      native.pushState(_compact);
+      await tester.pumpAndSettle();
+      expect(native.calls.first, 'config');
+      expect(
+        native.calls.lastIndexOf('offset 0'),
+        greaterThan(native.calls.lastIndexOf('config')),
+        reason: '${native.calls}',
+      );
+      expect(native.minimizeScrolls.last, (0, pixels));
+    });
+
+    testWidgets('a new shell expands the bar an old one left minimized (M4)', (
+      tester,
+    ) async {
+      final native = _OrderedNative();
+      final original = LiquidShellPlatform.instance;
+      LiquidShellPlatform.instance = native;
+      addTearDown(() => LiquidShellPlatform.instance = original);
+      await pumpShell(
+        tester,
+        const TestShell(destinations: kNative),
+        padding: _compactPadding,
+      );
+      await tester.drag(
+        find.byKey(const ValueKey('list-Home')),
+        const Offset(0, -300),
+      );
+      await tester.pumpAndSettle();
+      final expands = native.tabBarExpands;
+      expect(expands, 1, reason: 'the first shell expanded once too');
+      native.calls.clear();
+      // A new LiquidShell (a new key, a hot restart): its list starts at
+      // the top, and UIKit does not track the jump of its proxy to 0.
+      await pumpShell(
+        tester,
+        TestShell(key: UniqueKey(), destinations: kNative),
+        padding: _compactPadding,
+      );
+      expect(native.tabBarExpands, expands + 1);
+      expect(native.minimizeScrolls.last, (0, 0.0));
+      expect(native.calls.last, 'expand', reason: 'after the offset');
+      // Its later activations (a dialog, the search tab) do not.
+      final context = tester.element(find.byKey(const ValueKey('list-Home')));
+      unawaited(
+        showDialog<void>(context: context, builder: (_) => const SizedBox()),
+      );
+      await tester.pumpAndSettle();
+      Navigator.of(context).pop();
+      await tester.pumpAndSettle();
+      expect(native.tabBarExpands, expands + 1);
     });
   });
 }

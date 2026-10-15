@@ -166,8 +166,10 @@ class LiquidShell extends StatefulWidget {
   /// Compact bottom bar only, Flutter-drawn or native (iOS 26+): shrink to
   /// the selected tab while the body scrolls down. Scrolling back up in
   /// mid-content does not expand it; a fling or a programmatic scroll that
-  /// ends at the top does, as do a tap on the minimized circle and a change
-  /// of the selected destination. Neither bar minimizes while the search
+  /// ends at the top does, as does a tap on the minimized circle. A change
+  /// of the selected destination expands the Flutter bar, and the native
+  /// bar too unless the change selects the search destination (UIKit keeps
+  /// its own form there). Neither bar minimizes while the search
   /// destination is selected, nor at regular width.
   final bool minimizeOnScroll;
 
@@ -240,6 +242,11 @@ class _LiquidShellState extends State<LiquidShell>
   bool _minimizeActive = false;
   bool _minimizeSendScheduled = false;
   bool _minimizeForce = false;
+  // This shell's first activation expands the native bar after its offset:
+  // a bar an earlier shell left minimized (a new key, a hot restart) does
+  // not follow a proxy's jump to the top.
+  bool _minimizeEverActive = false;
+  bool _minimizeExpandPending = false;
   (int, double)? _minimizeSent;
   // The last config handed to the claim: a new one with other tabs may
   // rebuild the native tab hosts, at offset 0.
@@ -650,10 +657,15 @@ class _LiquidShellState extends State<LiquidShell>
 
   /// Whether the shell drives the native bar's minimize now (spec VK-600
   /// §9.2). On becoming active, the selected tab's offset is sent once,
-  /// even if unchanged: the native side may have reset it.
+  /// even if unchanged: the native side may have reset it. The first time,
+  /// the bar expands after it (final review M4).
   void _setMinimizeActive(bool active) {
     if (active && !_minimizeActive) {
       _minimizeForce = true;
+      if (!_minimizeEverActive) {
+        _minimizeEverActive = true;
+        _minimizeExpandPending = true;
+      }
       _scheduleMinimizeSend();
     }
     _minimizeActive = active;
@@ -686,6 +698,10 @@ class _LiquidShellState extends State<LiquidShell>
     if (!force && sent == _minimizeSent) return;
     _minimizeSent = sent;
     _claim?.setMinimizeScroll(tab: sent.$1, offset: sent.$2);
+    if (_minimizeExpandPending) {
+      _minimizeExpandPending = false;
+      _claim?.expandTabBar();
+    }
   }
 
   /// After every native destination tap, whatever came of it (accepted,
