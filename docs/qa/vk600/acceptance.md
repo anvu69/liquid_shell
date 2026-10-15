@@ -1,6 +1,6 @@
 # VK-600 acceptance: the native tab bar minimizes on scroll
 
-Evidence for spec `docs/specs/2026-10-14-native-tab-minimize-design.md` §12.5 (XCUITest). Task 10 adds the device checklist and its results.
+Evidence for spec `docs/specs/2026-10-14-native-tab-minimize-design.md` §12.5 (XCUITest) and §12.2 (the real channel). Task 10 adds the device checklist and its results.
 
 ## 1. Run (Task 8)
 
@@ -98,3 +98,18 @@ The `minimize` demo (`liquid_shell/example/lib/support/minimize_demo.dart`) adds
 `TabFidelityUITests.testSequences` used to assert that the native swipe did *not* minimize the bar (VK-503). With VK-600 it failed there, as expected: "native: the swipe scrolls the page and the bar does not minimize". It now asserts the minimize. The tap at the circle's centre, (52, 822) on an iPhone 17 Pro, is also the centre of UIKit's minimized circle, so it now expands the native bar, as in the Flutter run. `docs/qa/vk503/acceptance.md` (strip 7 "is a scroll") records the state before VK-600.
 
 **A narrow iPad window.** The iPad simulators (26.5 and 27.0) start in iPadOS 26's Windowed Apps mode (Settings › Multitasking & Gestures). SpringBoard gives the app's window a resize grabber (`resize-grabber`, "Resize Liquid Shell Example", value "Bottom Right"). The test drags it half the screen's width to the left. On the 27.0 iPad the window went from 820 × 1180 to 375–410 pt wide, compact, with UIKit's bottom tab bar ("Home" 94 × 54 near the window's bottom). iPadOS keeps a window's size for the next launch, so the test drags the grabber back to the screen's bottom-right corner when it ends. That restored 820 × 1180 in the probe. The window does not start at the screen's origin: one probe window sat at (223, 83), while `XCUIApplication.frame` still reported (0, 0). So every drag in `MinimizeUITests` is relative to the window.
+
+## 5. The real channel (integration, Task 8)
+
+`liquid_shell/example/integration_test/native_shell_test.dart`, run by `make integration-ios-native`:
+
+- `minimize on scroll is set; its pan only in compact (VK-600)`: `debugSnapshot()` reports `minimizeBehavior` `onScrollDown`, and `minimizePanAttached` equals "compact";
+- `the search tab takes the minimize pan off (VK-600 Q5)`: on Home the pan is attached when compact; with the search tab selected it is off and the behaviour stays `onScrollDown`; back on Home it is attached again.
+
+`make integration-ios-native NATIVE_DEVICES="<iPad 26.5>=true;<iPhone 26.5>=true"` (own simulators; 7 min 3 s): every target passed on both, `native_shell_test` 11/11, `native_dialogs_test` 6/6, `native_search_test` 6/6. The VK-600 lines:
+
+| Device | Home | Search selected |
+|---|---|---|
+| iPad Air 11-inch (M4), 26.5, regular | `minimize onScrollDown pan false compact false` | `search onScrollDown pan false compact false` |
+| iPhone 17 Pro, 26.5 | `minimize onScrollDown pan true compact true` | `search onScrollDown pan false compact true` |
+

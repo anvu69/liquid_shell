@@ -12,6 +12,7 @@ import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell_example/cases/badges.dart';
 import 'package:liquid_shell_example/cases/basic_tabs.dart';
 import 'package:liquid_shell_example/cases/native_chrome.dart';
+import 'package:liquid_shell_example/cases/search.dart';
 import 'package:liquid_shell_example/support/demo_page.dart';
 import 'package:liquid_shell_ios/liquid_shell_ios.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
@@ -287,5 +288,60 @@ void main() {
     await pushed;
     await _settle(tester);
     expect(_scope(tester).nativeChrome, isTrue);
+  });
+
+  testWidgets('minimize on scroll is set; its pan only in compact (VK-600)', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: BasicTabsCase(),
+      ),
+    );
+    await _settle(tester);
+    if (!_expectNative) return;
+    final platform = LiquidShellPlatform.instance as LiquidShellIOS;
+    final shot = await platform.debugSnapshot();
+    final compact = _scope(tester).sizeClass == LiquidSizeClass.compact;
+    debugPrint(
+      'liquid_shell native: minimize ${shot.minimizeBehavior} '
+      'pan ${shot.minimizePanAttached} compact $compact',
+    );
+    expect(shot.minimizeBehavior, 'onScrollDown');
+    expect(shot.minimizePanAttached, compact);
+  });
+
+  // Q5 (spec VK-600 §8.3): selecting the search tab takes the pan off the
+  // Flutter view; leaving it puts the pan back.
+  testWidgets('the search tab takes the minimize pan off (VK-600 Q5)', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(debugShowCheckedModeBanner: false, home: SearchCase()),
+    );
+    await _settle(tester);
+    if (!_expectNative) return;
+    final platform = LiquidShellPlatform.instance as LiquidShellIOS;
+    final compact =
+        LiquidShellScope.of(
+          tester.element(find.byType(ListView).first),
+        ).sizeClass ==
+        LiquidSizeClass.compact;
+    expect((await platform.debugSnapshot()).minimizePanAttached, compact);
+
+    await platform.debugTap(NativeTapTarget.destination, 2);
+    await _settle(tester);
+    final search = await platform.debugSnapshot();
+    debugPrint(
+      'liquid_shell native: search ${search.minimizeBehavior} '
+      'pan ${search.minimizePanAttached} compact $compact',
+    );
+    expect(search.minimizeBehavior, 'onScrollDown');
+    expect(search.minimizePanAttached, isFalse);
+
+    await platform.debugTap(NativeTapTarget.destination); // Home
+    await _settle(tester);
+    expect((await platform.debugSnapshot()).minimizePanAttached, compact);
   });
 }
