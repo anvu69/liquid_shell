@@ -2258,22 +2258,22 @@ Expected: a PR URL. Note it.
 
 - [ ] **Step 3: Get six runs at the head commit.** `main`'s copy of `ci.yaml` has no `workflow_dispatch` trigger, so GitHub will most likely refuse a dispatch with HTTP 422 (`Workflow does not have 'workflow_dispatch' trigger`). The documented main path is therefore the **rerun path** of spec §11.1:
   - six attempts of the PR's own run, one after another;
-  - attempt 1 is the run the push started, and `gh run rerun <id>` makes attempts 2 to 6, each started only after the previous attempt has completed;
+  - attempt 1 is the run that opening the PR started, and `gh run rerun <id>` makes attempts 2 to 6 (attempt 1 plus five reruns, six attempts in total, all counted), each started only after the previous attempt has completed;
   - expected wall time: **about 12 to 15 hours** (6 attempts at about 1.5 to 2.5 h each). Tell the owner before waiting. The only way to run the six in parallel is a `workflow_dispatch` trigger on `main` first, which is a separate change and the owner's call.
 
 ```bash
 HEAD_SHA=$(git rev-parse HEAD)
-RUN=$(gh run list --workflow ci.yaml --branch VK-625-ci-cold-launch --event pull_request --limit 5 \
+RUN=$(gh run list -R anvu69/liquid_shell --workflow ci.yaml --branch VK-625-ci-cold-launch --event pull_request --limit 5 \
   --json databaseId,headSha --jq ".[] | select(.headSha == \"$HEAD_SHA\") | .databaseId" | head -n1)
 echo "PR run: $RUN"      # attempt 1
 ```
 
-Optional, first: try one dispatch (`gh workflow run ci.yaml --ref VK-625-ci-cold-launch`). If it is accepted, dispatch five more, wait for all six (`--event workflow_dispatch`), and use the run ids for Steps 4 to 7 in place of the attempts. If it answers 422, which is expected, do the following.
+Optional, first: try one dispatch (`gh workflow run -R anvu69/liquid_shell ci.yaml --ref VK-625-ci-cold-launch`). If it is accepted, dispatch five more, wait for all six (`--event workflow_dispatch`), and use the run ids for Steps 4 to 7 in place of the attempts. If it answers 422, which is expected, do the following.
 
 For attempt `n` from 2 to 6, after attempt `n - 1` has completed:
 
 ```bash
-gh run rerun "$RUN"          # starts attempt n; it reruns all jobs
+gh run rerun -R anvu69/liquid_shell "$RUN"          # starts attempt n; it reruns all jobs
 ```
 
 Record the attempt numbers instead of run ids. The artifact names end in `-a<attempt>`, so the six attempts' artifacts stay apart.
@@ -2282,30 +2282,38 @@ Record the attempt numbers instead of run ids. The artifact names end in `-a<att
 
 ```bash
 # Is the latest attempt of $RUN complete? (prints the attempt number and its status)
-gh run view "$RUN" --json attempt,status --jq '[.attempt, .status] | @tsv'
+gh run view -R anvu69/liquid_shell "$RUN" --json attempt,status --jq '[.attempt, .status] | @tsv'
 ```
 
-Start attempt `n + 1` only when this prints `n	completed`. After the sixth attempt completes, stop. (With dispatched runs: `gh run list --workflow ci.yaml --branch VK-625-ci-cold-launch --event workflow_dispatch --limit 6 --json status --jq 'map(select(.status != "completed")) | length'` prints `0`.)
+Start attempt `n + 1` only when this prints `n	completed`. After the sixth attempt completes, stop. (With dispatched runs: `gh run list -R anvu69/liquid_shell --workflow ci.yaml --branch VK-625-ci-cold-launch --event workflow_dispatch --limit 6 --json status --jq 'map(select(.status != "completed")) | length'` prints `0`.)
 
 - [ ] **Step 5: Collect the jobs, the logs and the artifacts** (in `$SCRATCH`, never in the repo). One folder `$M/<key>` per attempt, where `<key>` is the attempt number (or the run id on the dispatch path). `gh run view --json jobs` returns only the latest attempt, so every attempt is read through its own endpoint.
 
 ```bash
 M="$SCRATCH/vk625-measure"; mkdir -p "$M"
-RUN=<the PR run id>      # rerun path
+RUN=${RUN:?set RUN to the PR run id}      # rerun path
+fail=0
 for n in 1 2 3 4 5 6; do
   mkdir -p "$M/$n/logs"
   gh api --paginate "repos/anvu69/liquid_shell/actions/runs/$RUN/attempts/$n/jobs" \
-    --jq '.jobs[] | [.id, .name, .conclusion, .started_at, .completed_at] | @tsv' > "$M/$n/jobs.tsv"
-  awk -F'\t' '$2 ~ /^(integration-ios|ios-unit|ios-ui|ios-minimize)/ { print $1 }' "$M/$n/jobs.tsv" \
-    | while read -r job; do
-        gh api "repos/anvu69/liquid_shell/actions/jobs/$job/logs" > "$M/$n/logs/$job.log"
-      done
-  gh run download "$RUN" --pattern "cold-launch-*-a$n" --dir "$M/$n/artifacts" || echo "attempt $n: no cold-launch artifact"
+    --jq '.jobs[] | [.id, .name, .conclusion, .started_at, .completed_at] | @tsv' > "$M/$n/jobs.tsv" \
+    || { echo "attempt $n: jobs download FAILED" >&2; fail=1; }
+  # --allow-escape-sequences: without it gh refuses the log body and writes 0 bytes.
+  for job in $(awk -F'\t' '$2 ~ /^(integration-ios|ios-unit|ios-ui|ios-minimize)/ { print $1 }' "$M/$n/jobs.tsv"); do
+    f="$M/$n/logs/$job.log"
+    gh api --allow-escape-sequences "repos/anvu69/liquid_shell/actions/jobs/$job/logs" > "$f" && [ -s "$f" ] \
+      || { echo "attempt $n job $job: NO LOG (download failed or empty)" >&2; fail=1; }
+  done
+  # A green job that uploaded nothing is only a note; a failed download is not distinguishable
+  # from it here, so -R is mandatory and the listing below must show the artifacts.
+  gh run download -R anvu69/liquid_shell "$RUN" --pattern "cold-launch-*-a$n" --dir "$M/$n/artifacts" \
+    || echo "NOTE attempt $n: no cold-launch artifact downloaded" >&2
 done
+[ "$fail" = 0 ] || { echo "collection FAILED: do not count (Step 6) until every NO LOG / FAILED line is resolved" >&2; false; }
 cat "$M"/*/jobs.tsv | awk -F'\t' '{ print $3 }' | sort | uniq -c
 ```
 
-On the dispatch path, loop over the six run ids instead: `gh run view <id> --json jobs` is then right, and `gh run download <id> --pattern 'cold-launch-*'`.
+On the dispatch path, loop over the six run ids instead: `gh run view -R anvu69/liquid_shell <id> --json jobs` is then right, and `gh run download -R anvu69/liquid_shell <id> --pattern 'cold-launch-*'`.
 
 - [ ] **Step 6: Count** (spec §11.3). Every count is per attempt folder; the totals add the six.
 
@@ -2359,13 +2367,13 @@ for d in "$M"/*/artifacts/*/*/; do
 done
 ```
 
-Then read each dump by hand with spec §10.2. A **drive** dump reads "printed; the reader missed it" only when **both** hold:
-1. the job log of that attempt (`$M/<attempt>/logs/<job>.log`, the job that uploaded the artifact) shows `Error waiting for a debug connection` after its `✗ stalled`;
-2. `vm-service.log` is a complete `log show` (no `✗ stalled` from its own cap), with a `Runner[<app pid>:` line.
+Then read each dump by hand with spec §10.2. A **drive** dump reads "printed; the reader missed it" when **both** hold:
+1. `vm-service.log` has a `Runner[<app pid>:` line (a line found is evidence even if the file was cut off by its cap);
+2. the job log of that attempt (`$M/<attempt>/logs/<job>.log`, the job that uploaded the artifact) shows `Error waiting for a debug connection` after its `✗ stalled`.
 
-If the job log lacks that error, the reading is "the test hung after connecting". If `vm-service.log` was cut off, or the job log cannot be matched, it is "unknown". Without a line and with an app pid: "alive, no VM service line: see sample.txt (main thread)". `app pid: none`: "no app: launch lost or crashed".
+If the line is there and the job log shows positive evidence of a connection (flutter_driver's connect line, or test progress after the launch), the reading is "the test hung after connecting". With the line but neither the error nor a connection, or if the job log cannot be matched, it is "unknown" (an absence is not evidence). Without a line and with `vm-service.log` cut off, it is also "unknown". Without a line and with an app pid: "alive, no VM service line: see sample.txt (main thread)". `app pid: none`: "no app: launch lost or crashed".
 
-A **warm-up** dump (label `…-warm-up`) is read with the `launched:` / `reader ready:` rule of §10.2: a line stamped before `launched:` + `IOS_WARMUP_TIMEOUT`, with `reader ready: yes`, is "our reader missed it"; after it, "the app was slower"; `reader ready: no`, "inconclusive".
+A **warm-up** dump (label `…-warm-up`) is read with the `launched:` / `reader ready:` rule of §10.2: a line stamped more than 10 s before `launched:` + `IOS_WARMUP_TIMEOUT`, with `reader ready: yes`, is "our reader missed it"; more than 10 s after it, "the app was slower"; within 10 s of it, "borderline: inconclusive"; `reader ready: no`, "inconclusive".
 
 For each "alive" dump, open `sample.txt` and note the top frames of the `com.apple.main-thread` stack, in one line.
 
@@ -2375,7 +2383,7 @@ For each "alive" dump, open `sample.txt` and note the top frames of the `com.app
 # VK-625: six CI runs on the cold-launch fix
 
 - **Branch / head:** `VK-625-ci-cold-launch` @ `<sha>`; PR <url> (draft)
-- **Runs:** <six run ids with links> (workflow_dispatch; or the PR run's attempts, if the fallback was used)
+- **Runs:** <six run ids with links> (workflow_dispatch; or the PR run's attempts, if the rerun path was used)
 - **Runner images seen:** <from "Set up job": macos-26-arm64 version(s)>
 - **Verdict:** PASS | FAIL (spec §11.2)
 
@@ -2415,7 +2423,7 @@ For each "alive" dump, open `sample.txt` and note the top frames of the `com.app
 <"Drafted docs/qa/vk625/upstream-draft.md: <dump>" or "Not needed: no dump of a drive stall showed a printed line the reader missed (<n> dumps read).">
 ```
 
-- [ ] **Step 9 (only under Q7): the upstream draft.** Write it only if some **drive** stall's dump (a label ending in `.dart on … stall <k>`) reads "printed; the reader missed it" under **both** conditions of Step 7 (the job log shows `Error waiting for a debug connection` after `✗ stalled`, and `vm-service.log` is a complete `log show`). Create `docs/qa/vk625/upstream-draft.md` with:
+- [ ] **Step 9 (only under Q7): the upstream draft.** Write it only if some **drive** stall's dump (a label ending in `.dart on … stall <k>`) reads "printed; the reader missed it" under **both** conditions of Step 7 (the job log shows `Error waiting for a debug connection` after `✗ stalled`, and `vm-service.log` has a `Runner[<app pid>:` line). Create `docs/qa/vk625/upstream-draft.md` with:
   - a title such as `[flutter_tools] iOS simulator: startApp waits forever when log stream misses the VM service line`;
   - the Flutter version (3.44.x on CI: take the version from the job log);
   - Xcode and the simulator runtime;

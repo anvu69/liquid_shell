@@ -178,10 +178,13 @@ The script never changes the caller's directory: `guard` runs its command where 
 |---|---|---|
 | `IOS_APP_BUNDLE_ID` | `vn.lasoai.liquidShellExample` | all three |
 | `IOS_WARMUP_TIMEOUT` | `180` (seconds, §9) | `warmup` |
+| `IOS_WARMUP_READY_TIMEOUT` | `30` (seconds, §9) | `warmup`: how long to wait for the log reader to attach before the launch |
 | `IOS_BUILD_TIMEOUT` | `900` (seconds per build step, §9) | `warmup --build` |
 | `IOS_DIAG_DIR` | `liquid_shell/example/build/ios-diagnostics` (absolute, from the script's location) | `diagnose`, and through it `warmup` and `guard` |
 | `FLUTTER` | `flutter` (may be `fvm flutter`) | `warmup --build` |
 | `GITHUB_ACTIONS` | set by Actions | when `true`, a counted line (§5.6) is printed to stdout as `::warning::…` |
+
+A non-numeric `IOS_WARMUP_TIMEOUT` or `IOS_WARMUP_READY_TIMEOUT` prints `ios_sim: <NAME>=<value> is not a number, using <default>` and uses the default, so a typo cannot loop until the job cap.
 
 ### 5.3 `warmup`
 
@@ -360,12 +363,13 @@ concurrency:
 | Name | Value | Covers | Why |
 |---|---|---|---|
 | `IOS_WARMUP_TIMEOUT` | **180 s** | launch → VM service line | Passing first launches after a boot logged their first line within 85 s (p90 70 s, n = 94), counted from "Xcode build done", so install included. Stalls never recovered in 600–1200 s. 180 s is about twice the slowest pass, and a stall costs 3 min instead of 10–20 |
+| `IOS_WARMUP_READY_TIMEOUT` | **30 s** | the reader's first output (its header), before the launch | The reader attaches in 1 to 3 s when idle; 30 s is a wide margin, and a reader that never attaches only makes the dump say `reader ready: no` |
 | `IOS_BUILD_TIMEOUT` | **900 s** per build step | `flutter build ios --config-only`; `xcodebuild build` / `build-for-testing` | CI's first app launch came 93–458 s after `xcodebuild test` started, build and implicit boot included. Flutter's first drive build took up to 108.9 s. 900 s is about twice the worst |
 | `IOS_MINIMIZE_TIMEOUT` | **900 s** | the `MinimizeUITests` suite | 6 iPhone tests: 165 s in the probe at host load ~200; VK-600 measured five of them at 81 s at load 6–11. On the Makefile's slow-runner scale (443 s → 1400 s, ×3.2) six take about 310 s. One stopped at its 300 s allowance makes about 610 s, which leaves ~290 s in hand |
 | `IOS_UNIT_TIMEOUT` | 900 s (unchanged) | the `RunnerTests` suite alone (was: build included) | — |
 | `IOS_UI_TIMEOUT` | 2100 s (unchanged) | the `RunnerUITests` suite alone (was: build included) | — |
 | `IOS_DRIVE_TIMEOUT` | 600 s / 1200 s (unchanged) | one guarded drive | — |
-| inner caps of `ios_sim.sh` | boot 600, bootstatus 600, install 300, launch 120, terminate 60; reader `IOS_WARMUP_TIMEOUT + 120`; dump: `log show` 120, `launchctl` 30, `sample` 60 (5 s of sampling) | each `xcrun` call | A stuck `simctl` once held a job for the 6 h limit, so every call is capped. The dump takes ≤ 210 s; it took 16 s in the probe |
+| inner caps of `ios_sim.sh` | boot 600, bootstatus 600, install 300, launch 120, terminate 60; reader `IOS_WARMUP_TIMEOUT + 120` (it starts before the ready wait and the launch, so the 120 s have to cover `IOS_WARMUP_READY_TIMEOUT` (30) and the launch (≤ 120 s, in practice a few seconds); the cap is a backstop, `stop_reader` ends it on every path); dump: `log show` 120, `launchctl` 30, `sample` 60 (5 s of sampling) | each `xcrun` call | A stuck `simctl` once held a job for the 6 h limit, so every call is capped. The dump takes ≤ 210 s; it took 16 s in the probe |
 
 ## 10. Diagnostics
 
@@ -375,9 +379,10 @@ Each dump is a folder `IOS_DIAG_DIR/<UTC yyyymmddThhmmssZ>-<label>`, where the l
 
 | File | Content |
 |---|---|
-| `meta.txt` | `label:`, `udid:`, `bundle:`, `dump started:` (UTC), `load:` (`uptime`), `dump finished:` (UTC) |
+| `meta.txt` | `label:`, `udid:`, `bundle:`, `dump started:` (UTC), `load:` (`uptime`), `app pid:` (§10.2), `dump finished:` (UTC). A warm-up dump adds `launched:` (UTC and local time, taken just before `simctl launch`) and `reader ready: yes\|no` |
 | `vm-service.log` | `xcrun simctl spawn <udid> log show --last <window> --info --debug --style compact --predicate '<§5.4>'` (stdout and stderr) |
 | `launchctl.txt` | `xcrun simctl spawn <udid> launchctl list \| grep -F <bundle>`, or `no <bundle> in the simulator's launchctl list` |
+| `warm-up-reader.log` | warm-up dumps only: everything the warm-up's own `log stream` reader printed (its header, and any line it saw); empty when it printed nothing |
 | `sample.txt` | `sample <pid> 5 -file …` when `launchctl.txt` has a numeric pid on a `UIKitApplication:<bundle>[` line; otherwise `<bundle> is not running: no sample` |
 
 On CI the folders are uploaded as the `cold-launch-*` artifacts of §8.2.
@@ -388,16 +393,18 @@ On CI the folders are uploaded as the `cold-launch-*` artifacts of §8.2.
 
 | What the dump shows | Reading |
 |---|---|
-| `vm-service.log` has a line from `Runner[<pid>:…]` whose pid is `app pid:`, **and both** of these hold: the job log of that attempt shows `Error waiting for a debug connection` after its `✗ stalled`, and `vm-service.log` is a complete `log show` (it has no `✗ stalled` line from its own 120 s cap) | The app printed the line, and the reader missed it: a flutter_tools / `log stream` race (Q7) |
-| The same line, but the job log shows no `Error waiting for a debug connection` (the drive got its URL) | The test hung after connecting. Not Q7 |
+| `vm-service.log` has a line from `Runner[<pid>:…]` whose pid is `app pid:`, and the job log of that attempt shows `Error waiting for a debug connection` after its `✗ stalled` | The app printed the line, and the reader missed it: a flutter_tools / `log stream` race (Q7). This holds even if `vm-service.log` was cut off by its cap: a line found is positive evidence |
+| The same line, and the job log shows positive evidence that the drive connected (flutter_driver's connect line, or test progress after the launch) | The test hung after connecting. Not Q7 |
+| The same line, and the job log shows neither the error nor a connection | Unknown. An absence is not evidence |
 | `vm-service.log` is cut off by its cap (it contains `✗ stalled`) and has no such line | Unknown. It is not "no line" |
 | The app is alive in `launchctl.txt` (`app pid:` is a number), with no such line in a complete `vm-service.log` | The app is stuck before its VM service started. `sample.txt` shows where (look at the main thread, `com.apple.main-thread`) |
 | `app pid: none` | The launch was lost, or the app died. Look for a crash report |
 
-For a **warm-up** timeout the reader is our own (`warm-up-reader.log` is what it saw), and `meta.txt` has `launched:` and `reader ready:`. A `Runner[<app pid>:…]` line in `vm-service.log` is stamped in the local time of `launched:`, so compare its stamp with `launched:` + `IOS_WARMUP_TIMEOUT`:
+For a **warm-up** timeout the reader is our own (`warm-up-reader.log` is what it saw), and `meta.txt` has `launched:` and `reader ready:`. A `Runner[<app pid>:…]` line in `vm-service.log` is stamped in the local time of `launched:`, so compare its stamp with `launched:` + `IOS_WARMUP_TIMEOUT`. Allow a margin of about 10 s at that deadline: the poll's deadline uses whole seconds, `launched:` has 1 s resolution, and the reader keeps listening 1 to 6 s inside `stop_reader`, plus the delivery lag of `log stream` under load. Within the margin the reading is "borderline: inconclusive".
 
-- stamped **before** that moment, `reader ready: yes`, and not in `warm-up-reader.log`: our own reader missed a line the app printed (Q7 at the `log stream` level);
-- stamped **after** it: the app was simply slower than `IOS_WARMUP_TIMEOUT`;
+- stamped more than 10 s **before** that moment, `reader ready: yes`, and not in `warm-up-reader.log`: our own reader missed a line the app printed (Q7 at the `log stream` level);
+- stamped more than 10 s **after** it: the app was simply slower than `IOS_WARMUP_TIMEOUT`;
+- stamped within 10 s of it: borderline, inconclusive;
 - `reader ready: no`: inconclusive, because the reader may not have been attached at the launch;
 - no line at all, with the app alive: the app never started its VM service (read `sample.txt`).
 
@@ -406,8 +413,8 @@ For a **warm-up** timeout the reader is our own (`warm-up-reader.log` is what it
 ### 11.1 Runs
 
 - Push the branch and open a draft PR. Q4 is the owner's go-ahead for this branch only.
-- Dispatch six runs at the same head commit: `gh workflow run ci.yaml --ref VK-625-ci-cold-launch`. The PR's own run is reported, but not counted.
-- **If GitHub refuses the dispatch** (HTTP 422, "does not have 'workflow_dispatch' trigger": `main`'s copy lacks the trigger), re-run the PR's run instead: `gh run rerun <id>` six times, one after another. Attempt numbers keep the artifacts apart.
+- Dispatch six runs at the same head commit: `gh workflow run -R anvu69/liquid_shell ci.yaml --ref VK-625-ci-cold-launch`. The PR's own run is reported, but not counted.
+- **If GitHub refuses the dispatch** (HTTP 422, "does not have 'workflow_dispatch' trigger": `main`'s copy lacks the trigger), re-run the PR's run instead: attempt 1 is the PR's own run, and `gh run rerun -R anvu69/liquid_shell <id>` makes attempts 2 to 6, one after another (attempt 1 plus five reruns: six attempts in total, all counted). Attempt numbers keep the artifacts apart.
 
 ### 11.2 Pass bar (Q4)
 
@@ -424,7 +431,7 @@ A red job for another reason is recorded with its category and does not count ag
 
 ### 11.3 Counted from the logs
 
-Count these per job from the job logs (`gh api repos/anvu69/liquid_shell/actions/jobs/<id>/logs`):
+Count these per job from the job logs (`gh api --allow-escape-sequences repos/anvu69/liquid_shell/actions/jobs/<id>/logs`; without the flag gh refuses the body and writes 0 bytes, so every download is checked for a non-empty file, and a failed one stops the count):
 
 | Count | Pattern | Baseline |
 |---|---|---|
@@ -469,8 +476,8 @@ The job's first label is its first `ios_sim.sh guard` call: `native_shell_test.d
 | Test file | Pins |
 |---|---|
 | `tool/test/with_timeout_test.dart` (+2) | the hook runs at the deadline, before the stop, with the command alive; the command never inherits the variable; a failing hook keeps 124 |
-| `tool/test/ios_sim_test.dart` (new) | warm-up order (boot → bootstatus → install → reader → launch → terminate), one launch, the ok and timeout lines, the dump before the terminate, the annotation on Actions, a failed launch and a failed `--build` still exit 0, `--build` args and app path; the dump's four files, no `sample` without the app, the window; the guard: pass once, failure never retried, stall → dump → terminate → retry with no shutdown or boot, two stalls → 124 and two dumps; usage |
-| `tool/test/ios_xctest_test.dart` (new) | build-for-testing → warm-up → test-without-building with the same destination, derived data and selection, and the allowances; the warm-up outside the suite cap; a warm-up timeout never fails; red → summary and the status; stall → dump and 124; a failed build stops before any `simctl`; usage |
+| `tool/test/ios_sim_test.dart` (new) | warm-up order (boot → bootstatus → install → reader → launch → terminate), one launch, the ok and timeout lines, the dump before the terminate, the annotation on Actions, a failed launch and a failed `--build` still exit 0, `--build` args and app path; the dump's four files, no `sample` without the app, the window; the app pid is the app and never the XCTest runner, and `none` when it is not running; the log reader is dead after an ok, a timeout, a failed launch and a TERM mid warm-up; a timeout dump keeps `warm-up-reader.log`, `launched:` and `reader ready:`; a non-numeric `IOS_WARMUP_TIMEOUT` or `IOS_WARMUP_READY_TIMEOUT` warns and uses the default; the guard: pass once, failure never retried, stall → dump → terminate → retry with no shutdown or boot, two stalls → 124 and two dumps; usage |
+| `tool/test/ios_xctest_test.dart` (new) | build-for-testing → warm-up → test-without-building with the same destination, derived data and selection, and the allowances; the warm-up outside the suite cap; a warm-up timeout never fails; red → summary and the status; stall → dump and 124; a failed build stops before any `simctl`; a green run that selected no test is red, and one that ran tests stays green; usage |
 | `tool/test/integration_ios_test.dart` (new) | both scripts: build, warm-up, then the drives; a stalled drive retried once with no `simctl shutdown`; a failing drive stops the run |
 
 - **Locally, on our own simulators (created and deleted by each task):**
