@@ -34,6 +34,9 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   /// Tabs with a native navigation bar, by destination index (P3b-1: the
   /// search tab only).
   private(set) var navControllers: [Int: ShellNavController] = [:]
+  /// The host of every non-search destination, by index: its proxy takes
+  /// Dart's minimize offset (spec VK-600 §8.2). Built with the tabs.
+  private var minimizeHosts: [Int: TabHostController] = [:]
   /// The search field and its delegates; one per shell, re-hosted when the
   /// tabs are rebuilt.
   let searchBridge = SearchBridge()
@@ -200,6 +203,8 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       select(Int(new.selectedIndex))
     }
     setFooter(new.footer)
+    let behavior: UITabBarController.MinimizeBehavior = new.minimizeOnScroll ? .onScrollDown : .never
+    if tabBarMinimizeBehavior != behavior { tabBarMinimizeBehavior = behavior }
     view.tintColor = UIColor(argb: new.tintArgb)
     traitOverrides.userInterfaceStyle = new.dark ? .dark : .light
     traitOverrides.layoutDirection = new.rtl ? .rightToLeft : .leftToRight
@@ -243,6 +248,7 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     searchTab = nil
     searchIndex = nil
     navControllers = [:]
+    minimizeHosts = [:]
     destinationTabs = new.tabs.enumerated().map { index, spec in
       if spec.search {
         let root = PageHostController()
@@ -257,9 +263,11 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
         searchIndex = index
         return tab
       }
-      let tab = UITab(title: "", image: nil, identifier: "destination\(index)") { _ in
-        TabHostController()
-      }
+      // Created now, not in the provider: Dart's minimize offset reaches
+      // a host UIKit has not asked for yet. The provider runs once per tab.
+      let host = TabHostController()
+      minimizeHosts[index] = host
+      let tab = UITab(title: "", image: nil, identifier: "destination\(index)") { _ in host }
       // `.fixed`: nothing to add, remove or reorder, so no sidebar "Edit".
       tab.preferredPlacement = spec.sidebarOnly ? .sidebarOnly : .fixed
       return tab
@@ -679,6 +687,28 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     syncFlutter()
   }
 
+  // MARK: - Minimize on scroll (spec VK-600 §8)
+
+  /// Number of expand toggles (tests).
+  private(set) var minimizeExpands = 0
+
+  func minimizeHost(_ index: Int) -> TabHostController? { minimizeHosts[index] }
+
+  /// Dart's body offset for destination [tab] (spec §8.6).
+  func setMinimizeScroll(tab: Int, offset: Double) {
+    guard offset.isFinite, let host = minimizeHosts[tab] else { return }
+    host.minimizeProxy.setOffset(offset)
+  }
+
+  /// Expands a minimized bar: `.never` then `.onScrollDown` (spike §3.2;
+  /// nothing changes on an expanded bar). Only while minimize is on.
+  func expandMinimizedBar() {
+    guard tabBarMinimizeBehavior == .onScrollDown else { return }
+    minimizeExpands += 1
+    tabBarMinimizeBehavior = .never
+    tabBarMinimizeBehavior = .onScrollDown
+  }
+
   // MARK: - Search field frame (spec P3b §7.5)
 
   private var lastField: NativeRect?
@@ -759,6 +789,14 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       case .integratedButton?: placement = "integratedButton"
       default: placement = ""
       }
+      let minimizeBehavior: String
+      switch tabBarMinimizeBehavior {
+      case .automatic: minimizeBehavior = "automatic"
+      case .never: minimizeBehavior = "never"
+      case .onScrollDown: minimizeBehavior = "onScrollDown"
+      case .onScrollUp: minimizeBehavior = "onScrollUp"
+      @unknown default: minimizeBehavior = ""
+      }
       return NativeDebugSnapshot(
         selectedTab: selectedDestination.map { "destination\($0)" } ?? "",
         searchActive: searchBridge.controller.isActive,
@@ -770,7 +808,10 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
         scopeTitles: searchBridge.controller.searchBar.scopeButtonTitles ?? [],
         scopeShown: searchBridge.controller.searchBar.showsScopeBar,
         selectedScope: Int64(searchBridge.controller.searchBar.selectedScopeButtonIndex),
-        scopeFrame: currentScopeFrame())
+        scopeFrame: currentScopeFrame(),
+        minimizeBehavior: minimizeBehavior,
+        // The pan is attached in Task 5 (spec §8.3).
+        minimizePanAttached: false)
     #else
       return .empty
     #endif
@@ -783,9 +824,16 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
 final class TabHostController: UIViewController {
   private var shell: NativeTabsController? { tabBarController as? NativeTabsController }
 
+  /// The proxy UIKit's tab bar minimize follows (spec VK-600 §8.2).
+  let minimizeProxy = MinimizeProxy()
+
   override func viewDidLoad() {
     super.viewDidLoad()
     view.backgroundColor = .clear
+    minimizeProxy.frame = view.bounds
+    minimizeProxy.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    view.addSubview(minimizeProxy)
+    setContentScrollView(minimizeProxy, for: .bottom)
   }
 
   override func viewIsAppearing(_ animated: Bool) {
@@ -836,6 +884,7 @@ extension NativeDebugSnapshot {
       selectedTab: "", searchActive: false, searchText: "", placement: "", pageTitles: [],
       fieldFrame: NativeRect(x: 0, y: 0, width: 0, height: 0), firstResponderIsSearch: false,
       scopeTitles: [], scopeShown: false, selectedScope: 0,
-      scopeFrame: NativeRect(x: 0, y: 0, width: 0, height: 0))
+      scopeFrame: NativeRect(x: 0, y: 0, width: 0, height: 0), minimizeBehavior: "",
+      minimizePanAttached: false)
   }
 }

@@ -610,6 +610,8 @@ class NativeDebugSnapshot {
     required this.scopeShown,
     required this.selectedScope,
     required this.scopeFrame,
+    required this.minimizeBehavior,
+    required this.minimizePanAttached,
   });
 
   /// The selected `UITab`'s identifier ("destination<i>", or "" when none).
@@ -641,6 +643,13 @@ class NativeDebugSnapshot {
   /// The scope bar's frame in the Flutter view; zero when it is not shown.
   NativeRect scopeFrame;
 
+  /// `tabBarMinimizeBehavior`: "automatic", "never", "onScrollDown" or
+  /// "onScrollUp".
+  String minimizeBehavior;
+
+  /// Whether a tab's minimize proxy pan is on the Flutter view.
+  bool minimizePanAttached;
+
   List<Object?> _toList() {
     return <Object?>[
       selectedTab,
@@ -654,6 +663,8 @@ class NativeDebugSnapshot {
       scopeShown,
       selectedScope,
       scopeFrame,
+      minimizeBehavior,
+      minimizePanAttached,
     ];
   }
 
@@ -675,6 +686,8 @@ class NativeDebugSnapshot {
       scopeShown: result[8]! as bool,
       selectedScope: result[9]! as int,
       scopeFrame: result[10]! as NativeRect,
+      minimizeBehavior: result[11]! as String,
+      minimizePanAttached: result[12]! as bool,
     );
   }
 
@@ -697,7 +710,9 @@ class NativeDebugSnapshot {
         _deepEquals(scopeTitles, other.scopeTitles) &&
         _deepEquals(scopeShown, other.scopeShown) &&
         _deepEquals(selectedScope, other.selectedScope) &&
-        _deepEquals(scopeFrame, other.scopeFrame);
+        _deepEquals(scopeFrame, other.scopeFrame) &&
+        _deepEquals(minimizeBehavior, other.minimizeBehavior) &&
+        _deepEquals(minimizePanAttached, other.minimizePanAttached);
   }
 
   @override
@@ -706,7 +721,7 @@ class NativeDebugSnapshot {
 
   @override
   String toString() {
-    return 'NativeDebugSnapshot(selectedTab: $selectedTab, searchActive: $searchActive, searchText: $searchText, placement: $placement, pageTitles: $pageTitles, fieldFrame: $fieldFrame, firstResponderIsSearch: $firstResponderIsSearch, scopeTitles: $scopeTitles, scopeShown: $scopeShown, selectedScope: $selectedScope, scopeFrame: $scopeFrame)';
+    return 'NativeDebugSnapshot(selectedTab: $selectedTab, searchActive: $searchActive, searchText: $searchText, placement: $placement, pageTitles: $pageTitles, fieldFrame: $fieldFrame, firstResponderIsSearch: $firstResponderIsSearch, scopeTitles: $scopeTitles, scopeShown: $scopeShown, selectedScope: $selectedScope, scopeFrame: $scopeFrame, minimizeBehavior: $minimizeBehavior, minimizePanAttached: $minimizePanAttached)';
   }
 }
 
@@ -725,6 +740,7 @@ class NativeChromeConfig {
     required this.rtl,
     required this.hidden,
     required this.interactive,
+    required this.minimizeOnScroll,
   });
 
   bool engaged;
@@ -749,6 +765,9 @@ class NativeChromeConfig {
 
   bool interactive;
 
+  /// The compact tab bar minimizes while the body scrolls down (VK-600).
+  bool minimizeOnScroll;
+
   List<Object?> _toList() {
     return <Object?>[
       engaged,
@@ -762,6 +781,7 @@ class NativeChromeConfig {
       rtl,
       hidden,
       interactive,
+      minimizeOnScroll,
     ];
   }
 
@@ -783,6 +803,7 @@ class NativeChromeConfig {
       rtl: result[8]! as bool,
       hidden: result[9]! as bool,
       interactive: result[10]! as bool,
+      minimizeOnScroll: result[11]! as bool,
     );
   }
 
@@ -805,7 +826,8 @@ class NativeChromeConfig {
         _deepEquals(dark, other.dark) &&
         _deepEquals(rtl, other.rtl) &&
         _deepEquals(hidden, other.hidden) &&
-        _deepEquals(interactive, other.interactive);
+        _deepEquals(interactive, other.interactive) &&
+        _deepEquals(minimizeOnScroll, other.minimizeOnScroll);
   }
 
   @override
@@ -814,7 +836,7 @@ class NativeChromeConfig {
 
   @override
   String toString() {
-    return 'NativeChromeConfig(engaged: $engaged, tabs: $tabs, selectedIndex: $selectedIndex, trailing: $trailing, footer: $footer, search: $search, tintArgb: $tintArgb, dark: $dark, rtl: $rtl, hidden: $hidden, interactive: $interactive)';
+    return 'NativeChromeConfig(engaged: $engaged, tabs: $tabs, selectedIndex: $selectedIndex, trailing: $trailing, footer: $footer, search: $search, tintArgb: $tintArgb, dark: $dark, rtl: $rtl, hidden: $hidden, interactive: $interactive, minimizeOnScroll: $minimizeOnScroll)';
   }
 }
 
@@ -1510,6 +1532,47 @@ class NativeShellHostApi {
     final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
       <Object?>[tab, offset],
     );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
+  }
+
+  /// The body scroll offset of destination [tab] for the tab bar's
+  /// minimize (proxy scroll view, spec VK-600 §8).
+  Future<void> setMinimizeScroll(int tab, double offset) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.liquid_shell_ios.NativeShellHostApi.setMinimizeScroll$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[tab, offset],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
+  }
+
+  /// Expands a minimized tab bar (spec VK-600 §8.5).
+  Future<void> expandTabBar() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.liquid_shell_ios.NativeShellHostApi.expandTabBar$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     _extractReplyValueOrThrow(

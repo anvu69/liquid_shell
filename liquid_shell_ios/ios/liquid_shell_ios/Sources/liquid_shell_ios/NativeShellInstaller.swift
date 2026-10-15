@@ -265,6 +265,14 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
     if #available(iOS 26.0, *) { tabs?.setPageScroll(tab: Int(tab), offset: offset) }
   }
 
+  func setMinimizeScroll(tab: Int64, offset: Double) throws {
+    if #available(iOS 26.0, *) { tabs?.setMinimizeScroll(tab: Int(tab), offset: offset) }
+  }
+
+  func expandTabBar() throws {
+    if #available(iOS 26.0, *) { tabs?.expandMinimizedBar() }
+  }
+
   func debugSnapshot() throws -> NativeDebugSnapshot {
     if #available(iOS 26.0, *), let tabs { return tabs.debugSnapshot() }
     return NativeDebugSnapshot.empty

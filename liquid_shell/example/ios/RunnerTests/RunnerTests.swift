@@ -452,7 +452,8 @@ final class NativeTabsTests: XCTestCase {
 
   private func config(
     engaged: Bool = true, hidden: Bool = false, interactive: Bool = true,
-    footer: Bool = false, trailing: Bool = false, reports: Bool = false, selected: Int64 = 0
+    footer: Bool = false, trailing: Bool = false, reports: Bool = false, selected: Int64 = 0,
+    minimize: Bool = false
   ) -> NativeChromeConfig {
     NativeChromeConfig(
       engaged: engaged,
@@ -475,7 +476,8 @@ final class NativeTabsTests: XCTestCase {
           title: "Ann Lee", subtitle: "Account", sfSymbol: "person.crop.circle",
           semanticLabel: "Account, Ann Lee")
         : nil,
-      tintArgb: 0xFF00_7AFF, dark: false, rtl: false, hidden: hidden, interactive: interactive)
+      tintArgb: 0xFF00_7AFF, dark: false, rtl: false, hidden: hidden, interactive: interactive,
+      minimizeOnScroll: minimize)
   }
 
   /// Lets UIKit finish layout and any sidebar transition.
@@ -1082,7 +1084,7 @@ final class NativeTabsTests: XCTestCase {
     tabs.apply(
       NativeChromeConfig(
         engaged: false, tabs: [], selectedIndex: 0, tintArgb: 0xFF00_7AFF, dark: false,
-        rtl: false, hidden: false, interactive: true))
+        rtl: false, hidden: false, interactive: true, minimizeOnScroll: false))
     settle()
     XCTAssertFalse(tabs.chromeVisible)
     XCTAssertEqual(tabs.tabs.map(\.identifier), shown, "dormant leaves the tabs alone")
@@ -1191,7 +1193,7 @@ final class NativeTabsTests: XCTestCase {
     tabs.apply(
       NativeChromeConfig(
         engaged: false, tabs: [], selectedIndex: 0, tintArgb: 0xFF00_7AFF, dark: false,
-        rtl: false, hidden: false, interactive: true))
+        rtl: false, hidden: false, interactive: true, minimizeOnScroll: false))
     settle()
 
     container.traitOverrides.horizontalSizeClass = .compact
@@ -1268,6 +1270,61 @@ final class NativeTabsTests: XCTestCase {
     tabs.apply(config(footer: true))
     XCTAssertTrue(footer.accessibilityActivate())
     XCTAssertEqual(events.sent.filter { $0 == "footer" }.count, 1)
+  }
+
+  // MARK: - VK-600: minimize on scroll
+
+  /// Spec VK-600 §8.5: the shell's minimizeOnScroll picks the behaviour.
+  func testTheConfigSetsTheMinimizeBehaviour() throws {
+    let tabs = try installedShell()
+    tabs.apply(config(minimize: true))
+    XCTAssertEqual(tabs.tabBarMinimizeBehavior, .onScrollDown)
+    tabs.apply(config(minimize: false))
+    XCTAssertEqual(tabs.tabBarMinimizeBehavior, .never)
+  }
+
+  /// §8.2, §8.6: each destination's host has a proxy for the bottom edge,
+  /// and Dart's offset reaches that tab's proxy only.
+  func testAMinimizeOffsetReachesItsTabsProxy() throws {
+    let tabs = try installedShell()
+    let home = try XCTUnwrap(tabs.minimizeHost(0))
+    let inbox = try XCTUnwrap(tabs.minimizeHost(1))
+    home.loadViewIfNeeded()
+    XCTAssertTrue(home.contentScrollView(for: .bottom) === home.minimizeProxy)
+    tabs.setMinimizeScroll(tab: 1, offset: 240)
+    tabs.setMinimizeScroll(tab: 0, offset: .nan)
+    tabs.setMinimizeScroll(tab: 9, offset: 50)
+    XCTAssertEqual(inbox.minimizeProxy.offset, 240)
+    XCTAssertEqual(home.minimizeProxy.offset, 0)
+  }
+
+  /// §8.5, spike §3.2: the toggle is the public "expand now"; it does
+  /// nothing while minimize is off.
+  func testExpandTogglesOnlyWhileMinimizeIsOn() throws {
+    let tabs = try installedShell()
+    tabs.apply(config(minimize: true))
+    tabs.expandMinimizedBar()
+    XCTAssertEqual(tabs.minimizeExpands, 1)
+    XCTAssertEqual(tabs.tabBarMinimizeBehavior, .onScrollDown)
+    tabs.apply(config(minimize: false))
+    tabs.expandMinimizedBar()
+    XCTAssertEqual(tabs.minimizeExpands, 1)
+    XCTAssertEqual(tabs.tabBarMinimizeBehavior, .never)
+  }
+
+  /// The channel: the installer forwards both calls to the shell.
+  func testTheInstallerForwardsMinimizeCalls() throws {
+    let (installer, window) = try installedByInstaller()
+    _ = try installer.attach()
+    var minimizing = config(minimize: true)
+    minimizing.selectedIndex = 0
+    try installer.update(config: minimizing)
+    settle()
+    let shell = try tabs(in: window)
+    try installer.setMinimizeScroll(tab: 0, offset: 77)
+    try installer.expandTabBar()
+    XCTAssertEqual(shell.minimizeHost(0)?.minimizeProxy.offset, 77)
+    XCTAssertEqual(shell.minimizeExpands, 1)
   }
 }
 
@@ -1434,7 +1491,7 @@ extension NativeTabsTests {
       engaged: true, tabs: tabs, selectedIndex: selected,
       search: NativeSearchConfig(placeholder: placeholder, scopes: scopes), tintArgb: 0xFF00_7AFF,
       dark: false,
-      rtl: false, hidden: hidden, interactive: interactive)
+      rtl: false, hidden: hidden, interactive: interactive, minimizeOnScroll: false)
   }
 
   fileprivate func installedSearchShell(
@@ -1812,7 +1869,7 @@ extension NativeTabsTests {
   func testHiddenChromeEndsAnActiveSearchAndKeepsTheText() throws {
     let dormant = NativeChromeConfig(
       engaged: false, tabs: [], selectedIndex: 0, tintArgb: 0xFF00_7AFF, dark: false,
-      rtl: false, hidden: false, interactive: true)
+      rtl: false, hidden: false, interactive: true, minimizeOnScroll: false)
     for (name, hide) in [("dormant", dormant), ("hidden", searchConfig(selected: 2, hidden: true))] {
       let tabs = try installedSearchShell(selected: 2)
       let bridge = tabs.searchBridge
