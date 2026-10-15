@@ -192,6 +192,9 @@ ios-unit: ## XCTest of liquid_shell_ios (example RunnerTests) on an iPad or iPho
 # load 6-11. Scaled as above (443 s, about 1400 s), about 1700 s, which
 # 1800 s would keep only ~100 s ahead of; VK-571 raised the cap at 250 s.
 # 2100 s keeps ~400 s in hand, as before; CI's job allows 45 minutes.
+# CI ran those 26 iPhone tests in 1092-1156 s and the iPad's 18 in 847-849 s
+# (PR #15). The final review's lock test (one more iPhone launch, 35 s
+# locally) makes 27 of 29: well inside the cap.
 IOS_UI_TIMEOUT ?= 2100
 # As for ios-unit: a red run prints the bundle's summary, the failed
 # assertion and its line, which `-quiet` leaves out. CI uploads the bundle

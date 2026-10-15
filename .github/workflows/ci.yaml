@@ -192,9 +192,9 @@ jobs:
     # P3a §9.4, P3b §12.6). Non-blocking:
     # simulator UI tests are slow and can flake on shared runners.
     # `make ios-ui` stops xcodebuild after IOS_UI_TIMEOUT (2100 s, build
-    # included): the iPhone suite (26 of 28 tests run since VK-600) is
-    # estimated at about 1700 s on a slow runner (Makefile). 45 minutes
-    # covers setup and that cap.
+    # included): the iPhone suite (27 of 29 tests run since VK-600) is
+    # estimated at about 1700 s on a slow runner and took 1092-1156 s on CI
+    # (Makefile). 45 minutes covers setup and that cap.
     name: ios-ui (${{ matrix.device }})
     runs-on: macos-latest
     continue-on-error: true

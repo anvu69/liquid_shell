@@ -180,6 +180,36 @@ final class MinimizeUITests: XCTestCase {
     XCTAssertFalse(isMinimized(app), "the top bar is not read as minimized")
   }
 
+  /// The lock, end to end (final review M5a): the pan on the Flutter view
+  /// tracks a drag that moves no Flutter content, and the bar stays whole.
+  /// XCTest pins the proxy's setters; this pins UIKit's own pan path. The
+  /// drag starts on "Next tab", above the list (Flutter gives it to the
+  /// button, which drops the tap once the finger moves), and goes up past
+  /// UIKit's 20–40 pt: an unlocked proxy would scroll down and minimize.
+  func testADragThatMovesNoContentKeepsTheBarWhole() throws {
+    try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .phone, "compact bar")
+    let app = launch("minimize")
+    let row = flutterRow(app, "Home item 6")
+    XCTAssertTrue(row.waitForExistence(timeout: 10), "Flutter's rows")
+    waitMinimized(app, false, "precondition: the whole bar")
+    let next = app.buttons["Next tab"]
+    XCTAssertTrue(next.waitForExistence(timeout: 10), "the button above the list")
+    let rowY = row.frame.minY
+    let rise = next.frame.midY - app.windows.firstMatch.frame.minY - 4
+    XCTAssertGreaterThan(rise, 60, "room to minimize above the button: \(next.frame)")
+    let start = next.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+    start.press(
+      forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: -rise)),
+      withVelocity: XCUIGestureVelocity(rise / 0.3), thenHoldForDuration: 0.2)
+    let deadline = Date().addingTimeInterval(2)
+    repeat {
+      XCTAssertTrue(isExpanded(app), "the bar stays whole")
+      usleep(250_000)
+    } while Date() < deadline
+    XCTAssertEqual(row.frame.minY, rowY, "no Flutter content moved")
+    XCTAssertTrue(app.tabBars.buttons["Home"].firstMatch.isSelected, "no tap: still Home")
+  }
+
   /// The pan on the Flutter view only observes: Flutter still gets the
   /// drag (its list moves under the finger) and, minimized, a tap. The tap
   /// is the app's own tab change, which expands the bar (Q4): UIKit alone
