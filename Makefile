@@ -193,16 +193,24 @@ ios-unit: ## XCTest of liquid_shell_ios (example RunnerTests) on an iPad or iPho
 # 1800 s would keep only ~100 s ahead of; VK-571 raised the cap at 250 s.
 # 2100 s keeps ~400 s in hand, as before; CI's job allows 45 minutes.
 IOS_UI_TIMEOUT ?= 2100
+# As for ios-unit: a red run prints the bundle's summary, the failed
+# assertion and its line, which `-quiet` leaves out. CI uploads the bundle
+# (the failure's screenshot) from here.
+IOS_UI_RESULT := $(CURDIR)/$(EXAMPLE)/build/ios-ui.xcresult
 
 ios-ui: ## XCUITest: real taps on native dialogs and the search tab (example RunnerUITests) on a simulator; IOS_UNIT_DEVICE=<udid>
 	cd $(EXAMPLE) && $(FLUTTER) build ios --config-only --simulator --debug
+	rm -rf $(IOS_UI_RESULT)
 	cd $(EXAMPLE)/ios && $(CURDIR)/tool/with_timeout.sh $(IOS_UI_TIMEOUT) \
 	  xcodebuild test -workspace Runner.xcworkspace -scheme Runner \
 	  -destination "id=$${IOS_UNIT_DEVICE:?set IOS_UNIT_DEVICE to a simulator UDID}" \
 	  -only-testing:RunnerUITests -parallel-testing-enabled NO \
 	  -collect-test-diagnostics never \
 	  -test-timeouts-enabled YES -default-test-execution-time-allowance 180 \
-	  -maximum-test-execution-time-allowance 300 -quiet
+	  -maximum-test-execution-time-allowance 300 \
+	  -resultBundlePath $(IOS_UI_RESULT) -quiet \
+	  || { status=$$?; [ ! -d $(IOS_UI_RESULT) ] || \
+	    xcrun xcresulttool get test-results summary --path $(IOS_UI_RESULT); exit $$status; }
 
 integration-ios: ## Signal channel round-trip on an iOS simulator
 	FLUTTER="$(FLUTTER)" tool/integration_ios.sh
