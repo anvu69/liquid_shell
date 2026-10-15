@@ -50,6 +50,19 @@ bundle=${IOS_APP_BUNDLE_ID:-vn.lasoai.liquidShellExample}
 warmup_timeout=${IOS_WARMUP_TIMEOUT:-180}
 build_timeout=${IOS_BUILD_TIMEOUT:-900}
 ready_timeout=${IOS_WARMUP_READY_TIMEOUT:-30}
+# A non-numeric value would spin the poll loops until the job cap.
+# $1 variable name, $2 value, $3 default; prints the number to use.
+number_or_default() {
+  case "$2" in
+    '' | *[!0-9]*)
+      echo "ios_sim: $1=$2 is not a number, using $3" >&2
+      echo "$3"
+      ;;
+    *) echo "$2" ;;
+  esac
+}
+warmup_timeout=$(number_or_default IOS_WARMUP_TIMEOUT "$warmup_timeout" 180)
+ready_timeout=$(number_or_default IOS_WARMUP_READY_TIMEOUT "$ready_timeout" 30)
 last_dump=
 diag_root=${IOS_DIAG_DIR:-$example/build/ios-diagnostics}
 # The line flutter_tools waits for after `simctl launch` (simulators.dart),

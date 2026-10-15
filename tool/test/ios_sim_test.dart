@@ -76,6 +76,32 @@ void main() {
       );
     });
 
+    test('a non-numeric timeout warns and falls back to the default, '
+        'it never loops', () {
+      // Capped at 25 s: before the guard the poll loop spun until the cap.
+      final script25 = File('tool/ios_sim.sh').absolute.path;
+      final r = sim.run(
+        'tool/with_timeout.sh',
+        ['25', 'bash', script25, 'warmup', udid],
+        env: {
+          'IOS_WARMUP_TIMEOUT': 'abc',
+          'IOS_WARMUP_READY_TIMEOUT': 'xyz',
+          'FAKE_VM_DELAY': '0',
+        },
+      );
+      expect(r.exitCode, 0, reason: outputOf(r));
+      expect(
+        outputOf(r),
+        contains('IOS_WARMUP_TIMEOUT=abc is not a number, using 180'),
+      );
+      expect(
+        outputOf(r),
+        contains('IOS_WARMUP_READY_TIMEOUT=xyz is not a number, using 30'),
+      );
+      expect(outputOf(r), contains('ios_sim: warm-up ok after'));
+      expect(outputOf(r), isNot(contains('unbound variable')));
+    });
+
     test('a failed launch is reported and never fails the job', () {
       final r = sim.run(
         script,
