@@ -1717,7 +1717,12 @@ final class NativeTabsTests: XCTestCase {
     XCTAssertEqual(tabs.tabBarMinimizeBehavior, .onScrollDown)
     XCTAssertFalse(field.isFirstResponder, "entering search raises no keyboard")
     // Dart's activation right after the selection, as a deep link sends it.
-    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    // It overlaps the search tab's own entry (the bar's morph into the
+    // field), so the search presents after it. On a loaded CI runner
+    // (PR #15) the report had not come after 3 s, yet the asserts below
+    // passed: the search was up, the field focused, the scope bar drawn.
+    // The UI suite's 10 s; a slower report is logged.
+    settle(sending: "searchActive true", within: 10) { tabs.setSearchActive(true) }
     XCTAssertTrue(field.isFirstResponder, "the keyboard comes with the search")
     XCTAssertTrue(bar.showsScopeBar)
     let scope = stable { tabs.debugSnapshot().scopeFrame } until: { $0.width > 0 }
@@ -1944,16 +1949,25 @@ extension NativeTabsTests {
 
   /// Runs [action] and waits until it has sent [message] once more: the
   /// search controller's present and dismiss transitions outlast `settle`
-  /// while the keyboard moves (up to 0.7 s on iPhone 27.0).
-  fileprivate func settle(sending message: String, _ action: () -> Void) {
+  /// while the keyboard moves (up to 0.7 s on iPhone 27.0). A wait longer
+  /// than 3 s is logged, so a report that slows down shows.
+  fileprivate func settle(
+    sending message: String, within timeout: TimeInterval = 3, _ action: () -> Void
+  ) {
     let count = { self.events.sent.filter { $0 == message }.count }
     let before = count()
+    let start = Date()
     action()
-    let deadline = Date().addingTimeInterval(3)
+    let deadline = start.addingTimeInterval(timeout)
     while count() == before, Date() < deadline {
       RunLoop.current.run(until: Date().addingTimeInterval(0.05))
     }
-    if count() == before { XCTFail("no \(message) within 3 s: \(events.sent)") }
+    let waited = Date().timeIntervalSince(start)
+    if count() == before {
+      XCTFail("no \(message) within \(Int(timeout)) s: \(events.sent)")
+    } else if waited > 3 {
+      print("NativeTabsTests: \(message) took \(String(format: "%.1f", waited)) s")
+    }
     settle()
   }
 
