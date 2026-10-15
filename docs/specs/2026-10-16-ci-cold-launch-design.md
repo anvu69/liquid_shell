@@ -198,13 +198,15 @@ The script never changes the caller's directory: `guard` runs its command where 
 4. **Install:** with an app, `simctl install <udid> <app>`, capped at 300 s. A failure prints `warm-up skipped: could not install <app>` and exits 0.
 5. **Start the reader before the launch:**
    - `simctl spawn <udid> log stream --style compact --predicate '<§5.4>'`, in the background, into a temporary file.
-   - It is capped at `IOS_WARMUP_TIMEOUT + 120` s, so it can never outlive the script.
-   - Wait up to 30 s for its first output, the "Filtering the log data …" header. Starting the reader first means it cannot miss the line, which is the race §3.2 suspects in flutter_tools.
+   - It is started through `tool/with_timeout.sh` directly, not through a shell function, so the background pid is the wrapper's: a TERM to it stops the reader's whole process group.
+   - It is capped at `IOS_WARMUP_TIMEOUT + 120` s, and stopped by the warm-up on every path: ok, timeout and launch failure. A `trap` stops it too when the script is terminated or exits early, so it does not outlive the warm-up. (A TERM that arrives while the script is inside a capped call is handled after that call returns, at most its cap.)
+   - Wait up to `IOS_WARMUP_READY_TIMEOUT` (default 30) s for its first output, the "Filtering the log data …" header. Starting the reader first means it cannot miss the line, which is the race §3.2 suspects in flutter_tools.
+   - Record whether the header had appeared (`reader ready: yes|no`) and the launch time, in UTC and in local time (the clock `log show` prints), as `launched:`. Print both in one `ios_sim: launching …` line.
 6. **Launch:** `simctl launch <udid> <bundle>`, capped at 120 s. A failure stops the reader, prints `warm-up skipped: could not launch <bundle>` and exits 0.
 7. **Wait for the line:** poll the reader's file once a second for `Dart VM service is listening on`, for at most `IOS_WARMUP_TIMEOUT` seconds from the launch. Then stop the reader.
 8. **Result:**
    - found: print `warm-up ok after <n>s on <udid>`;
-   - not found: print `warm-up timeout after <IOS_WARMUP_TIMEOUT>s on <udid>` and run `diagnose <udid> warm-up`. The dump runs **before** the terminate, so `sample` sees the app.
+   - not found: print `warm-up timeout after <IOS_WARMUP_TIMEOUT>s on <udid>` and run `diagnose <udid> warm-up`. The dump runs **before** the terminate, so `sample` sees the app. The dump also gets the reader's own output as `warm-up-reader.log`, and `launched:` and `reader ready:` lines in `meta.txt`.
 9. **Terminate:** `simctl terminate <udid> <bundle>`, capped at 60 s, errors ignored. Exit 0.
 
 The warm-up launches the app as built: no demo environment variable, so the example's case list.
@@ -274,6 +276,7 @@ tool/ios_xctest.sh UDID RESULT SUITE_SECONDS DEFAULT_ALLOWANCE MAX_ALLOWANCE sel
    - Arguments: the same workspace, scheme, destination, derived data and `<selection>`, plus `-parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance DEFAULT_ALLOWANCE -maximum-test-execution-time-allowance MAX_ALLOWANCE -resultBundlePath RESULT -quiet`.
    - `WITH_TIMEOUT_ON_STALL` is `ios_sim.sh diagnose UDID "<RESULT's basename without .xcresult> stall"`.
    - A red run prints `xcrun xcresulttool get test-results summary --path RESULT` when RESULT exists, then exits with the run's status. A stall exits 124.
+   - A green run whose result reports `totalTestCount` 0 (a selection that matched nothing, such as a renamed test class) exits 1 with `the selection ran 0 tests`; a count that cannot be read is only a warning.
 
 Fewer than six arguments print usage and exit 2. The flags and their reasons (`-collect-test-diagnostics never`, `-quiet` plus the summary) move from the Makefile into the script's header.
 
@@ -381,13 +384,22 @@ On CI the folders are uploaded as the `cold-launch-*` artifacts of §8.2.
 
 ### 10.2 Reading a dump (experiment E1 of the evidence)
 
+`meta.txt` carries `app pid:`, the pid of the app itself, found with the `UIKitApplication:<bundle>[` prefix in `launchctl list` (never the XCTest runner, whose label starts with the same bundle id), or `none`.
+
 | What the dump shows | Reading |
 |---|---|
-| `vm-service.log` has a line from `Runner[<pid>:…]` whose pid is the one in `launchctl.txt` | The app printed the line, and the reader missed it: a flutter_tools / `log stream` race (Q7) |
-| The app is alive in `launchctl.txt`, with no such line | The app is stuck before its VM service started. `sample.txt` shows where (look at the main thread, `com.apple.main-thread`) |
-| No app in `launchctl.txt` | The launch was lost, or the app died. Look for a crash report |
+| `vm-service.log` has a line from `Runner[<pid>:…]` whose pid is `app pid:`, **and both** of these hold: the job log of that attempt shows `Error waiting for a debug connection` after its `✗ stalled`, and `vm-service.log` is a complete `log show` (it has no `✗ stalled` line from its own 120 s cap) | The app printed the line, and the reader missed it: a flutter_tools / `log stream` race (Q7) |
+| The same line, but the job log shows no `Error waiting for a debug connection` (the drive got its URL) | The test hung after connecting. Not Q7 |
+| `vm-service.log` is cut off by its cap (it contains `✗ stalled`) and has no such line | Unknown. It is not "no line" |
+| The app is alive in `launchctl.txt` (`app pid:` is a number), with no such line in a complete `vm-service.log` | The app is stuck before its VM service started. `sample.txt` shows where (look at the main thread, `com.apple.main-thread`) |
+| `app pid: none` | The launch was lost, or the app died. Look for a crash report |
 
-For a warm-up timeout, the reader that "missed" is our own, which started before the launch. A line there means the app was simply slower than 180 s.
+For a **warm-up** timeout the reader is our own (`warm-up-reader.log` is what it saw), and `meta.txt` has `launched:` and `reader ready:`. A `Runner[<app pid>:…]` line in `vm-service.log` is stamped in the local time of `launched:`, so compare its stamp with `launched:` + `IOS_WARMUP_TIMEOUT`:
+
+- stamped **before** that moment, `reader ready: yes`, and not in `warm-up-reader.log`: our own reader missed a line the app printed (Q7 at the `log stream` level);
+- stamped **after** it: the app was simply slower than `IOS_WARMUP_TIMEOUT`;
+- `reader ready: no`: inconclusive, because the reader may not have been attached at the launch;
+- no line at all, with the app alive: the app never started its VM service (read `sample.txt`).
 
 ## 11. Measurement
 
@@ -438,7 +450,7 @@ The job's first label is its first `ios_sim.sh guard` call: `native_shell_test.d
 
 ### 11.5 Q7 and Q8
 
-- **Q7:** if any dump of a **drive** stall reads "the app printed the line, and the reader missed it" (§10.2, first row), write `docs/qa/vk625/upstream-draft.md`.
+- **Q7:** if any dump of a **drive** stall reads "the app printed the line, and the reader missed it" (§10.2, first row, with both conditions), write `docs/qa/vk625/upstream-draft.md`.
   - It is a flutter/flutter issue draft: title, Flutter version, steps, the dump lines, and `simulators.dart:478-533` / `615`.
   - It is for the owner to approve. Never post it.
   - Otherwise, write no draft.
