@@ -21,7 +21,7 @@ final class MinimizeProxy: UIScrollView {
     showsHorizontalScrollIndicator = false
     scrollsToTop = false
     contentInsetAdjustmentBehavior = .always
-    contentSize = CGSize(width: 1, height: 100_000)
+    contentSize = CGSize(width: 1, height: 2 * Self.contentAhead)
     isAccessibilityElement = false
     accessibilityElementsHidden = true
     panGestureRecognizer.allowedScrollTypesMask = []
@@ -43,10 +43,26 @@ final class MinimizeProxy: UIScrollView {
 
   override func scrollRectToVisible(_ rect: CGRect, animated: Bool) {}
 
+  /// Content kept below the visible bottom. Nothing clamps the offset, and
+  /// past its content the proxy would sit in its bottom overscroll, where
+  /// UIKit likely stops minimizing (VK-600 Task 6 review).
+  static let contentAhead: CGFloat = 50_000
+
   func setOffset(_ value: Double) {
     guard value.isFinite else { return }
     offset = value
+    growContent()
     apply()
+  }
+
+  /// Grows the content before less than `contentAhead` is left below the
+  /// visible bottom: a size change, not an offset change, so UIKit sees no
+  /// scroll. It never shrinks, so UIKit never clamps the offset either (the
+  /// lock would drop that write anyway).
+  private func growContent() {
+    let bottom = CGFloat(offset) + bounds.height
+    guard bottom + Self.contentAhead > contentSize.height else { return }
+    contentSize.height = bottom + 2 * Self.contentAhead
   }
 
   private func apply() {

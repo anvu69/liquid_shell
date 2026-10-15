@@ -412,6 +412,29 @@ final class MinimizeProxyTests: XCTestCase {
     XCTAssertEqual(proxy.offset, 120)
   }
 
+  /// Task 6 review: nothing clamps the offset, so a long feed past the
+  /// first content would leave the proxy in its bottom overscroll, where
+  /// UIKit likely stops minimizing. `setOffset` grows the content ahead of
+  /// it, never shrinks it, and the lock holds.
+  func testALongFeedGrowsTheContentAheadOfTheOffset() {
+    let proxy = proxy()
+    proxy.setOffset(250_000)
+    XCTAssertEqual(proxy.contentOffset.y, -proxy.adjustedContentInset.top + 250_000)
+    let bottom = proxy.contentOffset.y + proxy.bounds.height
+    XCTAssertGreaterThan(proxy.contentSize.height, 250_000 + proxy.bounds.height)
+    XCTAssertGreaterThanOrEqual(
+      proxy.contentSize.height + proxy.adjustedContentInset.bottom - bottom, 10_000,
+      "a margin of content below the visible bottom, not the overscroll")
+    let y = proxy.contentOffset.y
+    proxy.contentOffset = CGPoint(x: 0, y: 999)
+    proxy.setContentOffset(CGPoint(x: 0, y: 555), animated: false)
+    XCTAssertEqual(proxy.contentOffset.y, y, "only setOffset moves it")
+    let grown = proxy.contentSize.height
+    proxy.setOffset(10)
+    XCTAssertEqual(proxy.contentSize.height, grown, "it never shrinks")
+    XCTAssertEqual(proxy.contentOffset.y, -proxy.adjustedContentInset.top + 10)
+  }
+
   func testANonFiniteOffsetIsIgnored() {
     let proxy = proxy()
     proxy.setOffset(40)

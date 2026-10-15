@@ -173,7 +173,8 @@ final class MinimizeProxy: UIScrollView {
                                         // hidden from accessibility, pan
                                         // allowedScrollTypesMask = []
   override var contentOffset: CGPoint   // setter applies only while writing
-  func setOffset(_ value: Double)       // finite only; y = −adjustedTop + value
+  func setOffset(_ value: Double)       // finite only; y = −adjustedTop + value;
+                                        // grows the content first (below)
   override func adjustedContentInsetDidChange()   // re-applies `offset`
   override func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool
                                         // own pan: false when its location
@@ -182,6 +183,8 @@ final class MinimizeProxy: UIScrollView {
 ```
 
 Its deceleration after a release is left running, without overriding `scrollViewWillEndDragging`. The spike (C11) showed that the expand at the top needs it.
+
+**The content grows with the offset** (Task 6 review). Nothing clamps the offset, so past about 99 270 pt (an iPhone, 100 000 pt of content) a long feed would leave the proxy in its bottom overscroll, where UIKit most likely stops minimizing and the bottom scroll-edge effect may flip. `setOffset` therefore grows `contentSize.height` before less than `contentAhead` (50 000 pt) is left below the visible bottom, to the visible bottom plus twice that. A size change is not an offset change, so UIKit sees no scroll. The content only grows, so UIKit never needs to clamp the offset (and the lock would drop that write). Only `setOffset` still moves the proxy. A Dart-side wrap or a relative offset was rejected: a wrap is a jump that UIKit reads as a scroll, and a relative offset only moves the bound into a native accumulator. As built after Task 6.
 
 ### 8.2 Hosts
 
@@ -317,7 +320,8 @@ The Flutter bar (kind `bottomBar`) uses the same tracker result. With `minimizeO
 | Case | Behaviour |
 |---|---|
 | Content shorter than the viewport | iOS bounce physics overscrolls at the top: `atTop`, so the offset stays ≤ 0 and nothing minimizes. A bounce past the bottom is a positive offset and can minimize, as with UIKit's own short scroll view |
-| Several vertical scroll views (an iPad master/detail in a narrow window) | One continuous virtual offset per tab (§9.1) |
+| Several vertical scroll views (an iPad master/detail in a narrow window) | One continuous virtual offset per tab (§9.1). At rest it only drops, so a flick that stops in another list never minimizes (§9.1 rule 3) |
+| A very long feed (past 100 000 pt) | The proxy's content grows ahead of the offset (§8.1), so it never sits in its bottom overscroll |
 | A horizontal carousel inside the list | Ignored (axis). The proxy pan's vertical component does not move the locked proxy |
 | A vertical slider or a text-selection drag | Flutter's list does not move, so the offset does not change and nothing minimizes |
 | A drag that starts over a platform view | The pan does not begin (§8.3). The platform view scrolls as before (spike §4) |
@@ -386,6 +390,7 @@ The Flutter bar (kind `bottomBar`) uses the same tracker result. With `minimizeO
 `MinimizeProxyTests`:
 
 - the lock: UIKit's writes are dropped, `setOffset` maps to `-adjustedContentInset.top + offset`, a non-finite offset is ignored, the offset is re-applied after an inset change;
+- a long feed: `setOffset(250_000)` grows the content ahead of the offset (never into the bottom overscroll), the lock holds, and the content never shrinks;
 - `scrollsToTop` false; accessibility hidden; `allowedScrollTypesMask` empty;
 - the gesture gate over a subview of `contentView`.
 
