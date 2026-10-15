@@ -271,7 +271,9 @@ Rules. Only `n.metrics.axis == Axis.vertical` counts, at every depth, as for the
      - A drag into the top never expands, as UIKit's (spike §3.1).
      - The bounce back from an overscroll has `scrollDelta > 0`, so it never expands either.
    - Otherwise the result is `moved` if the offset changed, else `none`.
-3. Every other notification: `none`.
+   - A view **nested** in another vertical scroll view (a small list in a card, a `NestedScrollView`'s inner list) moves the offset like any other, but `atTop` is false for it. So it never snaps the offset to the top and never expands: its own top is not the page's. The adapter finds it from `n.depth` (the viewports passed on the way up). At depth 0, the common case, there is no walk. Otherwise it walks that many enclosing `ScrollableState`s and looks for a vertical one, so a list in a horizontal `PageView` is still the page. As built in Task 6.
+3. `ScrollEndNotification` from a view that is not nested: at rest the offset becomes that view's own, `m.pixels - m.minScrollExtent`, floored at `kMinimizeAwayFromTop` while below the top. Deltas that the tracker missed then do not outlive one scroll: a view replaced, or pixels corrected without a notification. The continuity between views gives way only at rest, where UIKit ignores a move it does not track (spike §2). As built in Task 6.
+4. Every other notification: `none`.
 
 The `expand` result is the same rule UIKit applies (spike §3.1: the deceleration that reaches the top expands). Dart sends it to native too, for two reasons:
 
@@ -280,7 +282,7 @@ The `expand` result is the same rule UIKit applies (spike §3.1: the deceleratio
 
 ### 9.2 Sending
 
-- `_onBodyScroll` feeds the tracker with the selected index, in both chrome modes.
+- `_onBodyScroll` feeds the tracker with the selected index, in both chrome modes. Only a view on screen counts (`isOnScreenUnder` the body, as for VK-567's navigators): an `IndexedStack` keeps the other tabs' lists, and an app that scrolls one of them must not move or expand the selected tab's bar.
 - With native chrome (kind `null`), a `moved` or `expand` result schedules one post-frame send, deduplicated per (tab, offset), like `_scheduleScrollSync`.
 - With native chrome, an `expand` also calls `claim.expandTabBar()`.
 - **Active** only when all of these hold:
@@ -293,6 +295,10 @@ The `expand` result is the same rule UIKit applies (spike §3.1: the deceleratio
 
   These are the same conditions as the native attachment (§8.3), and `nativeMinimizeActive(...)` in `native_minimize.dart` is the one predicate for them.
 - When it becomes active, or the selection changes while active, the selected tab's current offset is sent once, even if unchanged.
+- The same forced send follows (§8.6: new native hosts start at offset 0):
+  - a config that may rebuild the native tabs (`nativeTabsMayRebuild`: other tabs or another trailing action, a superset of the native structure). It is sent from the config's own post-frame callback, right after the config, never before it;
+  - a `LiquidNativeStateChanged`, which follows the host's forced config resend after a scene reconnect.
+- A destination that leaves the list (the list shrinks) is `forget`-ed, so a destination that comes back at that index starts at 0.
 - `NativeChromeClaim` gains `setMinimizeScroll({tab, offset})` and `expandTabBar()`, sent only while it owns the chrome.
 
 ### 9.3 Config
