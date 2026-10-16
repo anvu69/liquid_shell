@@ -82,7 +82,12 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       guard let self else { return false }
       return self.isSearchSelected && !self.applyingFromDart
     }
-    searchBridge.canKeepActivation = { [weak self] in self?.isSearchRootOnTop ?? false }
+    // Kept only where `setSearchActive` would apply it: the search tab
+    // selected, the chrome shown, no page over the search root (VK-634).
+    searchBridge.canKeepActivation = { [weak self] in
+      guard let self else { return false }
+      return self.isSearchSelected && self.chromeVisible && self.isSearchRootOnTop
+    }
     searchBridge.onText = { [weak self] text, composing in
       self?.send("onSearchTextChanged") {
         self?.events.onSearchTextChanged(text: text, composing: composing, completion: $0)

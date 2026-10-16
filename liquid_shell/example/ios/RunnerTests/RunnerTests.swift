@@ -3203,6 +3203,31 @@ extension NativeTabsTests {
     XCTAssertFalse(field.isFirstResponder, "dropped: no keyboard")
     XCTAssertFalse(events.sent.contains("searchActive true"), "dropped: \(events.sent)")
   }
+
+  /// VK-634: a refused activation is kept only while the search tab is
+  /// selected and the chrome shown. `didDismiss`'s deferred `activate()`
+  /// runs a turn later and does not look again: if Dart left the search tab
+  /// in between, nothing is kept, and selecting the tab later brings no
+  /// search, no keyboard and no report.
+  func testAnActivationRefusedAfterLeavingTheSearchTabIsNotKept() throws {
+    let (tabs, container) = try unshownSearchShell(scopes: Self.scopes)
+    let bridge = tabs.searchBridge
+    let bar = bridge.controller.searchBar
+
+    tabs.apply(searchConfig(selected: 0, scopes: Self.scopes))
+    bridge.activate()
+    XCTAssertFalse(bridge.activationPending, "not kept: the search tab is not selected")
+
+    let window = try portraitWindow(root: UIViewController())
+    extraWindows.append(window)
+    showShell(container, in: window, config: searchConfig(selected: 2, scopes: Self.scopes))
+    RunLoop.current.run(until: Date().addingTimeInterval(2))
+    XCTAssertFalse(bridge.controller.isActive, "nothing presents")
+    XCTAssertFalse(bridge.activationPending, "nothing is pending")
+    XCTAssertFalse(bar.searchTextField.isFirstResponder, "no keyboard")
+    XCTAssertFalse(bar.showsScopeBar, "no scope bar")
+    XCTAssertFalse(events.sent.contains("searchActive true"), "\(events.sent)")
+  }
 }
 
 // MARK: - VK-550: SearchBridge's scope bar (no window)

@@ -190,7 +190,7 @@ After `controller.isActive = true`, `activate()` reads one of three outcomes:
 |---|---|---|---|---|
 | true | any | the presentation started | restore the kept text; focus the field on the next turn | unchanged |
 | false | non-nil | a dismissal is still running | `activateAfterDismiss = true` | unchanged |
-| false | nil | **refused**: the search root is in no window (36 of 36 immediate activations) | fell through to the next-turn focus, which won about 6 times in 7 | `activationPending = true`; the scope bar follows `isActive` (§4.4); return |
+| false | nil | **refused**: the search root is in no window (36 of 36 immediate activations) | fell through to the next-turn focus, which won about 6 times in 7 | `activationPending = canKeepActivation()`: true only while the search tab is selected, the chrome is shown and the search root is the top of its stack (else dropped, §4.3); the scope bar follows `isActive` (§4.4); return |
 
 After a refusal the next-turn focus no longer runs:
 - the root's appearance is now the one recovery path, and it is deterministic;
@@ -223,6 +223,7 @@ After a refusal the next-turn focus no longer runs:
 | `dismissKeepingText()`, which serves Dart's `setSearchActive(false)`, leaving the search tab (`select`, `NativeTabsController.swift:388-397`), a rebuild (`:257`) and hidden chrome (`apply`, `:236`, VK-551) | cleared (today) | **cleared, before its `guard controller.isActive`**: a pending search is not active |
 | `didDismiss` with `activateAfterDismiss` | cleared; `activate()` on the next turn (today) | if that activation is refused: pending only when the search root is on top of its stack (otherwise dropped, addition 3), and `searchActive false` is still reported (`!isActive && !activateAfterDismiss`, `SearchBridge.swift:239`), so Dart hears what UIKit did |
 | A refusal while a page is pushed over the search root (the search tab's stack top is not the root; `canKeepActivation`) | — | **not set**: dropped, as before VK-634 (the owner's choice, addition 3). `syncScopeBar()` still runs, so no scope bar is left |
+| A refusal while the search tab is not selected or the chrome is hidden (`canKeepActivation`; for example `didDismiss`'s deferred `activate()` after Dart left the tab) | — | **not set**: the invariant "pending ⇒ search tab selected and chrome shown" holds while the activation is kept, not only when it is applied |
 | Dart's config pushes a page over the search root (`apply`, after the pages: `dropPendingActivation()`) | — | **cleared** (addition 3): the pop back must not bring the search |
 | The root's `viewDidAppear`, search tab selected, chrome shown | — | applied, and cleared |
 
@@ -311,6 +312,7 @@ After a refusal the next-turn focus no longer runs:
 | `NativeTabsTests/testAnActivationBeforeTheSearchRootIsInAWindowIsAppliedOnceItAppears` (new) | **Q2's deterministic red.** The shell has Dart's config (search tab selected) but is in no window, so its root is provably in none; activation is refused. For 1 s with no window: not active, **no scope bar**, no keyboard, no report. The container then becomes a window's root and Dart's config is applied again, as `NativeShellInstaller.install` does. Expected: `searchActive true`, `isActive`, the keyboard, the scope bar, and exactly one `searchActive` report | `no searchActive true within 10 s`, the keyboard, and the scope bar while inactive if UIKit ran `willPresent` as in the probe |
 | `NativeTabsTests/testAKeptActivationEndsWithADeactivateALeaveHiddenChromeOrAPresentation` (new) | the same refused activation, then one of: Dart's deactivate; another tab and back; hidden chrome and back; a presentation (`willPresent`, as UIKit calls it for a user's tap); a page pushed over the root (addition 3). Then the root appears, and nothing presents, nothing focuses, nothing is reported | each case presents and reports, once the activation is kept but never cancelled |
 | `NativeTabsTests/testAnActivationOverAPushedPageIsDroppedAndOneRightAfterThePopIsApplied` (new, addition 3) | a shell in a window with a page pushed in the search tab. A deep link (pop to the root, then activate at once) is refused while the pop runs, kept, and presents and reports. An activation while the page covers the root is refused, leaves no scope bar, and the pop back brings no search, no keyboard and no report | with the activation kept under a page: the pop presents and reports |
+| `NativeTabsTests/testAnActivationRefusedAfterLeavingTheSearchTabIsNotKept` (new, final review) | a shell in no window with the search tab not selected: `activate()` directly, as `didDismiss`'s deferred block does. Not kept (`activationPending` false). The shell then shows with the search tab selected: nothing presents, no keyboard, no scope bar, no report | `activationPending` true after the refusal, and the search presenting once the tab is selected |
 | `testEnteringSearchTogglesNothingAndLeavesTheScopeBarAndKeyboardAlone` (kept) | the product's own sequence (select, then activate at once) is the **guard** (Q2); locally ×20 iterations | — (racy: about 1 in 7) |
 | every other `RunnerTests` test | unchanged behaviour: activation, dismissal, `activateAfterDismiss`, VK-551, scopes, compositions | — |
 | `MinimizeUITests` (6 iPhone, 2 iPad) | §7 | a temporary probe, never committed, flings the list and shows the old read failing with `No matches found` |
@@ -354,7 +356,7 @@ After a refusal the next-turn focus no longer runs:
 
 | Category | A failure in | Against the bar |
 |---|---|---|
-| 1A (VK-634) | `NativeTabsTests/testEnteringSearchTogglesNothingAndLeavesTheScopeBarAndKeyboardAlone`, `…/testAnActivationBeforeTheSearchRootIsInAWindowIsAppliedOnceItAppears`, `…/testAKeptActivationEndsWithADeactivateALeaveHiddenChromeOrAPresentation`, `…/testAnActivationOverAPushedPageIsDroppedAndOneRightAfterThePopIsApplied` | yes (blocking job) |
+| 1A (VK-634) | `NativeTabsTests/testEnteringSearchTogglesNothingAndLeavesTheScopeBarAndKeyboardAlone`, `…/testAnActivationBeforeTheSearchRootIsInAWindowIsAppliedOnceItAppears`, `…/testAKeptActivationEndsWithADeactivateALeaveHiddenChromeOrAPresentation`, `…/testAnActivationOverAPushedPageIsDroppedAndOneRightAfterThePopIsApplied`, `…/testAnActivationRefusedAfterLeavingTheSearchTabIsNotKept` | yes (blocking job) |
 | 1B (VK-626) | `…/testAReportLaterThanThreeSecondsStillCounts`, or any other `NativeTabsTests` failure whose text starts `failed - no searchActive` (a `settle(sending:)` wait) | yes |
 | VK-633 | a `MinimizeUITests` failure whose text names a `Home item` row (`No matches found`), or reads `scrolled`, `the drag scrolled` or `at the top again` | yes |
 | Segv | `crashed with signal` in an `ios-unit` job | no (Q4): its crash report is read (§9.4) |
