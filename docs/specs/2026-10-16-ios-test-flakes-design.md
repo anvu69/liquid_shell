@@ -39,7 +39,7 @@
 
 ## 1. Goal
 
-1. Dart's activation of the native search is never lost because the search root was not in a window yet (VK-634). A refused presentation leaves no scope bar on an inactive search.
+1. Dart's activation of the native search is never lost because the search root was not in a window yet (VK-634), except while a page covers the root (addition 3). A refused presentation leaves no scope bar on an inactive search.
 2. The `ios-unit` waits for a search report survive the CI runner's multi-second stalls (VK-626, 1B).
 3. `MinimizeUITests` reads a row that left the accessibility tree as scrolled, instead of failing on the read (VK-633).
 4. The segv waits for the crash report that CI now keeps (VK-626, Q4).
@@ -53,7 +53,7 @@ Success:
 
 ### 2.1 In
 
-- **1A (VK-634):** a pending activation in `SearchBridge`, applied from the search root's `viewDidAppear` (§4). Two new XCTests. One CHANGELOG line (§10).
+- **1A (VK-634):** a pending activation in `SearchBridge`, applied from the search root's `viewDidAppear` (§4). Four new XCTests (§8). One CHANGELOG line (§10).
 - **1B (VK-626):** `settle(sending:within:_:)` waits 10 s by default (§5). One new XCTest.
 - **VK-633:** `MinimizeUITests` reads a row's frame through one snapshot, and a missing row counts as scrolled (§7).
 - **Segv (VK-626):** the evidence is recorded (§3.3). Its crash report is read when one exists, during the measurement (§6, §9.4).
@@ -309,11 +309,11 @@ After a refusal the next-turn focus no longer runs:
 | Test (file) | Pins | Red before the change |
 |---|---|---|
 | `NativeTabsTests/testAReportLaterThanThreeSecondsStillCounts` (new, `RunnerTests.swift`) | a report 3.5 s after the action counts; the default is 10 s | `no searchActive true within 3 s` |
-| `NativeTabsTests/testAnActivationBeforeTheSearchRootIsInAWindowIsAppliedOnceItAppears` (new) | **Q2's deterministic red.** The shell has Dart's config (search tab selected) but is in no window, so its root is provably in none; activation is refused. For 1 s with no window: not active, **no scope bar**, no keyboard, no report. The container then becomes a window's root and Dart's config is applied again, as `NativeShellInstaller.install` does. Expected: `searchActive true`, `isActive`, the keyboard, the scope bar, and exactly one `searchActive` report | `no searchActive true within 10 s`, the keyboard, and the scope bar while inactive if UIKit ran `willPresent` as in the probe |
+| `NativeTabsTests/testAnActivationBeforeTheSearchRootIsInAWindowIsAppliedOnceItAppears` (new) | **Q2's deterministic red.** The shell has Dart's config (search tab selected) but is in no window, so its root is provably in none; activation is refused. For 1 s with no window: not active, **no scope bar**, no keyboard, no report. The container then becomes a window's root and Dart's config is applied again, as `NativeShellInstaller.install` does. Expected: `searchActive true`, `isActive`, the keyboard, the scope bar, and exactly one `searchActive` report | `no searchActive true within 10 s`, and the keyboard. The refusal here is silent (the root is in no window) and runs no `willPresent`, so the scope bar is not red in this test; the scope-bar red is carried by the guard (d9e500f) |
 | `NativeTabsTests/testAKeptActivationEndsWithADeactivateALeaveHiddenChromeOrAPresentation` (new) | the same refused activation, then one of: Dart's deactivate; another tab and back; hidden chrome and back; a presentation (`willPresent`, as UIKit calls it for a user's tap); a page pushed over the root (addition 3). Then the root appears, and nothing presents, nothing focuses, nothing is reported | each case presents and reports, once the activation is kept but never cancelled |
 | `NativeTabsTests/testAnActivationOverAPushedPageIsDroppedAndOneRightAfterThePopIsApplied` (new, addition 3) | a shell in a window with a page pushed in the search tab. A deep link (pop to the root, then activate at once) is refused while the pop runs, kept, and presents and reports. An activation while the page covers the root is refused, leaves no scope bar, and the pop back brings no search, no keyboard and no report | with the activation kept under a page: the pop presents and reports |
 | `NativeTabsTests/testAnActivationRefusedAfterLeavingTheSearchTabIsNotKept` (new, final review) | a shell in no window with the search tab not selected: `activate()` directly, as `didDismiss`'s deferred block does. Not kept (`activationPending` false). The shell then shows with the search tab selected: nothing presents, no keyboard, no scope bar, no report | `activationPending` true after the refusal, and the search presenting once the tab is selected |
-| `testEnteringSearchTogglesNothingAndLeavesTheScopeBarAndKeyboardAlone` (kept) | the product's own sequence (select, then activate at once) is the **guard** (Q2); locally ×20 iterations | — (racy: about 1 in 7) |
+| `testEnteringSearchTogglesNothingAndLeavesTheScopeBarAndKeyboardAlone` (kept) | the product's own sequence (select, then activate at once) is the **guard** (Q2); locally ×20 iterations. It now carries the deterministic scope-bar red: UIKit runs `willPresent` on this refusal, so the scope bar shows unless `syncScopeBar()` hides it (d9e500f) | the scope bar left drawn on the inactive search (red with `syncScopeBar()` removed); the rest is racy, about 1 in 7 |
 | every other `RunnerTests` test | unchanged behaviour: activation, dismissal, `activateAfterDismiss`, VK-551, scopes, compositions | — |
 | `MinimizeUITests` (6 iPhone, 2 iPad) | §7 | a temporary probe, never committed, flings the list and shows the old read failing with `No matches found` |
 
@@ -395,7 +395,7 @@ Stop. Write `measurement.md` with the verdict and the evidence, commit it, push,
   - No version bump, no other CHANGELOG.
 - **The line,** in that file's style (a plain sentence, the ticket at the end):
 
-  > - An activation Dart asks for right after selecting the search tab (a deep link, a programmatic focus) is no longer lost when UIKit refuses it because the search root is not in a window yet: it is kept until the root appears, and Dart's deactivate, leaving the tab or hidden chrome drop it. A refused presentation no longer leaves the scope bar drawn on an inactive search (VK-634).
+  > - An activation Dart asks for right after selecting the search tab (a deep link, a programmatic focus) is no longer lost when UIKit refuses it because the search root is not in a window yet: it is kept until the root appears, and Dart's deactivate, leaving the tab, hidden chrome or a page pushed over the root drop it. While a page already covers the root the activation is still dropped, not kept. A refused presentation no longer leaves the scope bar drawn on an inactive search (VK-634).
 
 ## 11. Risks
 

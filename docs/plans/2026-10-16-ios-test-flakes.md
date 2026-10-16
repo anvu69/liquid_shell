@@ -4,12 +4,12 @@
 >
 > **For agentic workers:** REQUIRED SUB-SKILL: use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task by task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Dart's search activation is never lost when UIKit refuses it because the search root is not in a window yet (VK-634). The `ios-unit` report waits survive the CI runner's stalls (VK-626). `MinimizeUITests` counts a row that left the accessibility tree as scrolled (VK-633). Three CI runs measure the result.
+**Goal:** Dart's search activation is never lost when UIKit refuses it because the search root is not in a window yet (VK-634), except while a page covers the root (addition 3). The `ios-unit` report waits survive the CI runner's stalls (VK-626). `MinimizeUITests` counts a row that left the accessibility tree as scrolled (VK-633). Three CI runs measure the result.
 
 **Architecture:**
 
 1. **1B (Task 1):** the XCTest helper `settle(sending:within:_:)` waits 10 s by default instead of 3 s. Its print of a wait over 3 s stays. A new test pins it with a report sent after 3.5 s.
-2. **1A (Task 2):** `SearchBridge.activate()` reads a refused presentation (`isActive` still false, no dismissal running) as "the search root is in no window".
+2. **1A (Task 2):** `SearchBridge.activate()` reads a refused presentation (`isActive` still false, no dismissal running) as "the search root is in no window". An activation while a page covers the root is dropped, not kept (addition 3).
    - It keeps the activation (`activationPending`), and hides the scope bar that `willPresent` already showed (`syncScopeBar()`: shown only while `isActive`).
    - `PageHostController.viewDidAppear` → `NativeTabsController.searchRootAppeared(_:)` → `SearchBridge.applyPendingActivation()` applies it, under `setSearchActive`'s rule (search tab selected, chrome shown).
    - `dismissKeepingText()` (Dart's deactivate, leaving the tab, a rebuild, hidden chrome) and `willPresentSearchController` end it.
@@ -1367,7 +1367,7 @@ Give each failure one category, by its test and its text:
 
 | Category | A failure in | Against the bar |
 |---|---|---|
-| 1A (VK-634) | `NativeTabsTests/testEnteringSearchTogglesNothingAndLeavesTheScopeBarAndKeyboardAlone`, `NativeTabsTests/testAnActivationBeforeTheSearchRootIsInAWindowIsAppliedOnceItAppears`, `NativeTabsTests/testAKeptActivationEndsWithADeactivateALeaveHiddenChromeOrAPresentation` | yes, in a blocking job |
+| 1A (VK-634) | `NativeTabsTests/testEnteringSearchTogglesNothingAndLeavesTheScopeBarAndKeyboardAlone`, `NativeTabsTests/testAnActivationBeforeTheSearchRootIsInAWindowIsAppliedOnceItAppears`, `NativeTabsTests/testAKeptActivationEndsWithADeactivateALeaveHiddenChromeOrAPresentation`, `NativeTabsTests/testAnActivationOverAPushedPageIsDroppedAndOneRightAfterThePopIsApplied`, `NativeTabsTests/testAnActivationRefusedAfterLeavingTheSearchTabIsNotKept` | yes, in a blocking job |
 | 1B (VK-626) | `NativeTabsTests/testAReportLaterThanThreeSecondsStillCounts`, or any other `NativeTabsTests` failure whose text starts `failed - no searchActive` | yes, in a blocking job |
 | VK-633 | a `MinimizeUITests` failure whose text names a `Home item` row (`No matches found`), or reads `scrolled`, `the drag scrolled` or `at the top again` | yes, in a blocking job |
 | Segv | `crashed with signal` in an `ios-unit` job | no (Q4): Step 7 |
