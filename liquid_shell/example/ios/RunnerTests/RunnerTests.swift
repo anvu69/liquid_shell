@@ -1948,10 +1948,13 @@ extension NativeTabsTests {
 
   /// Runs [action] and waits until it has sent [message] once more: the
   /// search controller's present and dismiss transitions outlast `settle`
-  /// while the keyboard moves (up to 0.7 s on iPhone 27.0). A wait longer
-  /// than 3 s is logged, so a report that slows down shows.
+  /// while the keyboard moves (up to 0.7 s on iPhone 27.0). 10 s, the UI
+  /// suite's: the CI runner stalls for seconds at a time, and 3 s ran out
+  /// on reports that came at 3.0-3.5 s (VK-626). A wait longer than 3 s is
+  /// printed, so a report that slows down shows (the test host's stdout,
+  /// in the result bundle).
   fileprivate func settle(
-    sending message: String, within timeout: TimeInterval = 3, _ action: () -> Void
+    sending message: String, within timeout: TimeInterval = 10, _ action: () -> Void
   ) {
     let count = { self.events.sent.filter { $0 == message }.count }
     let before = count()
@@ -1997,6 +2000,20 @@ extension NativeTabsTests {
     installer.install(flutter, in: next)
     settle()
     return next
+  }
+
+  /// VK-626 (1B): a report that comes late, and comes, counts. The CI
+  /// runner stalls for seconds at a time (a test whose longest wait is
+  /// 0.5 s took 15-38 s there), and the old 3 s ran out on a report that
+  /// came at 3.0-3.5 s. The default is the UI suite's 10 s; a wait over
+  /// 3 s is printed.
+  func testAReportLaterThanThreeSecondsStillCounts() {
+    settle(sending: "searchActive true") {
+      DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
+        self.events.onSearchActiveChanged(active: true) { _ in }
+      }
+    }
+    XCTAssertEqual(events.sent, ["searchActive true"])
   }
 
   /// A scene reconnect whose first state report differs from the last one
