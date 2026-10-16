@@ -3189,16 +3189,21 @@ extension NativeTabsTests {
 
     // Over a pushed page: refused, and dropped.
     tabs.apply(config(pushed))
-    RunLoop.current.run(until: Date().addingTimeInterval(1))
-    XCTAssertNil(nav.rootHost.view.window, "precondition: the page covers the search root")
+    XCTAssertTrue(
+      stable({ nav.rootHost.viewIfLoaded?.window == nil }, until: { $0 }),
+      "precondition: the page covers the search root")
     events.sent.removeAll()
     tabs.setSearchActive(true)
     RunLoop.current.run(until: Date().addingTimeInterval(1))
     XCTAssertFalse(bridge.controller.isActive, "precondition: UIKit refused over the page")
     XCTAssertFalse(bar.showsScopeBar, "a refused presentation draws no scope bar")
     tabs.apply(config(root))
-    RunLoop.current.run(until: Date().addingTimeInterval(2))
-    XCTAssertNotNil(nav.rootHost.view.window, "precondition: back on the search root")
+    XCTAssertTrue(
+      stable(
+        { nav.rootHost.viewIfLoaded?.window != nil && nav.transitionCoordinator == nil },
+        until: { $0 }),
+      "precondition: back on the search root, the pop finished")
+    RunLoop.current.run(until: Date().addingTimeInterval(1))
     XCTAssertFalse(bridge.controller.isActive, "dropped: the pop brings no search")
     XCTAssertFalse(field.isFirstResponder, "dropped: no keyboard")
     XCTAssertFalse(events.sent.contains("searchActive true"), "dropped: \(events.sent)")
