@@ -15,6 +15,12 @@
 - **Breaking for fakes:** the exported `NativeDebugSnapshot` gains two
   required fields, `minimizeBehavior` and `minimizePanAttached`. Code that
   constructs one (a test fake) must pass them.
+- An activation Dart asks for right after selecting the search tab (a
+  deep link, a programmatic focus) is no longer lost when UIKit refuses
+  it because the search root is not in a window yet: it is kept until the
+  root appears, and Dart's deactivate, leaving the tab or hidden chrome
+  drop it. A refused presentation no longer leaves the scope bar drawn on
+  an inactive search (VK-634).
 
 ## 0.1.0-dev.7
 

@@ -33,7 +33,7 @@
 > - **Khác:** một dòng CHANGELOG cho 1A trong `liquid_shell_ios`. Không đổi phiên bản, không phát hành, không kiểm tra trên máy thật.
 > - **Cần chủ sản phẩm biết:**
 >   - Dòng in "chờ quá 3 s" nằm trong result bundle. CI chỉ tải bundle lên khi job đỏ, nên ở lần chạy xanh không thấy dòng này (mục phát sinh 6).
->   - Nếu Dart kích hoạt lúc có một trang con đè lên trang gốc tab tìm kiếm, ô tìm sẽ mở khi người dùng quay về trang gốc. Trước đây lời kích hoạt đó bị bỏ (mục phát sinh 3).
+>   - Nếu Dart kích hoạt lúc có một trang con đè lên trang gốc tab tìm kiếm, lời kích hoạt bị bỏ như trước, và push một trang lên trang gốc thì huỷ lời kích hoạt đang giữ. Deep link pop về trang gốc rồi kích hoạt ngay thì ô tìm vẫn mở. Chủ sản phẩm chọn ngày 2026-10-16 (mục phát sinh 3).
 
 ---
 
@@ -222,6 +222,8 @@ After a refusal the next-turn focus no longer runs:
 | `willPresentSearchController` (any presentation, the user's tap included) | cleared (today) | **cleared**: the search came; a later appearance of the root must not bring it back after the user closed it |
 | `dismissKeepingText()`, which serves Dart's `setSearchActive(false)`, leaving the search tab (`select`, `NativeTabsController.swift:383`), a rebuild (`:253`) and hidden chrome (`apply`, `:232`, VK-551) | cleared (today) | **cleared, before its `guard controller.isActive`**: a pending search is not active |
 | `didDismiss` with `activateAfterDismiss` | cleared; `activate()` on the next turn (today) | if that activation is refused: pending, and `searchActive false` is still reported (`!isActive && !activateAfterDismiss`, `SearchBridge.swift:239`), so Dart hears what UIKit did |
+| A refusal while a page is pushed over the search root (the search tab's stack top is not the root; `canKeepActivation`) | — | **not set**: dropped, as before VK-634 (the owner's choice, addition 3). `syncScopeBar()` still runs, so no scope bar is left |
+| Dart's config pushes a page over the search root (`apply`, after the pages: `dropPendingActivation()`) | — | **cleared** (addition 3): the pop back must not bring the search |
 | The root's `viewDidAppear`, search tab selected, chrome shown | — | applied, and cleared |
 
 ### 4.4 The scope bar
@@ -253,8 +255,8 @@ After a refusal the next-turn focus no longer runs:
 
 | File | Change |
 |---|---|
-| `SearchBridge.swift` | `private(set) var activationPending`; `activate()` keeps a refused activation; `func applyPendingActivation()`; `private func syncScopeBar()`, used by `setScopes` and after a refusal; `dismissKeepingText()` and `willPresentSearchController(_:)` clear the flag; the header comment |
-| `NativeTabsController.swift` | `func searchRootAppeared(_ host: PageHostController)`; `setSearchActive`'s comment |
+| `SearchBridge.swift` | `private(set) var activationPending`; `activate()` keeps a refused activation when `canKeepActivation()` allows it; `func applyPendingActivation()`; `func dropPendingActivation()`; `private func syncScopeBar()`, used by `setScopes` and after a refusal; `dismissKeepingText()` and `willPresentSearchController(_:)` clear the flag; the header comment |
+| `NativeTabsController.swift` | `func searchRootAppeared(_ host: PageHostController)`; `private var isSearchRootOnTop`, which feeds `canKeepActivation` and, in `apply` after the pages, drops a kept activation (addition 3); `setSearchActive`'s comment |
 | `ShellNavController.swift` | `PageHostController.viewDidAppear(_:)` calls `shell?.searchRootAppeared(self)` |
 
 ## 5. 1B (VK-626): 10 s by default
@@ -307,7 +309,8 @@ After a refusal the next-turn focus no longer runs:
 |---|---|---|
 | `NativeTabsTests/testAReportLaterThanThreeSecondsStillCounts` (new, `RunnerTests.swift`) | a report 3.5 s after the action counts; the default is 10 s | `no searchActive true within 3 s` |
 | `NativeTabsTests/testAnActivationBeforeTheSearchRootIsInAWindowIsAppliedOnceItAppears` (new) | **Q2's deterministic red.** The shell has Dart's config (search tab selected) but is in no window, so its root is provably in none; activation is refused. For 1 s with no window: not active, **no scope bar**, no keyboard, no report. The container then becomes a window's root and Dart's config is applied again, as `NativeShellInstaller.install` does. Expected: `searchActive true`, `isActive`, the keyboard, the scope bar, and exactly one `searchActive` report | `no searchActive true within 10 s`, the keyboard, and the scope bar while inactive if UIKit ran `willPresent` as in the probe |
-| `NativeTabsTests/testAKeptActivationEndsWithADeactivateALeaveHiddenChromeOrAPresentation` (new) | the same refused activation, then one of: Dart's deactivate; another tab and back; hidden chrome and back; a presentation (`willPresent`, as UIKit calls it for a user's tap). Then the root appears, and nothing presents, nothing focuses, nothing is reported | each case presents and reports, once the activation is kept but never cancelled |
+| `NativeTabsTests/testAKeptActivationEndsWithADeactivateALeaveHiddenChromeOrAPresentation` (new) | the same refused activation, then one of: Dart's deactivate; another tab and back; hidden chrome and back; a presentation (`willPresent`, as UIKit calls it for a user's tap); a page pushed over the root (addition 3). Then the root appears, and nothing presents, nothing focuses, nothing is reported | each case presents and reports, once the activation is kept but never cancelled |
+| `NativeTabsTests/testAnActivationOverAPushedPageIsDroppedAndOneRightAfterThePopIsApplied` (new, addition 3) | a shell in a window with a page pushed in the search tab. A deep link (pop to the root, then activate at once) is refused while the pop runs, kept, and presents and reports. An activation while the page covers the root is refused, leaves no scope bar, and the pop back brings no search, no keyboard and no report | with the activation kept under a page: the pop presents and reports |
 | `testEnteringSearchTogglesNothingAndLeavesTheScopeBarAndKeyboardAlone` (kept) | the product's own sequence (select, then activate at once) is the **guard** (Q2); locally ×20 iterations | — (racy: about 1 in 7) |
 | every other `RunnerTests` test | unchanged behaviour: activation, dismissal, `activateAfterDismiss`, VK-551, scopes, compositions | — |
 | `MinimizeUITests` (6 iPhone, 2 iPad) | §7 | a temporary probe, never committed, flings the list and shows the old read failing with `No matches found` |
@@ -351,7 +354,7 @@ After a refusal the next-turn focus no longer runs:
 
 | Category | A failure in | Against the bar |
 |---|---|---|
-| 1A (VK-634) | `NativeTabsTests/testEnteringSearchTogglesNothingAndLeavesTheScopeBarAndKeyboardAlone`, `…/testAnActivationBeforeTheSearchRootIsInAWindowIsAppliedOnceItAppears`, `…/testAKeptActivationEndsWithADeactivateALeaveHiddenChromeOrAPresentation` | yes (blocking job) |
+| 1A (VK-634) | `NativeTabsTests/testEnteringSearchTogglesNothingAndLeavesTheScopeBarAndKeyboardAlone`, `…/testAnActivationBeforeTheSearchRootIsInAWindowIsAppliedOnceItAppears`, `…/testAKeptActivationEndsWithADeactivateALeaveHiddenChromeOrAPresentation`, `…/testAnActivationOverAPushedPageIsDroppedAndOneRightAfterThePopIsApplied` | yes (blocking job) |
 | 1B (VK-626) | `…/testAReportLaterThanThreeSecondsStillCounts`, or any other `NativeTabsTests` failure whose text starts `failed - no searchActive` (a `settle(sending:)` wait) | yes |
 | VK-633 | a `MinimizeUITests` failure whose text names a `Home item` row (`No matches found`), or reads `scrolled`, `the drag scrolled` or `at the top again` | yes |
 | Segv | `crashed with signal` in an `ios-unit` job | no (Q4): its crash report is read (§9.4) |
@@ -398,7 +401,8 @@ Stop. Write `measurement.md` with the verdict and the evidence, commit it, push,
 |---|---|
 | UIKit refuses with the root already in a window (never seen: every refusal in the evidence had the root in none) | The activation waits for the root's next appearance instead of a next-turn focus. The measurement counts the refusals in red bundles |
 | iOS 27 reports a refusal differently (for example `isActive` true) | CI runs iOS 26.5 only. Task 2 runs the three 1A tests on a local iOS 27.0 simulator; a failure there stops the task |
-| A page pushed over the search root: Dart's activation is refused there too | It is kept until the user comes back to the root (addition 3). Before, it was dropped |
+| A page pushed over the search root: Dart's activation is refused there too | Not kept: the owner's choice (2026-10-16, the default of question A; addition 3). An activation refused while a page covers the root is dropped, as before, with no scope bar left; a push over the root drops a kept one. A pop to the root, then an activation (a deep link), is kept and applied |
+| After an animated pop to the search root, the applied activation presents the search and reports it, but the field does not take the keyboard (found in Task 2: 5 of 5 probes, iOS 26.5, at the parent commit as with the fix) | Not changed here: it predates VK-634 and is outside Q2. The pushed-page test does not assert the keyboard there. A follow-up item for the owner |
 | The red test's state (a whole shell in no window) is not a product state (§3.5 item 6) | It pins the bridge's rule on the same refusal. The guard test keeps the product's own sequence |
 | `willPresent` shows the scope bar, then the refusal hides it | Both happen in one run-loop turn, before any frame is drawn |
 | A missing report now costs 10 s per wait | About 34 waits per iPad run; a red run stays well inside the 900 s cap |
@@ -443,7 +447,10 @@ Bảng Q1–Q8 không nói tới những điểm dưới đây. Spec chọn như
    - nó chạy sau hiệu ứng xuất hiện;
    - lúc chuyển tab bằng code không chắc có `transitionCoordinator` để móc vào.
 2. **Bị từ chối thì bỏ lần focus ở lượt run loop sau.** Chỉ còn một đường cứu, chắc chắn, và huỷ là huỷ hết (§4.1). Ở lần trước bị từ chối, nếu lần focus đó thắng thì ô tìm mở sớm hơn một chút.
-3. **Trang con đè lên trang gốc tab tìm kiếm.** Dart kích hoạt lúc đó thì cũng bị từ chối. Lời kích hoạt được giữ đến khi người dùng quay về trang gốc; trước đây nó bị bỏ. Muốn bỏ như cũ thì thêm một luật: push một trang là huỷ.
+3. **Trang con đè lên trang gốc tab tìm kiếm: không giữ lời kích hoạt.** Chủ sản phẩm chọn ngày 2026-10-16, theo mặc định của câu hỏi A. Bản nháp trước giữ lời kích hoạt đến khi người dùng quay về trang gốc; chủ sản phẩm không chọn cách đó. Luật như sau:
+   - Dart kích hoạt lúc có trang con đè lên trang gốc (đỉnh ngăn xếp của tab tìm kiếm không phải trang gốc) thì UIKit cũng từ chối. Lời kích hoạt bị bỏ như trước: không giữ lại, và không để lại thanh phạm vi.
+   - Push một trang lên trang gốc thì huỷ lời kích hoạt đang giữ.
+   - Pop về trang gốc rồi kích hoạt ngay (đường của deep link) thì vẫn chạy: đỉnh ngăn xếp đã là trang gốc, nên lời kích hoạt bị từ chối lúc pop đang chạy vẫn được giữ và thực hiện khi trang gốc hiện ra.
 4. **Thanh phạm vi:** `willPresent` vẫn hiện nó, như spike VK-550 đã đo. Ngay khi bị từ chối, `activate()` ẩn nó đi theo `isActive`, trong cùng lượt run loop. Như vậy thanh phạm vi chỉ hiện khi `isActive` đúng, không hiện chỉ vì `willPresent` (§4.4).
 5. **Test đỏ dùng một shell chưa vào cửa sổ nào,** để đỏ chắc chắn; cuộc đua thật chỉ đỏ khoảng 1/7 lần. Thêm hai test: một test cho bốn cách huỷ (tắt, rời tab, ẩn chrome, một lần mở đã xảy ra), và một test 1B (báo cáo đến sau 3,5 s).
 6. **Dòng in "chờ quá 3 s" đã có sẵn từ VK-600.** Nó nằm trong stdout của test host, tức trong result bundle. Với `-quiet`, log của job không có nó, và CI chỉ tải bundle lên khi job đỏ. Muốn thấy cả ở lần chạy xanh thì phải đổi `tool/ios_xctest.sh` hoặc `ci.yaml`; việc đó ngoài phạm vi và chờ chủ sản phẩm quyết.
