@@ -4,7 +4,7 @@ Draft for the owner. Not posted.
 
 ## Summary
 
-On a loaded CI runner, `flutter drive` on an iOS simulator can wait forever for the VM service URL. The app has started and has printed "The Dart VM service is listening on …" to the unified log, but flutter_tools' `log stream` reader never delivers that line. `IOSSimulator.startApp` awaits the URL with no timeout. Nothing more is printed until an external timeout kills the process, and only then does "Error waiting for a debug connection: The log reader failed unexpectedly" appear. A second `flutter drive` on the same booted simulator then connects within seconds.
+On a loaded CI runner, `flutter drive` on an iOS simulator can wait forever for the VM service URL. The app has started and has printed "The Dart VM service is listening on …" to the unified log, but flutter_tools never reported it (cause unconfirmed; see below). `IOSSimulator.startApp` awaits the URL with no timeout. Nothing more is printed until an external timeout kills the process, and only then does "Error waiting for a debug connection: The log reader failed unexpectedly" appear. A second `flutter drive` on the same booted simulator then connects within seconds.
 
 ## Environment
 
@@ -41,7 +41,7 @@ After "Xcode build done", nothing is printed for 1200 s, until an external timeo
 
 The `✗ stalled` line is printed by our timeout wrapper. A diagnostics dump of the simulator ran after it and before the kill, so the dump saw the app in its stalled state:
 
-- **The app was running.** `launchctl list` in the simulator showed `19423	0	UIKitApplication:vn.lasoai.liquidShellExample[0875][rb-legacy]`, so `app pid: 19423`.
+- **The app was running.** `launchctl list` in the simulator showed `19423	0	UIKitApplication:<bundle id>[0875][rb-legacy]`, so `app pid: 19423`.
 - **The app had printed the line.** The dump ran `xcrun simctl spawn <udid> log show --last 25m --info --debug --style compact --predicate 'process == "Runner" AND eventMessage CONTAINS "Dart VM service is listening"'`. It found this line from that pid, about 14.5 minutes before the kill:
 
   ```
@@ -67,4 +67,4 @@ Any one of these would turn the hang into a recovery or an error:
 
 1. **A timeout** on `vmServiceDiscovery.uri` in `IOSSimulator.startApp`, failing with an actionable error instead of waiting forever.
 2. **A backfill:** when the URL has not arrived after N seconds, run `xcrun simctl spawn <udid> log show --start '<launch time>' --predicate '<same predicate>'` and feed its lines to the discovery.
-3. **Attach first:** wait for `log stream`'s "Filtering the log data using …" header before `simctl launch`, so the reader is attached when the app starts. Our CI warm-up does this, and its reader caught the line in 56 of 56 launches.
+3. **Attach first:** wait for `log stream`'s "Filtering the log data using …" header before `simctl launch`, so the reader is attached when the app starts. Our CI warm-up (a throwaway launch of the app on the booted simulator, before the drive) does this, and its reader caught the line in 48 of 48 launches in the six counted runs.

@@ -23,7 +23,7 @@
 
 | Criterion | Result |
 |---|---|
-| Blocking jobs red because of a stall | **0** (must be 0). There were four blocking reds, none of them a stall: no guard fired twice, no `✗ stalled` and no job hit its `timeout-minutes`. `ios-minimize (iPhone)` in 38819151747 is a new kind of test failure ("No matches found" for a row that had existed, launch #3, 12 m 43 s against a 45 min cap). The three `ios-unit` reds (38819151747 iPad, 38819171451 iPad and iPhone) are VK-626: "no searchActive true within 3 s / 10 s". Every non-iOS blocking job was green in all six runs. |
+| Blocking jobs red because of a stall | **0** (must be 0). There were four blocking reds, none of them a stall: no guard fired twice, no `✗ stalled` and no job hit its `timeout-minutes`. `ios-minimize (iPhone)` in 38819151747 is a new kind of test failure ("No matches found" for a row that had existed, launch #3, 12 m 43 s against the `timeout-minutes: 45` cap in `.github/workflows/ci.yaml`). The three `ios-unit` reds (38819151747 iPad, 38819171451 iPad and iPhone) are VK-626: "no searchActive true within 3 s / 10 s". Every non-iOS blocking job was green in all six runs. |
 | Stall-like `ios-ui` reds (12 jobs) | **0 by the §11.2 list, 1 counted conservatively** (must be ≤ 1). No red has "Timed out while evaluating UI query", "Failed to send signal 19", an exceeded allowance or `✗ stalled`. `ios-ui (iPhone)` in 38819190079 failed at the job's first two launches with "Failed to get launch progress for <XCUIApplicationImpl … vn.lasoai.liquidShellExample …>: Timed out while requesting launch progress." and "Failed to get background assertion for target app with pid 23973". That is not on the list, but it is a launch failure at launches #1–#2, close to the "signal 19" family, so it is counted. The other two `ios-ui (iPhone)` reds are assertions. |
 
 ## Rates against the baseline (spec §11.3)
@@ -36,7 +36,7 @@
 | Retry stalls (same simulator now) | 0 / 1 | 13 / 38 = 34 % (rebooted) |
 | Later-drive stalls | 0 / 36 = 0 % (95 % CI 0–9.7 %) | 8 / 197 = 4 % |
 | Stall-like `ios-ui` reds | 0 by the list, 1 conservatively / 12 | 15 / 82: 11 (A), 2 "signal 19", 2 suite cap (evidence report, last 40 runs) |
-| XCTest suite caps (`✗ stalled`) in `ios-unit` / `ios-ui` / `ios-minimize` | 0 / 30 | 2 / 82 `ios-ui` |
+| XCTest suite caps (`✗ stalled`) in `ios-unit` / `ios-ui` / `ios-minimize` | 0 / 30 (ios-unit, ios-ui and ios-minimize jobs) | 2 / 82 `ios-ui` jobs only; the denominators count different things |
 
 - **How the counts were made:**
   - The first drives are the 6 `integration-ios` jobs and the 12 `integration-ios-native (…, iOS 26)` jobs, all of which reached a warm-up line.
@@ -45,8 +45,8 @@
   - The one retry is the one attempt-1 firing. No attempt-2 firing occurred.
 - **The warm-up times are not like for like.** The baseline counts from "Xcode build done", so the install is in it. The warm-up counts from `simctl launch`.
 - **The stall the retry absorbed:** 38819180108, `integration-ios-native (iPhone, iOS 26)`. Its `native_shell_test.dart` drive stalled once, and the same-simulator retry connected 14 s after its build. The job stayed green and took 39 m 51 s, against 21–24 min for the same job in the other runs.
-- **Sample size:** a one-sided Fisher test of 1/18 against 30/127 gives p = 0.065. The direction is right, but six runs cannot prove the drop on their own.
-- **With the PR run** (not counted): first drives 1 / 21, later drives 0 / 42, warm-ups 56 / 56 ok (p50 5 s, max 53 s), and no other guard firing.
+- **Sample size:** a one-sided Fisher test of 1/18 against 30/127 gives p = 0.065. The result is consistent with an improvement, but six runs cannot prove the drop on their own: the 95 % interval for 1/18 (0.1–27.3 %) includes the 24 % baseline.
+- **With the PR run** (not counted): first drives 1 / 21, later drives 0 / 42, warm-ups 56 / 56 ok (48 / 48 in the six counted runs) (p50 5 s, max 53 s), and no other guard firing.
 
 ## Every iOS job
 
@@ -142,7 +142,7 @@ The PR's own run (reported, not counted):
 | 38819162000 | `ios-ui (iPhone)` | Assertion, not stall-like | `SearchUITests/testNativeAScopeTapDismissesTheKeyboardAndKeepsTheSearch()`: "XCTAssertTrue failed - the native field" |
 | 38819190079 | `ios-ui (iPhone)` | **Launch failure at launches #1–#2.** It is not (A)'s query timeout and not on the §11.2 list, but it is counted as stall-like (conservative). The first test took 70 s. The warm-up before it was ok after 2 s. | `MinimizeUITests/testADragThatMovesNoContentKeepsTheBarWhole()` (launch #1): "Failed to get launch progress for <XCUIApplicationImpl: 0x106ee6ac0 vn.lasoai.liquidShellExample at …/Runner.app>: Timed out while requesting launch progress."; `MinimizeUITests/testAScrollMinimizesAndAFlingToTheTopExpands()` (launch #2): "Failed to get background assertion for target app with pid 23973: No failure details provided"; `SearchUITests/testAnEdgeSwipePopsFlutterAndTheNativeBarFollows()`: "XCTAssertTrue failed - Flutter popped the detail" |
 
-None of the XCTest jobs printed `the selection ran 0 tests`. No `ios-ui` or `ios-minimize` job hit its suite cap. The first launched test of the 14 `ios-ui` jobs (PR run included) took p50 32 s and at most 74 s. The evidence baseline was a median of 36 s and a p90 of 112 s.
+None of the XCTest jobs printed `the selection ran 0 tests`. No `ios-ui` or `ios-minimize` job hit its suite cap.
 
 ## Other red jobs
 
@@ -159,7 +159,7 @@ One dump in the six runs: the drive stall above. There were no warm-up dumps (no
 
 | Artifact / dump | Label | Reading (spec §10.2) | Note (`sample.txt` top frames) |
 |---|---|---|---|
-| `cold-launch-native-iPhone-2-a1` (run 38819180108, job 116711276063) / `20261016T012834Z-native_shell_test.dart_on_88931AEA_62E6_447F_8697_DCE00A671384_stall_1` | `native_shell_test.dart on 88931AEA_62E6_447F_8697_DCE00A671384 stall 1` | **Printed; the reader missed it (Q7).** Both conditions hold. (1) `vm-service.log` is complete (no `✗ stalled` in it) and has `2026-10-16 01:14:02.833 Df Runner[19423:f0fc] (Flutter) flutter: The Dart VM service is listening on http://127.0.0.1:51215/LOA13XgD8YA=/`. The pid is `app pid: 19423` from `meta.txt`, and `launchctl.txt` has `19423	0	UIKitApplication:vn.lasoai.liquidShellExample[0875][rb-legacy]`. (2) The job log has `✗ stalled: still running after 1200s: flutter drive … native_shell_test.dart …` at 01:28:34, then `Error waiting for a debug connection: The log reader failed unexpectedly` at 01:28:51. | The main thread was idle in its run loop: `UIApplicationMain` → `GSEventRunModal` → `__CFRunLoopRun` → `__CFRunLoopServiceMachPort` → `mach_msg2_trap`, 3339 / 3339 samples. That is the app waiting for a debugger to resume its paused isolate, not a hang. Launch Time 01:14:00.601, so the VM service line came 2.2 s after the launch. `load:` 53.86 110.10 118.95 (3-core runner). The other line in the file, `Runner[8224:77d8]` at 01:08:30.847, is the warm-up's own launch ("warm-up ok after 2s" at 01:08:33). |
+| `cold-launch-native-iPhone-2-a1` (run 38819180108, job 116711276063) / `20261016T012834Z-native_shell_test.dart_on_88931AEA_62E6_447F_8697_DCE00A671384_stall_1` | `native_shell_test.dart on 88931AEA_62E6_447F_8697_DCE00A671384 stall 1` | **Printed; the reader missed it (Q7).** Both conditions hold. (1) `vm-service.log` is complete (no `✗ stalled` in it) and has `2026-10-16 01:14:02.833 Df Runner[19423:f0fc] (Flutter) flutter: The Dart VM service is listening on http://127.0.0.1:51215/LOA13XgD8YA=/`. The pid is `app pid: 19423` from `meta.txt`, and `launchctl.txt` has `19423	0	UIKitApplication:vn.lasoai.liquidShellExample[0875][rb-legacy]`. (2) The job log has `✗ stalled: still running after 1200s: flutter drive … native_shell_test.dart …` at 01:28:34, then `Error waiting for a debug connection: The log reader failed unexpectedly` at 01:28:51. | The main thread was idle in its run loop: `UIApplicationMain` → `GSEventRunModal` → `__CFRunLoopRun` → `__CFRunLoopServiceMachPort` → `mach_msg2_trap`, 3339 / 3339 samples. This is consistent with the app waiting for a debugger to resume its paused isolate rather than hanging; an idle run-loop sample alone does not prove it. Launch Time 01:14:00.601, so the VM service line came 2.2 s after the launch. `load:` 53.86 110.10 118.95 (3-core runner). The other line in the file, `Runner[8224:77d8]` at 01:08:30.847, is the warm-up's own launch ("warm-up ok after 2s" at 01:08:33). |
 
 **Timeline of the stalled drive (UTC; the simulator's local time is UTC):**
 
@@ -181,7 +181,7 @@ Drafted `docs/qa/vk625/upstream-draft.md` from the dump `cold-launch-native-iPho
 
 ## Notes for the owner
 
-- **What the one stall was.** It was not a first launch after the boot: the warm-up had launched the app about 5.5 minutes earlier, and it reached its line in 2 s. The app was up and idle and had printed its line, and flutter_tools' reader missed it. So (B), at least here, is a flutter_tools log-reader race under heavy load, not an app hang. The warm-up only makes it rarer. The same-simulator retry recovers from it, at the cost of the 1200 s drive cap.
+- **What the one stall was.** It was not a first launch after the boot: the warm-up had launched the app about 5.5 minutes earlier, and it reached its line in 2 s. The app was up and idle and had printed its line, and flutter_tools' reader missed it. So (B), at least here, is a flutter_tools log-reader race under heavy load, not an app hang. The warm-up may make it rarer; 1/18 does not show it. The same-simulator retry recovers from it, at the cost of the 1200 s drive cap.
 - **The new blocking job `ios-minimize (iPhone)` went red once in six runs, for a reason that is not a stall** (above). On `main` that would have turned the run red. Whether `testAStatusBarTapScrollsToTheTopAndExpands` is flaky or caught something real is not known from the log, and the xcresult was not read: this measurement downloads only `cold-launch-*` artifacts and job logs. It is in the run's `ios-minimize-iPhone-diagnostics` artifact (7 days).
 - **Two of the six runs were red overall,** both for non-stall reasons: VK-626 in `ios-unit` (3 jobs over 2 runs) and the `ios-minimize` failure above.
 - **`ios-ui (iPhone)` was red in 3 of 6 runs; `ios-ui (iPad)` was green in all 6.** It is non-blocking (Q6) and outside the bar.
