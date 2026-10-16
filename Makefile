@@ -19,7 +19,7 @@ COVERAGE_MIN := 90
 
 .PHONY: help get format format-check analyze test coverage goldens \
         goldens-update provenance snippets verify pana publish-check \
-        android-unit ios-unit ios-ui integration-ios integration-ios-native integration-android pigeon pigeon-check \
+        android-unit ios-unit ios-ui ios-minimize integration-ios integration-ios-native integration-android pigeon pigeon-check \
         test-impeller compare-images tab-traces tab-frames segment-traces \
         segment-frames
 
@@ -139,32 +139,28 @@ android-unit: ## JVM unit tests of the Android plugin (SignalReaderTest)
 	cd $(EXAMPLE) && $(FLUTTER) build apk --debug --config-only
 	cd $(EXAMPLE)/android && ./gradlew :liquid_shell_android:testDebugUnitTest
 
-# A red run must exit, not hang. With xcodebuild's default
-# `-collect-test-diagnostics on-failure` (a sysdiagnose-like bundle after a
-# failure) a red run here stalled past 7 minutes; with `never` it exits in
-# seconds. Test timeouts stop a stuck test, and tool/with_timeout.sh stops
-# the whole run, build included (exit 124).
+# The XCTest targets run tool/ios_xctest.sh (spec VK-625 §6): build-for-
+# testing (each build step capped at IOS_BUILD_TIMEOUT), one warm-up launch
+# of the built app on the booted simulator (tool/ios_sim.sh warmup: outside
+# every cap, never failing), then test-without-building under the suite's
+# own cap, IOS_UNIT_TIMEOUT / IOS_UI_TIMEOUT / IOS_MINIMIZE_TIMEOUT (exit 124
+# after a diagnostics dump). A red run prints the result bundle's summary.
+#
+# IOS_BUILD_TIMEOUT: CI's first app launch came 93-458 s after `xcodebuild
+# test` started, build and implicit boot included, and flutter's first drive
+# build took up to 109 s (VK-625 evidence); 900 s is about twice the worst.
+IOS_BUILD_TIMEOUT ?= 900
 IOS_UNIT_TIMEOUT ?= 900
-# `-quiet` names a failing test but not its failed assertion: a red run
-# prints the result bundle's summary (failure messages), so a CI-only
-# failure says why.
 IOS_UNIT_RESULT := $(CURDIR)/$(EXAMPLE)/build/ios-unit.xcresult
 
 ios-unit: ## XCTest of liquid_shell_ios (example RunnerTests) on an iPad or iPhone simulator; IOS_UNIT_DEVICE=<udid>
-	cd $(EXAMPLE) && $(FLUTTER) build ios --config-only --simulator --debug
-	rm -rf $(IOS_UNIT_RESULT)
-	cd $(EXAMPLE)/ios && $(CURDIR)/tool/with_timeout.sh $(IOS_UNIT_TIMEOUT) \
-	  xcodebuild test -workspace Runner.xcworkspace -scheme Runner \
-	  -destination "id=$${IOS_UNIT_DEVICE:?set IOS_UNIT_DEVICE to a simulator UDID}" \
-	  -only-testing:RunnerTests -skip-testing:RunnerUITests -parallel-testing-enabled NO \
-	  -collect-test-diagnostics never \
-	  -test-timeouts-enabled YES -default-test-execution-time-allowance 60 \
-	  -maximum-test-execution-time-allowance 120 \
-	  -resultBundlePath $(IOS_UNIT_RESULT) -quiet \
-	  || { status=$$?; [ ! -d $(IOS_UNIT_RESULT) ] || \
-	    xcrun xcresulttool get test-results summary --path $(IOS_UNIT_RESULT); exit $$status; }
+	FLUTTER="$(FLUTTER)" IOS_BUILD_TIMEOUT=$(IOS_BUILD_TIMEOUT) tool/ios_xctest.sh \
+	  "$${IOS_UNIT_DEVICE:?set IOS_UNIT_DEVICE to a simulator UDID}" \
+	  $(IOS_UNIT_RESULT) $(IOS_UNIT_TIMEOUT) 60 120 \
+	  -only-testing:RunnerTests -skip-testing:RunnerUITests
 
-# The UI suite's own cap, build included. Measured on CI's iPhone 17
+# The UI suite's own cap. Until VK-625 it included the build; the numbers
+# below do, so they overstate the suite alone. Measured on CI's iPhone 17
 # (iOS 26.5): 12 tests took 436-840 s by runner (PR #9); with VK-551's
 # three edge-swipe tests (15) a slow runner hit 900 s with four still to
 # run, about 1100 s in all; locally 477 s. VK-571 adds two full-launch
@@ -196,24 +192,27 @@ ios-unit: ## XCTest of liquid_shell_ios (example RunnerTests) on an iPad or iPho
 # (PR #15). The final review's lock test (one more iPhone launch, 35 s
 # locally) makes 27 of 29: well inside the cap.
 IOS_UI_TIMEOUT ?= 2100
-# As for ios-unit: a red run prints the bundle's summary, the failed
-# assertion and its line, which `-quiet` leaves out. CI uploads the bundle
-# (the failure's screenshot) from here.
 IOS_UI_RESULT := $(CURDIR)/$(EXAMPLE)/build/ios-ui.xcresult
 
 ios-ui: ## XCUITest: real taps on native dialogs and the search tab (example RunnerUITests) on a simulator; IOS_UNIT_DEVICE=<udid>
-	cd $(EXAMPLE) && $(FLUTTER) build ios --config-only --simulator --debug
-	rm -rf $(IOS_UI_RESULT)
-	cd $(EXAMPLE)/ios && $(CURDIR)/tool/with_timeout.sh $(IOS_UI_TIMEOUT) \
-	  xcodebuild test -workspace Runner.xcworkspace -scheme Runner \
-	  -destination "id=$${IOS_UNIT_DEVICE:?set IOS_UNIT_DEVICE to a simulator UDID}" \
-	  -only-testing:RunnerUITests -parallel-testing-enabled NO \
-	  -collect-test-diagnostics never \
-	  -test-timeouts-enabled YES -default-test-execution-time-allowance 180 \
-	  -maximum-test-execution-time-allowance 300 \
-	  -resultBundlePath $(IOS_UI_RESULT) -quiet \
-	  || { status=$$?; [ ! -d $(IOS_UI_RESULT) ] || \
-	    xcrun xcresulttool get test-results summary --path $(IOS_UI_RESULT); exit $$status; }
+	FLUTTER="$(FLUTTER)" IOS_BUILD_TIMEOUT=$(IOS_BUILD_TIMEOUT) tool/ios_xctest.sh \
+	  "$${IOS_UNIT_DEVICE:?set IOS_UNIT_DEVICE to a simulator UDID}" \
+	  $(IOS_UI_RESULT) $(IOS_UI_TIMEOUT) 180 300 \
+	  -only-testing:RunnerUITests
+
+# M7 of VK-600's review, blocking on CI since VK-625: MinimizeUITests alone
+# (6 iPhone tests, 2 iPad-only skips). 165 s on an iPhone 17 (iOS 26.5) here,
+# at host load ~200; VK-600 measured five of them at 81 s at load 6-11. On
+# the slow-runner scale above (x3.2) six take about 310 s; one test stopped
+# at its 300 s allowance makes about 610 s. 900 s keeps ~290 s in hand.
+IOS_MINIMIZE_TIMEOUT ?= 900
+IOS_MINIMIZE_RESULT := $(CURDIR)/$(EXAMPLE)/build/ios-minimize.xcresult
+
+ios-minimize: ## XCUITest: MinimizeUITests only (native tab bar minimize) on a simulator; IOS_UNIT_DEVICE=<udid>
+	FLUTTER="$(FLUTTER)" IOS_BUILD_TIMEOUT=$(IOS_BUILD_TIMEOUT) tool/ios_xctest.sh \
+	  "$${IOS_UNIT_DEVICE:?set IOS_UNIT_DEVICE to a simulator UDID}" \
+	  $(IOS_MINIMIZE_RESULT) $(IOS_MINIMIZE_TIMEOUT) 180 300 \
+	  -only-testing:RunnerUITests/MinimizeUITests
 
 integration-ios: ## Signal channel round-trip on an iOS simulator
 	FLUTTER="$(FLUTTER)" tool/integration_ios.sh

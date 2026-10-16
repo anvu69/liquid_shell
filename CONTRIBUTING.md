@@ -22,6 +22,7 @@
 | `make integration-ios-native` | Native iOS 26 shell on an iPad and an iPhone simulator (both install it); saves screenshots |
 | `make ios-unit IOS_UNIT_DEVICE=<udid>` | XCTest of `liquid_shell_ios` (example `RunnerTests`) on one simulator; CI runs it on the newest iPad and iPhone |
 | `make ios-ui IOS_UNIT_DEVICE=<udid>` | XCUITest: real taps on native dialogs (example `RunnerUITests`) on one simulator; CI runs it, non-blocking, on the newest iPad and iPhone |
+| `make ios-minimize IOS_UNIT_DEVICE=<udid>` | XCUITest: `MinimizeUITests` only (the native tab bar's minimize) on one simulator; CI runs it, blocking, on an iPhone 17 (iOS 26) |
 | `make pigeon` / `make pigeon-check` | Regenerate the native channel / fail when the generated files drift (part of `verify`) |
 | `make pana` / `make publish-check` | pub.dev scoring and publish dry-run |
 | `make test-impeller` | Shader tests under Impeller (macOS) |
