@@ -12,7 +12,7 @@
 > - Đạt: trong ba lần chạy, không job chặn nào đỏ vì 1A (VK-634), 1B (VK-626) hay VK-633. `ios-minimize (iPhone)` xanh cả ba lần.
 > - Có hai job chặn đỏ ở lần chạy 2, cả hai thuộc loại "Other" (không tính vào điều kiện đạt): `ios-unit (iPhone)` đỏ ở `NativeTabsTests/testAPushedPagesBackButtonIsNative()` (`XCTAssertTrue failed`, không có chữ `no searchActive`), và `integration-ios-native (iPhone, iOS 26)` đỏ vì máy ảo không xoay sang ngang (`Failed to change device orientation ... timeout`). `goldens (stable)` đỏ cả ba lần, đã đỏ sẵn trên main, chỉ để tham khảo.
 > - Segv: không có `crashed with signal` nào, không có `Runner-*.ips` nào.
-> - Cỡ mẫu: ba lần chạy là ít; bằng chứng chính của 1A, 1B là các test tất định. Lưu ý: test `testAPushedPagesBackButtonIsNative` là test mà VK-634 đã sửa cách chờ (commit 11ffeec) nên đáng được chủ sản phẩm xem lại; theo bảng loại của spec §9.3 nó là "Other".
+> - Cỡ mẫu: ba lần chạy là ít; bằng chứng chính của 1A, 1B là các test tất định. Lưu ý: nhánh này không sửa test `testAPushedPagesBackButtonIsNative` (commit 11ffeec sửa `testAnActivationOverAPushedPageIsDroppedAndOneRightAfterThePopIsApplied`, ở `RunnerTests.swift:3189`). Test này không kích hoạt tìm kiếm, nên phần sửa sản phẩm của VK-634 (chỉ chạy khi có lời kích hoạt) không đụng tới nó. Nó dựng shell có trang con rồi bấm thử nút back ngay, không chờ; nhiều khả năng là một test chập chờn riêng. Theo bảng loại của spec §9.3 nó là "Other".
 
 ## Bar (spec §9.2)
 
@@ -59,7 +59,7 @@
 
 ## Other red jobs
 
-- **Run 2, `ios-unit (iPhone)` (117040188912), blocking, Other:** 1 failed of 187 tests (168 passed, 18 skipped). `NativeTabsTests/testAPushedPagesBackButtonIsNative()`, `"failureText" : "XCTAssertTrue failed"`. It is a hit test of the pushed page's back button (`RunnerTests.swift:2849`); the text does not start `failed - no searchActive`, and the test is not one of the five 1A tests, so by §9.3 it is Other. Its `ios-unit (iPad)` sibling and the same job in runs 1 and 3 were green.
+- **Run 2, `ios-unit (iPhone)` (117040188912), blocking, Other:** 1 failed of 187 tests (168 passed, 18 skipped). `NativeTabsTests/testAPushedPagesBackButtonIsNative()`, `"failureText" : "XCTAssertTrue failed"`. It is a hit test of the pushed page's back button (`RunnerTests.swift:2849`); the text does not start `failed - no searchActive`, and the test is not one of the five 1A tests, so by §9.3 it is Other. This branch does not change the test, and it makes no activation, so VK-634's kept activation never runs in it; it hit-tests the back button right after installing the shell, with no wait. Its `ios-unit (iPad)` sibling and the same job in runs 1 and 3 were green.
 - **Run 2, `integration-ios-native (iPhone, iOS 26)` (117040189400), blocking, Other:** `Failed to change device orientation: Error Domain=BSActionErrorDomain Code=2 "(null)" UserInfo={BSErrorCodeDescription=timeout}`, then `Expected: Orientation:<Orientation.landscape> Actual: Orientation:<Orientation.portrait>` at `integration_test/native_search_test.dart:311` (test "VK-550: the native scope bar, over the results, follows the app"); `Some tests failed.` A simulator rotation timeout, not a 1A, 1B or VK-633 failure.
 - **`goldens (stable)` in runs 1, 2 and 3 (117040175249, 117040189556, 117040205044):** informational, already red on main. Not counted.
 - No `ios-ui` job was red, so no 1A, 1B or VK-633 failure in an `ios-ui` job.
