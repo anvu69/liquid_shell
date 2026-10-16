@@ -1723,7 +1723,16 @@ final class NativeTabsTests: XCTestCase {
     // beat UIKit's layout, about six times in seven. The guard of the
     // product's own sequence; the deterministic test is
     // `testAnActivationBeforeTheSearchRootIsInAWindowIsAppliedOnceItAppears`.
-    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    settle(sending: "searchActive true") {
+      tabs.setSearchActive(true)
+      // Same turn, the root still in no window: UIKit ran `willPresent`
+      // (the scope bar shown) and then refused. `syncScopeBar()` hides it
+      // at once, so no scope bar stands on an inactive search (VK-634).
+      let bridge = tabs.searchBridge
+      XCTAssertTrue(
+        bridge.controller.isActive || !bar.showsScopeBar,
+        "a refused presentation draws no scope bar")
+    }
     XCTAssertTrue(field.isFirstResponder, "the keyboard comes with the search")
     XCTAssertTrue(bar.showsScopeBar)
     let scope = stable { tabs.debugSnapshot().scopeFrame } until: { $0.width > 0 }

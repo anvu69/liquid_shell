@@ -117,7 +117,7 @@
 |---|---|
 | 1. Applied from the search root's `viewDidAppear` | 2 |
 | 2. A refusal no longer schedules the next-turn focus | 2 |
-| 3. Through a pushed page, the activation waits for the root's return | 2 (no extra code: it follows from 1) |
+| 3. Owner (2026-10-16, question A default): an activation while a page covers the search root is dropped as before; a push cancels a kept one; popToRoot then activate is kept and applied | 2 |
 | 4. `willPresent` keeps showing the scope bar; a refusal hides it at once (`syncScopeBar`) | 2 |
 | 5. The red test uses a shell in no window; a cancel test (four cases); a 1B test | 1, 2 |
 | 6. The print of a slow wait is in the bundle only; no CI change | 1 (checked locally), 4 (read from red bundles) |
