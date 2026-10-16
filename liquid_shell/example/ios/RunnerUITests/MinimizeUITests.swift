@@ -100,7 +100,10 @@ final class MinimizeUITests: XCTestCase {
   }
 
   /// A drag on the list over [seconds]: [dy] < 0 scrolls the content down.
-  /// The hold at the end stops a fling, so a slow reverse stays mid-content.
+  /// The hold at the end stops a fling, so a slow reverse stays mid-content,
+  /// unless a stalled main thread hands Flutter the moves, the hold and the
+  /// lift in one burst: then the list flings on (VK-633), and a row read
+  /// after the drag may have left the tree (`frameInTree`).
   /// Window-relative: an iPad window need not start at the screen's origin.
   private func drag(_ app: XCUIApplication, dy: CGFloat, seconds: CGFloat = 0.3) {
     let start = app.windows.firstMatch
@@ -115,6 +118,25 @@ final class MinimizeUITests: XCTestCase {
   private func flutterRow(_ app: XCUIApplication, _ title: String) -> XCUIElement {
     app.descendants(matching: .any)
       .matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
+  }
+
+  /// [element]'s frame, or nil when it is not in the accessibility tree.
+  /// Flutter drops a row scrolled past its cache from its semantics tree,
+  /// and `frame` on a missing element fails the test: on a stalled CI
+  /// runner a 300 pt drag became an 830-860 pt fling (VK-633). One
+  /// snapshot, as `bar` reads the tab bar, so a row that leaves between two
+  /// queries cannot fail the read.
+  private func frameInTree(_ element: XCUIElement) -> CGRect? {
+    (try? element.snapshot())?.frame
+  }
+
+  /// Whether [row] went up by more than [distance] from [start]. A row
+  /// that left the tree went further still (VK-633).
+  private func scrolled(
+    _ row: XCUIElement, from start: CGFloat, by distance: CGFloat = 200
+  ) -> Bool {
+    guard let frame = frameInTree(row) else { return true }
+    return frame.minY < start - distance
   }
 
   /// Polls [condition] until it holds or [timeout] passes: a loaded runner
@@ -172,7 +194,7 @@ final class MinimizeUITests: XCTestCase {
     let before = row.frame.minY
     drag(app, dy: -300)
     sleep(2)
-    XCTAssertLessThan(row.frame.minY, before - 200, "the drag scrolled the list")
+    XCTAssertTrue(scrolled(row, from: before), "the drag scrolled the list")
     XCTAssertTrue(tabButton(app, "Explore").isHittable)
     XCTAssertGreaterThan(tabButton(app, "Home").frame.width, 60, "Home is not a circle")
     // On iPad 27 the top bar is not a tab bar in the tree (acceptance.md
@@ -222,7 +244,7 @@ final class MinimizeUITests: XCTestCase {
     let before = row.frame.minY
     drag(app, dy: -300)
     waitMinimized(app, true, "a swipe up minimizes")
-    XCTAssertLessThan(row.frame.minY, before - 200, "the drag scrolled Flutter's list")
+    XCTAssertTrue(scrolled(row, from: before), "the drag scrolled Flutter's list")
 
     app.buttons["Next tab"].tap()
     XCTAssertTrue(
@@ -246,7 +268,7 @@ final class MinimizeUITests: XCTestCase {
     let top = row.frame.minY
     drag(app, dy: -300)
     waitMinimized(app, true, "a swipe up minimizes")
-    XCTAssertLessThan(row.frame.minY, top - 200, "scrolled")
+    XCTAssertTrue(scrolled(row, from: top), "scrolled")
 
     // On the status bar, clear of the Dynamic Island. The first tap can
     // land on Flutter's accessibility mirror of the list instead
@@ -259,10 +281,11 @@ final class MinimizeUITests: XCTestCase {
     // Native chrome or not, the same.
     let statusBar = app.windows.firstMatch.coordinate(withNormalizedOffset: .zero)
       .withOffset(CGVector(dx: app.windows.firstMatch.frame.width * 0.85, dy: 15))
-    let atTop = { abs(row.frame.minY - top) < 2 }
+    // A row out of the tree is not back yet (VK-633).
+    let atTop = { self.frameInTree(row).map { abs($0.minY - top) < 2 } ?? false }
     statusBar.tap()
     if !wait(timeout: 3, until: atTop) { statusBar.tap() }
-    XCTAssertTrue(wait(until: atTop), "at the top again: \(row.frame)")
+    XCTAssertTrue(wait(until: atTop), "at the top again: \(String(describing: frameInTree(row)))")
     waitMinimized(app, false, "a programmatic scroll to the top expands")
   }
 
@@ -357,7 +380,7 @@ final class MinimizeUITests: XCTestCase {
     let before = row.frame.minY
     drag(app, dy: -300)
     waitMinimized(app, true, "a swipe up minimizes in a narrow window")
-    XCTAssertLessThan(row.frame.minY, before - 200, "the drag scrolled the list")
+    XCTAssertTrue(scrolled(row, from: before), "the drag scrolled the list")
     window.swipeDown(velocity: .fast)
     window.swipeDown(velocity: .fast)
     waitMinimized(app, false, "a fling that reaches the top expands")
