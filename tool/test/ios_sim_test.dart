@@ -308,6 +308,52 @@ void main() {
       expect(sim.callsWith('xcodebuild build '), hasLength(2));
       expect(sim.callsWith('simctl launch'), isEmpty);
     });
+
+    // On GitHub Actions warn prints `::warning::` to stdout, and warmup
+    // captures build's stdout as the app path: the note must go to stderr.
+    test('--build on GitHub Actions keeps the VK-627 note out of the app '
+        'path', () {
+      final r = sim.run(
+        script,
+        ['warmup', udid, '--build'],
+        env: {
+          'FAKE_VM_DELAY': '0',
+          'FAKE_BUILDS': 'vk627',
+          'GITHUB_ACTIONS': 'true',
+        },
+      );
+      expect(r.exitCode, 0, reason: outputOf(r));
+      expect(
+        outputOf(r),
+        contains(
+          '::warning::$vk627: build on $udid (attempt 1 of 2); '
+          'building again once',
+        ),
+      );
+      expect(
+        sim.callsWith('simctl install').single,
+        matches(RegExp(r'^xcrun simctl install \S+ \S+/Runner\.app$')),
+      );
+      expect(outputOf(r), isNot(contains('warm-up skipped')));
+      expect(sim.callsWith('simctl launch'), hasLength(1));
+    });
+
+    test('--build twice with the VK-627 signature on GitHub Actions shows '
+        'both notes', () {
+      final r = sim.run(
+        script,
+        ['warmup', udid, '--build'],
+        env: {'FAKE_BUILDS': 'vk627 vk627', 'GITHUB_ACTIONS': 'true'},
+      );
+      expect(r.exitCode, 0, reason: outputOf(r));
+      expect(outputOf(r), contains('(attempt 1 of 2); building again once'));
+      expect(outputOf(r), contains('(attempt 2 of 2); giving up'));
+      expect(
+        outputOf(r),
+        contains('warm-up skipped: the build failed'),
+      );
+      expect(sim.callsWith('simctl launch'), isEmpty);
+    });
   });
 
   group('diagnose', () {

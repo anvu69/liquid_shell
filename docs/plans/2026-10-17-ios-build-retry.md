@@ -1046,7 +1046,7 @@ build() { # <udid> <action> [xcodebuild args...]
   for attempt in 1 2; do
     status=0
     logged "$tmp/output" build_once "$@" >&2 || status=$?
-    build_again "$label" "$attempt" "$status" "$tmp/output" || break
+    build_again "$label" "$attempt" "$status" "$tmp/output" >&2 || break
   done
   rm -rf "$tmp"
   return "$status"
@@ -1059,7 +1059,7 @@ build_app() { # <udid>
 }
 ```
 
-`build` sends the copy to stderr: `build_app`'s stdout is the app's path, read by `app=$(build_app "$udid")` in `warmup`.
+`build` sends the copy to stderr: `build_app`'s stdout is the app's path, read by `app=$(build_app "$udid")` in `warmup`. `build_again`'s note goes to stderr too (`>&2`) for the same reason: on GitHub Actions `warn` writes `::warning::` to stdout (final review I-1).
 
 (h) The subcommand. Replace:
 

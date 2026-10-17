@@ -33,6 +33,7 @@
 #           signature (below) also runs once more. The command runs at most
 #           twice, whatever the reason. Any other status is the command's
 #           own and is never retried: a test failure never is.
+#           The command's stdout and stderr both come out on guard's stdout.
 # build     Builds the example for UDID: `flutter build ios --config-only
 #           --simulator --debug`, then `xcodebuild ACTION` (build or
 #           build-for-testing) of Runner.xcworkspace into
@@ -162,6 +163,8 @@ diagnose() { # <udid> <label> [window]
 # runners end iOS jobs with orphaned adb, ibtoold and DTServiceHub) must
 # not hold the script. Once the command has ended, the copy gets
 # copy_drain seconds to finish, then it is stopped.
+# If mkfifo fails the command runs without a copy (its output stays on its
+# own streams) and the log stays empty, so it is never retried.
 logged() { # <log> command [args...]
   local log=$1 fifo="$1.fifo" copier status=0
   shift
@@ -220,7 +223,7 @@ build() { # <udid> <action> [xcodebuild args...]
   for attempt in 1 2; do
     status=0
     logged "$tmp/output" build_once "$@" >&2 || status=$?
-    build_again "$label" "$attempt" "$status" "$tmp/output" || break
+    build_again "$label" "$attempt" "$status" "$tmp/output" >&2 || break
   done
   rm -rf "$tmp"
   return "$status"
