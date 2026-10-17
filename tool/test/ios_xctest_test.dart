@@ -104,6 +104,39 @@ void main() {
     expect(r.exitCode, 65);
     expect(sim.callsWith('simctl'), isEmpty);
     expect(sim.callsWith('test-without-building'), isEmpty);
+    expect(
+      sim.callsWith('build-for-testing'),
+      hasLength(1),
+      reason: 'a failure without the VK-627 signature is not retried',
+    );
+  });
+
+  // VK-627: `flutter build ios --config-only` left the generated plugin
+  // package at .iOS("13.0"), and build-for-testing failed Xcode's Target
+  // Integrity check. Both steps run once more.
+  test('a build that failed with the VK-627 signature runs once more, both '
+      'steps, then the suite runs', () {
+    final r = run(env: {'FAKE_BUILDS': 'vk627'});
+    expect(r.exitCode, 0, reason: outputOf(r));
+    expect(
+      outputOf(r),
+      contains(
+        'ios_sim: VK-627: Flutter skipped the deployment-target raise '
+        '(xcodebuild -showBuildSettings timed out): build-for-testing on '
+        '$udid (attempt 1 of 2); building again once',
+      ),
+    );
+    expect(sim.callsWith('flutter build ios --config-only'), hasLength(2));
+    expect(sim.callsWith('xcodebuild build-for-testing'), hasLength(2));
+    expect(sim.callsWith('test-without-building'), hasLength(1));
+  });
+
+  test('the VK-627 signature twice stops before the warm-up', () {
+    final r = run(env: {'FAKE_BUILDS': 'vk627 vk627'});
+    expect(r.exitCode, 65, reason: outputOf(r));
+    expect(outputOf(r), contains('(attempt 2 of 2); giving up'));
+    expect(sim.callsWith('xcodebuild build-for-testing'), hasLength(2));
+    expect(sim.callsWith('simctl'), isEmpty);
   });
 
   test('too few arguments print usage and exit 2', () {
