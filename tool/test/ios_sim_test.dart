@@ -9,6 +9,10 @@ import 'fake_sim.dart';
 void main() {
   const script = 'tool/ios_sim.sh';
   const udid = 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE';
+  // VK-627's note, before ": <label> (attempt <k> of 2); …".
+  const vk627 =
+      'ios_sim: VK-627: Flutter skipped the deployment-target raise '
+      '(xcodebuild -showBuildSettings timed out)';
   late FakeSim sim;
 
   setUp(() => sim = FakeSim());
@@ -368,6 +372,68 @@ void main() {
       expect(outputOf(r), contains('(attempt 2 of 2); giving up'));
       expect(sim.callsWith('flutter drive'), hasLength(2));
       expect(sim.dumps, hasLength(2));
+    });
+
+    test('a drive whose build failed with the VK-627 signature runs once '
+        'more, in a fresh flutter process', () {
+      final r = sim.run(script, drive, env: {'FAKE_DRIVES': 'vk627'});
+      expect(r.exitCode, 0, reason: outputOf(r));
+      expect(
+        outputOf(r),
+        contains(
+          '$vk627: a_test.dart on iPhone (attempt 1 of 2); building again once',
+        ),
+      );
+      expect(
+        outputOf(r),
+        contains('Target Integrity (Xcode)'),
+        reason: "the drive's own output still reaches the log",
+      );
+      expect(drives(), hasLength(2));
+      expect(sim.callsWith('simctl terminate'), isEmpty, reason: 'no app ran');
+      expect(sim.dumps, isEmpty);
+    });
+
+    test('the VK-627 signature twice gives up with the drive status', () {
+      final r = sim.run(script, drive, env: {'FAKE_DRIVES': 'vk627 vk627'});
+      expect(r.exitCode, 1);
+      expect(
+        outputOf(r),
+        contains('$vk627: a_test.dart on iPhone (attempt 2 of 2); giving up'),
+      );
+      expect(drives(), hasLength(2));
+    });
+
+    test('a stall and the VK-627 signature share the one retry', () {
+      final r = sim.run(script, drive, env: {'FAKE_DRIVES': 'stall vk627'});
+      expect(r.exitCode, 1, reason: outputOf(r));
+      expect(outputOf(r), contains('(attempt 1 of 2); terminating the app'));
+      expect(outputOf(r), contains('(attempt 2 of 2); giving up'));
+      expect(drives(), hasLength(2));
+    });
+
+    test('the VK-627 signature, then a stall: two drives, 124', () {
+      final r = sim.run(script, drive, env: {'FAKE_DRIVES': 'vk627 stall'});
+      expect(r.exitCode, 124, reason: outputOf(r));
+      expect(outputOf(r), contains('(attempt 1 of 2); building again once'));
+      expect(
+        outputOf(r),
+        contains('stall guard fired: a_test.dart on iPhone (attempt 2 of 2)'),
+      );
+      expect(drives(), hasLength(2));
+    });
+
+    test('a process that keeps the drive output open holds the guard at '
+        'most a few seconds', () {
+      final watch = Stopwatch()..start();
+      final r = sim.run(script, drive, env: {'FAKE_DRIVE': 'linger'});
+      watch.stop();
+      final lingerer = int.parse(
+        File('${sim.dir.path}/lingerer').readAsStringSync().trim(),
+      );
+      addTearDown(() => Process.killPid(lingerer));
+      expect(r.exitCode, 0, reason: outputOf(r));
+      expect(watch.elapsed, lessThan(const Duration(seconds: 40)));
     });
   });
 

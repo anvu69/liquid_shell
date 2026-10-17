@@ -19,8 +19,13 @@ import 'package:test/test.dart';
 /// - `FAKE_BUILD`: `fail` makes `xcodebuild build` and `build-for-testing`
 ///   fail.
 /// - `FAKE_TEST`: `fail` or `stall` for `xcodebuild test-without-building`.
-/// - `FAKE_DRIVE`: `fail`, `stall` (every drive) or `stall-once` (the first
-///   drive only) for `flutter drive`.
+/// - `FAKE_DRIVE`: `fail`, `stall` (every drive), `stall-once` (the first
+///   drive only) or `linger` (the drive passes, and leaves a `sleep 60`
+///   that holds its output, its pid in `lingerer`) for `flutter drive`.
+/// - `FAKE_DRIVES`: the outcomes of the 1st, 2nd, ... `flutter drive`,
+///   space-separated: `pass`, `fail`, `stall`, or `vk627` (flutter's
+///   "Failed to build iOS app" and Target Integrity lines, exit 1). Drives
+///   past the list pass. Overrides `FAKE_DRIVE`.
 class FakeSim {
   /// Writes the fakes into a new temporary directory.
   FakeSim() : dir = Directory.systemTemp.createTempSync('fake_sim_') {
@@ -160,7 +165,13 @@ exit 0
 const _flutter = r'''
 echo "flutter $*" >> "$FAKE_DIR/calls"
 [ "$1" = drive ] || exit 0
-case "${FAKE_DRIVE:-}" in
+outcome=${FAKE_DRIVE:-}
+if [ -n "${FAKE_DRIVES:-}" ]; then
+  n=$(($(cat "$FAKE_DIR/drives" 2> /dev/null || echo 0) + 1))
+  echo "$n" > "$FAKE_DIR/drives"
+  outcome=$(echo "$FAKE_DRIVES" | awk -v n="$n" '{ print $n }')
+fi
+case "$outcome" in
   fail) exit 1 ;;
   stall) sleep 300 ;;
   stall-once)
@@ -168,6 +179,14 @@ case "${FAKE_DRIVE:-}" in
       touch "$FAKE_DIR/stalled"
       sleep 300
     fi ;;
+  linger)
+    sleep 60 &
+    echo $! > "$FAKE_DIR/lingerer" ;;
+  vk627)
+    echo 'Failed to build iOS app'
+    echo "Target Integrity (Xcode): The package product 'liquid-shell-ios' requires minimum platform version 15.0 for the iOS platform, but this target supports 13.0" >&2
+    echo 'Application failed to start. Will not run test. Quitting.' >&2
+    exit 1 ;;
 esac
 exit 0
 ''';

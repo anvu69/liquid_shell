@@ -86,6 +86,21 @@ void main() {
       expect(r.exitCode, 1);
       expect(sim.callsWith('flutter drive'), hasLength(1));
     });
+
+    test('a drive whose build failed with the VK-627 signature runs once '
+        'more', () {
+      final r = runNative(env: {'FAKE_DRIVES': 'vk627'});
+      expect(r.exitCode, 0, reason: outputOf(r));
+      expect(
+        sim.callsWith('--target=integration_test/a_test.dart'),
+        hasLength(2),
+      );
+      expect(
+        sim.callsWith('--target=integration_test/b_test.dart'),
+        hasLength(1),
+      );
+      expect(outputOf(r), contains('ios_sim: VK-627: '));
+    });
   });
 
   group('integration_ios.sh', () {
@@ -109,6 +124,14 @@ void main() {
         outputOf(r),
         contains('stall guard fired: signals_test.dart on iPhone 17 Pro'),
       );
+    });
+
+    test('a drive whose build failed with the VK-627 signature runs once '
+        'more', () {
+      final r = runSignals(env: {'FAKE_DRIVES': 'vk627'});
+      expect(r.exitCode, 0, reason: outputOf(r));
+      expect(sim.callsWith('flutter drive'), hasLength(2));
+      expect(outputOf(r), contains('ios_sim: VK-627: '));
     });
   });
 }

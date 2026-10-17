@@ -21,8 +21,10 @@
 # flutter_tools waited, with no timeout of its own, for the app's VM service
 # URL. A drive that outlives IOS_DRIVE_TIMEOUT is diagnosed and stopped, the
 # app is terminated, and the drive is retried once on the same booted
-# simulator; a retry on a restarted one stalled 13 times in 38. A test
-# failure is never retried, only a stall.
+# simulator; a retry on a restarted one stalled 13 times in 38. A drive
+# whose build failed with VK-627's signature (Flutter skipped the
+# deployment-target raise) is retried once too. A drive runs at most twice,
+# and a test failure is never retried.
 #
 # Reduce Transparency has no supported simctl switch, so only the default
 # value is asserted here; toggling it is the manual check in docs/qa/.
