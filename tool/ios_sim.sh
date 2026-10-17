@@ -8,14 +8,14 @@
 #   tool/ios_sim.sh warmup UDID [APP | --build]
 #   tool/ios_sim.sh diagnose UDID LABEL [WINDOW]
 #   tool/ios_sim.sh guard UDID LABEL SECONDS command [args...]
+#   tool/ios_sim.sh build UDID ACTION [xcodebuild args...]
 #
 # warmup    Boots UDID and waits for it (simctl boot, bootstatus -b),
 #           installs APP when given, launches the example once and waits
 #           until it logs "The Dart VM service is listening on" (at most
 #           IOS_WARMUP_TIMEOUT seconds), then terminates it. --build first
-#           builds the example for UDID (flutter build ios --config-only,
-#           xcodebuild build into liquid_shell/example/build/ios-derived)
-#           and installs that. It never fails: a timeout is diagnosed, any
+#           builds the example for UDID (`build UDID build`, below) and
+#           installs that. It never fails: a timeout is diagnosed, any
 #           other problem is reported, and it exits 0. Its log reader is
 #           stopped on every path, also when the script is terminated. A
 #           timeout dump adds warm-up-reader.log (what the reader saw) and
@@ -33,6 +33,12 @@
 #           signature (below) also runs once more. The command runs at most
 #           twice, whatever the reason. Any other status is the command's
 #           own and is never retried: a test failure never is.
+# build     Builds the example for UDID: `flutter build ios --config-only
+#           --simulator --debug`, then `xcodebuild ACTION` (build or
+#           build-for-testing) of Runner.xcworkspace into
+#           liquid_shell/example/build/ios-derived, each step capped at
+#           IOS_BUILD_TIMEOUT. A build that failed with VK-627's signature
+#           runs once more, both steps. Its output goes to stderr.
 #
 # VK-627 (spec docs/specs/2026-10-17-ios-build-retry-design.md): Flutter
 # writes its generated FlutterGeneratedPluginSwiftPackage at .iOS("13.0") on
@@ -50,13 +56,15 @@
 # IOS_WARMUP_READY_TIMEOUT
 #                     seconds the warm-up waits for its log reader to
 #                     attach before it launches (default 30)
-# IOS_BUILD_TIMEOUT   seconds each step of --build may take (default 900)
+# IOS_BUILD_TIMEOUT   seconds each step of build (and --build) may take
+#                     (default 900)
 # IOS_DIAG_DIR        diagnostics root
 #                     (default liquid_shell/example/build/ios-diagnostics)
-# FLUTTER             flutter command for --build (default: flutter)
+# FLUTTER             flutter command for build (default: flutter)
 set -uo pipefail
 tool_dir=$(cd "$(dirname "$0")" && pwd)
 example=$(cd "$tool_dir/../liquid_shell/example" && pwd)
+derived="$example/build/ios-derived"
 bundle=${IOS_APP_BUNDLE_ID:-vn.lasoai.liquidShellExample}
 warmup_timeout=${IOS_WARMUP_TIMEOUT:-180}
 build_timeout=${IOS_BUILD_TIMEOUT:-900}
@@ -106,6 +114,7 @@ usage() {
 usage: tool/ios_sim.sh warmup UDID [APP | --build]
        tool/ios_sim.sh diagnose UDID LABEL [WINDOW]
        tool/ios_sim.sh guard UDID LABEL SECONDS command [args...]
+       tool/ios_sim.sh build UDID ACTION [xcodebuild args...]
 EOF
   exit 2
 }
@@ -190,18 +199,36 @@ build_again() { # <label> <attempt> <status> <log>
   return 1
 }
 
-# Builds the example for <udid>; prints the app's path.
-build_app() { # <udid>
-  local derived="$example/build/ios-derived"
+# One run of build's two steps.
+build_once() { # <udid> <action> [xcodebuild args...]
+  local udid=$1 action=$2
+  shift 2
   (
     cd "$example" || exit 1
     # shellcheck disable=SC2086 # FLUTTER may be "fvm flutter"
     cap "$build_timeout" ${FLUTTER:-flutter} build ios --config-only --simulator --debug \
       && cd ios \
-      && cap "$build_timeout" xcodebuild build -workspace Runner.xcworkspace \
-        -scheme Runner -configuration Debug -destination "id=$1" \
-        -derivedDataPath "$derived" -quiet
-  ) >&2 || return 1
+      && cap "$build_timeout" xcodebuild "$action" -workspace Runner.xcworkspace \
+        -scheme Runner -destination "id=$udid" -derivedDataPath "$derived" \
+        "$@" -quiet
+  )
+}
+
+build() { # <udid> <action> [xcodebuild args...]
+  local label="$2 on $1" attempt status tmp
+  tmp=$(mktemp -d)
+  for attempt in 1 2; do
+    status=0
+    logged "$tmp/output" build_once "$@" >&2 || status=$?
+    build_again "$label" "$attempt" "$status" "$tmp/output" || break
+  done
+  rm -rf "$tmp"
+  return "$status"
+}
+
+# Builds the example for <udid>; prints the app's path.
+build_app() { # <udid>
+  build "$1" build -configuration Debug || return 1
   echo "$derived/Build/Products/Debug-iphonesimulator/Runner.app"
 }
 
@@ -321,5 +348,6 @@ case "$command" in
   warmup) [ $# -ge 1 ] && [ $# -le 2 ] || usage; warmup "$@" ;;
   diagnose) [ $# -ge 2 ] && [ $# -le 3 ] || usage; diagnose "$@" ;;
   guard) [ $# -ge 4 ] || usage; guard "$@" ;;
+  build) [ $# -ge 2 ] || usage; build "$@" ;;
   *) usage ;;
 esac

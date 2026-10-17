@@ -253,6 +253,60 @@ void main() {
       );
       expect(sim.callsWith('simctl bootstatus'), hasLength(1));
       expect(sim.callsWith('simctl launch'), isEmpty);
+      expect(
+        sim.callsWith('xcodebuild build '),
+        hasLength(1),
+        reason: 'a failure without the VK-627 signature is not retried',
+      );
+    });
+
+    // VK-627: the generated plugin package kept .iOS("13.0") and Xcode's
+    // Target Integrity check failed the build. Both steps run once more.
+    test('--build runs a build that failed with the VK-627 signature once '
+        'more, both steps, then warms up', () {
+      final r = sim.run(
+        script,
+        ['warmup', udid, '--build'],
+        env: {'FAKE_VM_DELAY': '0', 'FAKE_BUILDS': 'vk627'},
+      );
+      expect(r.exitCode, 0, reason: outputOf(r));
+      expect(
+        outputOf(r),
+        contains(
+          '$vk627: build on $udid (attempt 1 of 2); building again once',
+        ),
+      );
+      final configs = sim.indicesOf('flutter build ios --config-only');
+      final builds = sim.indicesOf('xcodebuild build ');
+      expect(configs, hasLength(2));
+      expect(builds, hasLength(2));
+      expect(
+        configs.last,
+        greaterThan(builds.first),
+        reason: sim.calls.join('\n'),
+      );
+      expect(outputOf(r), isNot(contains('warm-up skipped')));
+      expect(sim.callsWith('simctl launch'), hasLength(1));
+    });
+
+    test('--build with the VK-627 signature twice gives up and skips the '
+        'launch', () {
+      final r = sim.run(
+        script,
+        ['warmup', udid, '--build'],
+        env: {'FAKE_BUILDS': 'vk627 vk627'},
+      );
+      expect(r.exitCode, 0, reason: outputOf(r));
+      expect(
+        outputOf(r),
+        contains('$vk627: build on $udid (attempt 2 of 2); giving up'),
+      );
+      expect(
+        outputOf(r),
+        contains('ios_sim: warm-up skipped: the build failed'),
+      );
+      expect(sim.callsWith('xcodebuild build '), hasLength(2));
+      expect(sim.callsWith('simctl launch'), isEmpty);
     });
   });
 
@@ -441,6 +495,7 @@ void main() {
     expect(sim.run(script, []).exitCode, 2);
     expect(sim.run(script, ['warmup']).exitCode, 2);
     expect(sim.run(script, ['guard', udid, 'x', '5']).exitCode, 2);
+    expect(sim.run(script, ['build', udid]).exitCode, 2);
     expect(sim.run(script, ['nope', udid]).exitCode, 2);
   });
 }
