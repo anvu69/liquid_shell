@@ -1716,13 +1716,23 @@ final class NativeTabsTests: XCTestCase {
     XCTAssertEqual(tabs.minimizeExpands, before, "no toggle into search")
     XCTAssertEqual(tabs.tabBarMinimizeBehavior, .onScrollDown)
     XCTAssertFalse(field.isFirstResponder, "entering search raises no keyboard")
-    // Dart's activation right after the selection, as a deep link sends it.
-    // It overlaps the search tab's own entry (the bar's morph into the
-    // field), so the search presents after it. On a loaded CI runner
-    // (PR #15) the report had not come after 3 s, yet the asserts below
-    // passed: the search was up, the field focused, the scope bar drawn.
-    // The UI suite's 10 s; a slower report is logged.
-    settle(sending: "searchActive true", within: 10) { tabs.setSearchActive(true) }
+    // Dart's activation right after the selection, as a deep link sends it:
+    // the search root is not in the window yet, and UIKit refuses the
+    // presentation. The bridge keeps it until the root appears (VK-634).
+    // Before, the search came only when a focus on the next run-loop turn
+    // beat UIKit's layout, about six times in seven. The guard of the
+    // product's own sequence; the deterministic test is
+    // `testAnActivationBeforeTheSearchRootIsInAWindowIsAppliedOnceItAppears`.
+    settle(sending: "searchActive true") {
+      tabs.setSearchActive(true)
+      // Same turn, the root still in no window: UIKit ran `willPresent`
+      // (the scope bar shown) and then refused. `syncScopeBar()` hides it
+      // at once, so no scope bar stands on an inactive search (VK-634).
+      let bridge = tabs.searchBridge
+      XCTAssertTrue(
+        bridge.controller.isActive || !bar.showsScopeBar,
+        "a refused presentation draws no scope bar")
+    }
     XCTAssertTrue(field.isFirstResponder, "the keyboard comes with the search")
     XCTAssertTrue(bar.showsScopeBar)
     let scope = stable { tabs.debugSnapshot().scopeFrame } until: { $0.width > 0 }
@@ -1948,10 +1958,13 @@ extension NativeTabsTests {
 
   /// Runs [action] and waits until it has sent [message] once more: the
   /// search controller's present and dismiss transitions outlast `settle`
-  /// while the keyboard moves (up to 0.7 s on iPhone 27.0). A wait longer
-  /// than 3 s is logged, so a report that slows down shows.
+  /// while the keyboard moves (up to 0.7 s on iPhone 27.0). 10 s, the UI
+  /// suite's: the CI runner stalls for seconds at a time, and 3 s ran out
+  /// on reports that came at 3.0-3.5 s (VK-626). A wait longer than 3 s is
+  /// printed, so a report that slows down shows (the test host's stdout,
+  /// in the result bundle).
   fileprivate func settle(
-    sending message: String, within timeout: TimeInterval = 3, _ action: () -> Void
+    sending message: String, within timeout: TimeInterval = 10, _ action: () -> Void
   ) {
     let count = { self.events.sent.filter { $0 == message }.count }
     let before = count()
@@ -1997,6 +2010,20 @@ extension NativeTabsTests {
     installer.install(flutter, in: next)
     settle()
     return next
+  }
+
+  /// VK-626 (1B): a report that comes late, and comes, counts. The CI
+  /// runner stalls for seconds at a time (a test whose longest wait is
+  /// 0.5 s took 15-38 s there), and the old 3 s ran out on a report that
+  /// came at 3.0-3.5 s. The default is the UI suite's 10 s; a wait over
+  /// 3 s is printed.
+  func testAReportLaterThanThreeSecondsStillCounts() {
+    settle(sending: "searchActive true") {
+      DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
+        self.events.onSearchActiveChanged(active: true) { _ in }
+      }
+    }
+    XCTAssertEqual(events.sent, ["searchActive true"])
   }
 
   /// A scene reconnect whose first state report differs from the last one
@@ -3003,6 +3030,208 @@ extension NativeTabsTests {
     }
     XCTAssertEqual(try selectedScope(in: next), 2)
     XCTAssertEqual(events.sent.filter { $0.hasPrefix("searchScope") }, [])
+  }
+}
+
+// MARK: - VK-634: an activation before the search root is in a window
+
+@available(iOS 26.0, *)
+extension NativeTabsTests {
+  /// A search shell with Dart's config applied (the search tab selected)
+  /// but in no window yet: its search root is provably in none, so UIKit
+  /// refuses a presentation there ("not in the window hierarchy"), as it
+  /// does for a deep link that lands before the selected tab's view is
+  /// installed. Held as long as the test likes; the product's own sequence
+  /// (the root installed a layout pass later) is the guard,
+  /// `testEnteringSearchTogglesNothingAndLeavesTheScopeBarAndKeyboardAlone`.
+  fileprivate func unshownSearchShell(
+    scopes: [String]? = nil
+  ) throws -> (NativeTabsController, ShellContainerController) {
+    let flutter = UIViewController()
+    let tabs = NativeTabsController(flutter: flutter, events: events)
+    let container = ShellContainerController(tabs: tabs, flutter: flutter)
+    tabs.dartAttached = true
+    tabs.apply(searchConfig(selected: 2, scopes: scopes))
+    let nav = try XCTUnwrap(tabs.navControllers[2])
+    XCTAssertTrue(tabs.selectedViewController === nav, "precondition: the search tab is selected")
+    XCTAssertTrue(tabs.chromeVisible, "precondition: the chrome is shown")
+    XCTAssertNil(nav.rootHost.view.window, "precondition: the search root is in no window")
+    return (tabs, container)
+  }
+
+  /// Puts [container] in [window] and applies [config] again, as
+  /// `NativeShellInstaller.install` does: the search root appears.
+  fileprivate func showShell(
+    _ container: ShellContainerController, in window: UIWindow, config: NativeChromeConfig
+  ) {
+    window.rootViewController = container
+    container.tabs.apply(config)
+  }
+
+  /// VK-634: Dart's activation while the search root is in no window (a
+  /// deep link right after the selection) is refused by UIKit. It is kept,
+  /// with no scope bar on the inactive search, and applied once the root
+  /// appears: the search presents, the keyboard comes, Dart hears it once.
+  func testAnActivationBeforeTheSearchRootIsInAWindowIsAppliedOnceItAppears() throws {
+    let config = searchConfig(selected: 2, scopes: Self.scopes)
+    let (tabs, container) = try unshownSearchShell(scopes: Self.scopes)
+    let bridge = tabs.searchBridge
+    let bar = bridge.controller.searchBar
+    let field = bar.searchTextField
+
+    tabs.setSearchActive(true)
+    // The next run-loop turns pass with the root still in no window.
+    RunLoop.current.run(until: Date().addingTimeInterval(1))
+    XCTAssertFalse(bridge.controller.isActive, "UIKit refused: no window")
+    XCTAssertFalse(bar.showsScopeBar, "a refused presentation draws no scope bar")
+    XCTAssertFalse(field.isFirstResponder, "no keyboard yet")
+    XCTAssertFalse(events.sent.contains("searchActive true"), "\(events.sent)")
+
+    let window = try portraitWindow(root: UIViewController())
+    extraWindows.append(window)
+    settle(sending: "searchActive true") { showShell(container, in: window, config: config) }
+    XCTAssertTrue(bridge.controller.isActive, "applied once the root appeared")
+    XCTAssertTrue(field.isFirstResponder, "the keyboard comes with the search")
+    XCTAssertTrue(bar.showsScopeBar, "the scope bar comes with it")
+    XCTAssertEqual(events.sent.filter { $0.hasPrefix("searchActive") }, ["searchActive true"])
+  }
+
+  /// VK-634: a kept activation is Dart's to take back. Each of these ends
+  /// it: Dart's deactivate; another tab (for one config); hidden chrome
+  /// (VK-551); a presentation that already came (UIKit's own, as for the
+  /// user's tap); a page pushed over the search root (the owner's choice,
+  /// 2026-10-16). Once the root appears, nothing presents, nothing takes
+  /// the keyboard, and Dart hears nothing.
+  func testAKeptActivationEndsWithADeactivateALeaveHiddenChromeOrAPresentation() throws {
+    let shown = searchConfig(selected: 2)
+    let ends: [(String, (NativeTabsController) -> Void)] = [
+      ("deactivate", { $0.setSearchActive(false) }),
+      (
+        "another tab",
+        { tabs in
+          tabs.apply(self.searchConfig(selected: 0))
+          tabs.apply(shown)
+        }
+      ),
+      (
+        "hidden chrome",
+        { tabs in
+          tabs.apply(self.searchConfig(selected: 2, hidden: true))
+          tabs.apply(shown)
+        }
+      ),
+      (
+        "a presentation",
+        { tabs in
+          tabs.searchBridge.willPresentSearchController(tabs.searchBridge.controller)
+        }
+      ),
+      (
+        "a push",
+        { tabs in
+          tabs.apply(
+            self.searchConfig(
+              selected: 2, pages: [NativePage(title: "Find"), NativePage(title: "Detail")]))
+        }
+      ),
+    ]
+    for (name, end) in ends {
+      let (tabs, container) = try unshownSearchShell()
+      let bridge = tabs.searchBridge
+      tabs.setSearchActive(true)
+      RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+      XCTAssertFalse(bridge.controller.isActive, "\(name): precondition, refused")
+      end(tabs)
+      let window = try portraitWindow(root: UIViewController())
+      extraWindows.append(window)
+      showShell(container, in: window, config: shown)
+      RunLoop.current.run(until: Date().addingTimeInterval(2))
+      XCTAssertFalse(bridge.controller.isActive, "\(name): nothing presents")
+      XCTAssertFalse(
+        bridge.controller.searchBar.searchTextField.isFirstResponder, "\(name): no keyboard")
+      XCTAssertFalse(events.sent.contains("searchActive true"), "\(name): \(events.sent)")
+      window.isHidden = true
+      window.rootViewController = nil
+      events.sent.removeAll()
+    }
+  }
+
+  /// VK-634, the owner's choice (2026-10-16): a page pushed over the search
+  /// root keeps no activation. Dart's activation while the page covers the
+  /// root is refused by UIKit and dropped, as before the fix: no scope bar,
+  /// and the pop back to the root brings no search, no keyboard and no
+  /// report. A deep link pops to the root and activates at once: the root
+  /// is the top of the stack again, so that activation is kept until the
+  /// root appears, and the search comes.
+  func testAnActivationOverAPushedPageIsDroppedAndOneRightAfterThePopIsApplied() throws {
+    let root = [NativePage(title: "Find")]
+    let pushed = root + [NativePage(title: "Detail")]
+    let tabs = try installedSearchShell(selected: 2, pages: pushed, scopes: Self.scopes)
+    let bridge = tabs.searchBridge
+    let bar = bridge.controller.searchBar
+    let field = bar.searchTextField
+    let nav = try XCTUnwrap(tabs.navControllers[2])
+    let config = { (pages: [NativePage]) in
+      self.searchConfig(selected: 2, pages: pages, scopes: Self.scopes)
+    }
+
+    // A deep link: pop to the root, then activate at once.
+    settle(sending: "searchActive true") {
+      tabs.apply(config(root))
+      tabs.setSearchActive(true)
+    }
+    // Refused while the pop runs, applied by the root's `viewDidAppear`.
+    // The keyboard is not asserted: after an animated pop the field does
+    // not take it, before VK-634 as after (probed 5 of 5, iOS 26.5).
+    XCTAssertTrue(bridge.controller.isActive, "after the pop: the search came")
+    XCTAssertTrue(bar.showsScopeBar, "the scope bar comes with it")
+    settle(sending: "searchActive false") { tabs.setSearchActive(false) }
+
+    // Over a pushed page: refused, and dropped.
+    tabs.apply(config(pushed))
+    XCTAssertTrue(
+      stable({ nav.rootHost.viewIfLoaded?.window == nil }, until: { $0 }),
+      "precondition: the page covers the search root")
+    events.sent.removeAll()
+    tabs.setSearchActive(true)
+    RunLoop.current.run(until: Date().addingTimeInterval(1))
+    XCTAssertFalse(bridge.controller.isActive, "precondition: UIKit refused over the page")
+    XCTAssertFalse(bar.showsScopeBar, "a refused presentation draws no scope bar")
+    tabs.apply(config(root))
+    XCTAssertTrue(
+      stable(
+        { nav.rootHost.viewIfLoaded?.window != nil && nav.transitionCoordinator == nil },
+        until: { $0 }),
+      "precondition: back on the search root, the pop finished")
+    RunLoop.current.run(until: Date().addingTimeInterval(1))
+    XCTAssertFalse(bridge.controller.isActive, "dropped: the pop brings no search")
+    XCTAssertFalse(field.isFirstResponder, "dropped: no keyboard")
+    XCTAssertFalse(events.sent.contains("searchActive true"), "dropped: \(events.sent)")
+  }
+
+  /// VK-634: a refused activation is kept only while the search tab is
+  /// selected and the chrome shown. `didDismiss`'s deferred `activate()`
+  /// runs a turn later and does not look again: if Dart left the search tab
+  /// in between, nothing is kept, and selecting the tab later brings no
+  /// search, no keyboard and no report.
+  func testAnActivationRefusedAfterLeavingTheSearchTabIsNotKept() throws {
+    let (tabs, container) = try unshownSearchShell(scopes: Self.scopes)
+    let bridge = tabs.searchBridge
+    let bar = bridge.controller.searchBar
+
+    tabs.apply(searchConfig(selected: 0, scopes: Self.scopes))
+    bridge.activate()
+    XCTAssertFalse(bridge.activationPending, "not kept: the search tab is not selected")
+
+    let window = try portraitWindow(root: UIViewController())
+    extraWindows.append(window)
+    showShell(container, in: window, config: searchConfig(selected: 2, scopes: Self.scopes))
+    RunLoop.current.run(until: Date().addingTimeInterval(2))
+    XCTAssertFalse(bridge.controller.isActive, "nothing presents")
+    XCTAssertFalse(bridge.activationPending, "nothing is pending")
+    XCTAssertFalse(bar.searchTextField.isFirstResponder, "no keyboard")
+    XCTAssertFalse(bar.showsScopeBar, "no scope bar")
+    XCTAssertFalse(events.sent.contains("searchActive true"), "\(events.sent)")
   }
 }
 

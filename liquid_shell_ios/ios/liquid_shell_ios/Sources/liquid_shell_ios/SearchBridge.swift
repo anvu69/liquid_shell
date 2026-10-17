@@ -6,7 +6,9 @@ import UIKit
 ///
 /// The scope bar is UIKit's own (spec VK-550 §10): `.manual` activation,
 /// shown by `willPresent` and hidden by `willDismiss`, the only setup
-/// drawn on iPhone and iPad, iOS 26.5 and 27 (spike §1).
+/// drawn on iPhone and iPad, iOS 26.5 and 27 (spike §1). Shown only while
+/// the search is active: a presentation UIKit refuses runs `willPresent`
+/// too, and `activate` hides it again (VK-634).
 @available(iOS 26.0, *)
 final class SearchBridge: NSObject, UISearchResultsUpdating, UISearchControllerDelegate,
   UISearchBarDelegate
@@ -15,6 +17,11 @@ final class SearchBridge: NSObject, UISearchResultsUpdating, UISearchControllerD
   /// Whether a user edit may be reported now (the tabs controller: the
   /// search tab is selected and Dart's config is not being applied).
   var canReport: () -> Bool = { false }
+  /// Whether a refused activation may wait for the search root (the tabs
+  /// controller: the root is the top of its tab's stack). A page pushed
+  /// over the root keeps none: the activation is dropped, as before VK-634
+  /// (the owner's choice, 2026-10-16).
+  var canKeepActivation: () -> Bool = { true }
   var onText: (String, Bool) -> Void = { _, _ in }
   var onActive: (Bool) -> Void = { _ in }
   var onSubmit: (String) -> Void = { _ in }
@@ -34,6 +41,16 @@ final class SearchBridge: NSObject, UISearchResultsUpdating, UISearchControllerD
   /// Dart asked for activation while a dismissal was still running, which
   /// UIKit ignores: activate once it ends.
   private var activateAfterDismiss = false
+  /// Dart asked for activation while the search root was in no window,
+  /// which UIKit refuses ("not in the window hierarchy"): a deep link that
+  /// selects the search tab and activates lands before the tab's view is
+  /// installed (VK-634). The root's `viewDidAppear` applies it
+  /// (`applyPendingActivation`). Dart's deactivate, leaving the tab, a
+  /// rebuild and hidden chrome (all `dismissKeepingText`), any
+  /// presentation (`willPresent`) and a page pushed over the root
+  /// (`dropPendingActivation`) end it; over such a page it is never kept
+  /// (`canKeepActivation`).
+  private(set) var activationPending = false
   /// What Dart knows: its own last write, or the last edit reported. UIKit
   /// calls back without a change (after a programmatic `text =`, probe P8;
   /// when the search presents or dismisses): only a change is a user edit.
@@ -80,9 +97,17 @@ final class SearchBridge: NSObject, UISearchResultsUpdating, UISearchControllerD
       bar.scopeButtonTitles = wanted
       writing = false
     }
+    syncScopeBar()
+    selectKnownScope()
+  }
+
+  /// The scope bar while the search is active, and only then: Dart's
+  /// titles and UIKit's `isActive`. A presentation UIKit refused ran
+  /// `willPresent`, which showed it, but is not active (VK-634).
+  private func syncScopeBar() {
+    let bar = controller.searchBar
     let show = hasScopes && controller.isActive
     if bar.showsScopeBar != show { bar.setShowsScope(show, animated: false) }
-    selectKnownScope()
   }
 
   /// Dart's index, clamped. Never reported back.
@@ -127,14 +152,27 @@ final class SearchBridge: NSObject, UISearchResultsUpdating, UISearchControllerD
   }
 
   /// Presents the search and focuses the field (research spike: the first
-  /// responder must be asked on the next run-loop turn).
+  /// responder must be asked on the next run-loop turn). UIKit refuses the
+  /// presentation while the search root is in no window: the activation
+  /// is kept until the root appears (VK-634).
   func activate() {
     activateAfterDismiss = false
+    activationPending = false
     controller.isActive = true
-    if !controller.isActive, controller.transitionCoordinator != nil {
-      // A dismissal is still running (a quick deactivate → activate):
-      // `didDismiss` restores the text, then activates.
-      activateAfterDismiss = true
+    if !controller.isActive {
+      if controller.transitionCoordinator != nil {
+        // A dismissal is still running (a quick deactivate → activate):
+        // `didDismiss` restores the text, then activates.
+        activateAfterDismiss = true
+        return
+      }
+      // Refused: the search root is in no window yet. Its `viewDidAppear`
+      // applies the activation; a focus on the next turn would race
+      // UIKit's layout (it lost about one time in seven). Under a pushed
+      // page the activation is dropped instead. `willPresent` has shown
+      // the scope bar of a search that is not active.
+      activationPending = canKeepActivation()
+      syncScopeBar()
       return
     }
     // No dismissal runs: a kept text left over is the text.
@@ -144,11 +182,28 @@ final class SearchBridge: NSObject, UISearchResultsUpdating, UISearchControllerD
     }
   }
 
+  /// The search root is in a window now (its `viewDidAppear`): an
+  /// activation UIKit refused before is applied (VK-634).
+  func applyPendingActivation() {
+    guard activationPending else { return }
+    activationPending = false
+    if !controller.isActive { activate() }
+  }
+
+  /// A page pushed over the search root ends a kept activation: the pop
+  /// back must not bring the search (VK-634, the owner's choice).
+  func dropPendingActivation() {
+    activationPending = false
+  }
+
   /// Dismisses the search and keeps the text: a dismissal Dart asked for
   /// (a dialog above, another tab) is not the user's ×. Dart text held for
-  /// a composition is newer than the field's.
+  /// a composition is newer than the field's. An activation kept for the
+  /// root's window ends here too, before the guard: it is not active
+  /// (VK-634).
   func dismissKeepingText() {
     activateAfterDismiss = false
+    activationPending = false
     guard controller.isActive else { return }
     keepOnDismiss = pendingText ?? text
     pendingText = nil
@@ -211,9 +266,12 @@ final class SearchBridge: NSObject, UISearchResultsUpdating, UISearchControllerD
 
   /// Any presentation, the user's tap included (it never runs `activate`),
   /// ends a dismissal Dart asked for: one whose end UIKit never reported
-  /// would otherwise keep the bridge from reporting the user's edits.
+  /// would otherwise keep the bridge from reporting the user's edits. It
+  /// ends a kept activation too: the search came, and a later appearance
+  /// of the root must not bring it back once the user closed it (VK-634).
   func willPresentSearchController(_ searchController: UISearchController) {
     activateAfterDismiss = false
+    activationPending = false
     restoreKept()
     if hasScopes { controller.searchBar.setShowsScope(true, animated: true) }
   }

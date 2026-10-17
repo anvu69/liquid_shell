@@ -208,6 +208,14 @@ final class PageHostController: UIViewController {
     shell?.syncFlutter()
   }
 
+  /// UIKit presents the search only from a root in a window: an activation
+  /// it refused before is applied once the root has appeared, after the
+  /// appearance transition, not inside it (VK-634).
+  override func viewDidAppear(_ animated: Bool) {
+    super.viewDidAppear(animated)
+    shell?.searchRootAppeared(self)
+  }
+
   override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
     shell?.syncFlutter()

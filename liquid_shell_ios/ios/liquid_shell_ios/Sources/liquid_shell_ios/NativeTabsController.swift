@@ -82,6 +82,12 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       guard let self else { return false }
       return self.isSearchSelected && !self.applyingFromDart
     }
+    // Kept only where `setSearchActive` would apply it: the search tab
+    // selected, the chrome shown, no page over the search root (VK-634).
+    searchBridge.canKeepActivation = { [weak self] in
+      guard let self else { return false }
+      return self.isSearchSelected && self.chromeVisible && self.isSearchRootOnTop
+    }
     searchBridge.onText = { [weak self] text, composing in
       self?.send("onSearchTextChanged") {
         self?.events.onSearchTextChanged(text: text, composing: composing, completion: $0)
@@ -203,6 +209,9 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
           shown: selectedViewController === nav && Int(new.selectedIndex) == index,
           events: events)
       }
+      // A page pushed over the search root drops a kept activation: the
+      // pop back must not bring the search (VK-634, `isSearchRootOnTop`).
+      if !isSearchRootOnTop { searchBridge.dropPendingActivation() }
       select(Int(new.selectedIndex))
     }
     setFooter(new.footer)
@@ -297,6 +306,16 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   private var isSearchSelected: Bool {
     guard let searchIndex, let nav = navControllers[searchIndex] else { return false }
     return selectedViewController === nav
+  }
+
+  /// Whether the search root is the top of the search tab's stack. A page
+  /// pushed over it keeps no activation (VK-634, the owner's choice,
+  /// 2026-10-16): one UIKit refuses there is dropped, as before, and a
+  /// push drops one kept before. A pop to the root, then an activation (a
+  /// deep link), is kept: the stack's top is the root at once.
+  private var isSearchRootOnTop: Bool {
+    guard let searchIndex, let nav = navControllers[searchIndex] else { return false }
+    return nav.topViewController === nav.rootHost
   }
 
   private func searchStyle(rootLargeTitle: Bool?) -> SearchTabStyle {
@@ -636,7 +655,11 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
 
   /// Dart's activate / deactivate. Activation needs the search tab
   /// selected and the chrome shown: hidden chrome holds no search
-  /// (VK-551, `apply`). Deactivation keeps the text.
+  /// (VK-551, `apply`). Deactivation keeps the text. An activation UIKit
+  /// refuses because the search root is not in the window yet (a deep
+  /// link right after the selection) waits for the root
+  /// (`searchRootAppeared`, VK-634), unless a page is pushed over it
+  /// (`isSearchRootOnTop`).
   func setSearchActive(_ active: Bool) {
     if active {
       guard isSearchSelected, chromeVisible else { return }
@@ -644,6 +667,16 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     } else {
       searchBridge.dismissKeepingText()
     }
+  }
+
+  /// The search root appeared (its `viewDidAppear`): it is in a window, so
+  /// an activation UIKit refused before is applied now (VK-634), under the
+  /// rule of `setSearchActive`: the search tab selected, the chrome shown.
+  func searchRootAppeared(_ host: PageHostController) {
+    guard let searchIndex, navControllers[searchIndex]?.rootHost === host, isSearchSelected,
+      chromeVisible
+    else { return }
+    searchBridge.applyPendingActivation()
   }
 
   /// The scope a shell installed after a scene reconnect starts with, as
