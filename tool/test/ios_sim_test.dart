@@ -9,6 +9,10 @@ import 'fake_sim.dart';
 void main() {
   const script = 'tool/ios_sim.sh';
   const udid = 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE';
+  // VK-627's note, before ": <label> (attempt <k> of 2); …".
+  const vk627 =
+      'ios_sim: VK-627: Flutter skipped the deployment-target raise '
+      '(xcodebuild -showBuildSettings timed out)';
   late FakeSim sim;
 
   setUp(() => sim = FakeSim());
@@ -249,6 +253,106 @@ void main() {
       );
       expect(sim.callsWith('simctl bootstatus'), hasLength(1));
       expect(sim.callsWith('simctl launch'), isEmpty);
+      expect(
+        sim.callsWith('xcodebuild build '),
+        hasLength(1),
+        reason: 'a failure without the VK-627 signature is not retried',
+      );
+    });
+
+    // VK-627: the generated plugin package kept .iOS("13.0") and Xcode's
+    // Target Integrity check failed the build. Both steps run once more.
+    test('--build runs a build that failed with the VK-627 signature once '
+        'more, both steps, then warms up', () {
+      final r = sim.run(
+        script,
+        ['warmup', udid, '--build'],
+        env: {'FAKE_VM_DELAY': '0', 'FAKE_BUILDS': 'vk627'},
+      );
+      expect(r.exitCode, 0, reason: outputOf(r));
+      expect(
+        outputOf(r),
+        contains(
+          '$vk627: build on $udid (attempt 1 of 2); building again once',
+        ),
+      );
+      final configs = sim.indicesOf('flutter build ios --config-only');
+      final builds = sim.indicesOf('xcodebuild build ');
+      expect(configs, hasLength(2));
+      expect(builds, hasLength(2));
+      expect(
+        configs.last,
+        greaterThan(builds.first),
+        reason: sim.calls.join('\n'),
+      );
+      expect(outputOf(r), isNot(contains('warm-up skipped')));
+      expect(sim.callsWith('simctl launch'), hasLength(1));
+    });
+
+    test('--build with the VK-627 signature twice gives up and skips the '
+        'launch', () {
+      final r = sim.run(
+        script,
+        ['warmup', udid, '--build'],
+        env: {'FAKE_BUILDS': 'vk627 vk627'},
+      );
+      expect(r.exitCode, 0, reason: outputOf(r));
+      expect(
+        outputOf(r),
+        contains('$vk627: build on $udid (attempt 2 of 2); giving up'),
+      );
+      expect(
+        outputOf(r),
+        contains('ios_sim: warm-up skipped: the build failed'),
+      );
+      expect(sim.callsWith('xcodebuild build '), hasLength(2));
+      expect(sim.callsWith('simctl launch'), isEmpty);
+    });
+
+    // On GitHub Actions warn prints `::warning::` to stdout, and warmup
+    // captures build's stdout as the app path: the note must go to stderr.
+    test('--build on GitHub Actions keeps the VK-627 note out of the app '
+        'path', () {
+      final r = sim.run(
+        script,
+        ['warmup', udid, '--build'],
+        env: {
+          'FAKE_VM_DELAY': '0',
+          'FAKE_BUILDS': 'vk627',
+          'GITHUB_ACTIONS': 'true',
+        },
+      );
+      expect(r.exitCode, 0, reason: outputOf(r));
+      expect(
+        outputOf(r),
+        contains(
+          '::warning::$vk627: build on $udid (attempt 1 of 2); '
+          'building again once',
+        ),
+      );
+      expect(
+        sim.callsWith('simctl install').single,
+        matches(RegExp(r'^xcrun simctl install \S+ \S+/Runner\.app$')),
+      );
+      expect(outputOf(r), isNot(contains('warm-up skipped')));
+      expect(sim.callsWith('simctl launch'), hasLength(1));
+    });
+
+    test('--build twice with the VK-627 signature on GitHub Actions shows '
+        'both notes', () {
+      final r = sim.run(
+        script,
+        ['warmup', udid, '--build'],
+        env: {'FAKE_BUILDS': 'vk627 vk627', 'GITHUB_ACTIONS': 'true'},
+      );
+      expect(r.exitCode, 0, reason: outputOf(r));
+      expect(outputOf(r), contains('(attempt 1 of 2); building again once'));
+      expect(outputOf(r), contains('(attempt 2 of 2); giving up'));
+      expect(
+        outputOf(r),
+        contains('warm-up skipped: the build failed'),
+      );
+      expect(sim.callsWith('simctl launch'), isEmpty);
     });
   });
 
@@ -369,12 +473,75 @@ void main() {
       expect(sim.callsWith('flutter drive'), hasLength(2));
       expect(sim.dumps, hasLength(2));
     });
+
+    test('a drive whose build failed with the VK-627 signature runs once '
+        'more, in a fresh flutter process', () {
+      final r = sim.run(script, drive, env: {'FAKE_DRIVES': 'vk627'});
+      expect(r.exitCode, 0, reason: outputOf(r));
+      expect(
+        outputOf(r),
+        contains(
+          '$vk627: a_test.dart on iPhone (attempt 1 of 2); building again once',
+        ),
+      );
+      expect(
+        outputOf(r),
+        contains('Target Integrity (Xcode)'),
+        reason: "the drive's own output still reaches the log",
+      );
+      expect(drives(), hasLength(2));
+      expect(sim.callsWith('simctl terminate'), isEmpty, reason: 'no app ran');
+      expect(sim.dumps, isEmpty);
+    });
+
+    test('the VK-627 signature twice gives up with the drive status', () {
+      final r = sim.run(script, drive, env: {'FAKE_DRIVES': 'vk627 vk627'});
+      expect(r.exitCode, 1);
+      expect(
+        outputOf(r),
+        contains('$vk627: a_test.dart on iPhone (attempt 2 of 2); giving up'),
+      );
+      expect(drives(), hasLength(2));
+    });
+
+    test('a stall and the VK-627 signature share the one retry', () {
+      final r = sim.run(script, drive, env: {'FAKE_DRIVES': 'stall vk627'});
+      expect(r.exitCode, 1, reason: outputOf(r));
+      expect(outputOf(r), contains('(attempt 1 of 2); terminating the app'));
+      expect(outputOf(r), contains('(attempt 2 of 2); giving up'));
+      expect(drives(), hasLength(2));
+    });
+
+    test('the VK-627 signature, then a stall: two drives, 124', () {
+      final r = sim.run(script, drive, env: {'FAKE_DRIVES': 'vk627 stall'});
+      expect(r.exitCode, 124, reason: outputOf(r));
+      expect(outputOf(r), contains('(attempt 1 of 2); building again once'));
+      expect(
+        outputOf(r),
+        contains('stall guard fired: a_test.dart on iPhone (attempt 2 of 2)'),
+      );
+      expect(drives(), hasLength(2));
+    });
+
+    test('a process that keeps the drive output open holds the guard at '
+        'most a few seconds', () {
+      final watch = Stopwatch()..start();
+      final r = sim.run(script, drive, env: {'FAKE_DRIVE': 'linger'});
+      watch.stop();
+      final lingerer = int.parse(
+        File('${sim.dir.path}/lingerer').readAsStringSync().trim(),
+      );
+      addTearDown(() => Process.killPid(lingerer));
+      expect(r.exitCode, 0, reason: outputOf(r));
+      expect(watch.elapsed, lessThan(const Duration(seconds: 40)));
+    });
   });
 
   test('a wrong call prints usage and exits 2', () {
     expect(sim.run(script, []).exitCode, 2);
     expect(sim.run(script, ['warmup']).exitCode, 2);
     expect(sim.run(script, ['guard', udid, 'x', '5']).exitCode, 2);
+    expect(sim.run(script, ['build', udid]).exitCode, 2);
     expect(sim.run(script, ['nope', udid]).exitCode, 2);
   });
 }

@@ -8,7 +8,9 @@
 #
 # 1. `flutter build ios --config-only`, then `xcodebuild build-for-testing`
 #    into liquid_shell/example/build/ios-derived, each capped at
-#    IOS_BUILD_TIMEOUT seconds (default 900).
+#    IOS_BUILD_TIMEOUT seconds (default 900): tool/ios_sim.sh build. A
+#    build that failed with VK-627's signature (Flutter skipped the
+#    deployment-target raise) runs once more, both steps.
 # 2. tool/ios_sim.sh warmup: boot, one launch of the built app, terminate.
 #    The first launch after a boot is the one that stalls on CI, so no test
 #    gets it. Outside every cap here, and it never fails.
@@ -35,16 +37,12 @@ shift 5
 tool_dir=$(cd "$(dirname "$0")" && pwd)
 example=$(cd "$tool_dir/../liquid_shell/example" && pwd)
 derived="$example/build/ios-derived"
-build_secs=${IOS_BUILD_TIMEOUT:-900}
 cap() { "$tool_dir/with_timeout.sh" "$@"; }
 
 cd "$example"
-# shellcheck disable=SC2086 # FLUTTER may be "fvm flutter"
-cap "$build_secs" ${FLUTTER:-flutter} build ios --config-only --simulator --debug
 rm -rf "$result"
+"$tool_dir/ios_sim.sh" build "$udid" build-for-testing "$@"
 cd ios
-cap "$build_secs" xcodebuild build-for-testing -workspace Runner.xcworkspace \
-  -scheme Runner -destination "id=$udid" -derivedDataPath "$derived" "$@" -quiet
 "$tool_dir/ios_sim.sh" warmup "$udid" \
   "$derived/Build/Products/Debug-iphonesimulator/Runner.app"
 status=0

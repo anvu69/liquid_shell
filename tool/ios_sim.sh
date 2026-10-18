@@ -8,14 +8,14 @@
 #   tool/ios_sim.sh warmup UDID [APP | --build]
 #   tool/ios_sim.sh diagnose UDID LABEL [WINDOW]
 #   tool/ios_sim.sh guard UDID LABEL SECONDS command [args...]
+#   tool/ios_sim.sh build UDID ACTION [xcodebuild args...]
 #
 # warmup    Boots UDID and waits for it (simctl boot, bootstatus -b),
 #           installs APP when given, launches the example once and waits
 #           until it logs "The Dart VM service is listening on" (at most
 #           IOS_WARMUP_TIMEOUT seconds), then terminates it. --build first
-#           builds the example for UDID (flutter build ios --config-only,
-#           xcodebuild build into liquid_shell/example/build/ios-derived)
-#           and installs that. It never fails: a timeout is diagnosed, any
+#           builds the example for UDID (`build UDID build`, below) and
+#           installs that. It never fails: a timeout is diagnosed, any
 #           other problem is reported, and it exits 0. Its log reader is
 #           stopped on every path, also when the script is terminated. A
 #           timeout dump adds warm-up-reader.log (what the reader saw) and
@@ -29,8 +29,26 @@
 #           at most SECONDS. A stall (124) is diagnosed before the stop; then
 #           the app is terminated and the command runs once more on the same
 #           booted simulator, never a rebooted one (a retry after a reboot
-#           stalled 13 times in 38). Any other status is the command's own
-#           and is never retried.
+#           stalled 13 times in 38). A run whose build failed with VK-627's
+#           signature (below) also runs once more. The command runs at most
+#           twice, whatever the reason. Any other status is the command's
+#           own and is never retried: a test failure never is.
+#           The command's stdout and stderr both come out on guard's stdout.
+# build     Builds the example for UDID: `flutter build ios --config-only
+#           --simulator --debug`, then `xcodebuild ACTION` (build or
+#           build-for-testing) of Runner.xcworkspace into
+#           liquid_shell/example/build/ios-derived, each step capped at
+#           IOS_BUILD_TIMEOUT. A build that failed with VK-627's signature
+#           runs once more, both steps. Its output goes to stderr.
+#
+# VK-627 (spec docs/specs/2026-10-17-ios-build-retry-design.md): Flutter
+# writes its generated FlutterGeneratedPluginSwiftPackage at .iOS("13.0") on
+# every iOS build, and raises it to the app's 15.0 only when `xcodebuild
+# -showBuildSettings` answers within 60 s (one retry). Two timeouts skip the
+# raise without a word, and Xcode 26's Target Integrity check then fails the
+# build: "... requires minimum platform version 15.0 for the iOS platform,
+# but this target supports 13.0". A failed run whose output has that phrase
+# runs once more, in a fresh flutter process.
 #
 # IOS_APP_BUNDLE_ID   the app (default vn.lasoai.liquidShellExample)
 # IOS_WARMUP_TIMEOUT  seconds the warm-up waits for the VM service line
@@ -39,13 +57,15 @@
 # IOS_WARMUP_READY_TIMEOUT
 #                     seconds the warm-up waits for its log reader to
 #                     attach before it launches (default 30)
-# IOS_BUILD_TIMEOUT   seconds each step of --build may take (default 900)
+# IOS_BUILD_TIMEOUT   seconds each step of build (and --build) may take
+#                     (default 900)
 # IOS_DIAG_DIR        diagnostics root
 #                     (default liquid_shell/example/build/ios-diagnostics)
-# FLUTTER             flutter command for --build (default: flutter)
+# FLUTTER             flutter command for build (default: flutter)
 set -uo pipefail
 tool_dir=$(cd "$(dirname "$0")" && pwd)
 example=$(cd "$tool_dir/../liquid_shell/example" && pwd)
+derived="$example/build/ios-derived"
 bundle=${IOS_APP_BUNDLE_ID:-vn.lasoai.liquidShellExample}
 warmup_timeout=${IOS_WARMUP_TIMEOUT:-180}
 build_timeout=${IOS_BUILD_TIMEOUT:-900}
@@ -71,6 +91,12 @@ diag_root=${IOS_DIAG_DIR:-$example/build/ios-diagnostics}
 # vm_line.
 vm_predicate='process == "Runner" AND eventMessage CONTAINS "Dart VM service is listening"'
 vm_line='Dart VM service is listening on'
+# VK-627: the phrase of Xcode's Target Integrity error, as xcodebuild and
+# flutter print it, and the note that names the retry.
+vk627_signature='requires minimum platform version'
+vk627_note='VK-627: Flutter skipped the deployment-target raise (xcodebuild -showBuildSettings timed out)'
+# Seconds the output copy may take to drain once its command has ended.
+copy_drain=10
 
 cap() { "$tool_dir/with_timeout.sh" "$@"; }
 now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
@@ -89,6 +115,7 @@ usage() {
 usage: tool/ios_sim.sh warmup UDID [APP | --build]
        tool/ios_sim.sh diagnose UDID LABEL [WINDOW]
        tool/ios_sim.sh guard UDID LABEL SECONDS command [args...]
+       tool/ios_sim.sh build UDID ACTION [xcodebuild args...]
 EOF
   exit 2
 }
@@ -129,18 +156,82 @@ diagnose() { # <udid> <label> [window]
   note "diagnostics in $dir"
 }
 
-# Builds the example for <udid>; prints the app's path.
-build_app() { # <udid>
-  local derived="$example/build/ios-derived"
+# Runs a command with its stdout and stderr shown on stdout and copied to
+# <log> (emptied first); returns the command's status. The copy reads a
+# FIFO in the background rather than a pipe the script waits for: a
+# process that outlives the command and still holds its output (the
+# runners end iOS jobs with orphaned adb, ibtoold and DTServiceHub) must
+# not hold the script. Once the command has ended, the copy gets
+# copy_drain seconds to finish, then it is stopped.
+# If mkfifo fails the command runs without a copy (its output stays on its
+# own streams) and the log stays empty, so it is never retried.
+logged() { # <log> command [args...]
+  local log=$1 fifo="$1.fifo" copier status=0
+  shift
+  : > "$log"
+  rm -f "$fifo"
+  mkfifo "$fifo" || {
+    "$@"
+    return
+  }
+  tee -a "$log" < "$fifo" &
+  copier=$!
+  "$@" > "$fifo" 2>&1 || status=$?
+  for _ in $(seq "$copy_drain"); do
+    kill -0 "$copier" 2> /dev/null || break
+    sleep 1
+  done
+  kill "$copier" 2> /dev/null
+  wait "$copier" 2> /dev/null
+  rm -f "$fifo"
+  return "$status"
+}
+
+# Whether attempt <attempt> of <label>, which ended with <status> and
+# wrote <log>, is VK-627's build failure and gets one more run. Only a
+# failed run (not 0, not a stall's 124) whose output has the signature
+# counts, so a test failure is never retried.
+build_again() { # <label> <attempt> <status> <log>
+  [ "$3" -ne 0 ] && [ "$3" -ne 124 ] && grep -qF "$vk627_signature" "$4" \
+    || return 1
+  if [ "$2" -eq 1 ]; then
+    warn "$vk627_note: $1 (attempt 1 of 2); building again once"
+    return 0
+  fi
+  warn "$vk627_note: $1 (attempt 2 of 2); giving up"
+  return 1
+}
+
+# One run of build's two steps.
+build_once() { # <udid> <action> [xcodebuild args...]
+  local udid=$1 action=$2
+  shift 2
   (
     cd "$example" || exit 1
     # shellcheck disable=SC2086 # FLUTTER may be "fvm flutter"
     cap "$build_timeout" ${FLUTTER:-flutter} build ios --config-only --simulator --debug \
       && cd ios \
-      && cap "$build_timeout" xcodebuild build -workspace Runner.xcworkspace \
-        -scheme Runner -configuration Debug -destination "id=$1" \
-        -derivedDataPath "$derived" -quiet
-  ) >&2 || return 1
+      && cap "$build_timeout" xcodebuild "$action" -workspace Runner.xcworkspace \
+        -scheme Runner -destination "id=$udid" -derivedDataPath "$derived" \
+        "$@" -quiet
+  )
+}
+
+build() { # <udid> <action> [xcodebuild args...]
+  local label="$2 on $1" attempt status tmp
+  tmp=$(mktemp -d)
+  for attempt in 1 2; do
+    status=0
+    logged "$tmp/output" build_once "$@" >&2 || status=$?
+    build_again "$label" "$attempt" "$status" "$tmp/output" >&2 || break
+  done
+  rm -rf "$tmp"
+  return "$status"
+}
+
+# Builds the example for <udid>; prints the app's path.
+build_app() { # <udid>
+  build "$1" build -configuration Debug || return 1
   echo "$derived/Build/Products/Debug-iphonesimulator/Runner.app"
 }
 
@@ -225,18 +316,24 @@ warmup() { # <udid> [app | --build]
 }
 
 guard() { # <udid> <label> <seconds> command [args...]
-  local udid=$1 label=$2 secs=$3 attempt status window
+  local udid=$1 label=$2 secs=$3 attempt status window tmp
   shift 3
   # The log window covers the whole attempt: a 1200 s drive launched its
   # app about 19 minutes before the dump.
   window=$(((secs + 59) / 60 + 5))
   [ "$window" -ge 15 ] || window=15
+  tmp=$(mktemp -d)
+  # One retry in all: a stall's or VK-627's, so the job caps (two drive
+  # caps per drive) still hold.
   for attempt in 1 2; do
     status=0
-    WITH_TIMEOUT_ON_STALL="$(printf '%q ' "$tool_dir/ios_sim.sh" diagnose \
-      "$udid" "$label stall $attempt" "${window}m")" \
-      "$tool_dir/with_timeout.sh" "$secs" "$@" || status=$?
-    [ "$status" -eq 124 ] || return "$status"
+    logged "$tmp/output" env WITH_TIMEOUT_ON_STALL="$(printf '%q ' \
+      "$tool_dir/ios_sim.sh" diagnose "$udid" "$label stall $attempt" \
+      "${window}m")" "$tool_dir/with_timeout.sh" "$secs" "$@" || status=$?
+    if [ "$status" -ne 124 ]; then
+      build_again "$label" "$attempt" "$status" "$tmp/output" || break
+      continue
+    fi
     if [ "$attempt" -eq 1 ]; then
       warn "stall guard fired: $label (attempt 1 of 2); terminating the app and retrying on the same simulator"
     else
@@ -244,7 +341,8 @@ guard() { # <udid> <label> <seconds> command [args...]
     fi
     cap 60 xcrun simctl terminate "$udid" "$bundle" > /dev/null 2>&1
   done
-  return 124
+  rm -rf "$tmp"
+  return "$status"
 }
 
 command=${1:-}
@@ -253,5 +351,6 @@ case "$command" in
   warmup) [ $# -ge 1 ] && [ $# -le 2 ] || usage; warmup "$@" ;;
   diagnose) [ $# -ge 2 ] && [ $# -le 3 ] || usage; diagnose "$@" ;;
   guard) [ $# -ge 4 ] || usage; guard "$@" ;;
+  build) [ $# -ge 2 ] || usage; build "$@" ;;
   *) usage ;;
 esac

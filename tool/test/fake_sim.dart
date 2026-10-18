@@ -18,9 +18,18 @@ import 'package:test/test.dart';
 ///   (default 6).
 /// - `FAKE_BUILD`: `fail` makes `xcodebuild build` and `build-for-testing`
 ///   fail.
+/// - `FAKE_BUILDS`: the outcomes of the 1st, 2nd, ... `xcodebuild build` or
+///   `build-for-testing`, space-separated: `pass`, `fail`, or `vk627` (Xcode's
+///   Target Integrity error for the generated plugin package, exit 65).
+///   Builds past the list pass. Overrides `FAKE_BUILD`.
 /// - `FAKE_TEST`: `fail` or `stall` for `xcodebuild test-without-building`.
-/// - `FAKE_DRIVE`: `fail`, `stall` (every drive) or `stall-once` (the first
-///   drive only) for `flutter drive`.
+/// - `FAKE_DRIVE`: `fail`, `stall` (every drive), `stall-once` (the first
+///   drive only) or `linger` (the drive passes, and leaves a `sleep 60`
+///   that holds its output, its pid in `lingerer`) for `flutter drive`.
+/// - `FAKE_DRIVES`: the outcomes of the 1st, 2nd, ... `flutter drive`,
+///   space-separated: `pass`, `fail`, `stall`, or `vk627` (flutter's
+///   "Failed to build iOS app" and Target Integrity lines, exit 1). Drives
+///   past the list pass. Overrides `FAKE_DRIVE`.
 class FakeSim {
   /// Writes the fakes into a new temporary directory.
   FakeSim() : dir = Directory.systemTemp.createTempSync('fake_sim_') {
@@ -60,6 +69,12 @@ class FakeSim {
 
   /// The index in [calls] of the first call that contains [part], or -1.
   int indexOf(String part) => calls.indexWhere((c) => c.contains(part));
+
+  /// The indices in [calls] of every call that contains [part], in order.
+  List<int> indicesOf(String part) => [
+    for (var i = 0; i < calls.length; i++)
+      if (calls[i].contains(part)) i,
+  ];
 
   /// Expects a call containing each of [parts], in this order.
   void expectInOrder(List<String> parts) {
@@ -141,7 +156,19 @@ exit 0
 const _xcodebuild = r'''
 echo "xcodebuild $*" >> "$FAKE_DIR/calls"
 case "$1" in
-  build|build-for-testing) [ "${FAKE_BUILD:-}" != fail ] || exit 65 ;;
+  build|build-for-testing)
+    outcome=${FAKE_BUILD:-}
+    if [ -n "${FAKE_BUILDS:-}" ]; then
+      n=$(($(cat "$FAKE_DIR/builds" 2> /dev/null || echo 0) + 1))
+      echo "$n" > "$FAKE_DIR/builds"
+      outcome=$(echo "$FAKE_BUILDS" | awk -v n="$n" '{ print $n }')
+    fi
+    case "$outcome" in
+      fail) exit 65 ;;
+      vk627)
+        echo "$PWD/Runner.xcodeproj: error: The package product 'liquid-shell-ios' requires minimum platform version 15.0 for the iOS platform, but this target supports 13.0 (in target 'FlutterGeneratedPluginSwiftPackage' from project 'FlutterGeneratedPluginSwiftPackage')"
+        exit 65 ;;
+    esac ;;
   test-without-building)
     case "${FAKE_TEST:-}" in
       fail)
@@ -160,7 +187,13 @@ exit 0
 const _flutter = r'''
 echo "flutter $*" >> "$FAKE_DIR/calls"
 [ "$1" = drive ] || exit 0
-case "${FAKE_DRIVE:-}" in
+outcome=${FAKE_DRIVE:-}
+if [ -n "${FAKE_DRIVES:-}" ]; then
+  n=$(($(cat "$FAKE_DIR/drives" 2> /dev/null || echo 0) + 1))
+  echo "$n" > "$FAKE_DIR/drives"
+  outcome=$(echo "$FAKE_DRIVES" | awk -v n="$n" '{ print $n }')
+fi
+case "$outcome" in
   fail) exit 1 ;;
   stall) sleep 300 ;;
   stall-once)
@@ -168,6 +201,14 @@ case "${FAKE_DRIVE:-}" in
       touch "$FAKE_DIR/stalled"
       sleep 300
     fi ;;
+  linger)
+    sleep 60 &
+    echo $! > "$FAKE_DIR/lingerer" ;;
+  vk627)
+    echo 'Failed to build iOS app'
+    echo "Target Integrity (Xcode): The package product 'liquid-shell-ios' requires minimum platform version 15.0 for the iOS platform, but this target supports 13.0" >&2
+    echo 'Application failed to start. Will not run test. Quitting.' >&2
+    exit 1 ;;
 esac
 exit 0
 ''';

@@ -16,12 +16,14 @@
 # FLUTTER         flutter command (default: flutter).
 # IOS_DRIVE_TIMEOUT  seconds one `flutter drive` may run (default 1200).
 #
-# Warm-up and stall guard, as in tool/integration_ios.sh (VK-625): each
-# simulator is booted, and the example built and launched once, before its
-# first drive (tool/ios_sim.sh warmup --build). A drive (one target on one
-# device) that outlives IOS_DRIVE_TIMEOUT is diagnosed and stopped, the app
-# is terminated, and that drive is retried once on the same booted simulator
-# (tool/ios_sim.sh guard). A test failure is never retried.
+# Warm-up and stall guard, as in tool/integration_ios.sh (VK-625, VK-627):
+# each simulator is booted, and the example built and launched once, before
+# its first drive (tool/ios_sim.sh warmup --build). A drive (one target on
+# one device) that outlives IOS_DRIVE_TIMEOUT is diagnosed and stopped, the
+# app is terminated, and that drive is retried once on the same booted
+# simulator (tool/ios_sim.sh guard). A drive whose build failed with
+# VK-627's signature is retried once too; a drive runs at most twice, and a
+# test failure is never retried.
 #
 # Screenshots land in liquid_shell/example/build/integration_screenshots/:
 # native_<run>_*.png (home, sidebar, guard, cases), dialogs_<run>_*.png
