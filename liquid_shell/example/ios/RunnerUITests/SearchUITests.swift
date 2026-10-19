@@ -471,7 +471,7 @@ extension SearchUITests {
     let song = flutterRow(app, "Thành phố buồn")
     let place = flutterRow(app, "Phố cổ Hà Nội")
     XCTAssertTrue(song.waitForExistence(timeout: 10), "All: a song")
-    XCTAssertTrue(place.exists, "All: a place")
+    XCTAssertTrue(place.waitForExistence(timeout: 10), "All: a place")
 
     let scopes = app.segmentedControls.firstMatch
     XCTAssertTrue(scopes.waitForExistence(timeout: 10), "UIKit's scope bar")
@@ -523,7 +523,7 @@ extension SearchUITests {
     let song = flutterRow(app, "Thành phố buồn")
     let place = flutterRow(app, "Phố cổ Hà Nội")
     XCTAssertTrue(song.waitForExistence(timeout: 10), "All: a song")
-    XCTAssertTrue(place.exists, "All: a place")
+    XCTAssertTrue(place.waitForExistence(timeout: 10), "All: a place")
 
     let scopes = app.segmentedControls.firstMatch
     XCTAssertTrue(scopes.waitForExistence(timeout: 10), "UIKit's scope bar")
