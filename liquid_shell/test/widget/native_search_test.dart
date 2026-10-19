@@ -2174,4 +2174,147 @@ void main() {
       expect(fake.searchScopes, [2]);
     });
   });
+
+  // VK-572 bug A. A dismissal Dart asks for (deactivate, another tab, a
+  // dialog above, hidden chrome) or a reconnected scene ends the native
+  // search mid-composition. The field resigns, which commits the marked
+  // text, and native reports only `searchActive false`: it swallows that
+  // commit while it keeps the text (RunnerTests, VK-572). Natively the
+  // composition ends with the search, the text kept, and onChanged is not
+  // called: the text did not change.
+  group('VK-572: the native composition ends with the search', () {
+    Future<(FakeNativePlatform, LiquidSearchController, List<String>)>
+    composing(WidgetTester tester) async {
+      final (fake, controller, changes) = await _pump(tester);
+      fake
+        ..emitNative(const LiquidNativeSearchActiveChanged(true))
+        ..emitNative(
+          const LiquidNativeSearchTextChanged('かな', composing: true),
+        );
+      await tester.pump();
+      expect(controller.value.composing, isTrue, reason: 'precondition');
+      changes.clear();
+      return (fake, controller, changes);
+    }
+
+    void expectEnded(LiquidSearchController controller, List<String> changes) {
+      expect(controller.isActive, isFalse);
+      expect(controller.text, 'かな', reason: 'the composed text is kept');
+      expect(controller.value.composing, isFalse);
+      expect(changes, isEmpty, reason: 'the text did not change');
+    }
+
+    testWidgets('A1: deactivate(): native answers inactive only', (
+      tester,
+    ) async {
+      final (fake, controller, changes) = await composing(tester);
+      controller.deactivate();
+      await tester.pump();
+      expect(fake.searchActives, [false]);
+      fake.emitNative(const LiquidNativeSearchActiveChanged(false));
+      await tester.pump();
+      expectEnded(controller, changes);
+    });
+
+    // doc/search.md: "check `composing` before writing". Before VK-572 such
+    // an app held its write although no composition was open.
+    testWidgets('A3: an app write that checks composing lands', (
+      tester,
+    ) async {
+      final (fake, controller, _) = await composing(tester);
+      controller.deactivate();
+      fake.emitNative(const LiquidNativeSearchActiveChanged(false));
+      await tester.pump();
+      fake.searchTexts.clear();
+      // A recent search tapped, written only outside a composition.
+      if (!controller.value.composing) controller.text = 'phở';
+      await tester.pump();
+      expect(fake.searchTexts, ['phở']);
+    });
+
+    // Dart ends the search when the tab is left, before native's report:
+    // the composition ends then too. Native cannot report it on this path
+    // (the search tab is no longer selected), and Dart would drop it.
+    testWidgets('A2, A4: the user taps another tab mid-composition', (
+      tester,
+    ) async {
+      final (fake, controller, changes) = await composing(tester);
+      fake.emitNative(const LiquidNativeDestinationTapped(0));
+      await tester.pumpAndSettle();
+      expectEnded(controller, changes);
+      fake.emitNative(const LiquidNativeSearchActiveChanged(false));
+      await tester.pump();
+      expectEnded(controller, changes);
+      fake.emitNative(const LiquidNativeDestinationTapped(2));
+      await tester.pumpAndSettle();
+      expectEnded(controller, changes);
+    });
+
+    testWidgets('A5: a scene reconnect mid-composition', (tester) async {
+      final (fake, controller, changes) = await composing(tester);
+      fake.pushState(_compact);
+      await tester.pumpAndSettle();
+      expectEnded(controller, changes);
+    });
+
+    testWidgets('R1: an active search keeps its composition', (tester) async {
+      final (fake, controller, _) = await composing(tester);
+      fake.emitNative(const LiquidNativeSearchActiveChanged(true));
+      await tester.pump();
+      expect(controller.isActive, isTrue);
+      expect(controller.value.composing, isTrue);
+    });
+
+    // The end native reports itself (the VK-571 resign re-reads the field)
+    // is a user edit, as before: onChanged hears it.
+    testWidgets('R2: a composition end native reports still calls onChanged', (
+      tester,
+    ) async {
+      final (fake, controller, changes) = await composing(tester);
+      fake.emitNative(
+        const LiquidNativeSearchTextChanged('かな', composing: false),
+      );
+      await tester.pump();
+      expect(controller.value.composing, isFalse);
+      expect(changes, ['かな']);
+    });
+
+    // Flutter chrome under the shell's claim (not installed): the Flutter
+    // field ends its own composition when it lets go, and reports it.
+    testWidgets('R3: Flutter mode: the field still reports its own end', (
+      tester,
+    ) async {
+      installFakeNative(state: const LiquidNativeShellState(installed: false));
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      final changes = <String>[];
+      await pumpShell(
+        tester,
+        TestShell(
+          destinations: _destinations,
+          initialIndex: 2,
+          pageBuilder: _page,
+          search: LiquidSearch(controller: controller, onChanged: changes.add),
+        ),
+        padding: _compactPadding,
+      );
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: 'かな',
+          selection: TextSelection.collapsed(offset: 2),
+          composing: TextRange(start: 0, end: 2),
+        ),
+      );
+      await tester.pump();
+      expect(controller.value.composing, isTrue, reason: 'precondition');
+      changes.clear();
+      tester.state<TestShellState>(find.byType(TestShell)).select(0);
+      await tester.pumpAndSettle();
+      expect(controller.isActive, isFalse);
+      expect(controller.value.composing, isFalse);
+      expect(changes, ['かな'], reason: "the field's own end is reported");
+    });
+  });
 }

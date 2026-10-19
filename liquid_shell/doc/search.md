@@ -264,6 +264,14 @@ Flutter field, but natively the user's committed text stays and the tap
 is lost. Make such writes from taps that end the composition first (a tap
 outside the field does), or check `composing` before writing.
 
+Natively, `composing` ends with the search. Whatever ends the native
+search mid-composition (`deactivate()`, another tab, a dialog or page
+above, hidden chrome, a reconnected scene) makes the field resign, which
+commits its marked text: the controller then reads `active` and
+`composing` false, with the text kept. `onChanged` is not called for it,
+as the text did not change. A commit the field reports itself (the
+keyboard put away, the user's own edit) is an edit and calls it.
+
 ## Insets
 
 The shell's `chromeInsets` cover the search field in every phase:

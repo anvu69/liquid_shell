@@ -26,6 +26,14 @@
   not minimize it; trackpad, mouse and Apple Pencil scrolling do not;
   `bottomAccessory` is out of scope. A very long feed is handled by growing
   the hidden proxy's content.
+- **Fix (VK-572).** With native chrome, `LiquidSearchValue.composing` now
+  ends with the native search. A dismissal mid-composition that the app or
+  the shell asked for (`deactivate()`, another tab, a dialog above, hidden
+  chrome) or a reconnected scene left it true until the user's next edit,
+  so an app that checks `composing` before writing held its write. It
+  affects IMEs that mark their text (Japanese, Chinese), not Apple's
+  Vietnamese Telex. `onChanged` is not called for it: the text did not
+  change.
 
 ## 0.1.0-dev.7
 

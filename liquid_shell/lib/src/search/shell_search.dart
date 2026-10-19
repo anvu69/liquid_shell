@@ -165,9 +165,7 @@ final class ShellSearch implements SearchDriver {
       _syncInactive = true;
       _scopeSent = false;
       final controller = _controller;
-      if (controller != null && controller.isActive) {
-        applySearchEdit(controller, controller.value.copyWith(active: false));
-      }
+      if (controller != null) _endSearch(controller);
     }
     if (!reconnect && _userText) return;
     _sentShown = false;
@@ -214,9 +212,10 @@ final class ShellSearch implements SearchDriver {
         _userText = true;
         _config?.onChanged?.call(text);
       case LiquidNativeSearchActiveChanged(:final active):
-        final next = active && selected;
-        if (controller.isActive != next) {
-          applySearchEdit(controller, controller.value.copyWith(active: next));
+        if (!active || !selected) {
+          _endSearch(controller);
+        } else if (!controller.isActive) {
+          applySearchEdit(controller, controller.value.copyWith(active: true));
         }
       case LiquidNativeSearchSubmitted(:final text):
         if (selected) _config?.onSubmitted?.call(text);
@@ -268,9 +267,23 @@ final class ShellSearch implements SearchDriver {
       _syncInactive = false;
       if (!controller.isActive) claim()?.setSearchActive(active: false);
     }
-    if (left && controller.isActive) {
-      applySearchEdit(controller, controller.value.copyWith(active: false));
-    }
+    if (left) _endSearch(controller);
+  }
+
+  /// Ends the search in the controller and keeps its text. A native field
+  /// that ends its search resigns, which commits its marked text, and
+  /// native does not report that commit (VK-572): natively the composition
+  /// ends with the search. The text did not change, so `onChanged` is not
+  /// called. The Flutter field reports its own composition end when it
+  /// lets go ([_onEditing]): there only `active` changes here.
+  void _endSearch(LiquidSearchController controller) {
+    final value = controller.value;
+    final composing = !native && value.composing;
+    if (!value.active && value.composing == composing) return;
+    applySearchEdit(
+      controller,
+      value.copyWith(active: false, composing: composing),
+    );
   }
 
   // --- the controller's commands (SearchDriver) ------------------------
