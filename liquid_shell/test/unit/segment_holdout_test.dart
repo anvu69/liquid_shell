@@ -16,7 +16,7 @@ import 'package:flutter_test/flutter_test.dart';
 import '../helpers/segment_gate.dart';
 
 void main() {
-  final validation = nativeTaps('native_holdout.json');
+  final validation = nativeTaps('native_holdout.json', split: 'validation');
   final holdout = [
     for (final c in segmentTaps())
       if (c.split == 'holdout') c,
@@ -75,6 +75,39 @@ void main() {
     'tap_1_2_2seg #1': {'x @250ms', 'x @300ms'},
     'tap_1_2_2seg #2': {'x @250ms', 'x @300ms'},
   };
+
+  test('the validation set is the 21 taps of native_holdout.json', () {
+    expect(validation, hasLength(21));
+  });
+
+  test('every known miss names a holdout capture', () {
+    final ids = {for (final c in holdout) '${c.key} #${c.repeat}'};
+    expect(known.keys.toSet().difference(ids), isEmpty);
+  });
+
+  test('a capture with no split throws instead of joining the holdout', () {
+    Map<String, dynamic> file([String? own]) => {
+      'captures': [
+        {
+          'key': 'tap_1_2',
+          'pass': 1,
+          'split': ?own,
+          'segments': 3,
+          'from': 1,
+          'to': 2,
+          'rows': [
+            [0.0, 100.0, 80.0, 40.0, 1.0],
+          ],
+        },
+      ],
+    };
+    expect(() => nativeTapsOf(file()), throwsFormatException);
+    expect(
+      nativeTapsOf(file(), split: 'validation').single.split,
+      'validation',
+    );
+    expect(nativeTapsOf(file('fit'), split: 'validation').single.split, 'fit');
+  });
 
   for (final (set, captures) in [
     ('validation', validation),
