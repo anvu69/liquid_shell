@@ -122,7 +122,7 @@ Left alone: the `tap_2_1_5seg` double capture (each of passes 0, 1, 2 appears tw
 
 **Evidence.**
 - Engine 83675ed276, Flutter 3.44.6 (`bin/internal/engine.version`), `engine/src/flutter/shell/platform/darwin/ios/framework/Source/`:
-  - `SemanticsObject.mm:150-160`: `FlutterScrollableSemanticsObject initWithBridge:uid:` creates `FlutterSemanticsScrollView` (`:154`), sets indicators and insets, adds it to the bridge's view (`:158`). `grep scrollsToTop` finds nothing in `SemanticsObject.mm`, `FlutterSemanticsScrollView.mm` or `FlutterViewController.mm`: UIKit's default YES stays.
+  - `SemanticsObject.mm:150-160`: `FlutterScrollableSemanticsObject initWithBridge:uid:` creates `FlutterSemanticsScrollView` (`:154`), sets indicators and insets, adds it to the bridge's view (`:159`). `grep scrollsToTop` finds nothing in `SemanticsObject.mm`, `FlutterSemanticsScrollView.mm` or `FlutterViewController.mm`: UIKit's default YES stays.
   - `FlutterSemanticsScrollView.mm:14-22`: the init; its delegate is itself (`:19`), and the file has no `scrollViewShouldScrollToTop:`, so UIKit's default allows the scroll.
   - `FlutterViewController.mm:524-543` (`loadView`): Flutter's own status-bar scroll view (offset (2, 2), `scrollsToTop` default YES), and `:557-565` `scrollViewShouldScrollToTop:` forwards to `[self.engine onStatusBarTap]` and returns NO.
   - `FlutterViewController.mm:2183-2191`: the accessibility bridge is always on in a simulator (`TARGET_OS_SIMULATOR`); on a device it is on under VoiceOver, Switch Control or Speak Screen.

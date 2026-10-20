@@ -214,7 +214,7 @@ On the taps that were dumped, the mirror's offset animates from 4822 to 0 in abo
 
 `engine/src/flutter/shell/platform/darwin/ios/framework/Source/` at 83675ed276 (Flutter 3.44.6):
 
-- `SemanticsObject.mm:150-160`: `FlutterScrollableSemanticsObject initWithBridge:uid:` creates the mirror (`:154`), sets the indicators and the insets, and adds it to the bridge's view (`:158`). `scrollsToTop` is not set here or anywhere else in the engine's iOS sources (`grep -rn scrollsToTop` over `Source/` finds nothing), so UIKit's default stays.
+- `SemanticsObject.mm:150-160`: `FlutterScrollableSemanticsObject initWithBridge:uid:` creates the mirror (`:154`), sets the indicators and the insets, and adds it to the bridge's view (`:159`). `scrollsToTop` is not set here or anywhere else in the engine's iOS sources (`grep -rn scrollsToTop` over `Source/` finds nothing), so UIKit's default stays.
 - `FlutterSemanticsScrollView.mm:14-22`: the init. The view is its own delegate (`:19`), and the file has no `scrollViewShouldScrollToTop:`, so UIKit's default (allow) applies.
 - `FlutterViewController.mm:524-543` (`loadView`) creates Flutter's status-bar scroll view (a 2 × 2 content size, offset (2, 2), `scrollsToTop` at its default YES), and `:557-565` is its `scrollViewShouldScrollToTop:`: `[self.engine onStatusBarTap]`, then NO.
 - `FlutterViewController.mm:2183-2191` (`onAccessibilityStatusChanged:`): the bridge is always on in a simulator (`TARGET_OS_SIMULATOR`), and on a device under VoiceOver, Switch Control or Speak Screen.
