@@ -224,11 +224,12 @@ final class ShellSearch implements SearchDriver {
         // past the titles when they changed while a native tap was in
         // flight. Applied as the field's own edit, so it never goes back
         // to native.
-        final count = _config?.scopes?.length ?? 0;
-        if (!selected ||
-            index < 0 ||
-            index >= count ||
-            index == controller.scopeIndex) {
+        if (!selected || index < 0 || index == controller.scopeIndex) return;
+        if (index >= (_config?.scopes?.length ?? 0)) {
+          // Native's bar showed that tap, then clamps it to the new titles,
+          // while the controller keeps its scope: native gets it back
+          // (VK-604). Native's setScope never reports, so this is no echo.
+          if (native) claim()?.setSearchScope(controller.scopeIndex);
           return;
         }
         applySearchEdit(

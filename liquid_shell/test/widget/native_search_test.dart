@@ -2203,6 +2203,61 @@ void main() {
       await tester.pumpAndSettle();
       expect(fake.searchScopes, [2]);
     });
+
+    /// The search tab with [titles] as `LiquidSearch.scopes`; its page's
+    /// bar reads them from the shell. Pump it again to change them.
+    Future<void> titled(
+      WidgetTester tester,
+      LiquidSearchController controller,
+      List<String> titles,
+    ) => pumpShell(
+      tester,
+      TestShell(
+        destinations: _destinations,
+        initialIndex: 2,
+        pageBuilder: _withSearchRoot(
+          () => ListView(
+            key: const ValueKey('list-Scopes'),
+            children: [LiquidSearchScopeBar(controller: controller)],
+          ),
+        ),
+        search: LiquidSearch(controller: controller, scopes: titles),
+      ),
+      padding: _compactPadding,
+    );
+
+    // VK-604 (VK-550 review C9): the app changes its scopes at run time.
+    testWidgets('scopes changed at run time reach native; Flutter draws no '
+        'bar', (tester) async {
+      final fake = installFakeNative(state: _compact);
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      await titled(tester, controller, scopes);
+      expect(fake.last.search?.scopes, scopes);
+      await titled(tester, controller, const ['All', 'Songs']);
+      expect(fake.last.search?.scopes, ['All', 'Songs']);
+      expect(_scope(tester, 'Scopes').searchScopes, ['All', 'Songs']);
+      expect(_scope(tester, 'Scopes').nativeSearchScopes, isTrue);
+      expect(find.byType(LiquidSegmentedControl), findsNothing);
+    });
+
+    // VK-604 (VK-550 review C1): a user tap on the old last scope, still in
+    // flight when the app shortened the titles. Dart ignores the index;
+    // native's bar showed the tap and clamps it to the new titles. Dart
+    // sends its own scope back, once.
+    testWidgets('a native index past the new titles: native gets the '
+        "controller's scope back, once", (tester) async {
+      final fake = installFakeNative(state: _compact);
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      await titled(tester, controller, scopes);
+      await titled(tester, controller, const ['All', 'Songs']);
+      fake.searchScopes.clear();
+      fake.emitNative(const LiquidNativeSearchScopeChanged(2));
+      await tester.pump();
+      expect(controller.scopeIndex, 0, reason: 'ignored');
+      expect(fake.searchScopes, [0]);
+    });
   });
 
   // VK-572 bug A. A dismissal Dart asks for (deactivate, another tab, a

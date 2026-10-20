@@ -120,6 +120,10 @@ LiquidSearchScopeBar(controller: search)
   `scopeIndex` for the app's own actions only (a "reset" button, a
   restored state): that write moves the native bar once. Do not write it
   in answer to a change you just read from the controller.
+- **Fewer scopes.** The shell never clamps `scopeIndex`. When your scopes
+  shrink below it, clamp it yourself in the same change (an app action):
+  both bars show the last scope meanwhile, but a filter on the stale index
+  would use a scope that is gone.
 - The Flutter bar's look follows [`LiquidGlassTheme`](theming.md)
   (`segmentTrack`, `segmentThumb`, `segmentLabelStyle`).
 

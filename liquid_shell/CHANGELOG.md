@@ -50,6 +50,12 @@
   cover the raised field, as in portrait (268 pt on an iPhone 17 Pro). The
   iPad is unchanged.
 
+- **Fix (VK-604).** Native scope bar: a user tap on a scope that the app
+  removed at the same moment no longer leaves the bar and
+  `LiquidSearchController.scopeIndex` on different scopes: the shell sends
+  the controller's scope back to native. `doc/search.md` now says that the
+  app clamps `scopeIndex` when its scopes shrink.
+
 ## 0.1.0-dev.7
 
 - **`LiquidSegmentedControl` (VK-550).** A public segmented control after
