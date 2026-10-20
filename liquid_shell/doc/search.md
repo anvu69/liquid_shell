@@ -282,6 +282,12 @@ commits its marked text: the controller then reads `active` and
 as the text did not change. A commit the field reports itself (the
 keyboard put away, the user's own edit) is an edit and calls it.
 
+With native chrome, `active` and `composing` turn false only once native
+reports the end: after UIKit's dismissal, or with the tab change. They do
+not turn false right after `deactivate()` returns. An app that wants to
+write after deactivating should wait for the controller's `active == false`
+(a listener) instead of checking `composing` at once.
+
 ## Insets
 
 The shell's `chromeInsets` cover the search field in every phase:
