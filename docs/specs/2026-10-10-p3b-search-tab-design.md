@@ -490,7 +490,7 @@ Rules:
 
 On every `syncFlutter` while the search tab is selected, and at the end of every keyboard move (`keyboardDidChangeFrame` and `keyboardDidHide`: the field's end position, read once the animation is over), native publishes the field frame converted to the Flutter view: `searchBar.searchTextField` when it is in a window, not hidden and not transparent; `CGRect.zero` otherwise. A change under 0.5pt is not sent; a failed send forgets the value (P2 rule).
 
-Dart turns it into `chromeInsets.bottom` with one pure function, `nativeSearchBottomInset(field, size, padding, viewInsets, active)` (§4.6). Only a field whose centre is in the lower half of the view counts (the iPhone tab-hosted field); a stacked field at the top is already in the top safe area.
+Dart turns it into `chromeInsets.bottom` with one pure function, `nativeSearchBottomInset(field, size, padding, viewInsets, active)` (§4.6). A field inside the top safe area (`field.bottom <= padding.top + 1`: the iPad's stacked field) counts for nothing, since the top padding covers it. Any other field is the iPhone's tab-hosted field and counts, in either orientation. (VK-594 replaced the first rule, "a field whose centre is in the lower half of the view": in iPhone landscape the keyboard lifts the field above the middle, and the inset fell to 0.)
 
 ### 7.6 Page stack and the native back button (search tab in P3b-1)
 

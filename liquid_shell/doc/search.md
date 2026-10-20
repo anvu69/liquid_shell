@@ -285,7 +285,7 @@ The shell's `chromeInsets` cover the search field in every phase:
 | Where the field is | Inset |
 |---|---|
 | iPhone, native, `selected` (the field in the tab bar area) | `bottom`: the bottom safe area, as for the tab bar |
-| iPhone, native, `active` (above the keyboard) | `bottom`: down from the field's top, from the native field's real frame |
+| iPhone, native, `active` (above the keyboard, in either orientation) | `bottom`: down from the field's top, from the native field's real frame |
 | iPad, native (stacked at the top) | `top`: the top safe area, which holds the bar and the field |
 | Glass, compact | `bottom`: the bottom row; above the keyboard while `active` |
 | Glass, regular | `top`: below the field |

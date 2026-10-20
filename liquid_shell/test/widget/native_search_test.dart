@@ -354,6 +354,36 @@ void main() {
     expect(_scope(tester).chromeInsets.bottom, 392);
   });
 
+  // VK-594, measured on an iPhone 17 Pro, iOS 26.5: in landscape the
+  // keyboard lifts the field into the upper half of the view. The page's
+  // padding still clears the field and the keyboard below it.
+  testWidgets('landscape: the raised field still moves the bottom inset', (
+    tester,
+  ) async {
+    final fake = installFakeNative(state: _compact);
+    final controller = LiquidSearchController();
+    addTearDown(controller.dispose);
+    await pumpShell(
+      tester,
+      _searchShell(controller),
+      size: const Size(874, 402),
+      padding: const EdgeInsets.fromLTRB(62, 68, 62, 64),
+    );
+    // The keyboard is up: Flutter's padding loses the bottom safe area.
+    tester.view
+      ..viewInsets = const FakeViewPadding(bottom: 208)
+      ..padding = const FakeViewPadding(left: 62, top: 68, right: 62);
+    fake
+      ..emitNative(const LiquidNativeSearchActiveChanged(true))
+      ..emitNative(
+        const LiquidNativeSearchFieldChanged(Rect.fromLTWH(80, 142, 662, 44)),
+      );
+    await tester.pump();
+    final page = tester.element(find.byKey(const ValueKey('list-Search')));
+    // max(402 − 142, 208 + 44 + 16), as portrait's.
+    expect(LiquidShellScope.contentPaddingOf(page).bottom, 268);
+  });
+
   testWidgets('pages reach the config; native back pops the top page', (
     tester,
   ) async {

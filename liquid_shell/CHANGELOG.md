@@ -43,6 +43,13 @@
   showed an idle search: system back was blocked, `deactivate()` did
   nothing, and a shell pushed as a page could not be popped.
 
+- **Fix (VK-594).** iPhone with native chrome, in landscape, search active
+  with the keyboard up: `chromeInsets.bottom` and
+  `LiquidShellScope.contentPaddingOf(context).bottom` were 0, so the
+  results could not scroll clear of the field and the keyboard. They now
+  cover the raised field, as in portrait (268 pt on an iPhone 17 Pro). The
+  iPad is unchanged.
+
 ## 0.1.0-dev.7
 
 - **`LiquidSegmentedControl` (VK-550).** A public segmented control after

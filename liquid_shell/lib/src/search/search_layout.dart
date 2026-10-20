@@ -31,8 +31,10 @@ LiquidSearchPhase searchPhaseFor({
 }
 
 /// The bottom inset that keeps content clear of the native search field.
-/// Only a field in the lower half counts (the iPhone's
-/// tab-hosted field); a stacked field at the top is in the top padding.
+/// A field inside the top safe area (the iPad's stacked field) is covered
+/// by the top padding and counts for nothing. Any other field is the
+/// iPhone's tab-hosted one, in either orientation: the keyboard lifts it
+/// into the upper half of a landscape view.
 /// Active: down to the field's top, or the keyboard plus the field and its
 /// gaps while Flutter's keyboard inset is still animating.
 double nativeSearchBottomInset({
@@ -42,7 +44,7 @@ double nativeSearchBottomInset({
   required EdgeInsets viewInsets,
   required bool active,
 }) {
-  if (field.isEmpty || field.center.dy < size.height / 2) return 0;
+  if (field.isEmpty || field.bottom <= padding.top + 1) return 0;
   if (!active) return padding.bottom;
   return [
     padding.bottom,
