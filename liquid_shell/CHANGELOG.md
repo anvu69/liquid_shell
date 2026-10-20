@@ -35,6 +35,14 @@
   Vietnamese Telex. `onChanged` is not called for it: the text did not
   change.
 
+- **Fix (VK-572).** When native chrome takes over while the Flutter field
+  holds the search (focused, its keyboard put away, or composing), for
+  example `nativeChrome` back to `auto` or a late native install, the
+  search now ends with its text kept, as it does when the Flutter field
+  hides. Before, `isActive` (and `composing`) stayed true while UIKit
+  showed an idle search: system back was blocked, `deactivate()` did
+  nothing, and a shell pushed as a page could not be popped.
+
 ## 0.1.0-dev.7
 
 - **`LiquidSegmentedControl` (VK-550).** A public segmented control after

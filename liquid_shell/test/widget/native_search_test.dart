@@ -2317,4 +2317,210 @@ void main() {
       expect(changes, ['かな'], reason: "the field's own end is reported");
     });
   });
+
+  // VK-572 bug B (VK-571 review M-6, M-8). Native chrome engages while the
+  // Flutter field holds the search: focused, keyboard-down (VK-571) or
+  // composing. The shell releases the field (`holdsField`), and the Flutter
+  // search ends there, its text kept, as Flutter mode ends it for hidden
+  // chrome: native starts inactive and never answers a deactivate for an
+  // inactive search (RunnerTests, VK-572).
+  group('VK-572: native takes over a Flutter search', () {
+    /// Flutter chrome first (`nativeChrome: off`), the field focused. The
+    /// next build with `auto` claims native chrome through pending: the
+    /// host has no state yet.
+    Future<LiquidSearchController> viaPending(WidgetTester tester) async {
+      installFakeNative(state: _compact);
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      await pumpShell(
+        tester,
+        _searchShell(controller, nativeChrome: LiquidNativeChrome.off),
+        padding: _compactPadding,
+      );
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      expect(controller.isActive, isTrue, reason: 'precondition: active');
+      return controller;
+    }
+
+    /// auto, off, then the field focused: the host already knows the
+    /// state, so the next build with `auto` engages at once.
+    Future<LiquidSearchController> viaOff(WidgetTester tester) async {
+      installFakeNative(state: _compact);
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      await pumpShell(
+        tester,
+        _searchShell(controller),
+        padding: _compactPadding,
+      );
+      await pumpShell(
+        tester,
+        _searchShell(controller, nativeChrome: LiquidNativeChrome.off),
+        padding: _compactPadding,
+      );
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      expect(controller.isActive, isTrue, reason: 'precondition: active');
+      return controller;
+    }
+
+    /// Not installed (Flutter chrome), the field focused; [installLate]
+    /// then pushes `installed: true`, as a native install after the attach
+    /// does.
+    Future<(FakeNativePlatform, LiquidSearchController)> viaState(
+      WidgetTester tester,
+    ) async {
+      final fake = installFakeNative(
+        state: const LiquidNativeShellState(installed: false),
+      );
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      await pumpShell(
+        tester,
+        _searchShell(controller),
+        padding: _compactPadding,
+      );
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      expect(controller.isActive, isTrue, reason: 'precondition: active');
+      return (fake, controller);
+    }
+
+    Future<void> engage(
+      WidgetTester tester,
+      LiquidSearchController controller,
+    ) async {
+      await pumpShell(
+        tester,
+        _searchShell(controller),
+        padding: _compactPadding,
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(TextField), findsNothing, reason: 'native now');
+    }
+
+    Future<void> installLate(
+      WidgetTester tester,
+      FakeNativePlatform fake,
+    ) async {
+      fake.pushState(_compact);
+      await tester.pumpAndSettle();
+      expect(find.byType(TextField), findsNothing, reason: 'native now');
+    }
+
+    void dismissKeyboard(LiquidSearchController controller) {
+      controller.dismissKeyboard();
+      expect(controller.isActive, isTrue, reason: 'precondition: kept');
+    }
+
+    // Green before VK-572: the first claim builds pending, with `native`
+    // still false. It guards `holdsField` (VK-571) too.
+    testWidgets('B2: keyboard-down, the first claim (pending): the search '
+        'ends', (tester) async {
+      final controller = await viaPending(tester);
+      dismissKeyboard(controller);
+      await tester.pump();
+      await engage(tester, controller);
+      expect(controller.isActive, isFalse);
+    });
+
+    testWidgets('B5: focused, auto -> off -> auto: the search ends', (
+      tester,
+    ) async {
+      final controller = await viaOff(tester);
+      await engage(tester, controller);
+      expect(controller.isActive, isFalse);
+    });
+
+    testWidgets('B6: keyboard-down, auto -> off -> auto: the search ends', (
+      tester,
+    ) async {
+      final controller = await viaOff(tester);
+      dismissKeyboard(controller);
+      await tester.pump();
+      await engage(tester, controller);
+      expect(controller.isActive, isFalse);
+    });
+
+    testWidgets('B7: focused, a late native install: the search ends', (
+      tester,
+    ) async {
+      final (fake, controller) = await viaState(tester);
+      await installLate(tester, fake);
+      expect(controller.isActive, isFalse);
+    });
+
+    testWidgets('B8: keyboard-down, a late native install: the search ends', (
+      tester,
+    ) async {
+      final (fake, controller) = await viaState(tester);
+      dismissKeyboard(controller);
+      await tester.pump();
+      await installLate(tester, fake);
+      expect(controller.isActive, isFalse);
+    });
+
+    testWidgets('B9: composing, a late native install: the composition '
+        'ends, the text kept', (tester) async {
+      final (fake, controller) = await viaState(tester);
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: 'かな',
+          selection: TextSelection.collapsed(offset: 2),
+          composing: TextRange(start: 0, end: 2),
+        ),
+      );
+      await tester.pump();
+      expect(controller.value.composing, isTrue, reason: 'precondition');
+      await installLate(tester, fake);
+      expect(controller.isActive, isFalse);
+      expect(controller.text, 'かな');
+      expect(controller.value.composing, isFalse);
+    });
+
+    testWidgets('B10: deactivate() after a late install leaves the search '
+        'inactive', (tester) async {
+      final (fake, controller) = await viaState(tester);
+      await installLate(tester, fake);
+      controller.deactivate();
+      await tester.pumpAndSettle();
+      expect(controller.isActive, isFalse);
+    });
+
+    testWidgets('B11: a pushed shell pops after a late install over an '
+        'active Flutter search', (tester) async {
+      final outer = GlobalKey<NavigatorState>();
+      final fake = installFakeNative(
+        state: const LiquidNativeShellState(installed: false),
+      );
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      await pumpShell(
+        tester,
+        Navigator(
+          key: outer,
+          onGenerateInitialRoutes: (_, _) => [
+            MaterialPageRoute<void>(builder: (_) => const Text('The list')),
+            MaterialPageRoute<void>(builder: (_) => _searchShell(controller)),
+          ],
+        ),
+        padding: _compactPadding,
+      );
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      expect(controller.isActive, isTrue, reason: 'precondition');
+      await installLate(tester, fake);
+      fake.searchActives.clear();
+      await outer.currentState!.maybePop();
+      await tester.pumpAndSettle();
+      expect(
+        find.text('The list'),
+        findsOneWidget,
+        reason:
+            'back blocked: sent ${fake.searchActives}, '
+            'isActive ${controller.isActive}',
+      );
+    });
+  });
 }

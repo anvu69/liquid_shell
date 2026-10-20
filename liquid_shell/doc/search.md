@@ -223,6 +223,12 @@ whatever the tabs do.
   search and keeps its text, and `activate()` is ignored natively until
   the chrome shows again. Coming back shows the search selected, not
   active, as the Flutter field does.
+- **Native chrome takes over.** When native chrome engages while the
+  Flutter field holds the search (focused, its keyboard put away, or
+  composing), for example when `nativeChrome` goes back to `auto` or the
+  native shell installs late, the search ends as it does when the Flutter
+  field hides: `active` and `composing` turn false and the text stays. A
+  tap on the native field resumes it.
 
 ## Vietnamese and other IMEs
 

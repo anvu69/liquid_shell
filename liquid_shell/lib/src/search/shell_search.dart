@@ -409,16 +409,23 @@ final class ShellSearch implements SearchDriver {
   }
 
   /// The shell will not show the Flutter field in this frame (hidden
-  /// chrome, another tab, the other size class): let go of its focus, then
-  /// end its composition and active state. A focused
+  /// chrome, another tab, the other size class, native chrome): let go of
+  /// its focus, then end its composition and active state. A focused
   /// field taken out of the tree never hears its focus loss (the focus
   /// manager drops a detached node silently), so this does not wait for
   /// the listener. The microtask runs after the focus manager's.
+  ///
+  /// When native chrome took over, [_onFocus] and [_onEditing] hear
+  /// nothing: the microtask ends the search itself, its text kept, as
+  /// Flutter mode does. Native starts inactive.
   void releaseField() {
     _keyboardDown = false;
     focus.unfocus();
     scheduleMicrotask(() {
-      if (!_disposed) _onFocus();
+      if (_disposed) return;
+      _onFocus();
+      final controller = _controller;
+      if (native && controller != null) _endSearch(controller);
     });
   }
 
