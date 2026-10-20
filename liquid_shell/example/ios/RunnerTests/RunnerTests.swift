@@ -2431,6 +2431,70 @@ extension NativeTabsTests {
     XCTAssertEqual(events.sent.filter { $0.hasPrefix("search") }, [])
   }
 
+  /// The last text report Dart got, as "<text> composing=<bool>".
+  fileprivate func lastTextReport() -> String {
+    events.searchTexts.last.map { "\($0.0) composing=\($0.1)" } ?? "none"
+  }
+
+  /// The search active, the user composing "かな" (marked text, injected:
+  /// XCTest cannot type it). Returns the tabs and what resigning does to
+  /// the marked text: it commits it.
+  fileprivate func composingSearch() throws -> (NativeTabsController, commit: () -> Void) {
+    let tabs = try installedSearchShell(selected: 2)
+    let bridge = tabs.searchBridge
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    var composing = true
+    bridge.isComposing = { composing }
+    userTypes("かな", into: bridge)
+    XCTAssertEqual(lastTextReport(), "かな composing=true", "precondition: Dart heard it")
+    return (tabs, { composing = false })
+  }
+
+  /// VK-572, native behaviour that stays as it is: a dismissal Dart asks
+  /// for mid-composition ends in `searchActive false` with the composed
+  /// text kept, and native does not report the commit (`keepOnDismiss`
+  /// swallows UIKit's callback, `restoreKept` updates `known` only). Dart
+  /// ends `composing` with the search itself (`ShellSearch._endSearch`).
+  /// Native reporting the commit one day changes this test and that rule
+  /// together.
+  func testADeactivateMidCompositionEndsInactiveWithNoCommitReport() throws {
+    let (tabs, commit) = try composingSearch()
+    settle(sending: "searchActive false") {
+      commit()
+      tabs.setSearchActive(false)
+    }
+    XCTAssertFalse(tabs.searchBridge.controller.isActive)
+    XCTAssertEqual(tabs.searchBridge.text, "かな", "the composed text is kept")
+    XCTAssertEqual(lastTextReport(), "かな composing=true", "sent: \(events.sent)")
+  }
+
+  /// VK-572: the same through the user's tab tap (Dart answers with Home).
+  /// Native could not report the commit here anyway: the search tab is no
+  /// longer selected.
+  func testATabChangeMidCompositionEndsInactiveWithNoCommitReport() throws {
+    let (tabs, commit) = try composingSearch()
+    settle(sending: "searchActive false") {
+      commit()
+      tabs.apply(searchConfig(selected: 0))
+    }
+    XCTAssertFalse(tabs.searchBridge.controller.isActive)
+    XCTAssertEqual(tabs.searchBridge.text, "かな", "the composed text is kept")
+    XCTAssertEqual(lastTextReport(), "かな composing=true", "sent: \(events.sent)")
+  }
+
+  /// VK-572 bug B's premise: Dart's deactivate for a native search that is
+  /// not active is dropped (`dismissKeepingText` guards on `isActive`):
+  /// native never answers it, so Dart ends a search native took over by
+  /// itself (`ShellSearch.releaseField`).
+  func testDeactivatingAnInactiveSearchSendsNothing() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    events.sent.removeAll()
+    tabs.setSearchActive(false)
+    RunLoop.current.run(until: Date().addingTimeInterval(1.5))
+    XCTAssertFalse(tabs.searchBridge.controller.isActive)
+    XCTAssertEqual(events.sent.filter { $0.hasPrefix("searchActive") }, [])
+  }
+
   /// Q2: the user's × clears the text and dismisses; Dart hears both.
   func testTheCancelButtonClearsTheText() throws {
     let tabs = try installedSearchShell(selected: 2)
