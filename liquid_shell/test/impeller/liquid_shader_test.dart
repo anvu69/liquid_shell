@@ -291,9 +291,11 @@ void main() {
     // 0: byte for byte the lens without the uniform. Both renders run the
     // edited shader, so this shows only that the uniform is neutral at 0.
     // That 0 also draws what the shader drew before the uniform existed is
-    // shown by the band goldens of the surfaces that never set it
-    // (example/test/goldens/bands/tab_lens_*.png and liquid_*.png), which the
-    // commit that added the uniform did not regenerate (acceptance.md §2b).
+    // shown, within the 0.5 % tolerance of TolerantGoldenComparator, by the
+    // band goldens of the surfaces that never set it
+    // (example/test/goldens/bands/tab_*.png and liquid_*.png): c2e52eb
+    // regenerated only segment_lens_*, and no later commit touches bands/
+    // (acceptance.md §2b).
     final none = await render(params(0));
     final base = await render(
       const LiquidOpticsParams(
