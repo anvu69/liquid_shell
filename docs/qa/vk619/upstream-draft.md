@@ -4,7 +4,7 @@ Draft for the owner. **Not to be posted: upstream already has it** (checked 2026
 - [flutter/flutter#191833](https://github.com/flutter/flutter/pull/191833), a draft PR that sets `scrollsToTop = NO` on the mirror. Triage leaned instead towards the mirror forwarding the tap to `FlutterViewController`, and the PR has waited since 2026-08-26 for that choice.
 - The search under "Not verified" below missed both: a query with both words, "FlutterSemanticsScrollView scrollsToTop", returns nothing; "FlutterSemanticsScrollView" alone finds them.
 
-This file stays as the record of this project's simulator repro. Follow #191565 and #191833 instead of posting.
+This file stays as the record of this project's simulator repro. Follow #191565 and #191833 instead of posting. The draft below is kept as it was written: its "before posting" notes (the line check, the device check, the duplicate search) no longer apply.
 
 # [iOS] FlutterSemanticsScrollView leaves scrollsToTop on, so a status-bar tap scrolls the accessibility mirror instead of the Flutter list
 
@@ -241,4 +241,4 @@ The mirror exists only for assistive technology, which scrolls it through access
 - **A patched engine.** The control run sets the property from the app after the mirror exists; it shows that the property decides the outcome in this app, not that the engine change builds or has no other effect.
 - **A physical device** under VoiceOver and Speak Screen: whether one tap misses there too, and how many taps it takes. *(The owner does this before posting; it does not block the PR that adds this draft.)*
 - **Other OS and Xcode versions.** Only iOS 26.5 with Xcode 27.1 was run.
-- **A duplicate issue.** A search of flutter/flutter for "FlutterSemanticsScrollView scrollsToTop" and "status bar tap scroll to top semantics iOS" found nothing when this project looked for it first. *(Search again, with the current wording, before posting.)*
+- **A duplicate issue.** A search of flutter/flutter for "FlutterSemanticsScrollView scrollsToTop" and "status bar tap scroll to top semantics iOS" found nothing when this project looked for it first. *(The search again on 2026-10-21 found #191565 and #191833: see the top of this file.)*

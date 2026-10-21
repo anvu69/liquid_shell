@@ -135,7 +135,7 @@ Left alone: the `tap_2_1_5seg` double capture (each of passes 0, 1, 2 appears tw
 - A `RunnerUITests` UI-test bundle added to the project and to the `Runner` scheme's test action (the `xcodeproj` Ruby gem does it; the draft says how to do it in Xcode).
 - Semantics are on under XCUITest and, in a simulator, always (`FlutterViewController.mm:2183`), so no `ensureSemantics` call is needed.
 - Tests: scroll with eight fast swipes until `Row 0` is gone; tap the status bar by coordinate (`dx` 0.85 of the window width, `dy` 15: XCUITest finds no `StatusBar` element on iOS 26.5); assert `Row 0` is back within 5 s.
-- **Measured** (iPhone 17, iOS 26.5, Xcode 27.1, Flutter 3.44.6; repeated 5 times with the same result):
+- **Measured** (iPhone 17, iOS 26.5, Xcode 27.1, Flutter 3.44.6; repeated 5 times with the same result in this spec's prototype; the plan's Task 4 ran it 3 times, the count the draft states):
   - one tap: red; `Row 0` does not come back (the first built row stays `Row 81`);
   - the number of taps until `Row 0` is back: 3 each time (the first built row after taps 1 and 2 is `Row 81`; the mirror, dumped every 0.2 s, animates to offset 0 on the taps that were dumped). The VK-600 lldb note counted 2; the draft states what was measured and that the count is unexplained;
   - the scroll views, dumped from the app: `FlutterSemanticsScrollView` (frame = the screen, `scrollsToTop = true`) and Flutter's status-bar `UIScrollView` (frame 402 × 0, offset (2, 2), `scrollsToTop = true`).
@@ -210,3 +210,4 @@ Bảng trên không nói tới những điểm dưới đây. Spec chọn như s
 7. **VK-619: số lần chạm đo được là 3, không phải 2** (ghi chú lldb của VK-600 nói 2). Bản nháp ghi số đã đo và cấu hình, và ghi rằng chưa giải thích được; bước kiểm trên máy thật ghi lại số lần chạm.
 8. **VK-619: chạm thanh trạng thái bằng toạ độ**, vì XCUITest không tìm thấy phần tử `StatusBar` trên iOS 26.5; cùng cách `MinimizeUITests` đang dùng.
 9. **Nhiệm vụ C9a tách riêng** (cần simulator) và đứng sau nhiệm vụ Dart của VK-604, như kế hoạch dự kiến.
+10. **VK-619: bản nháp không đăng** (2026-10-21). Lần tìm lại trước khi đăng thấy upstream đã có [flutter/flutter#191565](https://github.com/flutter/flutter/issues/191565) (cùng nguyên nhân, cùng cách sửa) và PR nháp [#191833](https://github.com/flutter/flutter/pull/191833). Các chỗ "bạn tự đăng" / "Not posted" ở trên là quyết định lúc viết spec; `docs/qa/vk619/upstream-draft.md` giữ làm bản ghi repro, dòng đầu ghi theo dõi hai link đó thay vì đăng.
