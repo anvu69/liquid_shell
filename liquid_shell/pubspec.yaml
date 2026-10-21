@@ -5,6 +5,9 @@ homepage: https://github.com/anvu69/liquid_shell/tree/main/liquid_shell
 repository: https://github.com/anvu69/liquid_shell/tree/main/liquid_shell
 issue_tracker: https://github.com/anvu69/liquid_shell/issues
 topics: [navigation, glassmorphism, adaptive-layout, tab-bar, sidebar]
+screenshots:
+  - description: The glass tab bar on an iPhone, light mode.
+    path: doc/images/hero_iphone_light.png
 resolution: workspace
 
 environment:
