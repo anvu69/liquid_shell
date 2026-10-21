@@ -18,7 +18,7 @@ dart=()
 docs=()
 for p in "${packages[@]}"; do
   dart+=("$p/lib/*.dart")
-  docs+=("$p/README.md" "$p/doc/*.md")
+  docs+=("$p/README.md" "$p/doc/*.md" "$p/example/README.md")
 done
 status=0
 

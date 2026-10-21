@@ -56,6 +56,10 @@ void main() {
     expect(run('liquid_shell_ios/README.md', 'See P3b.\n'), 1);
   });
 
+  test('the example README, shown on pub.dev, is scanned', () {
+    expect(run('liquid_shell/example/README.md', 'See P3b.\n'), 1);
+  });
+
   test('a doc page reference fails', () {
     expect(run('liquid_shell/doc/search.md', 'As spec §7 says.\n'), 1);
   });

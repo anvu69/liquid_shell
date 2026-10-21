@@ -66,6 +66,7 @@ void main() {
     await tester.tap(find.text('Compose'));
     await tester.pumpAndSettle();
     expect(find.text('Compose page'), findsOneWidget);
+    expect(chrome(), findsNothing);
     expect(kindAt(tester, 'Home page'), before);
 
     await tester.binding.handlePopRoute();

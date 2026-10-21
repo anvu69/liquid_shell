@@ -659,8 +659,7 @@ class _LiquidShellState extends State<LiquidShell>
 
   /// Whether the shell drives the native bar's minimize now. On becoming
   /// active, the selected tab's offset is sent once, even if unchanged: the
-  /// native side may have reset it. The first time, the bar expands after it
-  /// (final review M4).
+  /// native side may have reset it. The first time, the bar expands after it.
   void _setMinimizeActive(bool active) {
     if (active && !_minimizeActive) {
       _minimizeForce = true;
