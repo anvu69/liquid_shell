@@ -77,7 +77,7 @@ Check: `make publish-check` before (listing saved) and after, for the four packa
 
 ### 3.3 I5: SwiftPM is verified
 
-- `liquid_shell_ios/README.md:13`: the sentence becomes "Both CocoaPods and Swift Package Manager builds are tested on CI.", dropping "unverified until …".
+- `liquid_shell_ios/README.md:13`: the sentence becomes "Ships for CocoaPods and Swift Package Manager; CI builds the example with Swift Package Manager.", the wording §12.1 of the P1 spec asks for, dropping "unverified until …".
 - `docs/specs/2026-10-08-p1-foundation-design.md` §12.1: the SwiftPM gate is marked closed, with run 39095489319 and the two log lines in Sources.
 - `liquid_shell_ios/CHANGELOG.md`, under the unreleased section: "Swift Package Manager builds are now tested on CI."
 
@@ -121,17 +121,17 @@ What the app is (one screen per README case), the case list with one line each (
 
 **Package.** `publish_to: none`, workspace member (root `pubspec.yaml` `workspace:` list), `resolution: workspace`. Dependencies: `flutter`, `liquid_shell` (workspace), `go_router: ^18.1.1`. Dev: `flutter_test`, `very_good_analysis` (same pin as `example`). Platform folders: none generated beyond what `flutter test` needs (widget tests only; no iOS/Android project), unless `flutter create` is required by the workspace analyzer, in which case `--platforms ios,android` and nothing else.
 
-**App** (`lib/go_router_app.dart`, with a two-line `lib/main.dart` that runs it; `#docregion` blocks named `shell`, `branches`, `detail`). The file name is unique across both example apps, because a marker names a file without its directory:
+**App** (`lib/go_router_app.dart`, with a two-line `lib/main.dart` that runs it; `#docregion` blocks named `shell`, `branches`, `above`, never nested). The file name is unique across both example apps, because a marker names a file without its directory:
 - `GoRouter` with a root navigator key and `StatefulShellRoute.indexedStack`: three branches, Home, Explore, Search (the search branch uses `LiquidSearch`).
 - `builder`: `LiquidShell(selectedIndex: shell.currentIndex, onDestinationSelected: (i) => shell.goBranch(i, initialLocation: i == shell.currentIndex), body: shell)`.
-- A detail route under Home with `parentNavigatorKey: rootKey`, wrapped in `LiquidHideChrome` (the chrome hides above a root page).
+- A detail route inside the Home branch (`/home/detail`), wrapped in `LiquidHideChrome`: a full-frame page under the shell hides the chrome. A compose route on the root navigator (`/compose`, `parentNavigatorKey: rootKey`), wrapped in `LiquidNoChrome`: a page above the shell covers the chrome and ignores its insets. This is the rule of `doc/router_integration.md` "Pages and the chrome": `LiquidHideChrome` on a root page does nothing, because it finds no shell above it. (Amended while writing the plan: the first draft put `LiquidHideChrome` on a root page.)
 - Back and the edge swipe: what the shell does under go_router today, no extra code.
 
 **Tests** (`test/router_test.dart`, red first: written against a stub `go_router_app.dart`):
 1. Selecting Explore shows Explore; a counter incremented on Home survives Home → Explore → Home.
-2. Pushing the detail page hides the chrome (`find.byType(LiquidTabBar)` gone or the hide wrapper active, whichever the shell exposes; the plan picks after reading `hide_chrome.dart`'s test).
-3. System back (`tester.binding.handlePopRoute()`) on the detail page returns to Home with the chrome shown.
-4. On Explore's root, system back goes to Home (the shell's default).
+2. Opening `/home/detail` hides the chrome: `find.byType(LiquidTabBar)` finds nothing (as `liquid_shell/test/widget/shell_chrome_test.dart:702` checks).
+3. System back (`tester.binding.handlePopRoute()`) on the detail page returns to Home with the tab bar shown.
+4. Opening `/compose` shows the page above the shell; system back closes it and the tab bar is still there.
 If a case does not hold under go_router, the test records the actual behaviour, the case goes to Known issues (§3.4), and `lib/` is not changed.
 
 **Doc.** `doc/router_integration.md` "go_router (until the adapter ships)" becomes "go_router", built from the three regions with the markers `make snippets` already reads (`<?code-excerpt "go_router_app.dart (shell)"?>` before a ```` ```dart ```` block; every region must be used), plus prose on the root page and back.
@@ -139,7 +139,8 @@ If a case does not hold under go_router, the test records the actual behaviour, 
 **Machinery.**
 - `tool/check_readme_snippets.dart` (`regionsUnder(Directory('$package/example/lib'))`, `:226`) also reads `$package/example_go_router/lib`; a file name found in both is an error.
 - `make analyze`, `make test`: the new package is included (the workspace already drives them; the plan checks the Makefile's package list).
-- `tool/check_provenance.sh`: the `go_router` rule excludes `':!liquid_shell/example_go_router/'` (and the root `pubspec.lock`/`pubspec.yaml` lines the workspace adds, if any). Spec P1 §9 and §12.2 get one line: go_router may appear in that app only.
+- `tool/check_provenance.sh`: the `go_router` rule excludes `':!liquid_shell/example_go_router/'` (no `pubspec.lock` is tracked).
+- `liquid_shell/.pubignore`: `example_go_router/`, so the app never ships in the `liquid_shell` archive. Spec P1 §9 and §12.2 get one line: go_router may appear in that app only.
 - `make coverage`: the app has no `lib` coverage requirement; `tool/check_covered.dart` is checked so it does not demand one.
 
 ## 4. Risks
