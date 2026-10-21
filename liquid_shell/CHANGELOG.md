@@ -38,7 +38,7 @@
   holds the search (focused, its keyboard put away, or composing), for
   example `nativeChrome` back to `auto` or a late native install, the
   search now ends with its text kept, as it does when the Flutter field
-  hides. Before, `isActive` (and `composing`) stayed true while UIKit
+  hides, and native is told the search is inactive. Before, `isActive` (and `composing`) stayed true while UIKit
   showed an idle search: system back was blocked, `deactivate()` did
   nothing, and a shell pushed as a page could not be popped.
 - **Fix (VK-594).** iPhone with native chrome, in landscape, search active

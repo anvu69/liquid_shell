@@ -2573,6 +2573,18 @@ void main() {
       expect(controller.isActive, isFalse);
     });
 
+    // The entry runs while the Flutter field still holds the search, so it
+    // cannot send the inactive state; the release sends it once the search
+    // ended (PR #20 review). A native field left active (a hot restart)
+    // would otherwise stay active over an inactive controller.
+    testWidgets('B12: a late install over an active Flutter search tells '
+        'native the search is inactive', (tester) async {
+      final (fake, controller) = await viaState(tester);
+      await installLate(tester, fake);
+      expect(controller.isActive, isFalse);
+      expect(fake.searchActives, [false]);
+    });
+
     testWidgets('B11: a pushed shell pops after a late install over an '
         'active Flutter search', (tester) async {
       final outer = GlobalKey<NavigatorState>();

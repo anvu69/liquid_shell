@@ -418,7 +418,10 @@ final class ShellSearch implements SearchDriver {
   ///
   /// When native chrome took over, [_onFocus] and [_onEditing] hear
   /// nothing: the microtask ends the search itself, its text kept, as
-  /// Flutter mode does. Native starts inactive.
+  /// Flutter mode does, and tells native the search is inactive: the
+  /// native entry ([afterConfigSent]) ran while the Flutter field still
+  /// held the search, so it sent nothing, and a native field left active
+  /// (a hot restart) would stay so. Native ignores it when inactive.
   void releaseField() {
     _keyboardDown = false;
     focus.unfocus();
@@ -426,7 +429,10 @@ final class ShellSearch implements SearchDriver {
       if (_disposed) return;
       _onFocus();
       final controller = _controller;
-      if (native && controller != null) _endSearch(controller);
+      if (native && controller != null) {
+        _endSearch(controller);
+        claim()?.setSearchActive(active: false);
+      }
     });
   }
 
