@@ -939,6 +939,8 @@ Tests move with their code (inventory §6.1). The moved P1 tests are rewritten a
 - `tool/check_provenance.sh` runs in CI. It fails if any file outside `docs/` contains `vankhan`, `Văn Khấn`, `calculator_promax`, `LocaleKeys`, `easy_localization`, `go_router`, `AppColors`, `AppGlassColors` or `GetIt`.
 - Every package `LICENSE` is MIT, with the copyright line from Q15.
 
+**Amended 2026-10-21 (VK-701):** `go_router` may also appear in `liquid_shell/example_go_router`, the unpublished app `doc/router_integration.md` is built from.
+
 ## 10. Testing
 
 TDD applies to every task (red → green → commit), with per-task review and a whole-branch review at the end.
@@ -1065,6 +1067,8 @@ Images use relative paths (`doc/images/…`). pub.dev rewrites them against `rep
 - `theming.md`: `LiquidGlassTheme` fields, defaults table, light/dark, per-brand example.
 - `tiers.md`: tiers, `LiquidGlassPolicy` algorithm, signals per platform, writing a `LiquidGlassRenderer`, forced tier.
 - `router_integration.md`: the seam with plain `Navigator`/`IndexedStack`, with go_router `StatefulShellRoute` by hand (until P5 ships the adapter), where `LiquidHideChrome` and `LiquidNoChrome` go, and keeping branch state alive.
+
+**Amended 2026-10-21 (VK-701):** `go_router` may also appear in `liquid_shell/example_go_router`, the unpublished app `doc/router_integration.md` is built from.
 
 ### 12.3 Snippet check
 

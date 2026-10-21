@@ -10,6 +10,7 @@ DART ?= $(if $(FVM),fvm dart,dart)
 
 PACKAGES := liquid_shell liquid_shell_platform_interface liquid_shell_ios liquid_shell_android
 EXAMPLE := liquid_shell/example
+EXAMPLE_GO_ROUTER := liquid_shell/example_go_router
 # Packages whose lib/ must keep >= COVERAGE_MIN % line coverage (spec Q14).
 # A barrel-only package instruments 0 lines and stays out; every package whose
 # lib/ has more than directives must be listed, or tool/check_covered.dart
@@ -37,10 +38,10 @@ format-check: ## Formatting gate: check only, never rewrite
 	$(DART) format --output=none --set-exit-if-changed .
 
 analyze: ## Static analysis of every package, the example and tool/; infos and warnings are fatal
-	$(DART) analyze --fatal-infos --fatal-warnings $(PACKAGES) $(EXAMPLE) tool
+	$(DART) analyze --fatal-infos --fatal-warnings $(PACKAGES) $(EXAMPLE) $(EXAMPLE_GO_ROUTER) tool
 
 test: ## Unit and widget tests in every package and the example (no goldens)
-	@set -e; for p in $(PACKAGES) $(EXAMPLE); do \
+	@set -e; for p in $(PACKAGES) $(EXAMPLE) $(EXAMPLE_GO_ROUTER); do \
 	  if [ -d $$p/test ]; then \
 	    echo "▸ test $$p"; \
 	    (cd $$p && $(FLUTTER) test --exclude-tags golden,impeller,liquid_golden); \

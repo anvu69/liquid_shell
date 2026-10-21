@@ -1,5 +1,6 @@
 // Checks that every README and doc/*.md snippet equals its #docregion in
-// liquid_shell/example/lib (spec §12.3, Q13).
+// liquid_shell/example/lib and liquid_shell/example_go_router/lib
+// (spec §12.3, Q13).
 //
 // A snippet is a ```dart block right after a marker line:
 //   <?code-excerpt "basic_tabs.dart (readme)"?>
@@ -224,6 +225,14 @@ void main(List<String> args) {
 
   try {
     final regions = regionsUnder(Directory('$package/example/lib'));
+    for (final MapEntry(:key, :value) in regionsUnder(
+      Directory('$package/example_go_router/lib'),
+    ).entries) {
+      if (regions.containsKey(key)) {
+        throw FormatException('two files with regions are named $key');
+      }
+      regions[key] = value;
+    }
     final texts = {for (final doc in docs) doc: doc.readAsStringSync()};
     String name(File doc) => doc.path.substring(package.length + 1);
     if (args.contains('--fix')) {

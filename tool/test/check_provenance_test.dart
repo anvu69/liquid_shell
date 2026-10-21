@@ -37,4 +37,23 @@ void main() {
     expect(run('// from VANKHAN'), 1);
     expect(run('import "easy_localization";'), 1);
   });
+
+  test('go_router is allowed in the go_router example only', () {
+    expect(run('import "package:go_router/go_router.dart";'), 1);
+    Directory(
+      '${repo.path}/liquid_shell/example_go_router/lib',
+    ).createSync(recursive: true);
+    File('${repo.path}/probe.dart').deleteSync();
+    File(
+      '${repo.path}/liquid_shell/example_go_router/lib/app.dart',
+    ).writeAsStringSync('import "package:go_router/go_router.dart";');
+    expect(
+      Process.runSync(
+        'bash',
+        ['tool/check_provenance.sh'],
+        workingDirectory: repo.path,
+      ).exitCode,
+      0,
+    );
+  });
 }

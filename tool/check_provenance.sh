@@ -3,6 +3,10 @@
 # app, its i18n/DI/theme symbols, or the project whose test helpers must be
 # rewritten. go_router is allowed in Markdown only, because
 # liquid_shell/doc/router_integration.md teaches that wiring (spec §12.2).
+# go_router is also allowed in liquid_shell/example_go_router, the app the
+# router doc is built from (VK-701). So are the files that wire that app in:
+# the root pubspec.yaml, Makefile, liquid_shell/.pubignore and
+# tool/check_readme_snippets.dart.
 #
 # Scans tracked files plus untracked files that .gitignore does not ignore,
 # so generated build files with local absolute paths never trip it.
@@ -22,7 +26,7 @@ fi
 if git grep --untracked -n -I -w "$banned_word" "${outside_docs[@]}"; then
   status=1
 fi
-if git grep --untracked -n -I -E 'go_router' "${outside_docs[@]}" ':!*.md'; then
+if git grep --untracked -n -I -E 'go_router' "${outside_docs[@]}" ':!*.md' ':!liquid_shell/example_go_router/' ':!pubspec.yaml' ':!Makefile' ':!liquid_shell/.pubignore' ':!tool/check_readme_snippets.dart'; then
   status=1
 fi
 
