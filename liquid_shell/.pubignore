@@ -7,5 +7,5 @@ test/
 example/test/
 example/integration_test/
 
-# The go_router example is a workspace app, not part of the package.
+# The example_go_router app is a workspace app, not part of the package.
 example_go_router/

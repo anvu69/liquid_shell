@@ -56,4 +56,20 @@ void main() {
       0,
     );
   });
+
+  test('go_router in a Makefile or the root pubspec still fails', () {
+    for (final name in ['Makefile', 'pubspec.yaml']) {
+      File('${repo.path}/$name').writeAsStringSync('  go_router: ^18.1.1\n');
+      expect(
+        Process.runSync(
+          'bash',
+          ['tool/check_provenance.sh'],
+          workingDirectory: repo.path,
+        ).exitCode,
+        1,
+        reason: name,
+      );
+      File('${repo.path}/$name').deleteSync();
+    }
+  });
 }
