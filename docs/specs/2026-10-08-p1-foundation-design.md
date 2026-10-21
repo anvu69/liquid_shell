@@ -1058,6 +1058,8 @@ Images use relative paths (`doc/images/…`). pub.dev rewrites them against `rep
 
 **P6 release checklist, Swift Package Manager (added 2026-10-09, final review I5, owner decision O2).** Before `dart pub publish`, build and run the example with SwiftPM on the release toolchain (Flutter's SwiftPM support on Xcode 27): enable it for the example project only (`flutter: config: enable-swift-package-manager: true` in `liquid_shell/example/pubspec.yaml`, never the global `flutter config`), run `make integration-ios`, and fix `liquid_shell_ios/ios/liquid_shell_ios/Package.swift` if the build needs it (for example a `FlutterFramework` package dependency in newer plugin templates). When it passes, replace the "unverified" sentence in `liquid_shell_ios/README.md` with "Ships for CocoaPods and Swift Package Manager". If it cannot pass, keep the sentence and say so in the CHANGELOG.
 
+**Closed 2026-10-21 (VK-701).** CI builds the example with Swift Package Manager: run 39095489319 (main, `cd6504c`), job integration-ios-native (iPhone, iOS 26), logs "Adding Swift Package Manager integration…" and "All plugins found for ios are Swift Packages". `Package.swift` needed no change. The README sentence is replaced as above.
+
 ### 12.2 `liquid_shell/doc/`
 
 - `theming.md`: `LiquidGlassTheme` fields, defaults table, light/dark, per-brand example.

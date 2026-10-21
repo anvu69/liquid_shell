@@ -8,7 +8,7 @@ tab bar and sidebar on iPhone and iPad, and reads the iPadOS window controls.
                        DESC
   s.homepage         = 'https://github.com/anvu69/liquid_shell'
   s.license          = { :file => '../LICENSE' }
-  s.author           = { 'lasoai.vn' => 'lasotuviai@gmail.com' }
+  s.author           = { 'lasoai.vn' => 'https://lasoai.vn' }
   s.source           = { :path => '.' }
   s.source_files     = 'liquid_shell_ios/Sources/liquid_shell_ios/**/*.swift'
   s.resource_bundles = { 'liquid_shell_ios_privacy' => ['liquid_shell_ios/Sources/liquid_shell_ios/PrivacyInfo.xcprivacy'] }
