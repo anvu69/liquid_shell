@@ -2,11 +2,11 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
 /// The smallest size, in logical pixels, a narrow tab label shrinks to
-/// before it ellipsizes (Q18).
+/// before it ellipsizes.
 const double kLiquidMinLabelSize = 10;
 
 /// A one-line label for a narrow tab cell that fits its width in three
-/// steps (Q18):
+/// steps:
 ///
 /// 1. it asks for [slack] extra width (the cell's side padding) and gives it
 ///    up first;

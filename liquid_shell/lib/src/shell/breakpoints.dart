@@ -30,7 +30,7 @@ class LiquidShellBreakpoints {
   final double tiledSidebar;
 
   /// A landscape shell lower than this is compact (phones in landscape get
-  /// the bottom bar, spec VK-503 §12.1). 0 restores P1.
+  /// the bottom bar). 0 turns the height rule off.
   final double compactHeight;
 
   /// The size class of [width].

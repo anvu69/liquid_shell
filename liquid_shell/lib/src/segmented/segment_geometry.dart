@@ -4,40 +4,40 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:liquid_shell/src/chrome/lens_track.dart';
 
-/// Measured metrics of the native segmented control (spec VK-550 §5).
+/// Measured metrics of the native segmented control.
 abstract final class SegmentMetrics {
-  /// The track's height at 1x text (spike §2).
+  /// The track's height at 1x text.
   static const double trackHeight = 32;
 
   /// The minimum hit box (owner rule, Q-C).
   static const double box = 44;
 
-  /// The gap between the track and a resting thumb (spike §2).
+  /// The gap between the track and a resting thumb.
   static const double thumbInset = 2;
 
-  /// Half the intrinsic padding around a label: label + 18 (spike §2).
+  /// Half the intrinsic padding around a label: label + 18.
   static const double labelPadding = 9;
 
   /// The narrowest intrinsic segment (Q-C; native is 32).
   static const double minSegment = 44;
 
-  /// The label's font size at text scale 1 (spike §2).
+  /// The label's font size at text scale 1.
   static const double labelSize = 13;
 
-  /// The label's line height at text scale 1 (spike §2).
+  /// The label's line height at text scale 1.
   static const double labelLine = 15.67;
 
   /// The track height minus one label line: 32 - 15.67.
   static const double labelBoxOffset = 16.33;
 
-  /// How much the pressed thumb grows (spike §3).
+  /// How much the pressed thumb grows.
   static const Size pressedGrow = Size(24, 16);
 
-  /// The label text scale cap (Q-D).
+  /// The label text scale cap.
   static const double maxTextScale = 2;
 }
 
-/// The laid-out segments of a control, track-local (spec VK-550 §5).
+/// The laid-out segments of a control, track-local.
 @immutable
 class SegmentGeometry implements LensTrack {
   /// Creates a geometry from already laid-out rects.
@@ -103,7 +103,7 @@ class SegmentGeometry implements LensTrack {
   }
 
   /// Every thumb has one size, (W/n − 4) × (H − 4), so the lens size does
-  /// not depend on [x] (spec §5).
+  /// not depend on [x].
   @override
   Size restLensAt(double x) => slots.isEmpty
       ? Size.zero
@@ -134,7 +134,7 @@ class SegmentGeometry implements LensTrack {
   );
 }
 
-/// Lays out [count] segments (spec VK-550 §5). With [mediumLabelWidths] the
+/// Lays out [count] segments. With [mediumLabelWidths] the
 /// width is intrinsic (each segment at least [SegmentMetrics.minSegment],
 /// Q-C), else [maxWidth] is filled: below 44 pt per segment the segments
 /// shrink equally to fit, as native's do.

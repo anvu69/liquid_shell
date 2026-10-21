@@ -18,7 +18,7 @@ enum LiquidTabBarPosition {
 }
 
 /// A landscape window lower than this gets the landscape bottom bar (the
-/// `LiquidShellBreakpoints.compactHeight` default, spec VK-503 §12.1).
+/// `LiquidShellBreakpoints.compactHeight` default).
 const double kLiquidCompactHeight = 500;
 
 /// The gap between the pill and the trailing circle.
@@ -31,7 +31,7 @@ const double kLiquidTabBarTrailingGap = 8;
 /// Larger text grows the pill, and the square trailing circle with it, so
 /// cells can drop below 44pt there.
 ///
-/// A narrow bar also fits its labels (Q18): a label that does not fit its
+/// A narrow bar also fits its labels: a label that does not fit its
 /// label box first shrinks down to 10pt, and only then ellipsizes.
 const double kLiquidNarrowWidth = 340;
 
@@ -42,7 +42,7 @@ const double kLiquidNarrowWidth = 340;
 /// chrome. It draws the row only: the caller adds the outer margins.
 ///
 /// The bottom bar fills the width it is given and places a native-sized pill
-/// in it (spec VK-503 §5): centred, or pinned to the start with the trailing
+/// in it: centred, or pinned to the start with the trailing
 /// circle at the end. The gaps pass touches through. Selection commits on
 /// release, and every slot draws `selectedIcon ?? icon`.
 ///
@@ -145,8 +145,8 @@ class LiquidTabBar extends StatelessWidget {
 }
 
 /// Whether the bottom [LiquidTabBar]s under it take the landscape form.
-/// Internal: `LiquidShell` decides it from its own size and breakpoints
-/// (spec VK-503 §5.2, §12.1), which a bar reading the window cannot, and
+/// Internal: `LiquidShell` decides it from its own size and breakpoints,
+/// which a bar reading the window cannot, and
 /// a `chromeBuilder`'s own bar follows it too.
 class TabBarLandscapeScope extends InheritedWidget {
   /// Creates the scope.
@@ -170,7 +170,7 @@ class TabBarLandscapeScope extends InheritedWidget {
 }
 
 /// A glass circle for a [LiquidTabAction]: square, as tall as its row. A
-/// press shows the white highlight (spec VK-503 §8.8), not ink; so do
+/// press shows the white highlight, not ink; so do
 /// keyboard focus, a pointer hovering it and [highlight].
 ///
 /// It takes keyboard focus; Enter and Space activate it.

@@ -6,12 +6,12 @@ import 'package:liquid_shell/src/glass/liquid_glass.dart';
 import 'package:liquid_shell/src/glass/signals_controller.dart';
 import 'package:liquid_shell/src/glass/tier.dart';
 
-/// Height of the scroll-edge pocket (research §5: 147.8 pt).
+/// Height of the scroll-edge pocket (147.8 pt).
 const double kScrollPocketExtent = 148;
 
 /// Height of the pocket under the 44 pt landscape bar. Native starts the
 /// pocket 64.8 pt above the pill top in both forms: 21 + 62 + 64.8 = 147.8
-/// in portrait, 20 + 44 + 64.8 = 128.8 in landscape (VK-503 Task 15, the
+/// in portrait, 20 + 44 + 64.8 = 128.8 in landscape (the
 /// TabFid layer dump: `ScrollEdgeEffectView` 0, 273.2, 874 × 128.8 on an
 /// 874 × 402 screen).
 const double kScrollPocketLandscapeExtent = 128.8;
@@ -19,8 +19,8 @@ const double kScrollPocketLandscapeExtent = 128.8;
 /// The pocket (tests).
 const kScrollPocketKey = ValueKey<String>('liquid-scroll-pocket');
 
-/// An approximation of iOS 26's scroll-edge pocket under the bottom bar
-/// (spec VK-503 §15, Q13): three blur bands (σ 0.5, 1.0, 1.6, top to
+/// An approximation of iOS 26's scroll-edge pocket under the bottom bar:
+/// three blur bands (σ 0.5, 1.0, 1.6, top to
 /// bottom) and a faint dim. Flutter has no progressive backdrop blur, so
 /// it is banded. Liquid tier only; it draws nothing in frosted and solid.
 class ScrollEdgePocket extends StatefulWidget {

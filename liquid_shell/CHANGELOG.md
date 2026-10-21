@@ -1,5 +1,8 @@
 ## 0.1.0-dev.8
 
+- The package archive no longer includes tests (they read files outside
+  the package). The README states the supported platforms (iOS and
+  Android), the install requirements and the known issues.
 - **Behaviour change (VK-600).** With native chrome on iOS 26+,
   `minimizeOnScroll` (default `true`) now also minimizes UIKit's compact tab
   bar when the body scrolls down. With `false` the native bar never

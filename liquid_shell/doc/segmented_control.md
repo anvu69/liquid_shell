@@ -119,20 +119,20 @@ or increased contrast there is no lens pass, only the thumb.
 
 ## What is not identical to iOS
 
-Measured against a `UISegmentedControl` on iOS 26.5; the numbers are in
-the acceptance notes of VK-550.
+Measured against a `UISegmentedControl` on iOS 26.5; the numbers come
+from the acceptance measurements.
 
-- **Track (Q-B).** Flat, like native's. Only the lens is glass. iOS 27's
+- **Track.** Flat, like native's. Only the lens is glass. iOS 27's
   glass track is not drawn.
-- **Size (Q-C).** The box is 44 pt, not 32. Intrinsic segments are at least
+- **Size.** The box is 44 pt, not 32. Intrinsic segments are at least
   44 pt wide: "A | B | C" is 132 pt where native's is 96. Longer labels
   match native to within a point ("All | Songs | Places" is 177 pt).
 - **Width below 44 pt per segment.** The segments shrink equally to fit,
   so hit targets follow the segment width and are narrower than 44 pt
   there. They stay 44 pt tall.
-- **Text scale (Q-D).** Native's labels stay at 13 pt; these follow the
+- **Text scale.** Native's labels stay at 13 pt; these follow the
   system text size up to x2, which is the Flutter convention.
-- **Wobble (Q-E).** The lens lifts and lands with springs matched to
+- **Wobble.** The lens lifts and lands with springs matched to
   native's peaks, overshoot and settle time within 10 %, not frame by
   frame: on the 31 native taps it was fitted to, which cover every kind of
   tap measured (two, three and five segments, left and right, LTR and
@@ -148,7 +148,7 @@ the acceptance notes of VK-550.
   colour fringe, and the page under it squeezed to about 0.8 across its
   height, as native's. Native's lens also bends the labels it passes; here
   they stay above it, and native's fringe is stronger.
-- **Segments (Q-F).** Text only, with a per-segment `enabled`. No icons, no
+- **Segments.** Text only, with a per-segment `enabled`. No icons, no
   momentary mode.
 - **Haptics.** One selection click per segment crossed while dragging; the
   device's own pattern for native's control could not be observed on the

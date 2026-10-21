@@ -19,7 +19,7 @@ nogit() { env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX "$@"; 
   exit 1
 }
 
-for target in format-check analyze provenance test; do
+for target in format-check analyze provenance public-docs test; do
   echo "▸ pre-commit: $target"
   nogit make --no-print-directory "$target"
 done

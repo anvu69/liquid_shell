@@ -128,7 +128,7 @@ class LiquidGlassPolicy {
   ///
   /// A forced tier also keeps every `LiquidShell` under this policy on
   /// Flutter chrome, even where native chrome could engage: forcing a tier
-  /// asks for Flutter glass (spec 2026-10-10 §9.1).
+  /// asks for Flutter glass.
   final LiquidGlassTier? forcedTier;
 
   /// Extra renderers. For each tier the first supported registered

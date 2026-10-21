@@ -152,22 +152,92 @@ LiquidShell(
   `StatefulShellBranch`; `goBranch(i, initialLocation: i == currentIndex)`
   gives the same reselect.
 
-## go_router (until the adapter ships)
+## go_router
 
+`StatefulShellRoute.indexedStack` gives each tab its own `Navigator` and
+keeps the others alive; the shell sits in its `builder`. The complete app
+is [`example_go_router`](../example_go_router/lib/go_router_app.dart),
+tested on CI.
+
+<?code-excerpt "go_router_app.dart (shell)"?>
 ```dart
-StatefulShellRoute.indexedStack(
+RouteBase _shell() => StatefulShellRoute.indexedStack(
   builder: (context, state, shell) => LiquidShell(
-    destinations: destinations,
+    destinations: _destinations,
     selectedIndex: shell.currentIndex,
+    // Reselecting a tab goes back to its first page.
     onDestinationSelected: (i) =>
         shell.goBranch(i, initialLocation: i == shell.currentIndex),
+    search: LiquidSearch(controller: _search),
+    // The indexed stack keeps every branch alive and hides the others
+    // with Offstage and TickerMode, which the shell reads as off screen.
     body: shell,
   ),
-  branches: [/* one StatefulShellBranch per destination */],
-)
+  branches: _branches(),
+);
 ```
 
-`StatefulShellRoute.indexedStack` already keeps each branch alive.
+Each destination is a `StatefulShellBranch`, the search destination too.
+A page that hides the chrome is a route inside its branch:
+
+<?code-excerpt "go_router_app.dart (branches)"?>
+```dart
+List<StatefulShellBranch> _branches() => [
+  StatefulShellBranch(
+    routes: [
+      GoRoute(
+        path: '/home',
+        builder: (context, state) => const _HomePage(),
+        routes: [
+          // Inside the branch, under the shell: LiquidHideChrome hides
+          // the chrome while the page is on screen.
+          GoRoute(
+            path: 'detail',
+            builder: (context, state) => const LiquidHideChrome(
+              child: _Page(title: 'Detail page'),
+            ),
+          ),
+        ],
+      ),
+    ],
+  ),
+  StatefulShellBranch(
+    routes: [
+      GoRoute(
+        path: '/explore',
+        builder: (context, state) => const _Page(title: 'Explore page'),
+      ),
+    ],
+  ),
+  StatefulShellBranch(
+    routes: [
+      GoRoute(
+        path: '/search',
+        builder: (context, state) => const _Page(title: 'Search page'),
+      ),
+    ],
+  ),
+];
+```
+
+A page above the shell (compose, a sheet) goes on the root navigator, with
+`LiquidNoChrome`:
+
+<?code-excerpt "go_router_app.dart (above)"?>
+```dart
+// Above the shell, on the root navigator: the page covers the chrome,
+// and LiquidNoChrome makes its insets ignore it.
+RouteBase _above() => GoRoute(
+  path: '/compose',
+  parentNavigatorKey: _rootKey,
+  builder: (context, state) =>
+      const LiquidNoChrome(child: _Page(title: 'Compose page')),
+);
+```
+
+System back and the iOS edge swipe pop the branch's page first, as in
+[Back pops the tab first](#back-pops-the-tab-first). A go_router adapter
+with route-driven hide chrome is planned.
 
 ## Pages and the chrome
 

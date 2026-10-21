@@ -8,6 +8,7 @@ environment:
 workspace:
   - liquid_shell
   - liquid_shell/example
+  - liquid_shell/example_go_router
   - liquid_shell_platform_interface
   - liquid_shell_ios
   - liquid_shell_android

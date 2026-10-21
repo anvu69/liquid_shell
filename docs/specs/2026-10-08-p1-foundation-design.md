@@ -939,6 +939,8 @@ Tests move with their code (inventory §6.1). The moved P1 tests are rewritten a
 - `tool/check_provenance.sh` runs in CI. It fails if any file outside `docs/` contains `vankhan`, `Văn Khấn`, `calculator_promax`, `LocaleKeys`, `easy_localization`, `go_router`, `AppColors`, `AppGlassColors` or `GetIt`.
 - Every package `LICENSE` is MIT, with the copyright line from Q15.
 
+**Amended 2026-10-21 (VK-701):** `go_router` may also appear in `liquid_shell/example_go_router`, the unpublished app `doc/router_integration.md` is built from.
+
 ## 10. Testing
 
 TDD applies to every task (red → green → commit), with per-task review and a whole-branch review at the end.
@@ -1058,11 +1060,15 @@ Images use relative paths (`doc/images/…`). pub.dev rewrites them against `rep
 
 **P6 release checklist, Swift Package Manager (added 2026-10-09, final review I5, owner decision O2).** Before `dart pub publish`, build and run the example with SwiftPM on the release toolchain (Flutter's SwiftPM support on Xcode 27): enable it for the example project only (`flutter: config: enable-swift-package-manager: true` in `liquid_shell/example/pubspec.yaml`, never the global `flutter config`), run `make integration-ios`, and fix `liquid_shell_ios/ios/liquid_shell_ios/Package.swift` if the build needs it (for example a `FlutterFramework` package dependency in newer plugin templates). When it passes, replace the "unverified" sentence in `liquid_shell_ios/README.md` with "Ships for CocoaPods and Swift Package Manager". If it cannot pass, keep the sentence and say so in the CHANGELOG.
 
+**Closed 2026-10-21 (VK-701).** CI builds the example with Swift Package Manager: run 39095489319 (main, `cd6504c`), job integration-ios-native (iPhone, iOS 26), logs "Adding Swift Package Manager integration…" and "All plugins found for ios are Swift Packages". `Package.swift` needed no change. The README sentence is replaced as above.
+
 ### 12.2 `liquid_shell/doc/`
 
 - `theming.md`: `LiquidGlassTheme` fields, defaults table, light/dark, per-brand example.
 - `tiers.md`: tiers, `LiquidGlassPolicy` algorithm, signals per platform, writing a `LiquidGlassRenderer`, forced tier.
 - `router_integration.md`: the seam with plain `Navigator`/`IndexedStack`, with go_router `StatefulShellRoute` by hand (until P5 ships the adapter), where `LiquidHideChrome` and `LiquidNoChrome` go, and keeping branch state alive.
+
+**Amended 2026-10-21 (VK-701):** `go_router` may also appear in `liquid_shell/example_go_router`, the unpublished app `doc/router_integration.md` is built from.
 
 ### 12.3 Snippet check
 

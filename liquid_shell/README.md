@@ -54,12 +54,16 @@ dependency.
 - Runtime dependencies: Flutter and this plugin's own packages only (plus
   `meta`, pinned by the Flutter SDK, for the generated iOS channel).
 
+iOS and Android are supported and tested on CI. macOS, web, Windows and
+Linux are not tested: the shell has no native code there and draws the
+glass shown below.
+
 | Platform | Look | Signals |
 |---|---|---|
 | iOS 15+ | Liquid glass pill and sidebar; native `UITabBarController` chrome on iOS 26 (opt-in) | Reduce Transparency, Increase Contrast, Low Power Mode, iPadOS 26 window controls |
 | Android 10+ | Liquid glass, as on iOS (frosted on Android 9 and lower: no Impeller) | Animations off / high contrast, battery saver, window blurs disabled (API 31+), low memory, no Vulkan 1.1 |
-| macOS | Liquid glass (Impeller is Flutter's default there) | None |
-| Web, Windows, Linux | Frosted glass (no Impeller shader filters by default) | None |
+| macOS (not tested) | Liquid glass (Impeller is Flutter's default there) | None |
+| Web, Windows, Linux (not tested) | Frosted glass (no Impeller shader filters by default) | None |
 
 ## Install
 
@@ -67,7 +71,12 @@ dependency.
 flutter pub add liquid_shell
 ```
 
-Requires Flutter 3.44 or later.
+- Flutter 3.44 or later.
+- iOS 15.0 or later: `platform :ios, '15.0'` in `ios/Podfile`, and
+  `IPHONEOS_DEPLOYMENT_TARGET = 15.0` for the Runner target.
+- Android minSdk 24.
+- Native iOS 26 chrome is opt-in: add `LiquidShellNativeChrome` to
+  `Info.plist` (see [Native iOS chrome](#native-ios-chrome)).
 
 ## Quickstart
 
@@ -1396,8 +1405,8 @@ content viewer (see [Custom chrome](#custom-chrome)).
   shell nested in another shell's body (sub-tabs) takes it from the outer
   one, which then shows no navigation; give a nested shell
   `nativeChrome: LiquidNativeChrome.off`.
-- **Native navigation bars are on the search tab only** (P3b-2 brings them
-  to every tab). Under the native search tab, a pushed page's large title
+- **Native navigation bars are on the search tab only** (planned for
+  every tab, see [Roadmap](#roadmap)). Under the native search tab, a pushed page's large title
   is drawn small (`LiquidPage.largeTitle`).
 - **The native back swipe does not follow the finger yet.** Flutter's back
   gesture moves the page, and the native bar switches when it ends.
@@ -1425,11 +1434,11 @@ content viewer (see [Custom chrome](#custom-chrome)).
 - **Native alerts.** A hot restart with a system alert up leaves an
   orphan alert in debug builds; a tap closes it. After a system alert,
   VoiceOver focus goes back to the Flutter view, not to the node that was
-  tapped. Alerts have no text fields yet (P3a-2). The system alert's text
+  tapped. Alerts have no text fields yet. The system alert's text
   follows the device's Dynamic Type, not your `TextScaler`, and system
   dialog text follows the device language for any string UIKit adds (none
-  in alerts; VoiceOver hints). Unverified on a real iOS < 26 runtime
-  (Q9): the iOS 15–25 paths are checked by XCTest with the OS version
+  in alerts; VoiceOver hints). Unverified on a real iOS < 26 runtime:
+  the iOS 15–25 paths are checked by XCTest with the OS version
   injected. See [doc/native_dialogs.md](doc/native_dialogs.md#known-limits).
 - **Android signals are best effort.** Each one that cannot be read
   counts as off.
@@ -1451,6 +1460,21 @@ content viewer (see [Custom chrome](#custom-chrome)).
   segment the hit target is as wide as the segment, and the landing wobble
   matches native's peaks and settle time, not every frame. Details in
   [doc/segmented_control.md](doc/segmented_control.md#what-is-not-identical-to-ios).
+
+## Known issues
+
+- **The first status-bar tap may not scroll to the top** while the iOS
+  accessibility bridge is on (VoiceOver, Switch Control, Speak Screen;
+  always in the simulator): Flutter's accessibility scroll view takes the
+  tap. Tap again. Upstream:
+  [flutter/flutter#191565](https://github.com/flutter/flutter/issues/191565).
+- **A tab revealed a few frames after it is selected** (a custom
+  `navigatorContainerBuilder` that animates the switch): system back may
+  not find that tab's navigator.
+- **Native navigation bars are on the search tab only** (see
+  [Limitations](#limitations)).
+- **iPhone in landscape with the keyboard up and native chrome:** the
+  bottom inset is 0, so the search field covers the first result.
 
 ## More
 
@@ -1474,20 +1498,17 @@ content viewer (see [Custom chrome](#custom-chrome)).
 
 ## Roadmap
 
-- **P2:** native iOS 26 chrome and window controls.
-- **P3a (0.1.0-dev.3, done):** native alerts and action sheets.
-- **P4 (0.1.0-dev.4, done):** the liquid tier in the core package.
-- **P3b-1 (0.1.0-dev.5, done):** the search tab, `LiquidPage` and the
-  glass back button.
-- **VK-503 (0.1.0-dev.6, done):** tab bar fidelity: the Flutter tab bar
-  measured against iOS 26.5.
-- **VK-550 (this release, 0.1.0-dev.7):** `LiquidSegmentedControl` and the
-  search scopes, with UIKit's scope bar on iOS 26+.
-- **P3b-2 (next):** the native navigation bar on every tab.
-- **P3a-2:** share sheet, haptics, date picker and text fields in alerts.
-- **P5:** a go_router adapter (`StatefulShellRoute` builder, route-driven
-  hide chrome).
-- **P6:** final docs pass and 0.1.0 on pub.dev.
+0.1.0 is the first release on pub.dev: the adaptive shell, the liquid,
+frosted and solid tiers, opt-in native iOS 26 chrome, native alerts and
+action sheets, the search tab with scopes, and `LiquidSegmentedControl`.
+
+Planned:
+
+- Native navigation bars on every tab (today: the search tab only).
+- Share sheet, haptics, date picker and text fields in native alerts.
+- A go_router adapter (a `StatefulShellRoute` builder, route-driven hide
+  chrome). Until then, see
+  [doc/router_integration.md](doc/router_integration.md).
 
 ## License
 

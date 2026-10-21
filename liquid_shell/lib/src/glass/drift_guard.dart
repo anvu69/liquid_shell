@@ -4,7 +4,7 @@ import 'package:liquid_shell/src/glass/liquid_backdrop.dart';
 
 /// After every frame, asks each attached [RenderLiquidBackdrop] whether it
 /// moved without repainting, so a lens under an ancestor that moved only
-/// its layer is corrected one frame later (spec §5.3).
+/// its layer is corrected one frame later.
 ///
 /// Registers one post-frame callback at a time and only while a backdrop
 /// is attached; an idle app runs no frames, so it does no work.

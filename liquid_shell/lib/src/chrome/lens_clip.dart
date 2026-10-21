@@ -1,7 +1,7 @@
 import 'package:flutter/widgets.dart';
 
-/// Inside or outside a lens capsule, in the clipped child's coordinates
-/// (spec VK-550 §8.1): one widget draws its content twice, the normal copy
+/// Inside or outside a lens capsule, in the clipped child's coordinates:
+/// one widget draws its content twice, the normal copy
 /// outside the lens and the tinted copy inside it.
 class LensClip extends CustomClipper<Path> {
   /// Clips to [lens]'s capsule ([inside]) or to everything but it.

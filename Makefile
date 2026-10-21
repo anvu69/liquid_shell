@@ -10,6 +10,7 @@ DART ?= $(if $(FVM),fvm dart,dart)
 
 PACKAGES := liquid_shell liquid_shell_platform_interface liquid_shell_ios liquid_shell_android
 EXAMPLE := liquid_shell/example
+EXAMPLE_GO_ROUTER := liquid_shell/example_go_router
 # Packages whose lib/ must keep >= COVERAGE_MIN % line coverage (spec Q14).
 # A barrel-only package instruments 0 lines and stays out; every package whose
 # lib/ has more than directives must be listed, or tool/check_covered.dart
@@ -18,7 +19,7 @@ COVERED := liquid_shell liquid_shell_platform_interface liquid_shell_ios liquid_
 COVERAGE_MIN := 90
 
 .PHONY: help get format format-check analyze test coverage goldens \
-        goldens-update provenance snippets verify pana publish-check \
+        goldens-update provenance public-docs snippets verify pana publish-check \
         android-unit ios-unit ios-ui ios-minimize integration-ios integration-ios-native integration-android pigeon pigeon-check \
         test-impeller compare-images tab-traces tab-frames segment-traces \
         segment-frames
@@ -37,10 +38,10 @@ format-check: ## Formatting gate: check only, never rewrite
 	$(DART) format --output=none --set-exit-if-changed .
 
 analyze: ## Static analysis of every package, the example and tool/; infos and warnings are fatal
-	$(DART) analyze --fatal-infos --fatal-warnings $(PACKAGES) $(EXAMPLE) tool
+	$(DART) analyze --fatal-infos --fatal-warnings $(PACKAGES) $(EXAMPLE) $(EXAMPLE_GO_ROUTER) tool
 
 test: ## Unit and widget tests in every package and the example (no goldens)
-	@set -e; for p in $(PACKAGES) $(EXAMPLE); do \
+	@set -e; for p in $(PACKAGES) $(EXAMPLE) $(EXAMPLE_GO_ROUTER); do \
 	  if [ -d $$p/test ]; then \
 	    echo "▸ test $$p"; \
 	    (cd $$p && $(FLUTTER) test --exclude-tags golden,impeller,liquid_golden); \
@@ -98,6 +99,9 @@ provenance: ## Fail on app names or banned dependencies outside docs/, or glass 
 	tool/check_provenance.sh
 	tool/check_glass_seam.sh
 
+public-docs: ## Fail on internal references (§, VK-, phase codes) in dartdoc, READMEs and doc/
+	tool/check_public_docs.sh
+
 snippets: ## README snippets must equal their #docregion in example/lib/cases
 	@if [ -f tool/check_readme_snippets.dart ]; then \
 	  $(DART) run tool/check_readme_snippets.dart; \
@@ -120,7 +124,7 @@ pigeon-check: pigeon ## Fail when the committed channel code drifts from its Pig
 	  exit 1; }
 	@echo "✓ pigeon output matches its source"
 
-verify: format-check analyze provenance pigeon-check test test-impeller coverage goldens snippets ## Everything CI's blocking jobs run
+verify: format-check analyze provenance public-docs pigeon-check test test-impeller coverage goldens snippets ## Everything CI's blocking jobs run
 	@echo "✓ verify passed"
 
 pana: ## pana for each package (see docs/plans: pre-publish limits)

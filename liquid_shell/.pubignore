@@ -1,4 +1,11 @@
-doc/images/
-test/goldens/failures/
-example/test/fonts/
-example/test/goldens/
+# Large doc images stay in the repo; pub.dev resolves README images through
+# `repository`. The one screenshot pub.dev shows stays in the archive.
+doc/images/*
+!doc/images/hero_iphone_light.png
+# Tests need files outside the package (tool/, docs/qa/): not shipped.
+test/
+example/test/
+example/integration_test/
+
+# The example_go_router app is a workspace app, not part of the package.
+example_go_router/

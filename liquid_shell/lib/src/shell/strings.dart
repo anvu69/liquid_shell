@@ -49,7 +49,7 @@ class LiquidShellStrings {
   /// Semantics and tooltip of `LiquidBackButton`.
   final String back;
 
-  /// The barrier label of a Flutter action sheet (spec P3a §4.3): screen
+  /// The barrier label of a Flutter action sheet: screen
   /// readers offer it to close the sheet.
   final String dismiss;
 

@@ -4,24 +4,22 @@ import 'package:flutter/physics.dart';
 import 'package:liquid_shell/src/chrome/tab_springs.dart';
 import 'package:liquid_shell/src/glass/lens_look.dart';
 
-/// The shape a lens takes in flight: which envelope `LensMotion` runs
-/// (spec VK-550 §8.1).
+/// The shape a lens takes in flight: which envelope `LensMotion` runs.
 @immutable
 sealed class LensEnvelope {
   /// Const constructor for subclasses.
   const LensEnvelope();
 }
 
-/// VK-503's tab envelope: LensMotion's existing targets, reading TabSprings.
+/// The tab envelope: LensMotion's existing targets, reading TabSprings.
 final class TabEnvelope extends LensEnvelope {
   /// The tab envelope.
   const TabEnvelope();
 }
 
-/// VK-550's segment envelope (spec VK-550 §8.3, §8.4): a press grows the
-/// lens in place, a tap lifts it on the way and wobbles it after, a drag
-/// squashes it with speed. Each constant names the native rows it comes
-/// from (`docs/qa/vk550/native_reference.json`).
+/// The segment envelope: a press grows the lens in place, a tap lifts it on the
+/// way and wobbles it after, a drag squashes it with speed. Each constant names
+/// the native rows it comes from (`docs/qa/vk550/native_reference.json`).
 final class SegmentEnvelope extends LensEnvelope {
   /// The segment envelope.
   const SegmentEnvelope({
@@ -90,7 +88,7 @@ final class SegmentEnvelope extends LensEnvelope {
   /// side the lift stretched most.
   final SpringDescription wobble;
 
-  /// After a tap's lift the lens keeps its area (spec §8.4): the area
+  /// After a tap's lift the lens keeps its area: the area
   /// returns to rest on this spring, and the side the lift stretched less
   /// is the area over the other.
   final SpringDescription wobbleArea;
@@ -104,7 +102,7 @@ final class SegmentEnvelope extends LensEnvelope {
   /// The squash limits: width and height factors.
   final Size squashMax;
 
-  /// A fast drag release's landing (spec §8.4): once the lens x passes its
+  /// A fast drag release's landing: once the lens x passes its
   /// target, the size heads for rest scaled by these gains (wider, flatter)
   /// on [pressSize], then [wobble] takes it back. Full where the drag
   /// squash saturates, none below [squashKnee].
@@ -119,7 +117,7 @@ final class SegmentEnvelope extends LensEnvelope {
   final double magnifyGain;
 }
 
-/// A segment tap's slide (spec VK-550 §8.4, Q-E): two springs from the
+/// A segment tap's slide: two springs from the
 /// commit, blended. The primary is the profile's `tap` spring; a secondary
 /// share adds native's overshoot and its late return.
 @immutable
@@ -145,8 +143,7 @@ final class TapSlide {
   final double share;
 }
 
-/// Every spring and envelope constant a `LensMotion` reads (spec VK-550
-/// §8.1).
+/// Every spring and envelope constant a `LensMotion` reads.
 @immutable
 final class LensProfile {
   /// Creates a profile.
@@ -212,7 +209,7 @@ final class LensProfile {
   /// Reduce motion: seconds the outgoing rest fill takes to fade.
   final double ghostFade;
 
-  /// A programmatic change slides on it; null jumps (VK-503 Q12).
+  /// A programmatic change slides on it; null jumps.
   final SpringDescription? programmatic;
 
   /// The flight envelope.
@@ -221,7 +218,7 @@ final class LensProfile {
   /// What the engaged lens looks like (the shader's optics).
   final LensLook look;
 
-  /// Exactly TabSprings (spec VK-503 §8.1).
+  /// Exactly TabSprings.
   static final LensProfile tab = LensProfile(
     tap: TabSprings.tap,
     dragFollow: TabSprings.dragFollow,
@@ -240,10 +237,10 @@ final class LensProfile {
     envelope: const TabEnvelope(),
   );
 
-  /// VK-550's segmented control (spec VK-550 §8.2). The press, release
-  /// and programmatic springs are the spike's fits (`native_reference.json`
-  /// `fits`); the tap slide and the envelope knobs are fitted in Task 4 to
-  /// the per-frame rows named on each.
+  /// The segmented control's. The press, release
+  /// and programmatic springs are fits to the native traces
+  /// (`native_reference.json` `fits`); the tap slide and the envelope knobs
+  /// are fitted to the per-frame rows named on each.
   static final LensProfile segment = LensProfile(
     // The tap slide's primary (see `slide`).
     tap: fittedSpring(0.751, 0.577),

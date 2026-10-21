@@ -10,7 +10,7 @@ at compact width, the top bar and sidebar at regular width), and reads the
 iPadOS window controls. See `liquid_shell`'s
 [native chrome guide](https://github.com/anvu69/liquid_shell/blob/main/liquid_shell/doc/native_chrome.md).
 
-CocoaPods is the tested path; a Swift Package manifest is included but unverified until Flutter's SwiftPM build works on Xcode 27.
+Ships for CocoaPods and Swift Package Manager; CI builds the example with Swift Package Manager.
 
 ## Usage
 

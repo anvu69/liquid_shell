@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:liquid_shell/src/search/search_controller.dart';
 
-/// The search tab's field (spec P3b §4.2). Give it to `LiquidShell.search`
+/// The search tab's field. Give it to `LiquidShell.search`
 /// with a destination whose role is `LiquidDestinationRole.search`.
 @immutable
 class LiquidSearch {
@@ -28,8 +28,8 @@ class LiquidSearch {
   /// the Flutter field).
   final String? placeholder;
 
-  /// Scope titles ("All", "Songs", "Places"), two or more, or null for none
-  /// (spec VK-550 §11). Native chrome on iOS 26+ shows them in UIKit's scope
+  /// Scope titles ("All", "Songs", "Places"), two or more, or null for none.
+  /// Native chrome on iOS 26+ shows them in UIKit's scope
   /// bar while the search is active; elsewhere `LiquidSearchScopeBar` shows
   /// them. Bound to [LiquidSearchController.scopeIndex].
   final List<String>? scopes;

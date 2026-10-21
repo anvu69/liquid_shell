@@ -131,7 +131,7 @@ instead. The user is still asked.
 - **VoiceOver focus** goes back to the Flutter view after a system alert,
   not to the node that was tapped.
 - **No text fields in alerts.** `addTextField` (secure entry, keyboard
-  type) is planned for P3a-2, with share, haptics and a date picker.
+  type) is planned for a later release, with share, haptics and a date picker.
 - **iOS before 26** is verified by XCTest with the OS version injected, not
   on a real iOS 15–25 runtime: the installed Xcode offers no older
   simulator runtime to download.

@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-/// Where the search is (spec P3b §3.1).
+/// Where the search is.
 enum LiquidSearchPhase {
   /// Another tab is selected.
   idle,
@@ -87,7 +87,7 @@ abstract interface class SearchDriver {
   /// The app replaced the text.
   void textSetByApp(String text);
 
-  /// The app changed the scope (spec VK-550 §10.2).
+  /// The app changed the scope.
   void scopeSetByApp(int index);
 
   /// Put the keyboard away; the search stays active.
@@ -95,7 +95,7 @@ abstract interface class SearchDriver {
 }
 
 /// The search query as a [ValueListenable] (Flutter's stream of values),
-/// plus commands for the shell's field (spec P3b §4.3). Owned by the app,
+/// plus commands for the shell's field. Owned by the app,
 /// so the query outlives tab switches.
 ///
 /// The app creates it, keeps it alive at least as long as the shell that
@@ -178,7 +178,7 @@ class LiquidSearchController extends ValueNotifier<LiquidSearchValue> {
   void deactivate() => _driver?.deactivate();
 
   /// Puts the keyboard away and keeps the search active, with its text and
-  /// its ×, as a drag on Apple Music's results does (VK-571). Only while
+  /// its ×, as a drag on Apple Music's results does. Only while
   /// [isActive]; otherwise nothing happens. Natively the field resigns
   /// first responder; the Flutter field unfocuses. Neither writes text, so
   /// an IME composition ends with its text as composed. A tap on the field

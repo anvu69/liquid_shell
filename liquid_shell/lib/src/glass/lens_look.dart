@@ -1,29 +1,29 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
-/// The engaged tab lens's veil over the page: native's milky core (spec
-/// VK-503 §7.2, about 10 % of the backdrop passes).
+/// The engaged tab lens's veil over the page: native's milky core (about
+/// 10 % of the backdrop passes).
 const double kLensVeil = 0.90;
 
 /// The dark engaged lens's veil colour: native's held lens reads 61 luma
 /// in its core over the example's dark page (idb dark press strip), where
-/// `colorScheme.surface` made a near-black disc (23). Task 16 part B.
+/// `colorScheme.surface` made a near-black disc (23).
 const Color kLensVeilDark = Color(0xFF414141);
 
 /// How far the dark lens's veil thins in its ring. Native's dark ring keeps
 /// some veil (ring luma 57 against the core's 60); at 1 the Flutter ring
 /// read p99 chroma 102 on the simulator against native's 64, at 0.8 it
-/// reads 85 (idb dark press strip). Task 16 part B.
+/// reads 85 (idb dark press strip).
 const double kLensVeilFalloffDark = 0.8;
 
-/// The engaged tab lens's refracting ring, in points (spec §7.2).
+/// The engaged tab lens's refracting ring, in points.
 const double kLensBezel = 14;
 
-/// The blur before the tab lens shader, logical sigma (spec §7.2).
+/// The blur before the tab lens shader, logical sigma.
 const double kLensBlurSigma = 2;
 
 /// What an engaged lens looks like: the lens shader's optics at engage 1,
-/// and what they fade from at engage 0 (spec VK-503 §7.2, VK-550 §7).
+/// and what they fade from at engage 0.
 @immutable
 final class LensLook {
   /// Creates a look.
@@ -91,7 +91,7 @@ final class LensLook {
   /// 1 / (1 + squeeze) of its size across the height. 0 for the tab.
   final double squeeze;
 
-  /// VK-503's tab lens: milky in the core, a clear refracting ring, over
+  /// The tab lens: milky in the core, a clear refracting ring, over
   /// the pill's glass.
   static const LensLook tab = LensLook(
     overGlass: true,
@@ -108,9 +108,9 @@ final class LensLook {
     rimWidth: 1,
   );
 
-  /// VK-550's segment lens (spec §7, Task 15): clear glass on a flat
-  /// track, tuned against native's held lens in the segment strips
-  /// (`native_reference.json` `lens.look`): the page passes with its
+  /// The segment lens: clear glass on a flat track, tuned against native's
+  /// held lens in the segment strips (`native_reference.json`
+  /// `lens.look`): the page passes with its
   /// colours (core chroma 0.96 of the page's, native 0.965) a little darker,
   /// squeezed to 1 / 1.22 across the height as native's (squeeze 0.22:
   /// 1.226 against 1.225 / 1.231), bent about 3 pt in its ring (3.1 / 3.0

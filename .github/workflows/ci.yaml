@@ -51,6 +51,8 @@ jobs:
         if: ${{ success() || (failure() && matrix.experimental) }}
       - run: make provenance
         if: ${{ success() || (failure() && matrix.experimental) }}
+      - run: make public-docs
+        if: ${{ success() || (failure() && matrix.experimental) }}
       - run: make pigeon-check
         if: ${{ success() || (failure() && matrix.experimental) }}
       - run: make test

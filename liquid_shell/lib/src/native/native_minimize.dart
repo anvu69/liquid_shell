@@ -14,7 +14,7 @@ enum MinimizeScrollResult {
   moved,
 
   /// The offset changed, and a fling or a programmatic scroll carried the
-  /// content up to its top edge: expand the tab bar (spec VK-600 §9.1).
+  /// content up to its top edge: expand the tab bar.
   expand,
 }
 
@@ -23,7 +23,7 @@ enum MinimizeScrollResult {
 const double kMinimizeAwayFromTop = 1;
 
 /// One virtual scroll offset per destination for the native tab bar's
-/// minimize (spec VK-600 §9.1): the pixels of a single scroll view, kept
+/// minimize: the pixels of a single scroll view, kept
 /// continuous across several while they scroll, snapped to the top edge
 /// when the scrolled view reaches its own, and lowered to that view's own
 /// at the end of each scroll, never raised. A view nested in another
@@ -75,7 +75,7 @@ final class MinimizeScrollTracker {
   /// corrected without a notification) does not outlive one scroll.
   ///
   /// It never rises to it. After a flick UIKit's own deceleration on the
-  /// proxy may still be running and reads Dart's writes (spike C11), so a
+  /// proxy may still be running and reads Dart's writes, so a
   /// jump down there (several views in one tab, corrected pixels) would read
   /// as a scroll down and minimize. A view at its top still gives its own
   /// (zero or less); a view below its top lifts an offset at the top only
@@ -154,7 +154,7 @@ final class MinimizeScrollTracker {
 }
 
 /// Whether sending [next] after [previous] may rebuild the native tabs,
-/// whose new hosts start at offset 0 (spec VK-600 §8.6): the shell then
+/// whose new hosts start at offset 0: the shell then
 /// sends the offset again. Any change of the tabs or the trailing action
 /// counts, a superset of what the platform rebuilds for. Null [previous]:
 /// nothing built yet.
@@ -166,8 +166,8 @@ bool nativeTabsMayRebuild(
     !listEquals(previous.tabs, next.tabs) ||
     previous.trailing != next.trailing;
 
-/// Whether the shell drives the native tab bar's minimize (spec VK-600
-/// §9.2); the native side attaches its pan under the same facts (§8.3).
+/// Whether the shell drives the native tab bar's minimize; the native side
+/// attaches its pan under the same facts.
 bool nativeMinimizeActive({
   required bool owner,
   required bool engaged,

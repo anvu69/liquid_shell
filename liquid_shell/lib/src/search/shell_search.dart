@@ -7,8 +7,8 @@ import 'package:liquid_shell/src/search/search.dart';
 import 'package:liquid_shell/src/search/search_controller.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
-/// Keeps a [LiquidSearchController] and the field that shows it in step
-/// (spec P3b §8.2): the native field over the claim, or the shell's
+/// Keeps a [LiquidSearchController] and the field that shows it in step:
+/// the native field over the claim, or the shell's
 /// Flutter field ([editing], [focus]). The controller is the truth; a
 /// field's own edits never go back to that field.
 final class ShellSearch implements SearchDriver {
@@ -25,7 +25,7 @@ final class ShellSearch implements SearchDriver {
   /// Rebuilds the shell.
   final VoidCallback onChange;
 
-  /// The Flutter field's text (fallback, spec §9.4). Lives as long as the
+  /// The Flutter field's text (fallback). Lives as long as the
   /// shell, so the field is never rebuilt with a new controller.
   final TextEditingController editing = TextEditingController();
 
@@ -98,7 +98,7 @@ final class ShellSearch implements SearchDriver {
   Rect field = Rect.zero;
 
   /// Whether the Flutter field holds the search: it has focus, or it let
-  /// the keyboard go and the search stayed active (VK-571). The shell
+  /// the keyboard go and the search stayed active. The shell
   /// releases a field it no longer shows.
   bool get holdsField => focus.hasFocus || _keyboardDown;
 
@@ -110,7 +110,7 @@ final class ShellSearch implements SearchDriver {
 
   /// Follows the shell's `search` parameter. Without one but with a search
   /// destination (a release build that ignored the assert), an internal
-  /// controller keeps the field working (spec §14).
+  /// controller keeps the field working.
   ///
   /// A new controller takes over the field: it gets the field's focus,
   /// and the field shows its text.
@@ -151,7 +151,7 @@ final class ShellSearch implements SearchDriver {
   /// its field lost the text, so the next config that shows the search tab
   /// sends it, empty or not. A changed state (an iPad crossing the size
   /// class) comes from a live field the user may be typing in: the user's
-  /// own text is never sent back to it (the one-way rule, spec §7.4); only
+  /// own text is never sent back to it (the one-way rule); only
   /// a text the app set is replayed. A reconnect whose first state differs
   /// looks the same here: the plugin's installer carries the old field's
   /// text to the new one natively.
@@ -247,7 +247,7 @@ final class ShellSearch implements SearchDriver {
   }
 
   /// After the shell's config went out: the search tab newly shown
-  /// natively gets the kept query (Q2; spec §7.10: a cold start, a hot
+  /// natively gets the kept query (a cold start, a hot
   /// restart, a reconnected scene); leaving it ends the active state.
   void afterConfigSent() {
     final controller = _controller;
@@ -305,7 +305,7 @@ final class ShellSearch implements SearchDriver {
     }
   }
 
-  /// Puts the keyboard away and keeps the search active (VK-571), only
+  /// Puts the keyboard away and keeps the search active, only
   /// while it is active, so a drag on an inactive page changes nothing.
   /// Natively the field resigns first responder: UIKit's search stays
   /// presented with its text and Cancel, and commits marked text. The
@@ -324,14 +324,14 @@ final class ShellSearch implements SearchDriver {
     focus.unfocus();
   }
 
-  /// The shell body's scroll notifications (VK-571): the first scroll of
+  /// The shell body's scroll notifications: the first scroll of
   /// a user drag along the list's axis puts the keyboard away, once per
   /// drag, unless the app opted out (`LiquidSearch.dismissKeyboardOnDrag`).
   /// As Flutter's `ScrollViewKeyboardDismissBehavior.onDrag`, it waits for
   /// the drag to move the content, and it also asks that the finger has
   /// moved at least as far along the list's axis as across it. A
   /// near-horizontal swipe over a vertical list (the iOS edge swipe,
-  /// VK-551, which wins that list's gesture arena alone) scrolls it by the
+  /// which wins that list's gesture arena alone) scrolls it by the
   /// thumb's drift, and keeps the keyboard. A programmatic scroll has no
   /// drag details.
   void onBodyScroll(ScrollNotification notification) {
@@ -369,8 +369,8 @@ final class ShellSearch implements SearchDriver {
     }
   }
 
-  /// Natively, while the search tab is shown, the native scope bar follows
-  /// (spec VK-550 §10.2); otherwise the entry sends it ([afterConfigSent]).
+  /// Natively, while the search tab is shown, the native scope bar follows;
+  /// otherwise the entry sends it ([afterConfigSent]).
   /// The Flutter scope bar rebuilds from the controller.
   @override
   void scopeSetByApp(int index) {
@@ -397,7 +397,7 @@ final class ShellSearch implements SearchDriver {
 
   /// The shell will not show the Flutter field in this frame (hidden
   /// chrome, another tab, the other size class): let go of its focus, then
-  /// end its composition and active state (spec P3b §8.2, §9.4). A focused
+  /// end its composition and active state. A focused
   /// field taken out of the tree never hears its focus loss (the focus
   /// manager drops a detached node silently), so this does not wait for
   /// the listener. The microtask runs after the focus manager's.
@@ -490,7 +490,7 @@ final class ShellSearch implements SearchDriver {
     }
   }
 
-  /// Ends a search kept active without the keyboard (VK-571): the field
+  /// Ends a search kept active without the keyboard: the field
   /// has no focus, so no focus change would report it.
   void _endKeyboardDown() {
     if (!_keyboardDown) return;

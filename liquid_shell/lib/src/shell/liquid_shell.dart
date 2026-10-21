@@ -40,10 +40,10 @@ typedef LiquidBeforeDestinationChange = Future<bool> Function(int index);
 /// Horizontal margin of the top tab bar row.
 const double _kBarMargin = 16;
 
-/// Horizontal margin of the bottom tab bar row (spec VK-503 §5).
+/// Horizontal margin of the bottom tab bar row.
 const double _kBottomBarMargin = TabMetrics.margin;
 
-/// Horizontal margin of the bottom row below [kLiquidNarrowWidth] (Q17).
+/// Horizontal margin of the bottom row below [kLiquidNarrowWidth].
 const double _kNarrowBarMargin = 8;
 
 /// Space each side of the top pill reserves while the toggle is shown:
@@ -178,7 +178,7 @@ class LiquidShell extends StatefulWidget {
   /// Every user-visible string.
   final LiquidShellStrings strings;
 
-  /// Whether the platform may draw the chrome (spec P2 §5.1). With
+  /// Whether the platform may draw the chrome. With
   /// [LiquidNativeChrome.auto] the shell uses native chrome when the
   /// platform installed it, it has no [chromeBuilder], and every
   /// destination (and [tabBarTrailing]) has an `sfSymbol`. In debug, a shell
@@ -408,7 +408,7 @@ class _LiquidShellState extends State<LiquidShell>
     super.dispose();
   }
 
-  /// Native taps (spec P2 §7.3). A destination tap takes the same path as
+  /// Native taps. A destination tap takes the same path as
   /// a Flutter tap, guard included; native does not select until we answer.
   void _onNativeEvent(LiquidNativeEvent event) {
     if (!mounted) return;
@@ -446,7 +446,7 @@ class _LiquidShellState extends State<LiquidShell>
 
   /// Sends the latest native config after the frame: never during build,
   /// at most once per frame, deduplicated by the host. [config] is built
-  /// then, once the body has built too (the page stack, VK-491).
+  /// then, once the body has built too (the page stack).
   void _scheduleNativeSend(LiquidNativeChromeConfig Function() config) {
     _nativeConfig = config;
     if (_nativeSendScheduled) return;
@@ -541,7 +541,7 @@ class _LiquidShellState extends State<LiquidShell>
   }
 
   /// Computes [tab]'s stack for the config. After the frame: the pages
-  /// have heard of this frame's changes by then (VK-491).
+  /// have heard of this frame's changes by then.
   void _updatePageStack(int tab) {
     final stack = _stackFor(tab);
     _stackRecords[tab] = stack;
@@ -554,7 +554,7 @@ class _LiquidShellState extends State<LiquidShell>
     ];
   }
 
-  /// The native back button (spec P3b §7.6): a proposal for the selected
+  /// The native back button: a proposal for the selected
   /// tab's top page. `maybePop` runs its PopScope. Under a sheet in the
   /// tab's navigator the kept stack shows a live back button: it pops the
   /// sheet, as the sheet's barrier does. Above the shell the chrome is not
@@ -580,7 +580,7 @@ class _LiquidShellState extends State<LiquidShell>
     await navigator?.maybePop();
   }
 
-  /// UIKit's other pops (spec P3b §7.6): the back button's long-press
+  /// UIKit's other pops: the back button's long-press
   /// menu, an accessibility escape, a pop-to-root. Native did not pop; the
   /// pages above [index] pop here, top first, each through its PopScope.
   /// A refused pop ends it, and the native stack follows what is left.
@@ -611,7 +611,7 @@ class _LiquidShellState extends State<LiquidShell>
   }
 
   /// Sends the top page's offset after the frame: one message per frame,
-  /// only for the top page of a tab with a native bar (spec P3b §7.7).
+  /// only for the top page of a tab with a native bar.
   void _scheduleScrollSync() {
     if (_scrollScheduled) return;
     _scrollScheduled = true;
@@ -657,10 +657,9 @@ class _LiquidShellState extends State<LiquidShell>
     );
   }
 
-  /// Whether the shell drives the native bar's minimize now (spec VK-600
-  /// §9.2). On becoming active, the selected tab's offset is sent once,
-  /// even if unchanged: the native side may have reset it. The first time,
-  /// the bar expands after it (final review M4).
+  /// Whether the shell drives the native bar's minimize now. On becoming
+  /// active, the selected tab's offset is sent once, even if unchanged: the
+  /// native side may have reset it. The first time, the bar expands after it.
   void _setMinimizeActive(bool active) {
     if (active && !_minimizeActive) {
       _minimizeForce = true;
@@ -793,7 +792,7 @@ class _LiquidShellState extends State<LiquidShell>
   /// a drawer, a persistent bottom sheet or any local-history entry comes
   /// or goes, and a branch can go offstage frames after the selection (the
   /// end of a cross-fade): a stale answer kept the shell's route blocked at
-  /// the tab's root, or let back pop a hidden tab's page (VK-567 review).
+  /// the tab's root, or let back pop a hidden tab's page.
   void _armBranchCheck() {
     if (_branchCheckArmed || _branches.isEmpty) return;
     _branchCheckArmed = true;
@@ -830,12 +829,12 @@ class _LiquidShellState extends State<LiquidShell>
 
   /// The shell's say over its own route's pops (system back, the iOS edge
   /// swipe), in this order:
-  /// 1. an overlay sidebar closes first (P1 Q10, natively too);
-  /// 2. an active search deactivates (spec P3b §9.4). Natively, popping
+  /// 1. an overlay sidebar closes first (natively too);
+  /// 2. an active search deactivates. Natively, popping
   ///    left UIKit's search active under the hidden chrome, its keyboard
-  ///    with nothing to dismiss it (VK-551);
-  /// 3. while the selected tab's navigator can pop, its top page pops
-  ///    (VK-567), as on iOS; at the tab's root the shell's route pops.
+  ///    with nothing to dismiss it;
+  /// 3. while the selected tab's navigator can pop, its top page pops,
+  /// as on iOS; at the tab's root the shell's route pops.
   ///
   /// A blocked route also loses the edge swipe: Flutter hit-tests the
   /// outer route's back gesture before a tab route's, so in a shell that
@@ -866,7 +865,7 @@ class _LiquidShellState extends State<LiquidShell>
   );
 
   /// The body under its listeners: one subtree for both layouts, so a
-  /// switch between native and Flutter chrome keeps its state (§5.6).
+  /// switch between native and Flutter chrome keeps its state.
   /// [kind] null: native chrome.
   Widget _bodySubtree(LiquidChromeKind? kind) => KeyedSubtree(
     key: _bodyKey,
@@ -916,7 +915,7 @@ class _LiquidShellState extends State<LiquidShell>
 
   void _onSelect(int index) => unawaited(_select(index));
 
-  /// The one path every user selection takes (§5.5): single-flight guard,
+  /// The one path every user selection takes: single-flight guard,
   /// then the callback, then the overlay closes.
   Future<void> _select(int requestedIndex) async {
     var index = requestedIndex;
@@ -959,7 +958,7 @@ class _LiquidShellState extends State<LiquidShell>
     }
   }
 
-  /// The native chrome is inert while a guard runs (spec P2 §7.3): its
+  /// The native chrome is inert while a guard runs: its
   /// dialog is drawn in the Flutter view, under an overlay sidebar, which
   /// UIKit closes for a non-interactive config.
   void _setGuardPending(bool pending) {
@@ -993,8 +992,8 @@ class _LiquidShellState extends State<LiquidShell>
   }
 
   /// The body's scrolling: a user drag puts the search keyboard away
-  /// (VK-571, [ShellSearch.onBodyScroll]); it drives the native bar's
-  /// minimize ([kind] null: native chrome, spec VK-600 §9.2); a user scroll
+  /// ([ShellSearch.onBodyScroll]); it drives the native bar's
+  /// minimize ([kind] null: native chrome); a user scroll
   /// minimizes the Flutter bar.
   bool _onBodyScroll(ScrollNotification notification, LiquidChromeKind? kind) {
     _search.onBodyScroll(notification);
@@ -1088,7 +1087,7 @@ class _LiquidShellState extends State<LiquidShell>
     );
   }
 
-  /// §5.5 item 6: once per entry into compact, after the frame.
+  /// Once per entry into compact, after the frame.
   void _reportHiddenSelection(ShellPresentation presentation, int selected) {
     if (presentation != ShellPresentation.compact) {
       _hiddenSelectionReported = false;
@@ -1732,7 +1731,7 @@ class _LiquidShellState extends State<LiquidShell>
   }
 
   /// In debug, once per shell: names what lacks an `sfSymbol` when only
-  /// that keeps this shell from native chrome (spec P2 §15, E2): `auto`, no
+  /// that keeps this shell from native chrome: `auto`, no
   /// `chromeBuilder`, and the platform answered that native chrome is
   /// installed. While the answer is pending nothing is logged: the device
   /// may not support it, and the once-per-shell line would be spent.
@@ -1752,7 +1751,7 @@ class _LiquidShellState extends State<LiquidShell>
     debugPrint(hint);
   }
 
-  /// The native chrome layout, or null to draw Flutter chrome (spec P2 §7).
+  /// The native chrome layout, or null to draw Flutter chrome.
   ///
   /// Also sends this shell's config to the platform when it owns the
   /// native chrome, engaged or not, so the platform hides it when this
@@ -2000,7 +1999,7 @@ final class _PageRecord implements PageHandle {
   final _LiquidShellState _shell;
   PageEntry entry;
 
-  /// The page's last scroll offset (spec P3b §7.7); null until its scroll
+  /// The page's last scroll offset; null until its scroll
   /// view reports one.
   double? offset;
 

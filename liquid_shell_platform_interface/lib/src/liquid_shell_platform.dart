@@ -77,7 +77,7 @@ abstract class LiquidShellPlatform extends PlatformInterface {
   }) async {}
 
   /// The selected destination [tab]'s body scroll offset for the native
-  /// tab bar's minimize (spec VK-600 §9): positive below the top, zero or
+  /// tab bar's minimize: positive below the top, zero or
   /// negative at it. Default: does nothing.
   Future<void> setNativeMinimizeScroll({
     required int tab,

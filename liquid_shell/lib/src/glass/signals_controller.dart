@@ -25,7 +25,7 @@ bool? debugLiquidGlassCanRefractOverride;
 
 /// Whether this device can draw the liquid lens: `ImageFilter.shader` is
 /// supported (Impeller). False on Skia (Android 9 and lower) and the web,
-/// which then draw frosted (spec 2026-10-10 §6).
+/// which then draw frosted.
 bool liquidGlassCanRefract() =>
     debugLiquidGlassCanRefractOverride ??
     ui.ImageFilter.isShaderFilterSupported;

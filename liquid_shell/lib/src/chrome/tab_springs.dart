@@ -4,7 +4,7 @@ import 'package:flutter/animation.dart' show Curve;
 import 'package:flutter/physics.dart';
 
 /// A spring from a least-squares fit: damping ratio [ratio] and undamped
-/// period [response] in seconds (spec VK-503 §8.1).
+/// period [response] in seconds.
 SpringDescription fittedSpring(double ratio, double response) =>
     SpringDescription.withDampingRatio(
       mass: 1,
@@ -12,8 +12,8 @@ SpringDescription fittedSpring(double ratio, double response) =>
       ratio: ratio,
     );
 
-/// Springs and envelope constants of the tab lens (spec §8, research §3,
-/// §4, §6, §7). The envelope constants are the only tuning knobs (§8.3).
+/// Springs and envelope constants of the tab lens. The envelope constants are
+/// the only tuning knobs.
 abstract final class TabSprings {
   /// Lens x after a tap; icon pop.
   static final SpringDescription tap = fittedSpring(0.79, 0.39);
@@ -63,27 +63,27 @@ abstract final class TabSprings {
   /// A flick's landing on the finger's slot: critically damped, 0.175 s.
   /// Fitted to the native flick trace (pill-local, from the release: 8.4,
   /// 5.1, 3.4 and 2.7 pt short at +0.100, +0.115, +0.131, +0.148 s; it
-  /// never passes the slot). VK-503 Task 16 re-review.
+  /// never passes the slot).
   static final SpringDescription flickLand = fittedSpring(1, 0.175);
 
   /// Minimize collapse.
   static final SpringDescription collapse = fittedSpring(0.8, 0.30);
 
-  /// Minimize expand (small overshoot). Research §6 gives only "≈ 0.35 s,
-  /// small overshoot"; ζ 0.80 makes the 3-tab pill's right edge overshoot
-  /// ≈ 4 pt, as the native TabFid expand strip shows (ζ 0.70: ≈ 12 pt, and
-  /// a full-width pill brushed the ⌕). VK-503 Task 16.
+  /// Minimize expand (small overshoot). The native reference gives only
+  /// "≈ 0.35 s, small overshoot"; ζ 0.80 makes the 3-tab pill's right edge
+  /// overshoot ≈ 4 pt, as the native TabFid expand strip shows (ζ 0.70:
+  /// ≈ 12 pt, and a full-width pill brushed the ⌕).
   static final SpringDescription expand = fittedSpring(0.8, 0.35);
 
   /// Reduce motion: the rest-size capsule following the finger.
   static final SpringDescription reduced = fittedSpring(1, 0.25);
 
-  /// Delay between a tap and the lens leaving (research §3).
+  /// Delay between a tap and the lens leaving.
   static const double tapDelay = 0.025;
 
   /// A tap shows the press (swell, engage) for at least this long from the
   /// down, then its flight envelope. Every measured native tap was a
-  /// 65-66 ms press (research §3 trace), and the native lens swells to
+  /// 65-66 ms press, and the native lens swells to
   /// about 96 × 60 before it lifts, even for idb taps shorter than that.
   static const double tapPress = 0.066;
 
@@ -92,7 +92,7 @@ abstract final class TabSprings {
   static const double flickHold = 0.215;
 
   /// After a press is lifted in place, the lens stays clear this long
-  /// (research §4.1 trace: opacityPair 1.0 to +0.10 s, 0.93 at +0.13 s).
+  /// (native trace: opacityPair 1.0 to +0.10 s, 0.93 at +0.13 s).
   static const double releaseHold = 0.12;
 
   /// The lens stays engaged this long after a tap.
@@ -101,15 +101,15 @@ abstract final class TabSprings {
   /// The flight's shape (a one-slot lift, a two-slot stretch) is held this
   /// long from the down. Fitted to the native per-frame traces: the
   /// one-slot height peaks near 0.20 s (81.8 pt) and is back to 70.7 by
-  /// 0.30 s; the two-slot width holds about 125 pt to 0.22 s (research §3;
-  /// Task 16 review, was 0.25 for both the shape and the refraction).
+  /// 0.30 s; the two-slot width holds about 125 pt to 0.22 s (it was 0.25
+  /// for both the shape and the refraction).
   static const double liftUntil = 0.22;
 
   /// Two slots or more lift late, after the stretch, until this long from
-  /// the down (research §3 trace: 107 × 67 at 0.30 s).
+  /// the down (native trace: 107 × 67 at 0.30 s).
   static const double farLiftUntil = 0.34;
 
-  /// Refraction lasts this long after a tap (research §3: the displacement
+  /// Refraction lasts this long after a tap (native trace: the displacement
   /// peaks at about 0.25 s).
   static const double refractUntil = 0.25;
 
@@ -165,7 +165,7 @@ abstract final class TabSprings {
 
   /// Flight width floor (one slot). The native one-slot lens narrows to
   /// 84.8 pt (×0.902) at 0.20 s; behind the `widthOut` spring a ×0.87
-  /// target reaches ×0.909 in the shorter shape window (Task 16 review,
+  /// target reaches ×0.909 in the shorter shape window (it
   /// was 0.9).
   static const double stretchFloor = 0.87;
 
@@ -174,14 +174,14 @@ abstract final class TabSprings {
 
   /// Width gain per pt/s above the knee. At 0.005 the target saturates at
   /// [stretchMax] by 790 pt/s, so the stretch is effectively a step at the
-  /// knee (spec §8.3).
+  /// knee.
   static const double stretchGain = 0.005;
 
   /// Flight width ceiling. Above the native peak because the `widthIn`
   /// spring lags the target: with the stretch held to [liftUntil], 1.39
   /// gives the native two-slot peak, 124.9 pt pill-local (×1.329) at
-  /// 0.18 s (research §3 trace over its platter scale; Task 16 re-review,
-  /// was 1.46, then 1.425 against the screen-space 127.4).
+  /// 0.18 s (native trace over its platter scale; it was 1.46, then 1.425
+  /// against the screen-space 127.4).
   static const double stretchMax = 1.39;
 
   /// Flight height gain.
@@ -190,7 +190,7 @@ abstract final class TabSprings {
   /// Lift gate for two or more slots.
   static const double liftGateFar = 0.45;
 
-  /// Top bar tap inflation, width and height (research §1.3).
+  /// Top bar tap inflation, width and height.
   static const double topTapWidth = 1.34;
 
   /// Top bar tap inflation, height.
@@ -208,7 +208,7 @@ abstract final class TabSprings {
   /// Minimize dip depth (×0.96 at the midpoint).
   static const double dip = 0.04;
 
-  /// Lens velocity → flight width factor (spec §8.3).
+  /// Lens velocity → flight width factor.
   static double stretchFor(double velocity) =>
       (stretchFloor + stretchGain * math.max(0, velocity.abs() - stretchKnee))
           .clamp(stretchFloor, stretchMax);
@@ -299,7 +299,7 @@ class SpringValue {
 /// step to exactly 1 is under half a point on the search field). An
 /// implicit animation (`AnimatedPositioned`) with it moves on the same
 /// clock as a [SpringValue] on [spring] that starts at rest: the compact
-/// search field and the tab bar's minimize morph (VK-503 Task 16).
+/// search field and the tab bar's minimize morph.
 class SpringCurve extends Curve {
   /// The step response of [spring], held at 0 for [delay] seconds first.
   SpringCurve(this.spring, {this.delay = 0})

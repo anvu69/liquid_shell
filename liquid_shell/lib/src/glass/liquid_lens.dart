@@ -15,7 +15,7 @@ import 'package:liquid_shell/src/glass/tier.dart';
 
 export 'package:liquid_shell/src/glass/lens_look.dart';
 
-/// The shadow under an engaged tab lens (spec VK-503 §7.2).
+/// The shadow under an engaged tab lens.
 const BoxShadow kLensShadow = BoxShadow(
   color: Color(0x1A000000),
   offset: Offset(0, 2),
@@ -23,14 +23,14 @@ const BoxShadow kLensShadow = BoxShadow(
 );
 
 /// The engaged tab lens: a second glass pass that refracts the page behind
-/// the bar (spec VK-503 §7). It fills its box as a capsule. In the liquid
+/// the bar. It fills its box as a capsule. In the liquid
 /// tier it shares the nearest `BackdropGroup`'s backdrop with the pill, so
 /// it samples the page, not the pill.
 ///
-/// It fades with [engage] (spec §7.2). The liquid pass cannot sit under an
+/// It fades with [engage]. The liquid pass cannot sit under an
 /// `Opacity`: inside the opacity layer its backdrop read is wrong, and a
 /// dark lens at engage 0.9 drew 116 luma between its 18 and the rest
-/// capsule's 55 (VK-503 Task 16 review, the grey flash). So the liquid
+/// capsule's 55 (the grey flash). So the liquid
 /// lens blends its optics toward the pill's own glass and draws
 /// [restFill] over itself at 1 − [engage]: at 0 it is the pill with its
 /// rest capsule. The frosted and solid lenses fade with one `Opacity`.
@@ -54,7 +54,7 @@ class LiquidLens extends StatefulWidget {
   final Color? restFill;
 
   /// The engaged lens's optics: [LensLook.tab] for a tab lens,
-  /// [LensLook.segment] for a segment lens (spec VK-550 §7).
+  /// [LensLook.segment] for a segment lens.
   final LensLook look;
 
   @override

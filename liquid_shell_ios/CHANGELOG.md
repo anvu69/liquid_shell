@@ -1,5 +1,7 @@
 ## 0.1.0-dev.8
 
+- Swift Package Manager: CI builds the example with it (Flutter 3.44), so
+  the README no longer calls it unverified.
 - Native minimize on scroll (VK-600): a hidden `MinimizeProxy` scroll view
   per tab host, set as the bottom content scroll view, that follows the
   offset Dart sends; its pan sits on the Flutter view (direct touches only,

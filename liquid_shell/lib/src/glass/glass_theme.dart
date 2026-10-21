@@ -36,7 +36,7 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
     this.segmentLabelStyle = _segmentLabelLight,
   });
 
-  /// Defaults for light and dark, derived from [scheme] (spec §5.9).
+  /// Defaults for light and dark, derived from [scheme].
   factory LiquidGlassTheme.fromColorScheme(ColorScheme scheme) {
     final light = scheme.brightness == Brightness.light;
     return LiquidGlassTheme(
@@ -110,8 +110,8 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
   ///
   /// When not given, it is a neutral milky fill picked by the brightness of
   /// [solid]: white @ 0.55 over a light [solid], #1C1C1C @ 0.90 over a dark
-  /// one. That is native iOS 26.5 glass, which does not take the app's hue
-  /// (spec VK-503 §6.4, Q14). [LiquidGlassTheme.fromColorScheme] uses the
+  /// one. That is native iOS 26.5 glass, which does not take the app's hue.
+  /// [LiquidGlassTheme.fromColorScheme] uses the
   /// same default, and it follows `copyWith(solid: …)`.
   Color get liquidTint =>
       _liquidTint ??
@@ -146,8 +146,7 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
   /// Logical sigma of the blur under the liquid lens. 0 turns it off.
   final double liquidBlurSigma;
 
-  /// The selected tab lens at rest: a neutral fill over the pill (spec
-  /// VK-503 §6.2).
+  /// The selected tab lens at rest: a neutral fill over the pill.
   final Color selectionFill;
 
   /// Unselected tab icons and labels.
@@ -167,7 +166,7 @@ class LiquidGlassTheme extends ThemeExtension<LiquidGlassTheme> {
 
   /// [LiquidSegmentedControl] labels at text scale 1. Without its own
   /// `letterSpacing`, a label in the system font takes UIKit's tracking for
-  /// its drawn size (VK-550 Task 15); an app's own font keeps its spacing.
+  /// its drawn size; an app's own font keeps its spacing.
   final TextStyle segmentLabelStyle;
 
   static const TextStyle _segmentLabelLight = TextStyle(

@@ -343,7 +343,7 @@ class LiquidNativeChromeConfig {
   final bool interactive;
 
   /// Whether the compact native tab bar minimizes while the body scrolls
-  /// down (`LiquidShell.minimizeOnScroll`, spec VK-600).
+  /// down (`LiquidShell.minimizeOnScroll`).
   final bool minimizeOnScroll;
 
   /// Whether the native chrome is on screen.
