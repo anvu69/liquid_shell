@@ -165,7 +165,7 @@ abstract final class TabSprings {
 
   /// Flight width floor (one slot). The native one-slot lens narrows to
   /// 84.8 pt (×0.902) at 0.20 s; behind the `widthOut` spring a ×0.87
-  /// target reaches ×0.909 in the shorter shape window (Task 16 review,
+  /// target reaches ×0.909 in the shorter shape window (it
   /// was 0.9).
   static const double stretchFloor = 0.87;
 

@@ -54,7 +54,7 @@ double? debugSegmentLensPress;
 const BorderRadius _capsule = BorderRadius.all(Radius.circular(999));
 
 /// A held unselected segment's label fades to this opacity over
-/// [_pressedLabelFade] (Task 1, `pressOther`).
+/// [_pressedLabelFade].
 const double _pressedLabelOpacity = 0.2;
 
 /// See [_pressedLabelOpacity].
@@ -312,8 +312,7 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl>
   }
 
   /// A semantics tap, Enter or Space: the tap path without a press. The
-  /// selected segment calls nothing, as a touch on it (Task 1,
-  /// `tapOnSelected`).
+  /// selected segment calls nothing, as a touch on it does.
   void _activate(int i) {
     if (!_enabled || !_canCommit(i) || i == widget.selectedIndex) return;
     _motion?.tapSlot(i);

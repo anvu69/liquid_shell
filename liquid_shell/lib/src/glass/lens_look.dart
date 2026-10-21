@@ -7,13 +7,13 @@ const double kLensVeil = 0.90;
 
 /// The dark engaged lens's veil colour: native's held lens reads 61 luma
 /// in its core over the example's dark page (idb dark press strip), where
-/// `colorScheme.surface` made a near-black disc (23). Task 16 part B.
+/// `colorScheme.surface` made a near-black disc (23).
 const Color kLensVeilDark = Color(0xFF414141);
 
 /// How far the dark lens's veil thins in its ring. Native's dark ring keeps
 /// some veil (ring luma 57 against the core's 60); at 1 the Flutter ring
 /// read p99 chroma 102 on the simulator against native's 64, at 0.8 it
-/// reads 85 (idb dark press strip). Task 16 part B.
+/// reads 85 (idb dark press strip).
 const double kLensVeilFalloffDark = 0.8;
 
 /// The engaged tab lens's refracting ring, in points.

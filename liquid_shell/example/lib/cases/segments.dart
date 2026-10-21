@@ -275,7 +275,7 @@ class _TitleRow extends StatelessWidget {
   }
 }
 
-/// The reference screen's stripes (the VK-550 spike's `PatternView`):
+/// The reference screen's stripes:
 /// bands 20 pt tall every 40 pt, falling 45° to the right, over the system
 /// background, in iOS 26's eight system colours (`.systemRed` …
 /// `.systemPink`), light or [dark].

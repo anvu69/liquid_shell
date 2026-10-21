@@ -75,7 +75,7 @@ final class MinimizeScrollTracker {
   /// corrected without a notification) does not outlive one scroll.
   ///
   /// It never rises to it. After a flick UIKit's own deceleration on the
-  /// proxy may still be running and reads Dart's writes (spike C11), so a
+  /// proxy may still be running and reads Dart's writes, so a
   /// jump down there (several views in one tab, corrected pixels) would read
   /// as a scroll down and minimize. A view at its top still gives its own
   /// (zero or less); a view below its top lifts an offset at the top only

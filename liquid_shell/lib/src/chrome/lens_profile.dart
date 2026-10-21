@@ -238,9 +238,9 @@ final class LensProfile {
   );
 
   /// The segmented control's. The press, release
-  /// and programmatic springs are the spike's fits (`native_reference.json`
-  /// `fits`); the tap slide and the envelope knobs are fitted in Task 4 to
-  /// the per-frame rows named on each.
+  /// and programmatic springs are fits to the native traces
+  /// (`native_reference.json` `fits`); the tap slide and the envelope knobs
+  /// are fitted to the per-frame rows named on each.
   static final LensProfile segment = LensProfile(
     // The tap slide's primary (see `slide`).
     tap: fittedSpring(0.751, 0.577),

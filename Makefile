@@ -96,10 +96,10 @@ segment-frames: ## Native vs Flutter liquid segmented control strips at 60 fps o
 
 provenance: ## Fail on app names or banned dependencies outside docs/, or glass outside LiquidGlass
 	tool/check_provenance.sh
+	tool/check_glass_seam.sh
 
 public-docs: ## Fail on internal references (§, VK-, phase codes) in dartdoc, READMEs and doc/
 	tool/check_public_docs.sh
-	tool/check_glass_seam.sh
 
 snippets: ## README snippets must equal their #docregion in example/lib/cases
 	@if [ -f tool/check_readme_snippets.dart ]; then \
