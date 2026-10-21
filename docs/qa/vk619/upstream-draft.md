@@ -1,4 +1,10 @@
-Draft for the owner. Not posted.
+Draft for the owner. **Not to be posted: upstream already has it** (checked 2026-10-21).
+
+- [flutter/flutter#191565](https://github.com/flutter/flutter/issues/191565), open since 2026-08-24, `P2`, `team-ios`, `triaged-ios`. It covers everything below and more: the same root cause and fix, swizzle logs of which view got `scrollViewShouldScrollToTop:`, a video, an app-side workaround, and a repro on an iPhone 15 Pro (iOS 26.6) under Speak Screen, on Flutter 3.47.1, newer than the 3.44.6 run here.
+- [flutter/flutter#191833](https://github.com/flutter/flutter/pull/191833), a draft PR that sets `scrollsToTop = NO` on the mirror. Triage leaned instead towards the mirror forwarding the tap to `FlutterViewController`, and the PR has waited since 2026-08-26 for that choice.
+- The search under "Not verified" below missed both: a query with both words, "FlutterSemanticsScrollView scrollsToTop", returns nothing; "FlutterSemanticsScrollView" alone finds them.
+
+This file stays as the record of this project's simulator repro. Follow #191565 and #191833 instead of posting.
 
 # [iOS] FlutterSemanticsScrollView leaves scrollsToTop on, so a status-bar tap scrolls the accessibility mirror instead of the Flutter list
 
