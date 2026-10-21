@@ -273,7 +273,7 @@ final class ShellSearch implements SearchDriver {
 
   /// Ends the search in the controller and keeps its text. A native field
   /// that ends its search resigns, which commits its marked text, and
-  /// native does not report that commit (VK-572): natively the composition
+  /// native does not report that commit: natively the composition
   /// ends with the search. The text did not change, so `onChanged` is not
   /// called. The Flutter field reports its own composition end when it
   /// lets go ([_onEditing]): there only `active` changes here.
