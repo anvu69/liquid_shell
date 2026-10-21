@@ -39,7 +39,7 @@ const kSegmentGhostKey = ValueKey<String>('liquid-segment-ghost');
 @visibleForTesting
 const kSegmentFocusKey = ValueKey<String>('liquid-segment-focus');
 
-/// Acceptance traces (spec VK-550 §14): called once per control tick with
+/// Acceptance traces: called once per control tick with
 /// the global lens centre (`x`, `y`), the lens size (`w`, `h`), `engage`
 /// and the ticker time `t` in seconds. Reset it to null after use.
 @visibleForTesting
@@ -101,7 +101,7 @@ class LiquidSegment with Diagnosticable {
 }
 
 /// A segmented control drawn after iOS 26's `UISegmentedControl`, with a
-/// liquid lens for its selection (spec VK-550). Controlled: rebuild it with
+/// liquid lens for its selection. Controlled: rebuild it with
 /// the index [onChanged] reports.
 ///
 /// The visible track is 32 pt tall, centred in a 44 pt box, so every
@@ -192,7 +192,7 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl>
   );
 
   /// The group the control opens, so the lens samples what lies behind
-  /// it (spec §7). One key for the control's life, as `GlassTabBar`'s.
+  /// it. One key for the control's life, as `GlassTabBar`'s.
   final BackdropKey _backdropKey = BackdropKey();
 
   /// The last laid-out geometry: the gesture handlers read it.
@@ -227,7 +227,7 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl>
 
   /// Keeps the motion on the laid-out track, and follows the app: a
   /// commit it adopts is accepted; a selection it changes on its own
-  /// slides there (spec §8.3, programmatic).
+  /// slides there.
   LensMotion _sync(SegmentGeometry g) {
     final selected = widget.selectedIndex;
     final m =
@@ -487,10 +487,10 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl>
     );
   }
 
-  /// Track, thumbs, both label rows and the lens, control-local (spec §6,
-  /// §7): the lens above the normal row, below the w500 row. Keyed: the
-  /// layers that come and go never shift the others' state (the touch
-  /// recognizer, the focus nodes, the label fade) to a new element.
+  /// Track, thumbs, both label rows and the lens, control-local: the lens above
+  /// the normal row, below the w500 row. Keyed: the layers that come and go
+  /// never shift the others' state (the touch recognizer, the focus nodes, the
+  /// label fade) to a new element.
   List<Widget> _layers(
     SegmentGeometry g,
     LensFrame f,
@@ -606,7 +606,7 @@ class _LiquidSegmentedControlState extends State<LiquidSegmentedControl>
 
   /// The segments' nodes: semantics, keyboard focus and the large content
   /// viewer, each over its full column. One recognizer over the whole box
-  /// takes their touches (spec §8.1), as the tab bar's row does.
+  /// takes their touches, as the tab bar's row does.
   Widget _touches(SegmentGeometry g, bool eager, {required bool onThumbOnly}) {
     final nodes = Stack(
       children: [

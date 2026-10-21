@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 
 /// Accessibility and power signals read from the operating system.
 ///
-/// `liquid_shell` maps them to a glass tier (its spec 2026-10-10 §6).
+/// `liquid_shell` maps them to a glass tier.
 /// Every field defaults to `false`; a signal that cannot be read is
 /// reported as `false`.
 @immutable

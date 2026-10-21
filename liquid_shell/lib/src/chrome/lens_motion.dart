@@ -8,7 +8,7 @@ import 'package:liquid_shell/src/chrome/lens_profile.dart';
 import 'package:liquid_shell/src/chrome/lens_track.dart';
 import 'package:liquid_shell/src/chrome/tab_springs.dart';
 
-/// What the lens is doing (spec VK-503 §8.2).
+/// What the lens is doing.
 enum LensPhase {
   /// At the committed slot, nothing moves.
   rest,
@@ -26,8 +26,7 @@ enum LensPhase {
   settling,
 }
 
-/// The side of a segment lens that follows its area after a tap's lift
-/// (spec VK-550 §8.4).
+/// The side of a segment lens that follows its area after a tap's lift.
 enum _Follow {
   /// The height is the area over the width.
   height,
@@ -36,7 +35,7 @@ enum _Follow {
   width,
 }
 
-/// What a segment flight is landing (spec VK-550 §8.3).
+/// What a segment flight is landing.
 enum _Flight {
   /// A tap on another segment: the lift, then the wobble.
   tap,
@@ -48,7 +47,7 @@ enum _Flight {
   show,
 }
 
-/// Everything the bar paints for one frame (spec §8.4). Bar-local.
+/// Everything the bar paints for one frame. Bar-local.
 @immutable
 class LensFrame {
   /// Creates a frame.
@@ -76,7 +75,7 @@ class LensFrame {
   /// Whether a lens is drawn at all (nothing selected and untouched: no).
   final bool visible;
 
-  /// 0 = gray rest fill, 1 = clear glass (spec §7.1).
+  /// 0 = gray rest fill, 1 = clear glass.
   final double engage;
 
   /// Lens refraction amount, 0–1.
@@ -144,7 +143,7 @@ class LensFrame {
   );
 }
 
-/// The lens state machine (spec §8). Pure: the widget feeds it pointer
+/// The lens state machine. Pure: the widget feeds it pointer
 /// events in track-local coordinates and calls [advance] once per frame.
 class LensMotion {
   /// Starts at rest on [selected] (null: nothing highlighted), moving on
@@ -164,10 +163,10 @@ class LensMotion {
     _h = SpringValue(rest.height, TabSprings.heightOut);
   }
 
-  /// Reduce motion (spec §13.2).
+  /// Reduce motion.
   bool reduceMotion;
 
-  /// The springs and envelope the lens moves on (spec VK-550 §8.1).
+  /// The springs and envelope the lens moves on.
   final LensProfile profile;
 
   LensTrack _geometry;
@@ -177,7 +176,7 @@ class LensMotion {
 
   late final SpringValue _x;
 
-  /// A segment tap slide's secondary spring (spec VK-550 §8.4): the lens x
+  /// A segment tap slide's secondary spring: the lens x
   /// is [_x] blended with it by [_share] until the slide rests or is
   /// interrupted (`_fold`).
   late final SpringValue _x2;
@@ -186,7 +185,7 @@ class LensMotion {
   late final SpringValue _h;
 
   /// After a segment tap's lift: the lens area, and the side that follows
-  /// it (spec VK-550 §8.4); null otherwise.
+  /// it; null otherwise.
   final SpringValue _area = SpringValue(0, TabSprings.widthOut);
   _Follow? _follow;
   final SpringValue _scale = SpringValue(1, TabSprings.scaleOut);
@@ -209,27 +208,26 @@ class LensMotion {
 
   /// Time since the touch-down (or the semantics tap) that started this
   /// interaction: native answers 25 ms after the down, and a tap's flight
-  /// envelope is timed from it (research §3, §4.1).
+  /// envelope is timed from it.
   double _since = 0;
 
   /// Where the press aims the lens: the finger, clamped to the slots.
   double _aim = 0;
 
-  /// The flight follows a flick to the finger's slot (spec §8.2).
+  /// The flight follows a flick to the finger's slot.
   bool _flick = false;
 
-  /// The segment flight's kind (spec VK-550 §8.3).
+  /// The segment flight's kind.
   _Flight _flight = _Flight.tap;
 
-  /// A fast drag release's landing (spec VK-550 §8.4): its size gains
+  /// A fast drag release's landing: its size gains
   /// (zero for a slow release), the side of the target the lens left
   /// from, and when the lens x passed the target (null until it does).
   Size _landing = Size.zero;
   double _landSide = 0;
   double? _landAt;
 
-  /// The press is on the lens's own slot: a segment lens grows only there
-  /// (spec VK-550 §8.3, `pressOther`).
+  /// The press is on the lens's own slot: a segment lens grows only there.
   bool _pressOnLens = false;
 
   /// The widest stretch of this flight so far (two slots or more).
@@ -240,8 +238,7 @@ class LensMotion {
   double _releaseAt = 0;
   int _flightSlots = 1;
 
-  /// A segment tap goes to the left on screen: its lift is tall, not wide
-  /// (spec VK-550 §8.4).
+  /// A segment tap goes to the left on screen: its lift is tall, not wide.
   bool _liftLeft = false;
   double _flightTarget = 0;
   int? _popSlot;
@@ -282,7 +279,7 @@ class LensMotion {
       slot != null && slot >= 0 && slot < g.slots.length ? slot : null;
 
   /// The finger glow, pill scale, highlight and content pop: the tab
-  /// envelope's; a segment lens has none (spec VK-550 §8.3, spike §2).
+  /// envelope's; a segment lens has none.
   bool get _effects => profile.envelope is TabEnvelope;
 
   /// The geometry; a new one at rest moves the lens without animation.
@@ -313,7 +310,7 @@ class LensMotion {
   /// The slot the lens belongs to.
   int? get committed => _committed;
 
-  /// A commit the app has not confirmed yet (spec §8.7).
+  /// A commit the app has not confirmed yet.
   int? get pending => _pending;
 
   /// A finger is down.
@@ -399,8 +396,8 @@ class LensMotion {
   }
 
   /// Finger up at [local] with horizontal [velocity]; returns the committed
-  /// slot (spec §8.2). A slot [canCommit] refuses is never committed: the
-  /// nearest one it allows is (spec VK-550 §8.3, disabled segments); with
+  /// slot. A slot [canCommit] refuses is never committed: the
+  /// nearest one it allows is (disabled segments); with
   /// none allowed the up is a [cancel] and returns null.
   int? up(
     Offset local, {
@@ -452,8 +449,7 @@ class LensMotion {
   }
 
   /// A programmatic selection: slides on [LensProfile.programmatic], or
-  /// jumps when it is null or under reduce motion (spec §8.7, Q12; spec
-  /// VK-550 §8).
+  /// jumps when it is null or under reduce motion.
   void show(int? slot) {
     _pending = null;
     _fold();
@@ -606,7 +602,7 @@ class LensMotion {
     _pop.retarget(TabSprings.pop, profile.tap);
   }
 
-  /// A segment commit (spec VK-550 §8.3). The flight's clock restarts at
+  /// A segment commit. The flight's clock restarts at
   /// the up, as the native rows' does: a tap lifts and lands on the tap
   /// spring, an up in place or after a drag releases.
   void _commitSegment(
@@ -782,7 +778,7 @@ class LensMotion {
     }
   }
 
-  /// The lens x, for every envelope (spec VK-550 §8.1). Once [answered], a
+  /// The lens x, for every envelope. Once [answered], a
   /// drag follows the finger on dragFollow (under reduce motion the
   /// rest-size capsule follows on the spring the down chose), and a press
   /// leans toward the finger on the tap spring when [pressLeans]. A flight
@@ -818,7 +814,7 @@ class LensMotion {
     SpringDescription falling,
   ) => value.retarget(target, target >= value.value ? rising : falling);
 
-  /// The tab envelope's targets (spec VK-503 §8.3).
+  /// The tab envelope's targets.
   void _tabTargets(double since) {
     final rest = _geometry.restLensAt(_x.value);
     var w = rest.width;
@@ -902,7 +898,7 @@ class LensMotion {
     if (holding) _glowDiameter.target = TabSprings.glowHeldDiameter;
   }
 
-  /// The segment envelope's targets (spec VK-550 §8.3, §8.4), [since]
+  /// The segment envelope's targets, [since]
   /// seconds after the down, the commit or the programmatic change. No
   /// glow, pill scale, highlight or pop: those springs stay at rest.
   void _segmentTargets(SegmentEnvelope e, double since) {
@@ -1008,7 +1004,7 @@ class LensMotion {
   double _liftUntil(SegmentEnvelope e) =>
       _liftLeft ? e.liftUntil.$2 : e.liftUntil.$1;
 
-  /// The side that keeps the area takes its value from it (spec §8.4).
+  /// The side that keeps the area takes its value from it.
   void _followArea() {
     final follow = _follow;
     if (follow == null) return;
@@ -1024,7 +1020,7 @@ class LensMotion {
   }
 
   /// [pressed] squashed by the lens speed: narrower and taller above the
-  /// knee, up to the limits (spec VK-550 §8.4).
+  /// knee, up to the limits.
   Size _squashed(SegmentEnvelope e, Size pressed) {
     final over = math.max(0, _x.velocity.abs() - e.squashKnee);
     return Size(
@@ -1047,7 +1043,7 @@ class LensMotion {
     return Size(e.landing.width * scale, e.landing.height * scale);
   }
 
-  /// The §8.4 hand-off a tap's lift and a fast release's landing share:
+  /// The hand-off a tap's lift and a fast release's landing share:
   /// while [lifting], the size heads on the press spring for [rest] scaled
   /// by [gain] (once [answered]); after, the wobble spring takes it back
   /// to rest.
@@ -1157,7 +1153,7 @@ class LensMotion {
   }
 }
 
-/// The minimize morph scalar: 0 = full bar, 1 = circle (spec VK-503 §10).
+/// The minimize morph scalar: 0 = full bar, 1 = circle.
 class MinimizeMotion {
   /// Starts at rest.
   MinimizeMotion({required bool minimized})

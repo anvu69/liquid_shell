@@ -1,7 +1,7 @@
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
-/// A navigator on screen under the shell's body (VK-567), and whether an
+/// A navigator on screen under the shell's body, and whether an
 /// enabled `NavigatorPopHandler` between the body and it answers system
 /// back for it (an app that wraps its branch, as the README once showed).
 typedef BranchNavigator = ({NavigatorState navigator, bool handled});

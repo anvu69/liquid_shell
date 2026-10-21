@@ -13,7 +13,7 @@ import 'package:liquid_shell/src/glass/shader_program.dart';
 typedef LiquidFilterFactory =
     ui.ImageFilter Function(ui.FragmentShader shader, double blurSigma);
 
-/// The production filter: the engine blur, then the lens (spec §3.3).
+/// The production filter: the engine blur, then the lens.
 ui.ImageFilter liquidLensFilter(ui.FragmentShader shader, double blurSigma) {
   final lens = ui.ImageFilter.shader(shader);
   if (blurSigma <= 0) return lens;
@@ -28,7 +28,7 @@ ui.ImageFilter liquidLensFilter(ui.FragmentShader shader, double blurSigma) {
 @visibleForTesting
 LiquidFilterFactory? debugLiquidFilterFactory;
 
-/// The liquid lens over the backdrop behind this box (spec §5.3).
+/// The liquid lens over the backdrop behind this box.
 ///
 /// Repaints in the same frame when an enclosing route animates or an
 /// enclosing scrollable scrolls; any other move that skips its paint is
@@ -150,7 +150,7 @@ class _LiquidBackdropBox extends SingleChildRenderObjectWidget {
 }
 
 /// Pushes a backdrop filter layer whose lens is placed from this box's
-/// rect in pass pixels, computed at paint time (spec §5.3).
+/// rect in pass pixels, computed at paint time.
 class RenderLiquidBackdrop extends RenderProxyBox {
   /// Creates the render object.
   RenderLiquidBackdrop({
@@ -250,7 +250,7 @@ class RenderLiquidBackdrop extends RenderProxyBox {
   }
 
   /// This box in pass pixels, pass pixels per logical pixel, and the pass
-  /// size in pixels (spec §5.3, §5.4).
+  /// size in pixels.
   ({Rect rect, double scale, Size pass}) passGeometry() {
     final box = Offset.zero & size;
     final root = owner?.rootNode;
@@ -317,7 +317,7 @@ class RenderLiquidBackdrop extends RenderProxyBox {
 
   /// A fresh shader per change: ImageFilter.shader equality compares the
   /// shader object, so mutating the current one could leave the layer's
-  /// filter unchanged (spec §5.3).
+  /// filter unchanged.
   ui.ImageFilter _lens(Float32List uniforms) {
     ui.FragmentShader? shader;
     try {

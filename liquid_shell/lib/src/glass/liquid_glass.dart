@@ -9,8 +9,8 @@ import 'package:liquid_shell/src/glass/renderer.dart';
 import 'package:liquid_shell/src/glass/shader_program.dart';
 import 'package:liquid_shell/src/glass/signals_controller.dart';
 
-/// Everything that can change which renderer a glass uses (liquid tier
-/// §5.5): platform signals, the shader program, the frame guard.
+/// Everything that can change which renderer a glass uses: platform signals,
+/// the shader program, the frame guard.
 Listenable liquidGlassChanges() => Listenable.merge([
   LiquidSignalsController.instance,
   LiquidShaderProgram.instance,
@@ -18,8 +18,7 @@ Listenable liquidGlassChanges() => Listenable.merge([
 ]);
 
 /// The renderer a glass at [context] uses now. `LiquidGlass` and
-/// `LiquidLens` share it, so the tab pill and its lens never disagree
-/// (spec VK-503 §7.3).
+/// `LiquidLens` share it, so the tab pill and its lens never disagree.
 LiquidGlassRenderer resolveGlassFor(BuildContext context) {
   final platform = LiquidSignalsController.instance.value;
   return resolveGlassRenderer(

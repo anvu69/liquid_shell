@@ -4,11 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:liquid_shell/src/glass/glass_theme.dart';
 
-/// Internal optics of the liquid tier (spec §4, §5.6). Lengths are logical
+/// Internal optics of the liquid tier. Lengths are logical
 /// pixels; [liquidUniforms] scales them to pass pixels.
 abstract final class LiquidOptics {
   /// Width of the curved band inside the edge. Wide and deep enough that
-  /// the band mirrors what lies inside it, as iOS 26 glass does (§3.6.1).
+  /// the band mirrors what lies inside it, as iOS 26 glass does.
   static const double bezel = 20;
 
   /// Glass thickness at `refraction` 1.
@@ -77,8 +77,7 @@ class LiquidOpticsParams {
   final double blurSigma;
 
   /// Bezel width override in logical pixels; null uses
-  /// [LiquidOptics.bezel]. The tab lens curves its whole height (spec
-  /// VK-503 §7.2).
+  /// [LiquidOptics.bezel]. The tab lens curves its whole height.
   final double? bezel;
 
   /// Rim width override in logical pixels; null uses
@@ -88,12 +87,11 @@ class LiquidOpticsParams {
   /// How much the [tint] veil thins toward the edge across the bezel, 0–1.
   /// 0 (the default, every surface but the engaged tab lens) is a uniform
   /// veil, as before. 1 is native's held lens: milky in the core, clear at
-  /// the rim, so the bent page and the fringe show in the ring (spec
-  /// VK-503 §7.2, Task 16 part B).
+  /// the rim, so the bent page and the fringe show in the ring.
   final double veilFalloff;
 
   /// Vibrancy override; null uses [LiquidOptics.saturation]. The segment
-  /// lens keeps the page's colours (spec VK-550 §7).
+  /// lens keeps the page's colours.
   final double? saturation;
 
   /// How much farther from the shape's spine (its centre line) the page is
@@ -101,7 +99,7 @@ class LiquidOpticsParams {
   /// under the glass at 1 / 1.22 of its size across a capsule's height,
   /// and its edge reads the page 0.22 × the radius beyond it. 0 (the
   /// default, every surface but the segment lens) reads it as before. The
-  /// segment lens's (spec VK-550 §7): native's squeezes the page to about
+  /// segment lens's: native's squeezes the page to about
   /// 0.8.
   final double squeeze;
 
@@ -134,7 +132,7 @@ class LiquidOpticsParams {
   );
 }
 
-/// The floats for shader indices 2–27 (spec §4.2), in pass pixels.
+/// The floats for shader indices 2–27, in pass pixels.
 ///
 /// [rect] is the glass in pass pixels and [radii] its drawn corners in
 /// logical pixels. [scale] is pass pixels per logical pixel, and [pass] the
@@ -201,8 +199,8 @@ Float32List liquidUniforms({
 /// Signed inward displacement at bezel coordinate [x] (0 at the edge, 1
 /// where the bezel flattens), in the unit of [bezel] and [thickness].
 ///
-/// The Dart mirror of the shader's `displacement` along the normal (spec
-/// §4.1 steps 4–7), for tests and docs. Negative means inward.
+/// The Dart mirror of the shader's `displacement` along the normal, for tests
+/// and docs. Negative means inward.
 double liquidDisplacement(
   double x, {
   double bezel = LiquidOptics.bezel,

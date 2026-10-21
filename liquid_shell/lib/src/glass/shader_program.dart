@@ -3,7 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 
-/// The liquid lens program, loaded once per process (spec §5.1).
+/// The liquid lens program, loaded once per process.
 ///
 /// `null` until loaded, and forever if both asset keys fail or the engine
 /// refuses the lens filter ([disable]); glass then stays frosted. Never
@@ -53,7 +53,7 @@ class LiquidShaderProgram extends ValueNotifier<ui.FragmentProgram?> {
   }
 
   /// Drops the program for the rest of the session: building the lens
-  /// filter threw [error], so the engine cannot draw it (spec §14). Every
+  /// filter threw [error], so the engine cannot draw it. Every
   /// glass draws frosted from the next build. Reported once, in debug
   /// builds.
   void disable(Object error, StackTrace stack) {

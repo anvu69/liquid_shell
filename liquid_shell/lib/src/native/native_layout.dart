@@ -7,7 +7,7 @@ import 'package:liquid_shell/src/search/search_layout.dart';
 import 'package:liquid_shell/src/shell/shell_layout.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
-/// Whether the shell's chrome is native right now (spec P2 §5.1). Pure.
+/// Whether the shell's chrome is native right now. Pure.
 ///
 /// Every condition must hold: the app allows it, this shell owns the
 /// window's native chrome, the platform installed it, the shell has no
@@ -36,7 +36,7 @@ bool nativeChromeEngaged({
 /// The conditions of [nativeChromeEngaged] that the shell knows without the
 /// platform: the app allows it, it has no custom Flutter chrome, no
 /// `LiquidGlassScope` above it forces a glass tier (an app that forces a
-/// tier asks for Flutter glass; spec 2026-10-10 §9.1), and it can be drawn
+/// tier asks for Flutter glass), and it can be drawn
 /// natively. Pure.
 ///
 /// While the platform has not answered (pending), only a shell for which
@@ -55,7 +55,7 @@ bool nativeChromePossible({
 
 /// Whether every destination and the trailing action have an SF Symbol. The
 /// search destination needs none: UIKit's search tab has its own image.
-/// Only the first one is the search tab (spec P3b §14); an extra one is
+/// Only the first one is the search tab; an extra one is
 /// standard and needs a symbol.
 bool nativeDescribable(
   List<LiquidDestination> destinations,
@@ -70,7 +70,7 @@ bool nativeDescribable(
 }
 
 /// The debug hint for a shell that could use native chrome but cannot
-/// describe itself (spec P2 §15, E2): one line naming every destination
+/// describe itself: one line naming every destination
 /// (by label) and the trailing action (by semantic label) without an
 /// `sfSymbol`. Null when nothing lacks one. Pure.
 String? nativeSymbolHint(
@@ -133,7 +133,7 @@ EdgeInsets nativeChromeInsets({
   _ => EdgeInsets.zero,
 };
 
-/// Everything the native chrome shows (spec P2 §6.2).
+/// Everything the native chrome shows.
 LiquidNativeChromeConfig nativeConfigFor({
   required bool engaged,
   required List<LiquidDestination> destinations,
@@ -194,9 +194,9 @@ LiquidNativeChromeConfig nativeConfigFor({
   );
 }
 
-/// Whether the selected tab has a native navigation bar (spec P3b §8.3).
-/// P3b-1: the search tab only, while native chrome is engaged. P3b-2 makes
-/// it every engaged tab.
+/// Whether the selected tab has a native navigation bar.
+/// Today that is the search tab only, while native chrome is engaged; a
+/// later release makes it every engaged tab.
 bool nativePageBarFor({
   required bool engaged,
   required int selected,

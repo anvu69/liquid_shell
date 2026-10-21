@@ -4,7 +4,7 @@ import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.
 
 /// Throws [ArgumentError] for actions UIKit would crash on, draw blank, or
 /// never let the user leave: none, more than one cancel action, more than
-/// one preferred action, a blank label (spec P3a §4.2), a disabled
+/// one preferred action, a blank label, a disabled
 /// preferred action, or no enabled action at all (a native alert has no
 /// tap-outside, so its future would never end).
 void checkAlertActions<T>(List<LiquidAlertAction<T>> actions) {
@@ -109,7 +109,7 @@ LiquidNativeDialogRequest dialogRequestFor<T>(
   );
 }
 
-/// Refusals that cannot change while the process runs (spec P3a §6):
+/// Refusals that cannot change while the process runs:
 /// later calls skip the channel and draw Flutter at once.
 final class NativeDialogMemory {
   NativeDialogMemory._();

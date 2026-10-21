@@ -18,7 +18,7 @@ COVERED := liquid_shell liquid_shell_platform_interface liquid_shell_ios liquid_
 COVERAGE_MIN := 90
 
 .PHONY: help get format format-check analyze test coverage goldens \
-        goldens-update provenance snippets verify pana publish-check \
+        goldens-update provenance public-docs snippets verify pana publish-check \
         android-unit ios-unit ios-ui ios-minimize integration-ios integration-ios-native integration-android pigeon pigeon-check \
         test-impeller compare-images tab-traces tab-frames segment-traces \
         segment-frames
@@ -96,6 +96,9 @@ segment-frames: ## Native vs Flutter liquid segmented control strips at 60 fps o
 
 provenance: ## Fail on app names or banned dependencies outside docs/, or glass outside LiquidGlass
 	tool/check_provenance.sh
+
+public-docs: ## Fail on internal references (§, VK-, phase codes) in dartdoc, READMEs and doc/
+	tool/check_public_docs.sh
 	tool/check_glass_seam.sh
 
 snippets: ## README snippets must equal their #docregion in example/lib/cases
@@ -120,7 +123,7 @@ pigeon-check: pigeon ## Fail when the committed channel code drifts from its Pig
 	  exit 1; }
 	@echo "✓ pigeon output matches its source"
 
-verify: format-check analyze provenance pigeon-check test test-impeller coverage goldens snippets ## Everything CI's blocking jobs run
+verify: format-check analyze provenance public-docs pigeon-check test test-impeller coverage goldens snippets ## Everything CI's blocking jobs run
 	@echo "✓ verify passed"
 
 pana: ## pana for each package (see docs/plans: pre-publish limits)

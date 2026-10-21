@@ -12,7 +12,7 @@ import 'package:liquid_shell/src/shell/strings.dart';
 const kSearchFieldKey = ValueKey<String>('liquid-search-field');
 
 /// The fallback collapsed circle (previous tab): the tab bar's own
-/// minimized circle while the search tab is selected (spec VK-503 §11).
+/// minimized circle while the search tab is selected.
 const kSearchCollapsedKey = ValueKey<String>('liquid-search-collapsed');
 
 /// The fallback × circle.
@@ -20,7 +20,7 @@ const kSearchCancelKey = ValueKey<String>('liquid-search-cancel');
 
 const _capsule = BorderRadius.all(Radius.circular(999));
 
-/// The field morphs on the bar's clock (VK-503 Task 16): it shrinks into
+/// The field morphs on the bar's clock: it shrinks into
 /// the ⌕ as the bar expands, and grows out of it as the bar collapses into
 /// the previous tab's circle, as native does in step.
 final SpringCurve _toIdle = SpringCurve(
@@ -29,7 +29,7 @@ final SpringCurve _toIdle = SpringCurve(
 );
 final SpringCurve _toSelected = SpringCurve(TabSprings.collapse);
 
-/// The fallback search field on glass (spec P3b §9.4). The `TextField` is
+/// The fallback search field on glass. The `TextField` is
 /// the first child of the same chain in every phase, so a phase change
 /// never rebuilds it; in idle it is invisible and a ⌕ glyph takes taps.
 class SearchFieldGlass extends StatelessWidget {
@@ -83,7 +83,7 @@ class SearchFieldGlass extends StatelessWidget {
   /// The inline ×'s tooltip and semantics (`LiquidShellStrings.cancelSearch`).
   final String cancelLabel;
 
-  /// Lens drag over the idle ⌕ (spec VK-503 §8.8).
+  /// Lens drag over the idle ⌕.
   final ValueListenable<bool> highlight;
 
   @override
@@ -184,8 +184,8 @@ class SearchFieldGlass extends StatelessWidget {
   }
 }
 
-/// The compact search row (spec P3b §9.2): the pill (built by the shell,
-/// which also collapses into the previous tab's circle, spec VK-503 §11),
+/// The compact search row: the pill (built by the shell,
+/// which also collapses into the previous tab's circle),
 /// the field and ×, each animating between the phase's rects. Empty areas
 /// pass touches to the body.
 class CompactSearchChrome extends StatelessWidget {

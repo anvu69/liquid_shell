@@ -5,7 +5,7 @@ import 'package:liquid_shell/src/segmented/segmented_control.dart';
 import 'package:liquid_shell/src/shell/shell_scope.dart';
 
 /// The search scopes ("All | Songs | Places") as a [LiquidSegmentedControl],
-/// bound to [controller]'s `scopeIndex` (spec VK-550 §11). Place it at the
+/// bound to [controller]'s `scopeIndex`. Place it at the
 /// top of the search page's content.
 ///
 /// When native chrome draws the scopes (iOS 26+, `LiquidSearch.scopes`
@@ -26,7 +26,7 @@ class LiquidSearchScopeBar extends StatelessWidget {
   final List<String>? scopes;
 
   /// Selects scope [i] and puts the keyboard away, keeping the search
-  /// active (VK-571), as the shell does for a tap on UIKit's scope bar
+  /// active, as the shell does for a tap on UIKit's scope bar
   /// (which alone keeps the keyboard up).
   void _select(int i) => controller
     ..scopeIndex = i

@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
 
-/// One registered `LiquidPage` (spec P3b §8.4): what the native bar needs
+/// One registered `LiquidPage`: what the native bar needs
 /// and where the page is.
 @immutable
 class PageEntry {
@@ -82,7 +82,7 @@ abstract interface class PageRegistry {
   PageHandle registerPage(PageEntry entry);
 }
 
-/// The selected tab's stack (spec P3b §8.4): every active page in the top
+/// The selected tab's stack: every active page in the top
 /// page's navigator, in push order. Empty when no page is on top.
 ///
 /// The top page stands for its route: another page in the same route sits

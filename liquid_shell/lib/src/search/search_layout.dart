@@ -30,8 +30,8 @@ LiquidSearchPhase searchPhaseFor({
   return active ? LiquidSearchPhase.active : LiquidSearchPhase.selected;
 }
 
-/// The bottom inset that keeps content clear of the native search field
-/// (spec P3b §4.6). Only a field in the lower half counts (the iPhone's
+/// The bottom inset that keeps content clear of the native search field.
+/// Only a field in the lower half counts (the iPhone's
 /// tab-hosted field); a stacked field at the top is in the top padding.
 /// Active: down to the field's top, or the keyboard plus the field and its
 /// gaps while Flutter's keyboard inset is still animating.
@@ -51,10 +51,10 @@ double nativeSearchBottomInset({
   ].reduce(math.max);
 }
 
-/// The fallback morph (Q12).
+/// The fallback morph.
 const Duration kSearchMorphDuration = Duration(milliseconds: 350);
 
-/// The fallback morph's curve (Q12).
+/// The fallback morph's curve.
 const Curve kSearchMorphCurve = Curves.easeOutCubic;
 
 /// The compact collapsed circle, field and × height (iOS 26: 48).
@@ -73,7 +73,7 @@ const double kRegularSearchFieldExtent = 44;
 /// The regular field's side margins (iPad: 20).
 const double kRegularSearchMargin = 20;
 
-/// Where the compact search parts are (spec P3b §9.2).
+/// Where the compact search parts are.
 @immutable
 class CompactSearchRects {
   /// Creates the rects.
@@ -104,7 +104,7 @@ class CompactSearchRects {
 }
 
 /// The compact parts for [phase]: the bottom row ends at [rowBottom] and is
-/// [rowExtent] tall (P1's pill); [keyboard] is the software keyboard's
+/// [rowExtent] tall (the tab bar's pill); [keyboard] is the software keyboard's
 /// height (0 with a hardware keyboard).
 CompactSearchRects compactSearchRects({
   required LiquidSearchPhase phase,
@@ -180,7 +180,7 @@ CompactSearchRects compactSearchRects({
   );
 }
 
-/// The regular field's top (spec P3b §9.3): one row below the Flutter top
+/// The regular field's top: one row below the Flutter top
 /// bar (or 54pt below the safe top beside a tiled sidebar); active, the bar
 /// row itself.
 double regularSearchFieldTop({

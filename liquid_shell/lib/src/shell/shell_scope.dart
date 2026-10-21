@@ -84,7 +84,7 @@ class LiquidShellScopeData {
   /// `LiquidPage` draws no Flutter bar, and [windowControls] is zero.
   final bool nativePageBar;
 
-  /// Native chrome draws the search scopes (iOS 26+, spec VK-550 §10.3):
+  /// Native chrome draws the search scopes (iOS 26+):
   /// `LiquidSearchScopeBar` builds nothing. Also true while native chrome
   /// is about to engage (no chrome is drawn yet), so the bar never shows
   /// for a frame and then vanishes.
@@ -94,7 +94,7 @@ class LiquidShellScopeData {
   /// search.
   final List<String>? searchScopes;
 
-  /// Field by field, except [setSidebarVisible] (spec §4.4). The setter is an
+  /// Field by field, except [setSidebarVisible]. The setter is an
   /// action, not state: pages depend on what the shell shows, so equality
   /// covers the values only. Two scopes that show the same thing are
   /// equal whatever function they carry, e.g. [LiquidShellScopeData.none]
@@ -187,7 +187,7 @@ abstract final class LiquidShellScope {
   static LiquidShellScopeData? maybeOf(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<ShellScopeMarker>()?.data;
 
-  /// The nearest shell's search phase (spec P3b §3.1): idle, selected or
+  /// The nearest shell's search phase: idle, selected or
   /// active. Null outside a shell and in a shell without a search tab.
   static LiquidSearchPhase? searchPhaseOf(BuildContext context) =>
       maybeOf(context)?.searchPhase;

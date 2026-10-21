@@ -38,16 +38,15 @@ enum ShellPresentation {
 /// Pill height of the bottom bar at text scale 1, used before measuring.
 const double kBottomPillExtent = 62;
 
-/// Gap between the safe area top and the top bar (spec VK-503 §5.3).
+/// Gap between the safe area top and the top bar.
 const double kTopBarGap = TabMetrics.topRowGap;
 
-/// Pill height of the top bar at text scale 1, used before measuring (spec
-/// VK-503 §5.3).
+/// Pill height of the top bar at text scale 1, used before measuring.
 const double kTopPillExtent = TabMetrics.topExtent;
 
 /// The presentation for the shell's constraints [size]. "Landscape" means
 /// `width > height`. A landscape shell lower than
-/// `breakpoints.compactHeight` is compact (spec VK-503 §12.1).
+/// `breakpoints.compactHeight` is compact.
 ShellPresentation presentationFor(
   Size size,
   LiquidShellBreakpoints breakpoints,
@@ -101,7 +100,7 @@ bool sidebarVisibleFor({
   return visible;
 }
 
-/// Gap below the bottom pill (Q9): 21 over a gesture area (always on iOS;
+/// Gap below the bottom pill: 21 over a gesture area (always on iOS;
 /// on Android when the bottom gesture inset is non-zero), otherwise
 /// `max(21, viewPadding.bottom + 8)` so a 3-button bar is never covered.
 double bottomGapFor({
@@ -113,7 +112,7 @@ double bottomGapFor({
   return gestureArea ? 21 : math.max(21, viewPaddingBottom + 8);
 }
 
-/// The part of the body covered by chrome (§5.3). [measuredBar] is the
+/// The part of the body covered by chrome. [measuredBar] is the
 /// measured bar slot height, or null before the first measurement. A bar
 /// measured at 0 (a custom bar collapsed away) covers nothing, so the
 /// insets are zero: no gap or status bar band is added for it.

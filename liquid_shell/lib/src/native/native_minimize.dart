@@ -14,7 +14,7 @@ enum MinimizeScrollResult {
   moved,
 
   /// The offset changed, and a fling or a programmatic scroll carried the
-  /// content up to its top edge: expand the tab bar (spec VK-600 §9.1).
+  /// content up to its top edge: expand the tab bar.
   expand,
 }
 
@@ -23,7 +23,7 @@ enum MinimizeScrollResult {
 const double kMinimizeAwayFromTop = 1;
 
 /// One virtual scroll offset per destination for the native tab bar's
-/// minimize (spec VK-600 §9.1): the pixels of a single scroll view, kept
+/// minimize: the pixels of a single scroll view, kept
 /// continuous across several while they scroll, snapped to the top edge
 /// when the scrolled view reaches its own, and lowered to that view's own
 /// at the end of each scroll, never raised. A view nested in another
@@ -154,7 +154,7 @@ final class MinimizeScrollTracker {
 }
 
 /// Whether sending [next] after [previous] may rebuild the native tabs,
-/// whose new hosts start at offset 0 (spec VK-600 §8.6): the shell then
+/// whose new hosts start at offset 0: the shell then
 /// sends the offset again. Any change of the tabs or the trailing action
 /// counts, a superset of what the platform rebuilds for. Null [previous]:
 /// nothing built yet.
@@ -166,8 +166,8 @@ bool nativeTabsMayRebuild(
     !listEquals(previous.tabs, next.tabs) ||
     previous.trailing != next.trailing;
 
-/// Whether the shell drives the native tab bar's minimize (spec VK-600
-/// §9.2); the native side attaches its pan under the same facts (§8.3).
+/// Whether the shell drives the native tab bar's minimize; the native side
+/// attaches its pan under the same facts.
 bool nativeMinimizeActive({
   required bool owner,
   required bool engaged,

@@ -41,11 +41,11 @@ const kTabFocusKey = ValueKey<String>('liquid-tab-focus');
 
 const _capsule = BorderRadius.all(Radius.circular(999));
 
-/// The smallest tap area a tab keeps (P1 Q17, Apple's 44 pt target).
+/// The smallest tap area a tab keeps (Apple's 44 pt target).
 const double _minTapWidth = 44;
 
-/// Rewrites every frame before it is painted: goldens of the engaged lens
-/// (spec VK-503 §17.3). Reset it to null after use.
+/// Rewrites every frame before it is painted: goldens of the engaged lens.
+/// Reset it to null after use.
 @visibleForTesting
 LensFrame Function(LensFrame frame)? debugTabLensOverride;
 
@@ -55,14 +55,14 @@ LensFrame Function(LensFrame frame)? debugTabLensOverride;
 @visibleForTesting
 double? debugTabLensPress;
 
-/// Acceptance traces (spec VK-503 §17.4): called once per bar tick with
+/// Acceptance traces: called once per bar tick with
 /// the global lens centre and the frame's scalars. Reset to null after use.
 @visibleForTesting
 void Function(Map<String, double> sample)? debugTabTrace;
 
-/// The Flutter tab bar of spec VK-503. Internal: `LiquidTabBar` and the
+/// The Flutter tab bar. Internal: `LiquidTabBar` and the
 /// shell build it. It fills the width it is given (the row between the
-/// margins) and places its pill per spec §5; gaps pass touches through.
+/// margins) and places its pill; gaps pass touches through.
 class GlassTabBar extends StatefulWidget {
   /// Creates the bar.
   const GlassTabBar({
@@ -97,36 +97,36 @@ class GlassTabBar extends StatefulWidget {
   /// Called on commit with an index into [destinations].
   final ValueChanged<int> onSelect;
 
-  /// Compact, landscape or top (spec §5).
+  /// Compact, landscape or top.
   final TabBarForm form;
 
   /// The trailing circle's action.
   final LiquidTabAction? trailing;
 
-  /// Collapsed to the 48 pt circle (spec §10).
+  /// Collapsed to the 48 pt circle.
   final bool minimized;
 
   /// Tap on the collapsed circle; null makes it inert.
   final VoidCallback? onCollapsedTap;
 
   /// Whether a collapsed tap announces `tabBarExpanded` and the node
-  /// carries the expand hint (false for the search collapse, spec §11).
+  /// carries the expand hint (false for the search collapse).
   final bool announceExpand;
 
-  /// Key of the collapsed circle's node (`kSearchCollapsedKey`, spec §11).
+  /// Key of the collapsed circle's node (`kSearchCollapsedKey`).
   final Key? collapsedKey;
 
   /// Strings for hints, announcements and badges.
   final LiquidShellStrings strings;
 
-  /// Narrow labels fit themselves (P1 Q18).
+  /// Narrow labels fit themselves.
   final bool narrow;
 
   /// A drop target the shell owns (the search ⌕), bar-local.
   final TabDragTarget? externalTarget;
 
   /// Lay out as if a trailing circle were there (the search ⌕ is drawn by
-  /// the shell, spec §11).
+  /// the shell).
   final bool reserveTrailing;
 
   /// A collapse waits 0.24 s (scroll); false for the search collapse.
@@ -134,7 +134,7 @@ class GlassTabBar extends StatefulWidget {
 
   /// Whether the collapsed circle tints the selected tab's icon. False for
   /// the search collapse: the circle holds the previous tab, not the
-  /// current one, in the unselected colour (spec VK-503 §11).
+  /// current one, in the unselected colour.
   final bool tintCollapsed;
 
   @override
@@ -157,7 +157,7 @@ class _GlassTabBarState extends State<GlassTabBar>
   );
 
   /// The group a standalone bar opens, so the lens samples the page and
-  /// not the pill (spec §7.2). One key for the bar's life.
+  /// not the pill. One key for the bar's life.
   final BackdropKey _backdropKey = BackdropKey();
 
   late final MinimizeMotion _minimize = MinimizeMotion(
@@ -398,7 +398,7 @@ class _GlassTabBarState extends State<GlassTabBar>
     ];
   }
 
-  /// Whether [d] draws its icon alone in the top form (spec §5.3).
+  /// Whether [d] draws its icon alone in the top form.
   bool _topIconOnly(LiquidDestination d) =>
       widget.form == TabBarForm.top && d.role == LiquidDestinationRole.search;
 
@@ -778,7 +778,7 @@ class _GlassTabBarState extends State<GlassTabBar>
   ///
   /// Neighbouring capsules overlap by 8. Each overlap is split at its
   /// midpoint, so a tap goes to the nearest slot, as on native. When that
-  /// leaves a slot narrower than [_minTapWidth] (P1 Q17: 5 tabs and a circle
+  /// leaves a slot narrower than [_minTapWidth] (5 tabs and a circle
   /// at 320, pitch 43.6), the narrow slots get [_minTapWidth] and the others
   /// share the rest of the row evenly: the end slots give up some of their
   /// outer room, and every area stays inside its own capsule. The semantics
@@ -931,7 +931,7 @@ class _GlassTabBarState extends State<GlassTabBar>
   }
 }
 
-/// Icon and label rects inside [slot], slot-local (spec §5.1–§5.3). At
+/// Icon and label rects inside [slot], slot-local. At
 /// AX sizes and for an icon-only slot, the icon takes the whole slot.
 (Rect?, Rect?) _cellParts({
   required TabBarForm form,
@@ -1232,7 +1232,7 @@ class _PillPainter extends CustomPainter {
       old.glowOpacity != glowOpacity;
 }
 
-/// A drop target for the lens drag (spec VK-503 §8.8): the trailing circle
+/// A drop target for the lens drag: the trailing circle
 /// or the search ⌕. The lens stays clamped to the pill; a release while
 /// [hovered] fires [onRelease] instead of committing a slot.
 class TabDragTarget {
@@ -1252,7 +1252,7 @@ class TabDragTarget {
   void dispose() => hovered.dispose();
 }
 
-/// The white press/hover overlay on a glass circle (spec §8.8): 0.85 in
+/// The white press/hover overlay on a glass circle: 0.85 in
 /// light, 0.25 in dark.
 class TabHoverHighlight extends StatelessWidget {
   /// Creates the overlay over [child].

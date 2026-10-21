@@ -3,7 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 
-/// Consecutive slow windows that demote liquid to frosted (spec §7.4).
+/// Consecutive slow windows that demote liquid to frosted.
 const kLiquidSlowWindows = 3;
 
 /// Frames per measuring window.
@@ -33,7 +33,7 @@ bool debugLiquidFrameGuardEnabled = false;
 
 /// Watches raster times while liquid glass is on screen and turns
 /// [value] (`slowFrames`) on for the rest of the process when they stay
-/// over budget (spec §7.4). Sticky: frosted is cheaper, so switching
+/// over budget. Sticky: frosted is cheaper, so switching
 /// back would oscillate.
 class LiquidFrameGuard extends ValueNotifier<bool> {
   LiquidFrameGuard._() : super(false);

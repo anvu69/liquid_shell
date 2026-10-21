@@ -8,7 +8,7 @@ import 'package:liquid_shell/src/glass/signals_controller.dart';
 import 'package:liquid_shell/src/glass/tier.dart';
 
 /// Built-in liquid tier: the clean-room lens shader over a light blur,
-/// then the outside shadow (spec 2026-10-10 §5.2).
+/// then the outside shadow.
 class LiquidShaderRenderer extends LiquidGlassRenderer {
   /// Creates the liquid renderer.
   const LiquidShaderRenderer();
@@ -18,7 +18,7 @@ class LiquidShaderRenderer extends LiquidGlassRenderer {
 
   /// Shader filters are supported, the program is loaded, and the glass is
   /// not inside another [BackdropFilter]: there the shader's coordinates
-  /// start at that filter's region, not the screen (spec §3.2 case I).
+  /// start at that filter's region, not the screen.
   @override
   bool isSupported(BuildContext context) =>
       liquidGlassCanRefract() &&

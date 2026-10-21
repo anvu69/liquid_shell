@@ -13,7 +13,7 @@ const double kLargeTitleExtent = 52;
 /// Fade height of the scroll-edge effect under the bar.
 const double _kEdgeFade = 24;
 
-/// A `LiquidPage`'s bar where no native bar draws it (spec P3b §9.5): the
+/// A `LiquidPage`'s bar where no native bar draws it: the
 /// glass back circle, the inline or large title, and a scroll-edge fade.
 /// A root page's large title sits on the bar row, leading, as UIKit's
 /// `.inline` large title and Apple Music draw it; under a back button it

@@ -5,8 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:liquid_shell/src/chrome/lens_track.dart';
 import 'package:liquid_shell/src/chrome/tab_springs.dart';
 
-/// iOS 26.5 tab bar metrics in logical points (spec VK-503 §5, research
-/// §1).
+/// iOS 26.5 tab bar metrics in logical points.
 abstract final class TabMetrics {
   /// Compact pill height at text scale 1.
   static const double pillExtent = 62;
@@ -23,7 +22,7 @@ abstract final class TabMetrics {
   /// Bottom row margin at each side.
   static const double margin = 21;
 
-  /// Row margin of a narrow shell (P1 Q17).
+  /// Row margin of a narrow shell.
   static const double narrowMargin = 8;
 
   /// Gap between the pill and the trailing circle.
@@ -84,7 +83,7 @@ abstract final class TabMetrics {
   static const double topRowGap = 5.5;
 }
 
-/// The three bar forms (spec §5).
+/// The three bar forms.
 enum TabBarForm {
   /// Compact portrait: icon over label, 62 pt pill.
   compact,
@@ -181,7 +180,7 @@ class TabBarGeometry implements LensTrack {
     return Size.lerp(a.size, b.size, t)!;
   }
 
-  /// The regular top bar's tap inflation (research §1.3); null elsewhere.
+  /// The regular top bar's tap inflation; null elsewhere.
   @override
   Size? get tapInflation => form == TabBarForm.top
       ? const Size(TabSprings.topTapWidth, TabSprings.topTapHeight)
@@ -215,7 +214,7 @@ Rect _mirror(Rect r, double width, TextDirection direction) =>
     ? Rect.fromLTRB(width - r.right, r.top, width - r.left, r.bottom)
     : r;
 
-/// Compact portrait geometry (spec §5.1). [maxWidth] is the row between
+/// Compact portrait geometry. [maxWidth] is the row between
 /// its margins; infinite means "as wide as the content".
 TabBarGeometry compactTabGeometry({
   required int count,
@@ -272,7 +271,7 @@ TabBarGeometry compactTabGeometry({
   );
 }
 
-/// Compact landscape geometry (spec §5.2): content-sized items of label
+/// Compact landscape geometry: content-sized items of label
 /// width + 49, squeezed proportionally when the row is too narrow.
 TabBarGeometry landscapeTabGeometry({
   required List<double> labelWidths,
@@ -320,7 +319,7 @@ TabBarGeometry landscapeTabGeometry({
   );
 }
 
-/// Regular top geometry (spec §5.3): label-only items of label + 31,
+/// Regular top geometry: label-only items of label + 31,
 /// icon-only items of 48.5, the pill and its trailing circle centred as a
 /// group.
 TabBarGeometry topTabGeometry({
@@ -395,7 +394,7 @@ Rect tabLabelBox(Rect slot, double lineHeight) => Rect.fromLTWH(
 );
 
 /// Top-left of a badge [badgeWidth] wide: at the icon frame's trailing top
-/// corner, 4 inward and 4 up (research §1.1).
+/// corner, 4 inward and 4 up.
 Offset tabBadgeOrigin(
   Rect iconFrame,
   double badgeWidth,

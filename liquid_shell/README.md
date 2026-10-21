@@ -1434,11 +1434,11 @@ content viewer (see [Custom chrome](#custom-chrome)).
 - **Native alerts.** A hot restart with a system alert up leaves an
   orphan alert in debug builds; a tap closes it. After a system alert,
   VoiceOver focus goes back to the Flutter view, not to the node that was
-  tapped. Alerts have no text fields yet (P3a-2). The system alert's text
+  tapped. Alerts have no text fields yet. The system alert's text
   follows the device's Dynamic Type, not your `TextScaler`, and system
   dialog text follows the device language for any string UIKit adds (none
-  in alerts; VoiceOver hints). Unverified on a real iOS < 26 runtime
-  (Q9): the iOS 15–25 paths are checked by XCTest with the OS version
+  in alerts; VoiceOver hints). Unverified on a real iOS < 26 runtime:
+  the iOS 15–25 paths are checked by XCTest with the OS version
   injected. See [doc/native_dialogs.md](doc/native_dialogs.md#known-limits).
 - **Android signals are best effort.** Each one that cannot be read
   counts as off.

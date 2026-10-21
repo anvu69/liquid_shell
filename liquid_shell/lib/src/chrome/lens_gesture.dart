@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart' show VoidCallback;
 import 'package:flutter/gestures.dart';
 
-/// The tab lens's one-finger recognizer (spec VK-503 §8.6). It reports
+/// The tab lens's one-finger recognizer. It reports
 /// the touch from pointer down either way, so the lens engages at
 /// touch-down.
 ///
@@ -11,7 +11,7 @@ import 'package:flutter/gestures.dart';
 /// viewer's long press, or a vertical drag of the scroll view, can win
 /// first, and the lens gets [onCancel]. A horizontal drag still beats a
 /// page view around the bar: the bar's recognizer sees each move first,
-/// unless [claimsDragAt] says no for this touch (spec VK-550 §8.1).
+/// unless [claimsDragAt] says no for this touch.
 class LensGestureRecognizer extends OneSequenceGestureRecognizer {
   /// Creates the recognizer.
   LensGestureRecognizer({super.debugOwner, this.eager = true});

@@ -1,6 +1,6 @@
 import 'dart:ui';
 
-/// The slots a lens moves over (spec VK-550 §8.1): a tab bar's slots or a
+/// The slots a lens moves over: a tab bar's slots or a
 /// segmented control's thumbs. Track-local coordinates.
 abstract interface class LensTrack {
   /// Rest lens rects, in index order (mirrored in RTL).
@@ -18,6 +18,6 @@ abstract interface class LensTrack {
   /// The rest lens size at lens centre [x].
   Size restLensAt(double x);
 
-  /// A tap flight's size factor (VK-503's iPad top bar), null elsewhere.
+  /// A tap flight's size factor (the iPad top bar), null elsewhere.
   Size? get tapInflation;
 }

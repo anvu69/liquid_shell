@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
-/// The process-wide link to the window's native chrome (spec P2 §7.2).
+/// The process-wide link to the window's native chrome.
 ///
 /// A window has one native chrome. Shells [claim] it; the most recent
 /// claim owns it, and only the owner's config reaches the platform. When
@@ -210,7 +210,7 @@ final class NativeChromeClaim {
   }
 
   /// Puts the native search keyboard away and keeps the search active,
-  /// when this claim owns the chrome (VK-571).
+  /// when this claim owns the chrome.
   void dismissSearchKeyboard() {
     if (!isOwner) return;
     unawaited(LiquidShellPlatform.instance.dismissNativeSearchKeyboard());
@@ -228,7 +228,7 @@ final class NativeChromeClaim {
   }
 
   /// Sends [tab]'s body scroll offset for the native minimize, when this
-  /// claim owns the chrome (spec VK-600 §9.2).
+  /// claim owns the chrome.
   void setMinimizeScroll({required int tab, required double offset}) {
     if (!isOwner) return;
     unawaited(

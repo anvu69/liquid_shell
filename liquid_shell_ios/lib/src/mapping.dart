@@ -99,7 +99,7 @@ Rect rectFromNative(NativeRect rect) {
 }
 
 /// Interface dialog request → native request. A non-finite anchor is not
-/// sent (spec P3a §6).
+/// sent.
 NativeDialogRequest dialogRequestToNative(LiquidNativeDialogRequest request) =>
     NativeDialogRequest(
       kind: switch (request.kind) {

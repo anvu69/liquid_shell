@@ -10,7 +10,7 @@ import 'package:liquid_shell/src/shell/shell_scope.dart';
 import 'package:liquid_shell/src/shell/strings.dart';
 
 /// One page of a tab: its title for the navigation bar, and the back
-/// button when its navigator can pop (spec P3b §4.5).
+/// button when its navigator can pop.
 ///
 /// Where its tab has a native navigation bar (iOS 26 native chrome: the
 /// search tab), the platform draws the title and UIKit's glass back circle
@@ -172,7 +172,7 @@ class _LiquidPageState extends State<LiquidPage> {
   }
 }
 
-/// A 44pt glass circle with a back chevron (spec P3b §4.5). Pops the
+/// A 44pt glass circle with a back chevron. Pops the
 /// nearest navigator with `maybePop` by default, so a page's `PopScope`
 /// guard runs.
 class LiquidBackButton extends StatelessWidget {

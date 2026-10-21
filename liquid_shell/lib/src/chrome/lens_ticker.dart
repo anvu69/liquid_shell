@@ -6,7 +6,7 @@ import 'package:flutter/widgets.dart';
 import 'package:liquid_shell/src/chrome/lens_motion.dart';
 import 'package:liquid_shell/src/chrome/tab_springs.dart';
 
-/// The frame loop of a lens widget (spec VK-550 §8.1): it advances a
+/// The frame loop of a lens widget: it advances a
 /// [LensMotion] on wall time, clicks once per slot crossing, hands a
 /// commit the app did not adopt back to the selection, and stops when
 /// nothing moves. A tab bar and a segmented control share it.
@@ -96,8 +96,8 @@ class LensTicker {
   }
 }
 
-/// The acceptance-trace sample every lens widget reports, once per tick
-/// (spec VK-503 §17.4, VK-550 §14): the ticker time `t` in seconds, the
+/// The acceptance-trace sample every lens widget reports, once per tick:
+/// the ticker time `t` in seconds, the
 /// lens centre in global coordinates (`x`, `y`; [frame] is local to
 /// [context]'s render box), the lens size (`w`, `h`) and `engage`.
 Map<String, double> lensTraceSample(

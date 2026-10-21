@@ -14,7 +14,7 @@ LiquidShellIOS liquidShellIOSWithHost(
   NativeDialogHostApi? dialogs,
 }) => LiquidShellIOS._(hostApi, dialogs ?? NativeDialogHostApi());
 
-/// The dialog a debug build of the plugin shows (spec P3a §5.5).
+/// The dialog a debug build of the plugin shows.
 typedef NativeDialogDebugSnapshot = ({
   bool actionSheet,
   String? title,

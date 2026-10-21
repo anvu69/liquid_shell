@@ -10,7 +10,7 @@ import 'package:liquid_shell/src/shell/shell_layout.dart';
 import 'package:liquid_shell/src/shell/shell_scope.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
-/// The process-wide window-controls value (spec P2 §8.2).
+/// The process-wide window-controls value.
 ///
 /// Starts when the first user acquires it and stops when the last releases
 /// it, like the glass signals. Values arrive two ways: pushed by native
@@ -76,8 +76,7 @@ final class WindowControlsSource with WidgetsBindingObserver {
 }
 
 /// Moves [child] past the iPadOS 26 window controls when its row is under
-/// them: a start padding of `LiquidWindowControls.indentFor(rowTop:)`
-/// (spec P2 §8.3).
+/// them: a start padding of `LiquidWindowControls.indentFor(rowTop:)`.
 ///
 /// The cluster sits in the window's top-leading corner, so a row is under
 /// it only when both hold:

@@ -9,8 +9,8 @@ import 'package:liquid_shell/src/shell/breakpoints.dart';
 import 'package:liquid_shell/src/shell/strings.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
-/// Shows [request] as a Flutter glass dialog on the root navigator (spec
-/// P3a §7). Completes with the chosen action's index, or null when it is
+/// Shows [request] as a Flutter glass dialog on the root navigator.
+/// Completes with the chosen action's index, or null when it is
 /// dismissed without a choice.
 Future<int?> showGlassDialog(
   BuildContext context,
@@ -106,7 +106,7 @@ TextStyle dialogActionTextStyle(
   fontWeight: emphasised ? FontWeight.w600 : FontWeight.w500,
 );
 
-/// The Flutter glass alert (spec P3a §7.1). Pops the chosen index.
+/// The Flutter glass alert. Pops the chosen index.
 class GlassAlert extends StatelessWidget {
   /// Creates the alert.
   const GlassAlert({required this.request, super.key});
@@ -229,7 +229,7 @@ class GlassAlert extends StatelessWidget {
   }
 }
 
-/// The Flutter glass action sheet (spec P3a §7.2): at the bottom with a
+/// The Flutter glass action sheet: at the bottom with a
 /// separate cancel action when compact, an anchored card without one when
 /// regular. Pops the chosen index; a tap outside pops null.
 class GlassActionSheet extends StatelessWidget {
