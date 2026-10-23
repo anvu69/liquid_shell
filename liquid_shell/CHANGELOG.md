@@ -63,11 +63,26 @@
   a tab's page first (a nested flow, a go_router `ShellRoute` in a
   branch), then the tab's page; before, they popped the tab's page or the
   whole shell.
+- **Fix (VK-775).** A second back while a dialog is still closing pops
+  the page of a navigator nested in the tab's page, not the page that
+  holds it: a route that is closing no longer covers the page under it.
+- **Fix (VK-680).** Back and the iOS edge swipe pop the page of a tab that
+  a router shows a few frames after the selection (the end of a
+  cross-fade), also with no `PopScope` of the app's own; before, they
+  popped the whole shell.
+- **Fix (VK-774).** A shell nested in another shell's body (sub-tabs)
+  answers back in its own order: its overlay sidebar closes, then its
+  active search ends, then its tab's page pops. Before, the outer shell
+  popped the inner shell's tab page directly.
+- **Behaviour change (VK-774).** With a nested shell's search active at
+  its tab's root, back ends that search instead of popping the outer
+  shell's route; with its overlay sidebar open, back closes the sidebar
+  first.
 - **Fix (VK-699).** When Flutter chrome takes over an active native search
-  (`nativeChrome: off`, a forced glass tier, a lost native install, standby under another shell), the
-  search now ends with its text kept, `composing` false and `onChanged`
-  not called. Before, the controller stayed active (and blocked back) or
-  kept `composing` true.
+  (`nativeChrome: off`, a forced glass tier, a lost native install,
+  standby under another shell), the search now ends with its text kept,
+  `composing` false and `onChanged` not called. Before, the controller
+  stayed active (and blocked back) or kept `composing` true.
 
 ## 0.1.0-dev.7
 

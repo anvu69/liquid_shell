@@ -205,7 +205,7 @@ class LiquidShell extends StatefulWidget {
 }
 
 class _LiquidShellState extends State<LiquidShell>
-    implements HideChromeRegistry, PageRegistry {
+    implements HideChromeRegistry, PageRegistry, NestedShellBack {
   final ValueNotifier<bool> _minimized = ValueNotifier(false);
   late final GlobalObjectKey _bodyKey = GlobalObjectKey(this);
 
@@ -287,6 +287,10 @@ class _LiquidShellState extends State<LiquidShell>
   bool _branchCanPop = false;
   bool _branchScanScheduled = false;
   bool _branchCheckArmed = false;
+
+  // What the last build's [_backScope] blocks for (VK-774).
+  bool _backOverlay = false;
+  bool _backSearch = false;
 
   @override
   void initState() {
@@ -768,7 +772,7 @@ class _LiquidShellState extends State<LiquidShell>
     if (!mounted) return;
     final body = _bodyKey.currentContext;
     _branches = body == null ? const [] : onScreenNavigatorsUnder(body);
-    _checkBranches();
+    _checkBranches(rescan: false);
     _armBranchCheck();
   }
 
@@ -776,16 +780,24 @@ class _LiquidShellState extends State<LiquidShell>
   /// pop. Cheap: its ancestors plus, at a navigator's overlay, the entries
   /// after the one on the path (up to 12 levels each, looking for a route
   /// barrier), not the tree.
-  void _checkBranches() {
+  ///
+  /// A navigator that came on screen or went off it since the scan (a tab a
+  /// router shows frames after the selection) asks for a new scan: its
+  /// nested navigators were not walked.
+  void _checkBranches({bool rescan = true}) {
     final body = _bodyKey.currentContext;
-    final canPop =
-        body != null &&
-        _branches.any(
-          (b) =>
-              b.navigator.mounted &&
-              isOnScreenUnder(b.navigator.context, body) &&
-              b.navigator.canPop(),
-        );
+    var canPop = false;
+    for (final b in _branches) {
+      final onScreen =
+          body != null &&
+          b.target.mounted &&
+          isOnScreenUnder(b.target.context, body);
+      if (rescan && onScreen != b.onScreen && b.target.mounted) {
+        _scanBranches();
+        return;
+      }
+      if (onScreen && _canPop(b.target)) canPop = true;
+    }
     if (canPop != _branchCanPop) setState(() => _branchCanPop = canPop);
   }
 
@@ -815,11 +827,16 @@ class _LiquidShellState extends State<LiquidShell>
         SchedulerPhase.persistentCallbacks) {
       _scanBranches();
     }
-    for (final (:navigator, :handled) in _branches.reversed) {
-      if (!navigator.mounted || !navigator.canPop()) continue;
+    for (final (:target, :handled, :onScreen) in _branches.reversed) {
+      if (!onScreen || !target.mounted || !_canPop(target)) continue;
       // The app's NavigatorPopHandler around it asks the same navigator in
       // the same turn: a second ask would close a drawer and pop its page.
       if (handled) return;
+      if (target is NestedShellBack) {
+        (target as NestedShellBack).handleBack();
+        return;
+      }
+      final navigator = target as NavigatorState;
       unawaited(
         _maybePop(navigator).whenComplete(() {
           if (mounted) _scheduleBranchScan();
@@ -851,20 +868,37 @@ class _LiquidShellState extends State<LiquidShell>
     required bool overlay,
     required bool searchActive,
     required Widget child,
-  }) => PopScope(
-    canPop: !overlay && !searchActive && !_branchCanPop,
-    onPopInvokedWithResult: (didPop, _) {
-      if (didPop) return;
-      if (overlay) {
-        _setSidebarVisible(false);
-      } else if (searchActive) {
-        _search.deactivate();
-      } else {
-        _popBranch();
-      }
-    },
-    child: child,
-  );
+  }) {
+    _backOverlay = overlay;
+    _backSearch = searchActive;
+    return PopScope(
+      canPop: !claimsBack,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) handleBack();
+      },
+      child: child,
+    );
+  }
+
+  @override
+  bool get claimsBack => _backOverlay || _backSearch || _branchCanPop;
+
+  @override
+  void handleBack() {
+    if (_backOverlay) {
+      _setSidebarVisible(false);
+    } else if (_backSearch) {
+      _search.deactivate();
+    } else {
+      _popBranch();
+    }
+  }
+
+  static bool _canPop(State target) => switch (target) {
+    NavigatorState() => target.canPop(),
+    NestedShellBack() => (target as NestedShellBack).claimsBack,
+    _ => false,
+  };
 
   /// The body under its listeners: one subtree for both layouts, so a
   /// switch between native and Flutter chrome keeps its state.
