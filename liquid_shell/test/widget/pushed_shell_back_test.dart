@@ -338,7 +338,7 @@ class _PagedBodyState extends State<_PagedBody> {
     allowImplicitScrolling: widget.cached,
     children: [
       for (final child in widget.children)
-        widget.cached ? child : KeptAlive(child: child),
+        if (widget.cached) child else KeptAlive(child: child),
     ],
   );
 }
