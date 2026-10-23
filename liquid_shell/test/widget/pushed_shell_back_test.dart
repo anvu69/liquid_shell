@@ -245,6 +245,51 @@ class _LateHideState extends State<_LateHide> {
   );
 }
 
+/// Branches kept as a router keeps them, but the one selected comes on
+/// screen 300 ms after the selection (the end of a cross-fade), the one
+/// left at once: for a moment no branch is on screen.
+class _LateShow extends StatefulWidget {
+  const _LateShow({required this.index, required this.children});
+
+  final int index;
+  final List<Widget> children;
+
+  @override
+  State<_LateShow> createState() => _LateShowState();
+}
+
+class _LateShowState extends State<_LateShow> {
+  late int? _shown = widget.index;
+  Timer? _timer;
+
+  @override
+  void didUpdateWidget(_LateShow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.index == widget.index) return;
+    _shown = null;
+    _timer?.cancel();
+    _timer = Timer(
+      const Duration(milliseconds: 300),
+      () => setState(() => _shown = widget.index),
+    );
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    fit: StackFit.expand,
+    children: [
+      for (final (i, child) in widget.children.indexed)
+        Offstage(offstage: i != _shown, child: child),
+    ],
+  );
+}
+
 void main() {
   setUp(debugResetLiquidNative);
 
@@ -620,6 +665,69 @@ void main() {
         await tester.pumpAndSettle();
         expect(app.shellPopped, isFalse);
         expect(_page('Form'), findsOneWidget);
+      });
+    });
+
+    group('VK-593 (${mode.name}): back finds the right navigator', () {
+      Future<void> back(_Pushed app, WidgetTester tester) async {
+        await app.outer.currentState!.maybePop();
+        await tester.pumpAndSettle();
+      }
+
+      // T2: the three re-scan mechanisms of `_popBranch`, each locked.
+      // An app's PopScope blocks the shell's route, so `_popBranch` runs
+      // even when the shell's own answer is stale.
+      testWidgets('T2: back reaches a branch that came on screen after the '
+          'last scan', (tester) async {
+        final app = _Pushed(mode);
+        await app.pump(
+          tester,
+          around: (shell) => PopScope<Object?>(canPop: false, child: shell),
+          body: (index, pages) => _LateShow(index: index, children: pages),
+        );
+        await app.select(tester, 1);
+        await app.push(tester, 1, 'Kept');
+        await app.select(tester, 0);
+        app.shell.currentState!.select(1);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        await back(app, tester);
+        expect(_page('Kept'), findsNothing, reason: 'the fresh scan found it');
+        expect(_page('Library'), findsOneWidget);
+      });
+
+      testWidgets("T2: after back pops a branch's last page, the next back "
+          "pops the shell's route", (tester) async {
+        final app = _Pushed(mode);
+        await app.pump(tester);
+        await app.push(tester, 0, 'Detail');
+        await back(app, tester);
+        expect(_page('Home'), findsOneWidget);
+        await back(app, tester);
+        expect(app.shellPopped, isTrue);
+      });
+
+      testWidgets('T2: two navigators as deep on screen: back pops the last '
+          'in tree order', (tester) async {
+        final app = _Pushed(mode);
+        await app.pump(
+          tester,
+          body: (_, pages) => Row(
+            children: [
+              Expanded(child: pages[0]),
+              Expanded(child: pages[1]),
+            ],
+          ),
+        );
+        await app.push(tester, 0, 'Master');
+        await app.push(tester, 1, 'Detail');
+        await back(app, tester);
+        expect(_page('Detail'), findsNothing);
+        expect(
+          _page('Master'),
+          findsOneWidget,
+          reason: 'the earlier one stays',
+        );
       });
     });
   }
