@@ -35,25 +35,32 @@ typedef NativeTap = ({
 });
 
 /// The captures of [file] in docs/qa/vk550 (read from the package
-/// directory).
-List<NativeTap> nativeTaps(String file) {
-  final json =
-      jsonDecode(File('../docs/qa/vk550/$file').readAsStringSync())
-          as Map<String, dynamic>;
-  return [
-    for (final c in (json['captures'] as List).cast<Map<String, dynamic>>())
-      (
-        key: c['key'] as String,
-        repeat: (c['pass'] ?? c['repeat']) as int,
-        split: (c['split'] ?? 'holdout') as String,
-        segments: c['segments'] as int,
-        rtl: (c['rtl'] ?? false) as bool,
-        from: c['from'] as int,
-        to: c['to'] as int,
-        rows: tapRowsOf({'c': c}, 'c'),
-      ),
-  ];
-}
+/// directory). A file whose captures carry no `split` needs [split].
+List<NativeTap> nativeTaps(String file, {String? split}) => nativeTapsOf(
+  jsonDecode(File('../docs/qa/vk550/$file').readAsStringSync())
+      as Map<String, dynamic>,
+  split: split,
+);
+
+/// The captures of an already decoded file: each one's own `split`, else
+/// [split], else a [FormatException]. A capture never lands in a split by
+/// default: a missing key must not turn a fit tap into a held-out one.
+List<NativeTap> nativeTapsOf(Map<String, dynamic> json, {String? split}) => [
+  for (final c in (json['captures'] as List).cast<Map<String, dynamic>>())
+    (
+      key: c['key'] as String,
+      repeat: (c['pass'] ?? c['repeat']) as int,
+      split:
+          (c['split'] as String?) ??
+          split ??
+          (throw FormatException('capture ${c['key']} has no split')),
+      segments: c['segments'] as int,
+      rtl: (c['rtl'] ?? false) as bool,
+      from: c['from'] as int,
+      to: c['to'] as int,
+      rows: tapRowsOf({'c': c}, 'c'),
+    ),
+];
 
 /// The discriminating taps (Task 15 review): `native_taps.json`.
 List<NativeTap> segmentTaps() => nativeTaps('native_taps.json');

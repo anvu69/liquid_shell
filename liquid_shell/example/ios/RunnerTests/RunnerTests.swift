@@ -2915,7 +2915,9 @@ extension NativeTabsTests {
       selected: 2, pages: [NativePage(title: "Search"), NativePage(title: "Detail")])
     let root = try XCTUnwrap(tabs.parent?.view)
     let bar = try XCTUnwrap(tabs.navControllers[2]).navigationBar
-    let frame = bar.convert(bar.bounds, to: root)
+    // A slow runner is still laying the bar out after the install: wait until
+    // the bar is on screen and holds still, then hit its back button.
+    let frame = stable({ bar.convert(bar.bounds, to: root) }, until: { _ in bar.window != nil })
     XCTAssertTrue(isNative(try hit(tabs, CGPoint(x: frame.minX + 38, y: frame.midY)), tabs))
   }
 

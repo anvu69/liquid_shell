@@ -246,7 +246,8 @@ void main() {
 
   // VK-550 §7 (Task 15 review): a squeeze samples the page farther out
   // from the lens's spine, so the page under it shows smaller across its
-  // height, as native's segment lens; 0 draws exactly as before.
+  // height, as native's segment lens; 0 draws as the lens without the
+  // uniform (below).
   testWidgets('a squeeze samples the page farther from the spine; 0 draws '
       'as before', (tester) async {
     final program = await _program(tester);
@@ -287,7 +288,14 @@ void main() {
     // At 8 pt from the spine the bezel height is about 0.99: the source is
     // about 1.25 × 8 = 10 pt above the spine, 140 against 142 unbent.
     expect(source, closeTo(140, 0.6), reason: 'level $level');
-    // 0: byte for byte the lens without the uniform.
+    // 0: byte for byte the lens without the uniform. Both renders run the
+    // edited shader, so this shows only that the uniform is neutral at 0.
+    // That 0 also draws what the shader drew before the uniform existed is
+    // shown, within the 0.5 % tolerance of TolerantGoldenComparator, by the
+    // band goldens of the surfaces that never set it
+    // (example/test/goldens/bands/tab_*.png and liquid_*.png): c2e52eb
+    // regenerated only segment_lens_*, and no later commit touches bands/
+    // (acceptance.md §2b).
     final none = await render(params(0));
     final base = await render(
       const LiquidOpticsParams(
