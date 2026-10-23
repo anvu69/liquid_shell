@@ -55,6 +55,10 @@ class _Pushed {
   FakeNativePlatform? fake;
   late final LiquidSearchController search;
 
+  /// The root page of a tab, when a test gives its own (a nested flow);
+  /// null keeps the default.
+  Widget? Function(int index)? root;
+
   /// A tab's navigator, its root a LiquidPage; [wrap] decorates it (an
   /// app's `NavigatorPopHandler`).
   Widget branch(int index, {Widget Function(int, Widget)? wrap}) {
@@ -62,10 +66,12 @@ class _Pushed {
     final navigator = Navigator(
       key: tabs[index],
       onGenerateRoute: (_) => MaterialPageRoute<void>(
-        builder: (_) => LiquidPage(
-          title: label,
-          child: TestPage(label: label),
-        ),
+        builder: (_) =>
+            root?.call(index) ??
+            LiquidPage(
+              title: label,
+              child: TestPage(label: label),
+            ),
       ),
     );
     return wrap?.call(index, navigator) ?? navigator;
@@ -78,8 +84,10 @@ class _Pushed {
     Widget Function(int, Widget)? wrap,
     Widget Function(Widget shell)? around,
     Widget Function(int index, List<Widget> pages)? body,
+    Widget? Function(int index)? root,
     bool pushed = true,
   }) async {
+    this.root = root;
     if (mode == _Mode.native) fake = installFakeNative(state: _compact);
     search = LiquidSearchController();
     addTearDown(search.dispose);
@@ -333,6 +341,34 @@ class _PagedBodyState extends State<_PagedBody> {
         widget.cached ? child : KeptAlive(child: child),
     ],
   );
+}
+
+/// A page that holds its own navigator (a nested flow): its root is the
+/// test page of [label].
+Widget _flow(GlobalKey<NavigatorState> inner, String label) => Navigator(
+  key: inner,
+  onGenerateRoute: (_) => MaterialPageRoute<void>(
+    builder: (_) => LiquidPage(
+      title: label,
+      child: TestPage(label: label),
+    ),
+  ),
+);
+
+/// Pushes a plain page titled [title] on [navigator].
+Future<void> _pushOn(
+  WidgetTester tester,
+  GlobalKey<NavigatorState> navigator,
+  String title,
+) async {
+  navigator.currentState!
+      .push(
+        MaterialPageRoute<void>(
+          builder: (_) => Scaffold(body: Center(child: Text('$title page: 0'))),
+        ),
+      )
+      .ignore();
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -869,6 +905,107 @@ void main() {
         expect(library.canPop(), isTrue, reason: "Library's page is kept");
         await tester.pumpAndSettle();
         expect(app.shellPopped, isTrue, reason: 'Home is at its root');
+      });
+
+      // T5: a nested flow in the tab's root page.
+      testWidgets("a nested flow at the tab's root: back pops the inner page, "
+          'then the shell', (tester) async {
+        final inner = GlobalKey<NavigatorState>();
+        final app = _Pushed(mode);
+        await app.pump(
+          tester,
+          root: (i) => i == 0 ? _flow(inner, 'Home') : null,
+        );
+        await _pushOn(tester, inner, 'Inner');
+        await back(app, tester);
+        expect(_page('Inner'), findsNothing);
+        expect(_page('Home'), findsOneWidget);
+        expect(app.shellPopped, isFalse);
+        await back(app, tester);
+        expect(app.shellPopped, isTrue);
+      });
+
+      testWidgets("a nested flow at the tab's root: the edge swipe pops the "
+          'inner page, not the shell', (tester) async {
+        final inner = GlobalKey<NavigatorState>();
+        final app = _Pushed(mode);
+        await app.pump(
+          tester,
+          root: (i) => i == 0 ? _flow(inner, 'Home') : null,
+        );
+        await _pushOn(tester, inner, 'Inner');
+        await _swipeFromTheEdge(tester);
+        expect(app.shellPopped, isFalse);
+        expect(_page('Inner'), findsNothing);
+        expect(_page('Home'), findsOneWidget);
+      });
+
+      testWidgets('a nested flow on a pushed page: the inner page pops '
+          "first, then the tab's page", (tester) async {
+        final inner = GlobalKey<NavigatorState>();
+        final app = _Pushed(mode);
+        await app.pump(tester);
+        app.tabs[0].currentState!
+            .push(
+              MaterialPageRoute<void>(builder: (_) => _flow(inner, 'Flow')),
+            )
+            .ignore();
+        await tester.pumpAndSettle();
+        await _pushOn(tester, inner, 'Inner');
+        await back(app, tester);
+        expect(_page('Inner'), findsNothing);
+        expect(_page('Flow'), findsOneWidget, reason: 'the inner page only');
+        await back(app, tester);
+        expect(_page('Flow'), findsNothing);
+        expect(_page('Home'), findsOneWidget);
+        expect(app.shellPopped, isFalse);
+      });
+
+      testWidgets('a dialog over a page with a nested flow: back closes the '
+          'dialog, the inner page stays', (tester) async {
+        final inner = GlobalKey<NavigatorState>();
+        final app = _Pushed(mode);
+        await app.pump(tester);
+        app.tabs[0].currentState!
+            .push(
+              MaterialPageRoute<void>(builder: (_) => _flow(inner, 'Flow')),
+            )
+            .ignore();
+        await tester.pumpAndSettle();
+        await _pushOn(tester, inner, 'Inner');
+        app.tabs[0].currentState!
+            .push(
+              DialogRoute<void>(
+                context: app.tabs[0].currentContext!,
+                builder: (_) => const Text('The dialog'),
+              ),
+            )
+            .ignore();
+        await tester.pumpAndSettle();
+        await back(app, tester);
+        expect(find.text('The dialog'), findsNothing);
+        expect(_page('Inner'), findsOneWidget, reason: 'under the dialog');
+      });
+
+      // T5: an entry an app inserts in the tab's overlay (a toast) is not a
+      // route: the nested flow under it still pops first.
+      testWidgets('a toast in the tab overlay over a nested flow: back still '
+          'pops the inner page', (tester) async {
+        final inner = GlobalKey<NavigatorState>();
+        final app = _Pushed(mode);
+        await app.pump(
+          tester,
+          root: (i) => i == 0 ? _flow(inner, 'Home') : null,
+        );
+        await _pushOn(tester, inner, 'Inner');
+        final toast = OverlayEntry(builder: (_) => const Text('The toast'));
+        app.tabs[0].currentState!.overlay!.insert(toast);
+        addTearDown(toast.remove);
+        await tester.pumpAndSettle();
+        await back(app, tester);
+        expect(_page('Inner'), findsNothing);
+        expect(_page('Home'), findsOneWidget);
+        expect(app.shellPopped, isFalse);
       });
     });
   }

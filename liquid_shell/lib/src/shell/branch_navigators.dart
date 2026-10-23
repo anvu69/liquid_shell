@@ -31,7 +31,10 @@ bool _hides(Widget widget) => switch (widget) {
 ///   object is what says so: from Flutter 3.47 it no longer wraps the
 ///   others in a `Visibility` widget;
 /// - a scrolling list (`PageView`, `ListView`) shows a child laid out in
-///   its visible window, not one kept alive or in the cache extent.
+///   its visible window, not one kept alive or in the cache extent;
+/// - a navigator's overlay shows a page under another route (a dialog, a
+///   sheet, a page) without letting it pop first: a child with a route's
+///   barrier after it is not shown. Other entries (a toast) do not count.
 bool _shows(Element parent, Element child) {
   if (parent is! RenderObjectElement) return true;
   final render = parent.renderObject;
@@ -39,6 +42,7 @@ bool _shows(Element parent, Element child) {
     return _position(parent, child) == render.index;
   }
   if (render is RenderSliverMultiBoxAdaptor) return _inWindow(render, child);
+  if (_isOverlayTheater(parent)) return !_routeAfter(parent, child);
   return true;
 }
 
@@ -70,11 +74,52 @@ bool _inWindow(RenderSliverMultiBoxAdaptor sliver, Element child) {
   return start < windowEnd && start + extent > windowStart;
 }
 
-/// The navigators on screen nearest under [root]: the selected tab's own
-/// navigator, as an app or a router keeps one per tab in the shell's body.
+/// Whether [element] is an `Overlay`'s list of entries (its only child).
+bool _isOverlayTheater(Element element) {
+  var theater = false;
+  element.visitAncestorElements((parent) {
+    theater = parent is StatefulElement && parent.state is OverlayState;
+    return false;
+  });
+  return theater;
+}
+
+/// Whether an entry after [child] in [theater] is a route's barrier.
+bool _routeAfter(Element theater, Element child) {
+  var after = false;
+  var barrier = false;
+  theater.visitChildren((entry) {
+    if (barrier) return;
+    if (after && _hasBarrier(entry, _barrierDepth)) barrier = true;
+    if (identical(entry, child)) after = true;
+  });
+  return barrier;
+}
+
+/// How deep a route's barrier sits under its overlay entry, with room to
+/// spare (6 on Flutter 3.44).
+const _barrierDepth = 12;
+
+bool _hasBarrier(Element element, int depth) {
+  if (element.widget is ModalBarrier ||
+      element.widget is AnimatedModalBarrier) {
+    return true;
+  }
+  if (depth == 0) return false;
+  var found = false;
+  element.visitChildren((child) {
+    if (!found) found = _hasBarrier(child, depth - 1);
+  });
+  return found;
+}
+
+/// The navigators on screen under [root], in tree order: the selected
+/// tab's own navigator, as an app or a router keeps one per tab in the
+/// shell's body, then the navigators nested in its top page. A nested one
+/// comes after the navigator it is in, so "the last that can pop" pops it
+/// first, as iOS does.
 ///
-/// A branch hidden by [_hides] is skipped. The walk stops at each navigator
-/// found; a navigator nested in one of its pages is not looked at.
+/// A branch hidden by [_hides] or [_shows] is skipped.
 ///
 /// It walks elements, so call it outside a build (after the frame).
 List<BranchNavigator> onScreenNavigatorsUnder(BuildContext root) {
@@ -85,7 +130,6 @@ List<BranchNavigator> onScreenNavigatorsUnder(BuildContext root) {
     final handledHere = handled || _answersBack(widget);
     if (element case StatefulElement(state: final NavigatorState navigator)) {
       found.add((navigator: navigator, handled: handledHere));
-      return;
     }
     element.visitChildren((child) {
       if (_shows(element, child)) visit(child, handled: handledHere);

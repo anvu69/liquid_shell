@@ -85,17 +85,16 @@ the swipe on any tab's pushed page popped the whole shell.
 - **Several navigators on screen** (an iPad detail beside its master):
   back pops the last one in tree order that can pop. A `PageView` or list
   page off screen (kept alive, or in the cache extent) does not count.
+- **A navigator inside a tab's page** (a flow nested in a page, or a
+  go_router `ShellRoute` inside a branch) pops first, as on iOS: back and
+  the edge swipe pop its page, then the tab's. It counts only while its
+  page is the top route of its navigator: a dialog or sheet above it
+  closes first. An overlay entry the app inserts (a toast) is not a route.
 - A shell at the app's root has no edge swipe of its own; there system
   back (Android) pops the tab's page instead of leaving the app.
 
 Known limits:
 
-- **A navigator inside a tab's page** (a flow nested in a page, or a
-  go_router `ShellRoute` inside a `StatefulShellRoute` branch) is not
-  looked at: only the navigator nearest under `body` is. While that
-  navigator is at its root, the swipe on a page pushed in the nested one
-  still pops a pushed shell. A deeper scan is planned with the go_router
-  adapter.
 - **"On screen" for back is not quite `LiquidHideChrome`'s.** Back also
   treats a bare `Offstage` as hidden; `LiquidHideChrome` needs
   `Visibility` or `TickerMode`. Hide kept branches with `TickerMode` (or an

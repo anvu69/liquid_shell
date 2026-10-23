@@ -59,6 +59,10 @@
   `enabled` or not (VK-593).
 - Back no longer pops a page in a `PageView` or list page that is off
   screen (kept alive, or in the cache extent) (VK-593).
+- Back and the iOS edge swipe pop a navigator nested in a tab's page
+  first (a nested flow, a go_router `ShellRoute` in a branch), then the
+  tab's page; before, they popped the tab's page or the whole shell
+  (VK-593).
 
 ## 0.1.0-dev.7
 
