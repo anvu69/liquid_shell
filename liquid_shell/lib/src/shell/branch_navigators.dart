@@ -11,11 +11,20 @@ import 'package:flutter/widgets.dart';
 /// `onScreen` false: a tab's own navigator that is hidden at the scan (an
 /// unselected tab, or one a router shows frames after the selection), kept
 /// so the per-frame check can see it come on screen.
-typedef BranchNavigator = ({
-  NavigatorState navigator,
-  bool handled,
-  bool onScreen,
-});
+///
+/// `target` is a `NavigatorState`, or a [NestedShellBack]: a shell nested in
+/// the body (sub-tabs), which answers back in its own order.
+typedef BranchNavigator = ({State target, bool handled, bool onScreen});
+
+/// A shell in another shell's body: the outer one hands it back, as its
+/// own route would (overlay sidebar, then search, then its tab's page).
+abstract interface class NestedShellBack {
+  /// Whether it would block a pop now.
+  bool get claimsBack;
+
+  /// Back, blocked: it closes, deactivates or pops one thing.
+  void handleBack();
+}
 
 /// Whether a `NavigatorPopHandler` answers back: it has a callback.
 bool _answersBack(Widget widget) => switch (widget) {
@@ -134,7 +143,9 @@ bool _hasBarrier(Element element, int depth) {
 /// first, as iOS does.
 ///
 /// A branch hidden by [_hides] or [_shows] is skipped, but for its first
-/// navigator (a hidden tab's own), recorded with `onScreen` false.
+/// navigator (a hidden tab's own), recorded with `onScreen` false. A
+/// shell nested in the body ([NestedShellBack]) is recorded, not walked:
+/// its tabs are its own.
 ///
 /// It walks elements, so call it outside a build (after the frame).
 List<BranchNavigator> onScreenNavigatorsUnder(BuildContext root) {
@@ -154,12 +165,17 @@ List<BranchNavigator> onScreenNavigatorsUnder(BuildContext root) {
     final handledHere = handled || (!inside && _answersBack(widget));
     final isNavigator =
         element is StatefulElement && element.state is NavigatorState;
-    if (element case StatefulElement(state: final NavigatorState navigator)) {
+    if (element case StatefulElement(state: final NestedShellBack _)) {
+      // Its tab navigators are its own to pop (VK-774).
       found.add((
-        navigator: navigator,
+        target: element.state,
         handled: handledHere,
         onScreen: shownHere,
       ));
+      return;
+    }
+    if (element case StatefulElement(state: final NavigatorState navigator)) {
+      found.add((target: navigator, handled: handledHere, onScreen: shownHere));
     }
     final insideHere = inside || isNavigator;
     element.visitChildren((child) {

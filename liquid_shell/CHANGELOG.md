@@ -70,6 +70,13 @@
   a router shows a few frames after the selection (the end of a
   cross-fade), also with no `PopScope` of the app's own; before, they
   popped the whole shell.
+- **Fix (VK-774).** A shell nested in another shell's body (sub-tabs)
+  answers back in its own order: its overlay sidebar closes, then its
+  active search ends, then its tab's page pops. Before, the outer shell
+  popped the inner shell's tab page directly.
+- **Behaviour change (VK-774).** With a nested shell's search active at
+  its tab's root, back ends that search instead of popping the outer
+  shell's route.
 
 ## 0.1.0-dev.7
 

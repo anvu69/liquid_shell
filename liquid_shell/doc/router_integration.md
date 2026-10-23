@@ -90,6 +90,10 @@ the swipe on any tab's pushed page popped the whole shell.
   the edge swipe pop its page, then the tab's. It counts only while its
   page is the top route of its navigator: a dialog or sheet above it
   closes first. An overlay entry the app inserts (a toast) is not a route.
+- **A shell nested in another shell's body (sub-tabs)** answers back in
+  its own order, as back to its own route would: its overlay sidebar
+  closes, then its active search ends, then its tab's page pops. The
+  outer shell's route and edge swipe wait until it has nothing left.
 - A shell at the app's root has no edge swipe of its own; there system
   back (Android) pops the tab's page instead of leaving the app.
 
@@ -99,12 +103,6 @@ Known limits:
   treats a bare `Offstage` as hidden; `LiquidHideChrome` needs
   `Visibility` or `TickerMode`. Hide kept branches with `TickerMode` (or an
   `IndexedStack`) and both agree.
-- **A shell nested in another shell's body (sub-tabs).** The outer shell's
-  back reaches the inner shell's tab navigators directly, so the inner
-  shell's own order (its overlay sidebar, then its active search) is not
-  applied first. System back never reached the inner shell's own back
-  handling before either: its `PopScope` sits on a tab page's route, not
-  the outer shell's.
 
 ## A search branch
 

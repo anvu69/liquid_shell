@@ -86,6 +86,7 @@ class _Pushed {
     Widget Function(int index, List<Widget> pages)? body,
     Widget? Function(int index)? root,
     bool pushed = true,
+    Size size = kPhone,
   }) async {
     this.root = root;
     if (mode == _Mode.native) fake = installFakeNative(state: _compact);
@@ -112,6 +113,7 @@ class _Pushed {
               ],
             )
           : inRoute,
+      size: size,
       padding: mode == _Mode.native
           ? _compactPadding
           : const EdgeInsets.only(top: 59, bottom: 34),
@@ -377,6 +379,47 @@ Future<void> _pushOn(
       )
       .ignore();
   await tester.pumpAndSettle();
+}
+
+/// A shell with its own tabs (sub-tabs) as the root page of tab 1 of a
+/// [_Pushed] app, on its search tab, Flutter chrome; [tabs] holds its tab
+/// navigators.
+class _Inner {
+  final List<GlobalKey<NavigatorState>> tabs = [
+    for (var i = 0; i < 3; i++) GlobalKey<NavigatorState>(),
+  ];
+  final search = LiquidSearchController();
+
+  /// Pumps [app] with this shell in tab 1, then selects it.
+  Future<void> pump(
+    _Pushed app,
+    WidgetTester tester, {
+    Size size = kPhone,
+  }) async {
+    addTearDown(search.dispose);
+    await app.pump(
+      tester,
+      size: size,
+      root: (i) => i != 1
+          ? null
+          : TestShell(
+              nativeChrome: LiquidNativeChrome.off,
+              destinations: _destinations,
+              initialIndex: 2,
+              search: LiquidSearch(controller: search),
+              pageBuilder: (j) => Navigator(
+                key: tabs[j],
+                onGenerateRoute: (_) => MaterialPageRoute<void>(
+                  builder: (_) => LiquidPage(
+                    title: 'Inner ${_destinations[j].label}',
+                    child: TestPage(label: 'Inner ${_destinations[j].label}'),
+                  ),
+                ),
+              ),
+            ),
+    );
+    await app.select(tester, 1);
+  }
 }
 
 void main() {
@@ -1150,6 +1193,90 @@ void main() {
         expect(app.shellPopped, isFalse, reason: 'the nested flow has a page');
         expect(_page('Inner'), findsNothing);
         expect(_page('Flow'), findsOneWidget);
+      });
+
+      // VK-774: a shell nested in a tab (sub-tabs) answers back in its own
+      // order: its overlay sidebar, then its active search, then its tab's
+      // page. The outer shell hands it back instead of popping its tabs.
+      testWidgets('a shell nested in a tab, its search active over a pushed '
+          'page: back deactivates the inner search first', (tester) async {
+        final app = _Pushed(mode);
+        final inner = _Inner();
+        await inner.pump(app, tester);
+        await _pushOn(tester, inner.tabs[2], 'Deep');
+        inner.search.activate();
+        await tester.pumpAndSettle();
+        expect(inner.search.isActive, isTrue, reason: 'precondition');
+        await back(app, tester);
+        expect(
+          inner.search.isActive,
+          isFalse,
+          reason: "the inner shell's order",
+        );
+        expect(_page('Deep'), findsOneWidget, reason: 'search first');
+        expect(app.shellPopped, isFalse);
+        await back(app, tester);
+        expect(_page('Deep'), findsNothing, reason: 'the page next');
+        expect(app.shellPopped, isFalse);
+      });
+
+      testWidgets('a shell nested in a tab, its search active at the tab '
+          'root: back deactivates the inner search, not the shell', (
+        tester,
+      ) async {
+        final app = _Pushed(mode);
+        final inner = _Inner();
+        await inner.pump(app, tester);
+        inner.search.activate();
+        await tester.pumpAndSettle();
+        expect(inner.search.isActive, isTrue, reason: 'precondition');
+        await back(app, tester);
+        expect(
+          inner.search.isActive,
+          isFalse,
+          reason: "the inner shell's order",
+        );
+        expect(app.shellPopped, isFalse);
+        await back(app, tester);
+        expect(app.shellPopped, isTrue, reason: 'nothing left inside');
+      });
+
+      testWidgets('iPad, a shell nested in a tab, its overlay sidebar open '
+          'over its active search and a pushed page: back closes the '
+          'sidebar, then the search, then pops the page', (tester) async {
+        final app = _Pushed(mode);
+        final inner = _Inner();
+        await inner.pump(app, tester, size: kTabletPortrait);
+        await _pushOn(tester, inner.tabs[2], 'Deep');
+        inner.search.activate();
+        await tester.pumpAndSettle();
+        // The outer shell's bar covers the inner one's button: the inner
+        // shell's scope opens its sidebar, as the button does.
+        LiquidShellScopeData scope() =>
+            LiquidShellScope.of(tester.element(_page('Deep')));
+        scope().setSidebarVisible(true);
+        await tester.pumpAndSettle();
+        expect(
+          scope().chromeKind,
+          LiquidChromeKind.sidebarOverlay,
+          reason: 'precondition',
+        );
+        expect(inner.search.isActive, isTrue, reason: 'precondition');
+
+        await back(app, tester);
+        expect(_page('Deep'), findsOneWidget, reason: 'the sidebar first');
+        expect(scope().chromeKind, isNot(LiquidChromeKind.sidebarOverlay));
+        expect(inner.search.isActive, isTrue, reason: 'the sidebar first');
+        expect(app.shellPopped, isFalse);
+
+        await back(app, tester);
+        expect(inner.search.isActive, isFalse, reason: 'the search next');
+        expect(_page('Deep'), findsOneWidget);
+        expect(app.shellPopped, isFalse);
+
+        await back(app, tester);
+        expect(_page('Deep'), findsNothing, reason: 'the page last');
+        expect(app.shellPopped, isFalse);
       });
     });
   }
