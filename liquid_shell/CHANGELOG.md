@@ -76,7 +76,8 @@
   popped the inner shell's tab page directly.
 - **Behaviour change (VK-774).** With a nested shell's search active at
   its tab's root, back ends that search instead of popping the outer
-  shell's route.
+  shell's route; with its overlay sidebar open, back closes the sidebar
+  first.
 
 ## 0.1.0-dev.7
 

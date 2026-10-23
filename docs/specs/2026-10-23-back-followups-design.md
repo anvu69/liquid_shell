@@ -64,7 +64,7 @@ VK-775, VK-680, VK-774 below, each with its tests, the CHANGELOG lines and the r
 - `_popBranch` skips entries with `onScreen` false.
 - `_armBranchCheck` is unchanged: the list is no longer empty while any tab has a navigator, so the per-frame check stays on.
 
-**Cost.** The scan (on navigation events and on back, never per frame) now walks hidden tabs down to their first navigator; a hidden tab with no navigator is walked whole (marked `ponytail:` in the code). The per-frame check calls `isOnScreenUnder` for every tab navigator, hidden ones too, each its ancestors only.
+**Cost.** The scan (on navigation events and on back, never per frame) now walks hidden tabs down to their first navigator; a hidden tab with no navigator is walked whole (a comment at the walk in `branch_navigators.dart` says so). The per-frame check calls `isOnScreenUnder` for every tab navigator, hidden ones too, each its ancestors only.
 
 **Tests (red first).** With no app `PopScope`, `_LateShow` body, a page pushed in tab 1, tab 0 selected, then tab 1 selected and on screen 300 ms later: back pops the page, not the shell; the edge swipe does the same; and with a nested flow as tab 1's root page (inner page pushed), back pops the inner page. The last one is what locks the re-scan: without it the tab's own navigator (at its root) is seen coming on screen, but the flow inside it never is. All red today: `Expected: false  Actual: <true>` (`shellPopped`).
 
@@ -109,7 +109,7 @@ VK-775, VK-680, VK-774 below, each with its tests, the CHANGELOG lines and the r
 |---|---|
 | VK-775 rests on Flutter's `IgnorePointer` around the barrier, not a contract | The VK-775 test goes red if Flutter changes it; CI `checks (stable)` runs it on the newest stable, and VK-700 tracks 3.47. |
 | An app's own `IgnorePointer(ignoring: true)` above a `ModalBarrier` within 12 levels of an entry hides that barrier | A barrier that takes no touch does not cover; the same is true for the user. |
-| VK-680's scan walks hidden tabs | Event-driven only; hidden tabs stop at their first navigator. Not measured as slow; `ponytail:` marks the ceiling. |
+| VK-680's scan walks hidden tabs | Event-driven only; hidden tabs stop at their first navigator. Not measured as slow; the comment at the walk names the ceiling. |
 | VK-680's re-scan could loop if the walk and `isOnScreenUnder` disagree | `_scanBranches` checks with `rescan: false`: at most one re-scan per frame. |
 | VK-774 changes the record shape used by `_checkBranches` and `_popBranch` | Internal only; every existing back test runs in both modes. |
 | Coverage of the new branches | Every new branch has a test; the mutation tables of the plan show each one red without its line. |
