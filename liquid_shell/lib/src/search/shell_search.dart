@@ -165,9 +165,7 @@ final class ShellSearch implements SearchDriver {
       _syncInactive = true;
       _scopeSent = false;
       final controller = _controller;
-      if (controller != null && controller.isActive) {
-        applySearchEdit(controller, controller.value.copyWith(active: false));
-      }
+      if (controller != null) _endSearch(controller);
     }
     if (!reconnect && _userText) return;
     _sentShown = false;
@@ -214,9 +212,10 @@ final class ShellSearch implements SearchDriver {
         _userText = true;
         _config?.onChanged?.call(text);
       case LiquidNativeSearchActiveChanged(:final active):
-        final next = active && selected;
-        if (controller.isActive != next) {
-          applySearchEdit(controller, controller.value.copyWith(active: next));
+        if (!active || !selected) {
+          _endSearch(controller);
+        } else if (!controller.isActive) {
+          applySearchEdit(controller, controller.value.copyWith(active: true));
         }
       case LiquidNativeSearchSubmitted(:final text):
         if (selected) _config?.onSubmitted?.call(text);
@@ -225,11 +224,12 @@ final class ShellSearch implements SearchDriver {
         // past the titles when they changed while a native tap was in
         // flight. Applied as the field's own edit, so it never goes back
         // to native.
-        final count = _config?.scopes?.length ?? 0;
-        if (!selected ||
-            index < 0 ||
-            index >= count ||
-            index == controller.scopeIndex) {
+        if (!selected || index < 0 || index == controller.scopeIndex) return;
+        if (index >= (_config?.scopes?.length ?? 0)) {
+          // Native's bar showed that tap, then clamps it to the new titles,
+          // while the controller keeps its scope: native gets it back
+          // (VK-604). Native's setScope never reports, so this is no echo.
+          if (native) claim()?.setSearchScope(controller.scopeIndex);
           return;
         }
         applySearchEdit(
@@ -268,9 +268,23 @@ final class ShellSearch implements SearchDriver {
       _syncInactive = false;
       if (!controller.isActive) claim()?.setSearchActive(active: false);
     }
-    if (left && controller.isActive) {
-      applySearchEdit(controller, controller.value.copyWith(active: false));
-    }
+    if (left) _endSearch(controller);
+  }
+
+  /// Ends the search in the controller and keeps its text. A native field
+  /// that ends its search resigns, which commits its marked text, and
+  /// native does not report that commit: natively the composition
+  /// ends with the search. The text did not change, so `onChanged` is not
+  /// called. The Flutter field reports its own composition end when it
+  /// lets go ([_onEditing]): there only `active` changes here.
+  void _endSearch(LiquidSearchController controller) {
+    final value = controller.value;
+    final composing = !native && value.composing;
+    if (!value.active && value.composing == composing) return;
+    applySearchEdit(
+      controller,
+      value.copyWith(active: false, composing: composing),
+    );
   }
 
   // --- the controller's commands (SearchDriver) ------------------------
@@ -396,16 +410,29 @@ final class ShellSearch implements SearchDriver {
   }
 
   /// The shell will not show the Flutter field in this frame (hidden
-  /// chrome, another tab, the other size class): let go of its focus, then
-  /// end its composition and active state. A focused
+  /// chrome, another tab, the other size class, native chrome): let go of
+  /// its focus, then end its composition and active state. A focused
   /// field taken out of the tree never hears its focus loss (the focus
   /// manager drops a detached node silently), so this does not wait for
   /// the listener. The microtask runs after the focus manager's.
+  ///
+  /// When native chrome took over, [_onFocus] and [_onEditing] hear
+  /// nothing: the microtask ends the search itself, its text kept, as
+  /// Flutter mode does, and tells native the search is inactive: the
+  /// native entry ([afterConfigSent]) ran while the Flutter field still
+  /// held the search, so it sent nothing, and a native field left active
+  /// (a hot restart) would stay so. Native ignores it when inactive.
   void releaseField() {
     _keyboardDown = false;
     focus.unfocus();
     scheduleMicrotask(() {
-      if (!_disposed) _onFocus();
+      if (_disposed) return;
+      _onFocus();
+      final controller = _controller;
+      if (native && controller != null) {
+        _endSearch(controller);
+        claim()?.setSearchActive(active: false);
+      }
     });
   }
 

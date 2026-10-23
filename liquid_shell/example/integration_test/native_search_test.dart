@@ -313,6 +313,32 @@ void main() {
           Orientation.landscape,
         );
         await expectTheScopeBarOverTheResults('landscape');
+        // VK-594: the keyboard lifts the field into the upper half of the
+        // landscape view. The content inset still covers it, and the
+        // keyboard below it, as in portrait (the "active" check above).
+        final landscape = MediaQueryData.fromView(tester.view);
+        final raised = (await _ios.debugSnapshot()).fieldFrame;
+        final bottom = LiquidShellScope.contentPaddingOf(
+          tester.element(_scopeBar),
+        ).bottom;
+        debugPrint(
+          'liquid_shell VK-594 landscape: keyboard '
+          '${landscape.viewInsets.bottom} field ${raised.x},${raised.y} '
+          '${raised.width}x${raised.height} bottom $bottom',
+        );
+        expect(
+          landscape.viewInsets.bottom,
+          greaterThan(0),
+          reason: 'landscape: the keyboard is up',
+        );
+        expect(
+          bottom,
+          greaterThanOrEqualTo(landscape.size.height - raised.y - 1),
+          reason:
+              'landscape: the content inset covers the raised native field '
+              '(field ${raised.x},${raised.y} ${raised.width}x'
+              '${raised.height}, size ${landscape.size})',
+        );
         await shot('scopes_landscape');
         await SystemChrome.setPreferredOrientations(const [
           DeviceOrientation.portraitUp,

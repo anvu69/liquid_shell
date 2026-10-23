@@ -354,6 +354,36 @@ void main() {
     expect(_scope(tester).chromeInsets.bottom, 392);
   });
 
+  // VK-594, measured on an iPhone 17 Pro, iOS 26.5: in landscape the
+  // keyboard lifts the field into the upper half of the view. The page's
+  // padding still clears the field and the keyboard below it.
+  testWidgets('landscape: the raised field still moves the bottom inset', (
+    tester,
+  ) async {
+    final fake = installFakeNative(state: _compact);
+    final controller = LiquidSearchController();
+    addTearDown(controller.dispose);
+    await pumpShell(
+      tester,
+      _searchShell(controller),
+      size: const Size(874, 402),
+      padding: const EdgeInsets.fromLTRB(62, 68, 62, 64),
+    );
+    // The keyboard is up: Flutter's padding loses the bottom safe area.
+    tester.view
+      ..viewInsets = const FakeViewPadding(bottom: 208)
+      ..padding = const FakeViewPadding(left: 62, top: 68, right: 62);
+    fake
+      ..emitNative(const LiquidNativeSearchActiveChanged(true))
+      ..emitNative(
+        const LiquidNativeSearchFieldChanged(Rect.fromLTWH(80, 142, 662, 44)),
+      );
+    await tester.pump();
+    final page = tester.element(find.byKey(const ValueKey('list-Search')));
+    // max(402 − 142, 208 + 44 + 16), as portrait's.
+    expect(LiquidShellScope.contentPaddingOf(page).bottom, 268);
+  });
+
   testWidgets('pages reach the config; native back pops the top page', (
     tester,
   ) async {
@@ -2172,6 +2202,422 @@ void main() {
       fake.emitNative(const LiquidNativeDestinationTapped(2));
       await tester.pumpAndSettle();
       expect(fake.searchScopes, [2]);
+    });
+
+    /// The search tab with [titles] as `LiquidSearch.scopes`; its page's
+    /// bar reads them from the shell. Pump it again to change them.
+    Future<void> titled(
+      WidgetTester tester,
+      LiquidSearchController controller,
+      List<String> titles,
+    ) => pumpShell(
+      tester,
+      TestShell(
+        destinations: _destinations,
+        initialIndex: 2,
+        pageBuilder: _withSearchRoot(
+          () => ListView(
+            key: const ValueKey('list-Scopes'),
+            children: [LiquidSearchScopeBar(controller: controller)],
+          ),
+        ),
+        search: LiquidSearch(controller: controller, scopes: titles),
+      ),
+      padding: _compactPadding,
+    );
+
+    // VK-604 (VK-550 review C9): the app changes its scopes at run time.
+    testWidgets('scopes changed at run time reach native; Flutter draws no '
+        'bar', (tester) async {
+      final fake = installFakeNative(state: _compact);
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      await titled(tester, controller, scopes);
+      expect(fake.last.search?.scopes, scopes);
+      await titled(tester, controller, const ['All', 'Songs']);
+      expect(fake.last.search?.scopes, ['All', 'Songs']);
+      expect(_scope(tester, 'Scopes').searchScopes, ['All', 'Songs']);
+      expect(_scope(tester, 'Scopes').nativeSearchScopes, isTrue);
+      expect(find.byType(LiquidSegmentedControl), findsNothing);
+    });
+
+    // VK-604 (VK-550 review C1): a user tap on the old last scope, still in
+    // flight when the app shortened the titles. Dart ignores the index;
+    // native's bar showed the tap and clamps it to the new titles. Dart
+    // sends its own scope back, once.
+    testWidgets('a native index past the new titles: native gets the '
+        "controller's scope back, once", (tester) async {
+      final fake = installFakeNative(state: _compact);
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      await titled(tester, controller, scopes);
+      await titled(tester, controller, const ['All', 'Songs']);
+      fake.searchScopes.clear();
+      fake.emitNative(const LiquidNativeSearchScopeChanged(2));
+      await tester.pump();
+      expect(controller.scopeIndex, 0, reason: 'ignored');
+      expect(fake.searchScopes, [0]);
+    });
+  });
+
+  // VK-572 bug A. A dismissal Dart asks for (deactivate, another tab, a
+  // dialog above, hidden chrome) or a reconnected scene ends the native
+  // search mid-composition. The field resigns, which commits the marked
+  // text, and native reports only `searchActive false`: it swallows that
+  // commit while it keeps the text (RunnerTests, VK-572). Natively the
+  // composition ends with the search, the text kept, and onChanged is not
+  // called: the text did not change.
+  group('VK-572: the native composition ends with the search', () {
+    Future<(FakeNativePlatform, LiquidSearchController, List<String>)>
+    composing(WidgetTester tester) async {
+      final (fake, controller, changes) = await _pump(tester);
+      fake
+        ..emitNative(const LiquidNativeSearchActiveChanged(true))
+        ..emitNative(
+          const LiquidNativeSearchTextChanged('かな', composing: true),
+        );
+      await tester.pump();
+      expect(controller.value.composing, isTrue, reason: 'precondition');
+      changes.clear();
+      return (fake, controller, changes);
+    }
+
+    void expectEnded(LiquidSearchController controller, List<String> changes) {
+      expect(controller.isActive, isFalse);
+      expect(controller.text, 'かな', reason: 'the composed text is kept');
+      expect(controller.value.composing, isFalse);
+      expect(changes, isEmpty, reason: 'the text did not change');
+    }
+
+    testWidgets('A1: deactivate(): native answers inactive only', (
+      tester,
+    ) async {
+      final (fake, controller, changes) = await composing(tester);
+      controller.deactivate();
+      await tester.pump();
+      expect(fake.searchActives, [false]);
+      fake.emitNative(const LiquidNativeSearchActiveChanged(false));
+      await tester.pump();
+      expectEnded(controller, changes);
+    });
+
+    // doc/search.md: "check `composing` before writing". Before VK-572 such
+    // an app held its write although no composition was open.
+    testWidgets('A3: an app write that checks composing lands', (
+      tester,
+    ) async {
+      final (fake, controller, _) = await composing(tester);
+      controller.deactivate();
+      fake.emitNative(const LiquidNativeSearchActiveChanged(false));
+      await tester.pump();
+      fake.searchTexts.clear();
+      // A recent search tapped, written only outside a composition.
+      if (!controller.value.composing) controller.text = 'phở';
+      await tester.pump();
+      expect(fake.searchTexts, ['phở']);
+    });
+
+    // Dart ends the search when the tab is left, before native's report:
+    // the composition ends then too. Native cannot report it on this path
+    // (the search tab is no longer selected), and Dart would drop it.
+    testWidgets('A2, A4: the user taps another tab mid-composition', (
+      tester,
+    ) async {
+      final (fake, controller, changes) = await composing(tester);
+      fake.emitNative(const LiquidNativeDestinationTapped(0));
+      await tester.pumpAndSettle();
+      expectEnded(controller, changes);
+      fake.emitNative(const LiquidNativeSearchActiveChanged(false));
+      await tester.pump();
+      expectEnded(controller, changes);
+      fake.emitNative(const LiquidNativeDestinationTapped(2));
+      await tester.pumpAndSettle();
+      expectEnded(controller, changes);
+    });
+
+    testWidgets('A5: a scene reconnect mid-composition', (tester) async {
+      final (fake, controller, changes) = await composing(tester);
+      fake.pushState(_compact);
+      await tester.pumpAndSettle();
+      expectEnded(controller, changes);
+    });
+
+    testWidgets('R1: an active search keeps its composition', (tester) async {
+      final (fake, controller, _) = await composing(tester);
+      fake.emitNative(const LiquidNativeSearchActiveChanged(true));
+      await tester.pump();
+      expect(controller.isActive, isTrue);
+      expect(controller.value.composing, isTrue);
+    });
+
+    // The end native reports itself (the VK-571 resign re-reads the field)
+    // is a user edit, as before: onChanged hears it.
+    testWidgets('R2: a composition end native reports still calls onChanged', (
+      tester,
+    ) async {
+      final (fake, controller, changes) = await composing(tester);
+      fake.emitNative(
+        const LiquidNativeSearchTextChanged('かな', composing: false),
+      );
+      await tester.pump();
+      expect(controller.value.composing, isFalse);
+      expect(changes, ['かな']);
+    });
+
+    // Flutter chrome under the shell's claim (not installed): the Flutter
+    // field ends its own composition when it lets go, and reports it.
+    testWidgets('R3: Flutter mode: the field still reports its own end', (
+      tester,
+    ) async {
+      installFakeNative(state: const LiquidNativeShellState(installed: false));
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      final changes = <String>[];
+      await pumpShell(
+        tester,
+        TestShell(
+          destinations: _destinations,
+          initialIndex: 2,
+          pageBuilder: _page,
+          search: LiquidSearch(controller: controller, onChanged: changes.add),
+        ),
+        padding: _compactPadding,
+      );
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: 'かな',
+          selection: TextSelection.collapsed(offset: 2),
+          composing: TextRange(start: 0, end: 2),
+        ),
+      );
+      await tester.pump();
+      expect(controller.value.composing, isTrue, reason: 'precondition');
+      changes.clear();
+      tester.state<TestShellState>(find.byType(TestShell)).select(0);
+      await tester.pumpAndSettle();
+      expect(controller.isActive, isFalse);
+      expect(controller.value.composing, isFalse);
+      expect(changes, ['かな'], reason: "the field's own end is reported");
+    });
+  });
+
+  // VK-572 bug B (VK-571 review M-6, M-8). Native chrome engages while the
+  // Flutter field holds the search: focused, keyboard-down (VK-571) or
+  // composing. The shell releases the field (`holdsField`), and the Flutter
+  // search ends there, its text kept, as Flutter mode ends it for hidden
+  // chrome: native starts inactive and never answers a deactivate for an
+  // inactive search (RunnerTests, VK-572).
+  group('VK-572: native takes over a Flutter search', () {
+    /// Flutter chrome first (`nativeChrome: off`), the field focused. The
+    /// next build with `auto` claims native chrome through pending: the
+    /// host has no state yet.
+    Future<LiquidSearchController> viaPending(WidgetTester tester) async {
+      installFakeNative(state: _compact);
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      await pumpShell(
+        tester,
+        _searchShell(controller, nativeChrome: LiquidNativeChrome.off),
+        padding: _compactPadding,
+      );
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      expect(controller.isActive, isTrue, reason: 'precondition: active');
+      return controller;
+    }
+
+    /// auto, off, then the field focused: the host already knows the
+    /// state, so the next build with `auto` engages at once.
+    Future<LiquidSearchController> viaOff(WidgetTester tester) async {
+      installFakeNative(state: _compact);
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      await pumpShell(
+        tester,
+        _searchShell(controller),
+        padding: _compactPadding,
+      );
+      await pumpShell(
+        tester,
+        _searchShell(controller, nativeChrome: LiquidNativeChrome.off),
+        padding: _compactPadding,
+      );
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      expect(controller.isActive, isTrue, reason: 'precondition: active');
+      return controller;
+    }
+
+    /// Not installed (Flutter chrome), the field focused; [installLate]
+    /// then pushes `installed: true`, as a native install after the attach
+    /// does.
+    Future<(FakeNativePlatform, LiquidSearchController)> viaState(
+      WidgetTester tester,
+    ) async {
+      final fake = installFakeNative(
+        state: const LiquidNativeShellState(installed: false),
+      );
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      await pumpShell(
+        tester,
+        _searchShell(controller),
+        padding: _compactPadding,
+      );
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      expect(controller.isActive, isTrue, reason: 'precondition: active');
+      return (fake, controller);
+    }
+
+    Future<void> engage(
+      WidgetTester tester,
+      LiquidSearchController controller,
+    ) async {
+      await pumpShell(
+        tester,
+        _searchShell(controller),
+        padding: _compactPadding,
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(TextField), findsNothing, reason: 'native now');
+    }
+
+    Future<void> installLate(
+      WidgetTester tester,
+      FakeNativePlatform fake,
+    ) async {
+      fake.pushState(_compact);
+      await tester.pumpAndSettle();
+      expect(find.byType(TextField), findsNothing, reason: 'native now');
+    }
+
+    void dismissKeyboard(LiquidSearchController controller) {
+      controller.dismissKeyboard();
+      expect(controller.isActive, isTrue, reason: 'precondition: kept');
+    }
+
+    // Green before VK-572: the first claim builds pending, with `native`
+    // still false. It guards `holdsField` (VK-571) too.
+    testWidgets('B2: keyboard-down, the first claim (pending): the search '
+        'ends', (tester) async {
+      final controller = await viaPending(tester);
+      dismissKeyboard(controller);
+      await tester.pump();
+      await engage(tester, controller);
+      expect(controller.isActive, isFalse);
+    });
+
+    testWidgets('B5: focused, auto -> off -> auto: the search ends', (
+      tester,
+    ) async {
+      final controller = await viaOff(tester);
+      await engage(tester, controller);
+      expect(controller.isActive, isFalse);
+    });
+
+    testWidgets('B6: keyboard-down, auto -> off -> auto: the search ends', (
+      tester,
+    ) async {
+      final controller = await viaOff(tester);
+      dismissKeyboard(controller);
+      await tester.pump();
+      await engage(tester, controller);
+      expect(controller.isActive, isFalse);
+    });
+
+    testWidgets('B7: focused, a late native install: the search ends', (
+      tester,
+    ) async {
+      final (fake, controller) = await viaState(tester);
+      await installLate(tester, fake);
+      expect(controller.isActive, isFalse);
+    });
+
+    testWidgets('B8: keyboard-down, a late native install: the search ends', (
+      tester,
+    ) async {
+      final (fake, controller) = await viaState(tester);
+      dismissKeyboard(controller);
+      await tester.pump();
+      await installLate(tester, fake);
+      expect(controller.isActive, isFalse);
+    });
+
+    testWidgets('B9: composing, a late native install: the composition '
+        'ends, the text kept', (tester) async {
+      final (fake, controller) = await viaState(tester);
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: 'かな',
+          selection: TextSelection.collapsed(offset: 2),
+          composing: TextRange(start: 0, end: 2),
+        ),
+      );
+      await tester.pump();
+      expect(controller.value.composing, isTrue, reason: 'precondition');
+      await installLate(tester, fake);
+      expect(controller.isActive, isFalse);
+      expect(controller.text, 'かな');
+      expect(controller.value.composing, isFalse);
+    });
+
+    testWidgets('B10: deactivate() after a late install leaves the search '
+        'inactive', (tester) async {
+      final (fake, controller) = await viaState(tester);
+      await installLate(tester, fake);
+      controller.deactivate();
+      await tester.pumpAndSettle();
+      expect(controller.isActive, isFalse);
+    });
+
+    // The entry runs while the Flutter field still holds the search, so it
+    // cannot send the inactive state; the release sends it once the search
+    // ended (PR #20 review). A native field left active (a hot restart)
+    // would otherwise stay active over an inactive controller.
+    testWidgets('B12: a late install over an active Flutter search tells '
+        'native the search is inactive', (tester) async {
+      final (fake, controller) = await viaState(tester);
+      await installLate(tester, fake);
+      expect(controller.isActive, isFalse);
+      expect(fake.searchActives, [false]);
+    });
+
+    testWidgets('B11: a pushed shell pops after a late install over an '
+        'active Flutter search', (tester) async {
+      final outer = GlobalKey<NavigatorState>();
+      final fake = installFakeNative(
+        state: const LiquidNativeShellState(installed: false),
+      );
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      await pumpShell(
+        tester,
+        Navigator(
+          key: outer,
+          onGenerateInitialRoutes: (_, _) => [
+            MaterialPageRoute<void>(builder: (_) => const Text('The list')),
+            MaterialPageRoute<void>(builder: (_) => _searchShell(controller)),
+          ],
+        ),
+        padding: _compactPadding,
+      );
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      expect(controller.isActive, isTrue, reason: 'precondition');
+      await installLate(tester, fake);
+      fake.searchActives.clear();
+      await outer.currentState!.maybePop();
+      await tester.pumpAndSettle();
+      expect(
+        find.text('The list'),
+        findsOneWidget,
+        reason:
+            'back blocked: sent ${fake.searchActives}, '
+            'isActive ${controller.isActive}',
+      );
     });
   });
 }

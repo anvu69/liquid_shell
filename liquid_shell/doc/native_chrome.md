@@ -207,8 +207,8 @@ composition to end (see [search.md](search.md#vietnamese-and-other-imes)).
 
 The field's frame reaches the shell after every layout and keyboard move,
 and the shell's `chromeInsets` cover it: on iPhone the bottom inset follows
-the field above the keyboard; on iPad the stacked field is in the top safe
-area already.
+the field above the keyboard, in either orientation; on iPad the stacked
+field is in the top safe area already.
 
 ## Page stacks and the back button
 

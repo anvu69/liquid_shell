@@ -373,7 +373,7 @@ void main() {
       const size = Size(402, 874);
       const padding = EdgeInsets.only(top: 62, bottom: 83);
 
-      test('no field, or a field at the top: nothing', () {
+      test('no field: nothing', () {
         expect(
           nativeSearchBottomInset(
             field: Rect.zero,
@@ -384,13 +384,29 @@ void main() {
           ),
           0,
         );
+      });
+
+      // Measured (VK-594): iPad Air 11-inch (M4), iOS 26.5, portrait. The
+      // stacked field lies inside the top safe area, active and selected.
+      test('the stacked field inside the top safe area: nothing', () {
+        const ipad = Size(820, 1180);
         expect(
           nativeSearchBottomInset(
-            field: const Rect.fromLTWH(16, 86, 370, 44),
-            size: size,
-            padding: padding,
-            viewInsets: EdgeInsets.zero,
+            field: const Rect.fromLTWH(20, 38, 780, 44),
+            size: ipad,
+            padding: const EdgeInsets.only(top: 134),
+            viewInsets: const EdgeInsets.only(bottom: 337),
             active: true,
+          ),
+          0,
+        );
+        expect(
+          nativeSearchBottomInset(
+            field: const Rect.fromLTWH(20, 87, 780, 44),
+            size: ipad,
+            padding: const EdgeInsets.only(top: 146, bottom: 20),
+            viewInsets: EdgeInsets.zero,
+            active: false,
           ),
           0,
         );
@@ -438,6 +454,35 @@ void main() {
           );
         },
       );
+
+      // VK-594, measured: iPhone 17 Pro, iOS 26.5, landscape (874x402, top
+      // padding 68). The keyboard (208) lifts the field to y 142, into the
+      // upper half of the view. It is still the tab-hosted field.
+      test('landscape, keyboard up: the raised field counts', () {
+        expect(
+          nativeSearchBottomInset(
+            field: const Rect.fromLTWH(80, 142, 662, 44),
+            size: const Size(874, 402),
+            padding: const EdgeInsets.only(left: 62, top: 68, right: 62),
+            viewInsets: const EdgeInsets.only(bottom: 208),
+            active: true,
+          ),
+          268, // max(402 − 142, 208 + 44 + 16), as portrait's 399
+        );
+      });
+
+      test('landscape, keyboard down (VK-571): down to the field top', () {
+        expect(
+          nativeSearchBottomInset(
+            field: const Rect.fromLTWH(393, 338, 363, 44),
+            size: const Size(874, 402),
+            padding: const EdgeInsets.fromLTRB(62, 68, 62, 64),
+            viewInsets: EdgeInsets.zero,
+            active: true,
+          ),
+          64, // max(64, 402 − 338, 0 + 44 + 16)
+        );
+      });
     });
   });
 

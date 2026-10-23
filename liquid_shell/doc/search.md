@@ -120,6 +120,10 @@ LiquidSearchScopeBar(controller: search)
   `scopeIndex` for the app's own actions only (a "reset" button, a
   restored state): that write moves the native bar once. Do not write it
   in answer to a change you just read from the controller.
+- **Fewer scopes.** The shell never clamps `scopeIndex`. When your scopes
+  shrink below it, clamp it yourself in the same change (an app action):
+  both bars show the last scope meanwhile, but a filter on the stale index
+  would use a scope that is gone.
 - The Flutter bar's look follows [`LiquidGlassTheme`](theming.md)
   (`segmentTrack`, `segmentThumb`, `segmentLabelStyle`).
 
@@ -223,6 +227,12 @@ whatever the tabs do.
   search and keeps its text, and `activate()` is ignored natively until
   the chrome shows again. Coming back shows the search selected, not
   active, as the Flutter field does.
+- **Native chrome takes over.** When native chrome engages while the
+  Flutter field holds the search (focused, its keyboard put away, or
+  composing), for example when `nativeChrome` goes back to `auto` or the
+  native shell installs late, the search ends as it does when the Flutter
+  field hides: `active` and `composing` turn false and the text stays. A
+  tap on the native field resumes it.
 
 ## Vietnamese and other IMEs
 
@@ -264,6 +274,20 @@ Flutter field, but natively the user's committed text stays and the tap
 is lost. Make such writes from taps that end the composition first (a tap
 outside the field does), or check `composing` before writing.
 
+Natively, `composing` ends with the search. Whatever ends the native
+search mid-composition (`deactivate()`, another tab, a dialog or page
+above, hidden chrome, a reconnected scene) makes the field resign, which
+commits its marked text: the controller then reads `active` and
+`composing` false, with the text kept. `onChanged` is not called for it,
+as the text did not change. A commit the field reports itself (the
+keyboard put away, the user's own edit) is an edit and calls it.
+
+With native chrome, `active` and `composing` turn false only once native
+reports the end: after UIKit's dismissal, or with the tab change. They do
+not turn false right after `deactivate()` returns. An app that wants to
+write after deactivating should wait for the controller's `active == false`
+(a listener) instead of checking `composing` at once.
+
 ## Insets
 
 The shell's `chromeInsets` cover the search field in every phase:
@@ -271,7 +295,7 @@ The shell's `chromeInsets` cover the search field in every phase:
 | Where the field is | Inset |
 |---|---|
 | iPhone, native, `selected` (the field in the tab bar area) | `bottom`: the bottom safe area, as for the tab bar |
-| iPhone, native, `active` (above the keyboard) | `bottom`: down from the field's top, from the native field's real frame |
+| iPhone, native, `active` (above the keyboard, in either orientation) | `bottom`: down from the field's top, from the native field's real frame |
 | iPad, native (stacked at the top) | `top`: the top safe area, which holds the bar and the field |
 | Glass, compact | `bottom`: the bottom row; above the keyboard while `active` |
 | Glass, regular | `top`: below the field |

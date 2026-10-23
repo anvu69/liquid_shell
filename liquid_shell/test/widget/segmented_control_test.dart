@@ -965,10 +965,17 @@ void main() {
           ),
         );
 
-    List<TextStyle> styles(WidgetTester tester) => [
-      for (final row in [kSegmentNormalKey, kSegmentSelectedKey])
-        for (final p in _paragraphs(tester, row)) p.text.style!,
-    ];
+    /// The six label styles: three segments, each drawn in the normal and
+    /// the selected weight. The count is checked here, so a loop over them
+    /// never passes on none (VK-604, VK-550 review C9).
+    List<TextStyle> styles(WidgetTester tester) {
+      final all = [
+        for (final row in [kSegmentNormalKey, kSegmentSelectedKey])
+          for (final p in _paragraphs(tester, row)) p.text.style!,
+      ];
+      expect(all, hasLength(6), reason: 'the labels of both rows');
+      return all;
+    }
 
     testWidgets("by default: ThemeData.fontFamily, the spec's metrics", (
       tester,

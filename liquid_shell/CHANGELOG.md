@@ -26,6 +26,32 @@
   not minimize it; trackpad, mouse and Apple Pencil scrolling do not;
   `bottomAccessory` is out of scope. A very long feed is handled by growing
   the hidden proxy's content.
+- **Fix (VK-572).** With native chrome, `LiquidSearchValue.composing` now
+  ends with the native search. A dismissal mid-composition that the app or
+  the shell asked for (`deactivate()`, another tab, a dialog above, hidden
+  chrome) or a reconnected scene left it true until the user's next edit,
+  so an app that checks `composing` before writing held its write. It
+  affects IMEs that mark their text (Japanese, Chinese), not Apple's
+  Vietnamese Telex. `onChanged` is not called for it: the text did not
+  change.
+- **Fix (VK-572).** When native chrome takes over while the Flutter field
+  holds the search (focused, its keyboard put away, or composing), for
+  example `nativeChrome` back to `auto` or a late native install, the
+  search now ends with its text kept, as it does when the Flutter field
+  hides, and native is told the search is inactive. Before, `isActive` (and `composing`) stayed true while UIKit
+  showed an idle search: system back was blocked, `deactivate()` did
+  nothing, and a shell pushed as a page could not be popped.
+- **Fix (VK-594).** iPhone with native chrome, in landscape, search active
+  with the keyboard up: `chromeInsets.bottom` and
+  `LiquidShellScope.contentPaddingOf(context).bottom` were 0, so the
+  results could not scroll clear of the field and the keyboard. They now
+  cover the raised field, as in portrait (268 pt on an iPhone 17 Pro). The
+  iPad is unchanged.
+- **Fix (VK-604).** Native scope bar: a user tap on a scope that the app
+  removed at the same moment no longer leaves the bar and
+  `LiquidSearchController.scopeIndex` on different scopes: the shell sends
+  the controller's scope back to native. `doc/search.md` now says that the
+  app clamps `scopeIndex` when its scopes shrink.
 
 ## 0.1.0-dev.7
 
