@@ -355,6 +355,14 @@ Widget _flow(GlobalKey<NavigatorState> inner, String label) => Navigator(
   ),
 );
 
+/// [_flow] inside the standard `NavigatorPopHandler`, in the tab's page: its
+/// PopScope is on the tab page's route, which system back never calls.
+Widget _handledFlow(GlobalKey<NavigatorState> inner, String label) =>
+    NavigatorPopHandler(
+      onPopWithResult: (_) => inner.currentState?.maybePop(),
+      child: _flow(inner, label),
+    );
+
 /// Pushes a plain page titled [title] on [navigator].
 Future<void> _pushOn(
   WidgetTester tester,
@@ -957,6 +965,41 @@ void main() {
         expect(_page('Flow'), findsOneWidget, reason: 'the inner page only');
         await back(app, tester);
         expect(_page('Flow'), findsNothing);
+        expect(_page('Home'), findsOneWidget);
+        expect(app.shellPopped, isFalse);
+      });
+
+      testWidgets('a NavigatorPopHandler inside a pushed page: back pops the '
+          'inner page', (tester) async {
+        final inner = GlobalKey<NavigatorState>();
+        final app = _Pushed(mode);
+        await app.pump(tester);
+        app.tabs[0].currentState!
+            .push(
+              MaterialPageRoute<void>(
+                builder: (_) => _handledFlow(inner, 'Flow'),
+              ),
+            )
+            .ignore();
+        await tester.pumpAndSettle();
+        await _pushOn(tester, inner, 'Inner');
+        await back(app, tester);
+        expect(_page('Inner'), findsNothing);
+        expect(_page('Flow'), findsOneWidget);
+        expect(app.shellPopped, isFalse);
+      });
+
+      testWidgets("a NavigatorPopHandler in the tab's root page: back pops "
+          'the inner page, the shell stays', (tester) async {
+        final inner = GlobalKey<NavigatorState>();
+        final app = _Pushed(mode);
+        await app.pump(
+          tester,
+          root: (i) => i == 0 ? _handledFlow(inner, 'Home') : null,
+        );
+        await _pushOn(tester, inner, 'Inner');
+        await back(app, tester);
+        expect(_page('Inner'), findsNothing);
         expect(_page('Home'), findsOneWidget);
         expect(app.shellPopped, isFalse);
       });

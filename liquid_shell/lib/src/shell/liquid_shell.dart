@@ -773,7 +773,9 @@ class _LiquidShellState extends State<LiquidShell>
   }
 
   /// Whether a navigator found by the last scan is still on screen and can
-  /// pop. Cheap: its ancestors, not the tree.
+  /// pop. Cheap: its ancestors plus, at a navigator's overlay, the entries
+  /// after the one on the path (up to 12 levels each, looking for a route
+  /// barrier), not the tree.
   void _checkBranches() {
     final body = _bodyKey.currentContext;
     final canPop =
@@ -842,9 +844,9 @@ class _LiquidShellState extends State<LiquidShell>
   /// whole shell. Blocked, the swipe falls to the tab's top page.
   ///
   /// The route calls every PopScope on it, so a back blocked by another one
-  /// (an exit wrapper, an unsaved form) lands here too. An enabled
-  /// `NavigatorPopHandler` around the branch answers back for its
-  /// navigator; the shell then only blocks its own route.
+  /// (an exit wrapper, an unsaved form) lands here too. A
+  /// `NavigatorPopHandler` with a callback around the branch answers back
+  /// for its navigator; the shell then only blocks its own route.
   Widget _backScope({
     required bool overlay,
     required bool searchActive,

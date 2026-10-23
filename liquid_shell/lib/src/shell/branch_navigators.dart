@@ -2,9 +2,11 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
 /// A navigator on screen under the shell's body, and whether a
-/// `NavigatorPopHandler` with a callback lies between the body and it: the
-/// route calls that callback on every blocked back, enabled or not, so the
-/// app answers back for it.
+/// `NavigatorPopHandler` with a callback lies between the body and the first
+/// navigator above it (the tab's own): the shell's route calls that callback
+/// on every blocked back, enabled or not, so the app answers back for it. A
+/// handler inside a tab's page sits on the page's route, which system back
+/// never calls, so it does not count.
 typedef BranchNavigator = ({NavigatorState navigator, bool handled});
 
 /// Whether a `NavigatorPopHandler` answers back: it has a callback.
@@ -124,24 +126,33 @@ bool _hasBarrier(Element element, int depth) {
 /// It walks elements, so call it outside a build (after the frame).
 List<BranchNavigator> onScreenNavigatorsUnder(BuildContext root) {
   final found = <BranchNavigator>[];
-  void visit(Element element, {required bool handled}) {
+  void visit(Element element, {required bool handled, required bool inside}) {
     final widget = element.widget;
     if (_hides(widget)) return;
-    final handledHere = handled || _answersBack(widget);
+    final handledHere = handled || (!inside && _answersBack(widget));
+    final isNavigator =
+        element is StatefulElement && element.state is NavigatorState;
     if (element case StatefulElement(state: final NavigatorState navigator)) {
       found.add((navigator: navigator, handled: handledHere));
     }
+    final insideHere = inside || isNavigator;
     element.visitChildren((child) {
-      if (_shows(element, child)) visit(child, handled: handledHere);
+      if (_shows(element, child)) {
+        visit(child, handled: handledHere, inside: insideHere);
+      }
     });
   }
 
-  root.visitChildElements((child) => visit(child, handled: false));
+  root.visitChildElements(
+    (child) => visit(child, handled: false, inside: false),
+  );
   return found;
 }
 
 /// Whether [context] is still on screen under [root]: nothing between them
-/// hides it. It walks ancestors only, so it is cheap enough for every frame.
+/// hides it. It walks the ancestors plus, at a navigator's overlay, the
+/// entries after the one on the path (up to 12 levels each, looking for a
+/// route barrier), so it is cheap enough for every frame.
 bool isOnScreenUnder(BuildContext context, BuildContext root) {
   var onScreen = true;
   var below = context as Element;
