@@ -139,7 +139,7 @@ as in Apple Music and as the HIG asks on iPad); a tap on the field, or
 |---|---|---|
 | `idle` | The glass tab pill, and a separate ⌕ circle beside it | The pill, and a 62pt ⌕ circle 8pt after it |
 | `selected` | UIKit's morph: the pill collapses to one circle with the previous tab's icon, the ⌕ becomes a 48pt field; the large title "Search" | The same morph in Flutter (350 ms, none under reduce motion): a 48pt circle and the field in the bottom row |
-| `active` | The field rides 8pt above the keyboard with a × circle; the circle and the title hide | The field above the keyboard with a × circle |
+| `active` | The field rides 8pt above the keyboard with a × circle; the circle and the title hide (on iOS 27.0 UIKit realises a stacked field at the top on iPhone too) | The field above the keyboard with a × circle |
 | × | Clears the text and goes back to `selected` | Clears the text and unfocuses |
 | The circle | Back to the previous tab, through your guard | The same |
 
@@ -235,7 +235,7 @@ whatever the tabs do.
   tap on the native field resumes it.
 - **Flutter chrome takes over.** When native chrome lets go of an active
   native search (`nativeChrome` set to `off`, a forced glass tier, the
-  native shell lost), the search ends right after that build: `active`
+  native shell lost, or another shell taking the claim, standby), the search ends right after that build: `active`
   and `composing` turn false and the text stays. `onChanged` is not
   called. A tap on the Flutter field resumes it.
 
@@ -300,7 +300,7 @@ The shell's `chromeInsets` cover the search field in every phase:
 | Where the field is | Inset |
 |---|---|
 | iPhone, native, `selected` (the field in the tab bar area) | `bottom`: the bottom safe area, as for the tab bar |
-| iPhone, native, `active` (above the keyboard, in either orientation) | `bottom`: down from the field's top, from the native field's real frame |
+| iPhone, native, `active` (above the keyboard, in either orientation) | `bottom`: down from the field's top, from the native field's real frame. On iOS 27.0 UIKit realises a stacked field at the top on iPhone too, so the inset is `top` there |
 | iPad, native (stacked at the top) | `top`: the top safe area, which holds the bar and the field |
 | Glass, compact | `bottom`: the bottom row; above the keyboard while `active` |
 | Glass, regular | `top`: below the field |

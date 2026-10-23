@@ -85,7 +85,7 @@ In the `native` setter's `true → false` branch, after `_writeField(controller.
 ### 4.3 Consequences
 
 - P2b: native's late `searchActive false` after a lost install finds `!active && !composing` and is a no-op (`:283`). No change to the Flutter-mode rule (owner decision 3).
-- IME safety: nothing is written into a composing field (the Flutter field is not focused under native; `_writeField` still holds a write while composing), and nothing is sent to native (claim released, or native gone).
+- IME safety: nothing is written into a composing field (the Flutter field is not focused under native; `_writeField` still holds a write while composing), and nothing is sent to native (claim released, native gone, or standby under another shell: the next entry then sends `setSearchActive(false)`, which native ignores when already inactive).
 - The text is kept as composed (owner decision 5: Apple commits marked text on resign).
 - The user taps the Flutter field to resume; no `requestFocus`, so the keyboard does not pop up on a config change.
 
