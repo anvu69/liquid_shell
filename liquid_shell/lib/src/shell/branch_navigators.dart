@@ -103,6 +103,10 @@ bool _routeAfter(Element theater, Element child) {
 const _barrierDepth = 12;
 
 bool _hasBarrier(Element element, int depth) {
+  // A route that is closing (or dismissed) wraps its barrier in an
+  // IgnorePointer that ignores: its page no longer covers the one under it
+  // (VK-775).
+  if (element.widget case IgnorePointer(ignoring: true)) return false;
   if (element.widget is ModalBarrier ||
       element.widget is AnimatedModalBarrier) {
     return true;

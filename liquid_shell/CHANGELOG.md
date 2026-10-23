@@ -63,6 +63,9 @@
   a tab's page first (a nested flow, a go_router `ShellRoute` in a
   branch), then the tab's page; before, they popped the tab's page or the
   whole shell.
+- **Fix (VK-775).** A second back while a dialog is still closing pops
+  the page of a navigator nested in the tab's page, not the page that
+  holds it: a route that is closing no longer covers the page under it.
 
 ## 0.1.0-dev.7
 

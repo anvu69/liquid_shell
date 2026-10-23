@@ -1050,6 +1050,39 @@ void main() {
         expect(_page('Home'), findsOneWidget);
         expect(app.shellPopped, isFalse);
       });
+
+      // VK-775: a route that is closing no longer covers the page under it,
+      // so a quick second back reaches the nested flow.
+      testWidgets('a quick second back while a dialog closes pops the inner '
+          'page, not the outer one', (tester) async {
+        final inner = GlobalKey<NavigatorState>();
+        final app = _Pushed(mode);
+        await app.pump(tester);
+        app.tabs[0].currentState!
+            .push(
+              MaterialPageRoute<void>(builder: (_) => _flow(inner, 'Flow')),
+            )
+            .ignore();
+        await tester.pumpAndSettle();
+        await _pushOn(tester, inner, 'Inner');
+        app.tabs[0].currentState!
+            .push(
+              DialogRoute<void>(
+                context: app.tabs[0].currentContext!,
+                builder: (_) => const Text('The dialog'),
+              ),
+            )
+            .ignore();
+        await tester.pumpAndSettle();
+        await app.outer.currentState!.maybePop();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+        expect(find.text('The dialog'), findsOneWidget, reason: 'closing');
+        await back(app, tester);
+        expect(find.text('The dialog'), findsNothing);
+        expect(_page('Inner'), findsNothing, reason: 'the inner page popped');
+        expect(_page('Flow'), findsOneWidget, reason: 'the outer page stays');
+      });
     });
   }
 
