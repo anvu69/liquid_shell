@@ -97,6 +97,8 @@ The hit test and its assertion stay as they are.
 
 ### 3.3 VK-604 C8: the segment gate tests stay out of the pub archive
 
+> **Superseded (2026-10-23).** This branch makes no `.pubignore` change: VK-701 (`4a52d98`, already on `main`) drops all of `test/`, `example/test/` and `example/integration_test/` from the archive, which covers the three files below. See Quyết định phát sinh 11.
+
 **Evidence.** `liquid_shell/test/helpers/segment_gate.dart:12-15` imports `../../../tool/segment_gate.dart` and re-exports `../../../tool/trace_math.dart`, both outside the package. `liquid_shell/.pubignore` lists only `doc/images/`, `test/goldens/failures/`, `example/test/fonts/` and `example/test/goldens/`. Two tests use the helper: `test/unit/segment_motion_test.dart` and `test/unit/segment_holdout_test.dart` (`grep -rln segment_gate liquid_shell/test`). Inside the archive they cannot compile.
 
 **Design.** Three lines in `.pubignore`: the helper and the two tests. Check, with the dry-run (the only publish command allowed; it uploads nothing):
@@ -211,3 +213,4 @@ Bảng trên không nói tới những điểm dưới đây. Spec chọn như s
 8. **VK-619: chạm thanh trạng thái bằng toạ độ**, vì XCUITest không tìm thấy phần tử `StatusBar` trên iOS 26.5; cùng cách `MinimizeUITests` đang dùng.
 9. **Nhiệm vụ C9a tách riêng** (cần simulator) và đứng sau nhiệm vụ Dart của VK-604, như kế hoạch dự kiến.
 10. **VK-619: bản nháp không đăng** (2026-10-21). Lần tìm lại trước khi đăng thấy upstream đã có [flutter/flutter#191565](https://github.com/flutter/flutter/issues/191565) (cùng nguyên nhân, cùng cách sửa) và PR nháp [#191833](https://github.com/flutter/flutter/pull/191833). Các chỗ "bạn tự đăng" / "Not posted" ở trên là quyết định lúc viết spec; `docs/qa/vk619/upstream-draft.md` giữ làm bản ghi repro, dòng đầu ghi theo dõi hai link đó thay vì đăng.
+11. **C8 do VK-701 làm thay** (ghi 2026-10-23, lúc review trước merge). Nhánh này không đổi `.pubignore`: VK-701 (`4a52d98`) đã loại cả `test/`, `example/test/`, `example/integration_test/` khỏi gói, nên ba file của §3.3 đã ở ngoài. Các chỗ trong spec và plan nói "ba dòng `.pubignore`" và "523 KB → 515 KB" là thiết kế lúc viết, không phải thay đổi của PR này.
