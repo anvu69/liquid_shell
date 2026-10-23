@@ -78,6 +78,11 @@
   its tab's root, back ends that search instead of popping the outer
   shell's route; with its overlay sidebar open, back closes the sidebar
   first.
+- **Fix (VK-699).** When Flutter chrome takes over an active native search
+  (`nativeChrome: off`, a forced glass tier, a lost native install,
+  standby under another shell), the search now ends with its text kept,
+  `composing` false and `onChanged` not called. Before, the controller
+  stayed active (and blocked back) or kept `composing` true.
 
 ## 0.1.0-dev.7
 

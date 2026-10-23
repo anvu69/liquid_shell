@@ -2969,8 +2969,9 @@ extension NativeTabsTests {
   /// UIKit presents and dismisses the search (the real delegate calls):
   /// the scope bar shows only while the search is active (spike §1). The
   /// debug snapshot gives its frame in the Flutter view (VK-550 Task 11):
-  /// at the top on an iPhone, above the field UIKit hosts by the tab bar;
-  /// under the risen field on an iPad. Zero once hidden.
+  /// at the top on an iPhone, above the field UIKit hosts by the tab bar
+  /// (iOS 26); under the risen stacked field on an iPad and on an iPhone
+  /// from iOS 27.0. Zero once hidden.
   func testTheScopeBarShowsOnlyWhileTheSearchIsActive() throws {
     let tabs = try installedSearchShell(selected: 2, scopes: Self.scopes)
     let bar = tabs.searchBridge.controller.searchBar
@@ -2978,10 +2979,13 @@ extension NativeTabsTests {
     XCTAssertTrue(bar.showsScopeBar)
     XCTAssertTrue(tabs.debugSnapshot().scopeShown)
     let scope = stable { tabs.debugSnapshot().scopeFrame } until: { $0.width > 0 }
-    let field = tabs.debugSnapshot().fieldFrame
+    let snapshot = tabs.debugSnapshot()
+    let field = snapshot.fieldFrame
     XCTAssertGreaterThan(scope.width, 100, "\(scope)")
     XCTAssertGreaterThan(scope.height, 20, "\(scope)")
-    if UIDevice.current.userInterfaceIdiom == .pad {
+    // UIKit realises a stacked field on an iPad, and on an iPhone from
+    // iOS 27.0 (VK-698: the active field rises to the top there).
+    if snapshot.placement == "stacked" {
       XCTAssertGreaterThanOrEqual(scope.y, field.y + field.height - 1, "under the field: \(field)")
     } else {
       XCTAssertLessThan(scope.y + scope.height, field.y, "above the field: \(field)")
