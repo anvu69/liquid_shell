@@ -233,6 +233,11 @@ whatever the tabs do.
   native shell installs late, the search ends as it does when the Flutter
   field hides: `active` and `composing` turn false and the text stays. A
   tap on the native field resumes it.
+- **Flutter chrome takes over.** When native chrome lets go of an active
+  native search (`nativeChrome` set to `off`, a forced glass tier, the
+  native shell lost), the search ends right after that build: `active`
+  and `composing` turn false and the text stays. `onChanged` is not
+  called. A tap on the Flutter field resumes it.
 
 ## Vietnamese and other IMEs
 

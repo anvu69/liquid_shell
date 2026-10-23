@@ -78,7 +78,9 @@ final class ShellSearch implements SearchDriver {
   /// Leaving native chrome (a lost install, native chrome off, a forced
   /// tier) writes the controller's text into the Flutter field, which
   /// heard nothing while native drove the search. The write follows
-  /// [_writeField]'s rule: held while the field is composing.
+  /// [_writeField]'s rule: held while the field is composing. It also
+  /// ends the search, its text kept, right after the build: native's own
+  /// end never comes then, or comes in Flutter mode.
   bool get native => _native;
   set native(bool value) {
     if (!value) {
@@ -86,7 +88,18 @@ final class ShellSearch implements SearchDriver {
       _scopeSent = false;
       _replay = true;
       final controller = _controller;
-      if (_native && controller != null) _writeField(controller.text);
+      if (_native && controller != null) {
+        _writeField(controller.text);
+        // The native search ends with native chrome (VK-699): its own
+        // `searchActive false` never comes (a released claim) or comes in
+        // Flutter mode (a lost install). After the build, as releaseField.
+        scheduleMicrotask(() {
+          if (_disposed || _native || !identical(controller, _controller)) {
+            return;
+          }
+          _endSearch(controller, nativeField: true);
+        });
+      }
     }
     _native = value;
   }
@@ -277,9 +290,11 @@ final class ShellSearch implements SearchDriver {
   /// ends with the search. The text did not change, so `onChanged` is not
   /// called. The Flutter field reports its own composition end when it
   /// lets go ([_onEditing]): there only `active` changes here.
-  void _endSearch(LiquidSearchController controller) {
+  /// [nativeField] says which field held the search when [native] no
+  /// longer does (the hand-back to Flutter chrome).
+  void _endSearch(LiquidSearchController controller, {bool? nativeField}) {
     final value = controller.value;
-    final composing = !native && value.composing;
+    final composing = !(nativeField ?? native) && value.composing;
     if (!value.active && value.composing == composing) return;
     applySearchEdit(
       controller,

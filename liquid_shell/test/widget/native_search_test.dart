@@ -2620,4 +2620,103 @@ void main() {
       );
     });
   });
+
+  // VK-699. The reverse of VK-572 bug B: an active native search,
+  // mid-composition (marked text), is handed back to Flutter chrome. The
+  // search ends there, its text kept, as any native end does (VK-572 §4):
+  // inactive, not composing, onChanged not called.
+  group('VK-699: Flutter chrome takes over a native search', () {
+    Widget shell(
+      LiquidSearchController controller,
+      List<String> changes, {
+      LiquidNativeChrome nativeChrome = LiquidNativeChrome.auto,
+      LiquidGlassTier? forcedTier,
+    }) => LiquidGlassScope(
+      policy: LiquidGlassPolicy(forcedTier: forcedTier),
+      child: TestShell(
+        destinations: _destinations,
+        initialIndex: 2,
+        pageBuilder: _page,
+        nativeChrome: nativeChrome,
+        search: LiquidSearch(controller: controller, onChanged: changes.add),
+      ),
+    );
+
+    Future<(FakeNativePlatform, LiquidSearchController, List<String>)>
+    composing(WidgetTester tester) async {
+      final fake = installFakeNative(state: _compact);
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      final changes = <String>[];
+      await pumpShell(
+        tester,
+        shell(controller, changes),
+        padding: _compactPadding,
+      );
+      fake
+        ..emitNative(const LiquidNativeSearchActiveChanged(true))
+        ..emitNative(
+          const LiquidNativeSearchTextChanged('かな', composing: true),
+        );
+      await tester.pump();
+      expect(controller.isActive, isTrue, reason: 'precondition');
+      expect(controller.value.composing, isTrue, reason: 'precondition');
+      changes.clear();
+      return (fake, controller, changes);
+    }
+
+    void expectEnded(LiquidSearchController controller, List<String> changes) {
+      expect(controller.isActive, isFalse);
+      expect(controller.text, 'かな', reason: 'the composed text is kept');
+      expect(controller.value.composing, isFalse);
+      expect(changes, isEmpty, reason: 'the text did not change');
+    }
+
+    // The claim is released in the same build, so native's own
+    // `searchActive false` (if any) never reaches the shell.
+    testWidgets('P1: nativeChrome turned off mid-composition', (
+      tester,
+    ) async {
+      final (fake, controller, changes) = await composing(tester);
+      await pumpShell(
+        tester,
+        shell(controller, changes, nativeChrome: LiquidNativeChrome.off),
+        padding: _compactPadding,
+      );
+      fake.emitNative(const LiquidNativeSearchActiveChanged(false));
+      await tester.pumpAndSettle();
+      expectEnded(controller, changes);
+    });
+
+    testWidgets('P2: a lost install mid-composition', (tester) async {
+      final (fake, controller, changes) = await composing(tester);
+      fake.pushState(const LiquidNativeShellState(installed: false));
+      await tester.pumpAndSettle();
+      expectEnded(controller, changes);
+    });
+
+    // The claim survives a lost install: native's late report arrives
+    // after Dart switched to Flutter mode.
+    testWidgets('P2b: a lost install, then native reports inactive', (
+      tester,
+    ) async {
+      final (fake, controller, changes) = await composing(tester);
+      fake.pushState(const LiquidNativeShellState(installed: false));
+      await tester.pumpAndSettle();
+      fake.emitNative(const LiquidNativeSearchActiveChanged(false));
+      await tester.pumpAndSettle();
+      expectEnded(controller, changes);
+    });
+
+    // A forced glass tier leaves native chrome through the same setter.
+    testWidgets('P3: a forced glass tier mid-composition', (tester) async {
+      final (_, controller, changes) = await composing(tester);
+      await pumpShell(
+        tester,
+        shell(controller, changes, forcedTier: LiquidGlassTier.liquid),
+        padding: _compactPadding,
+      );
+      expectEnded(controller, changes);
+    });
+  });
 }

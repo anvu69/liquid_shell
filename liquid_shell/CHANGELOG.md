@@ -63,6 +63,11 @@
   a tab's page first (a nested flow, a go_router `ShellRoute` in a
   branch), then the tab's page; before, they popped the tab's page or the
   whole shell.
+- **Fix (VK-699).** When Flutter chrome takes over an active native search
+  (`nativeChrome: off`, a forced glass tier, a lost native install), the
+  search now ends with its text kept, `composing` false and `onChanged`
+  not called. Before, the controller stayed active (and blocked back) or
+  kept `composing` true.
 
 ## 0.1.0-dev.7
 
