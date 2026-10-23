@@ -20,7 +20,7 @@
 
 > **Tóm tắt (cho chủ sản phẩm).**
 > - **Tìm là một tab, không bao giờ là trang đẩy lên.** App khai báo một đích có vai trò tìm (`LiquidDestination(role: LiquidDestinationRole.search)`) và truyền `LiquidShell(search: LiquidSearch(controller: …))`. Chỉ số của tab Tìm nằm trong `destinations` như mọi tab khác, nên `IndexedStack` hay nhánh router dùng y như cũ.
-> - **iOS 26+: tất cả là UIKit thật.** Tab Tìm là `UISearchTab` chứa một `UINavigationController` có `UISearchController`. iPhone: viên tab và nút ⌕ tách rời; chạm ⌕ thì viên tab thu thành 1 nút tròn mang icon tab trước, ⌕ nở thành ô tìm ở đáy; chạm ô thì ô nằm trên bàn phím kèm nút ×. iPad: ô tìm ở trên cùng, dưới hàng nút cửa sổ •••, khi gõ thì trồi lên ngang hàng •••. Đúng như hai video, đã dựng lại được trên simulator 26.5 và 27.0.
+> - **iOS 26+: tất cả là UIKit thật.** Tab Tìm là `UISearchTab` chứa một `UINavigationController` có `UISearchController`. iPhone: viên tab và nút ⌕ tách rời; chạm ⌕ thì viên tab thu thành 1 nút tròn mang icon tab trước, ⌕ nở thành ô tìm ở đáy; chạm ô thì ô nằm trên bàn phím kèm nút ×. **Đo trên iOS 27.0 (VK-698): khi tìm đang bật, UIKit đặt ô ở trên cùng (stacked) chứ không ở đáy; ta nhận lựa chọn của hệ thống.** iPad: ô tìm ở trên cùng, dưới hàng nút cửa sổ •••, khi gõ thì trồi lên ngang hàng •••. Đúng như hai video, đã dựng lại được trên simulator 26.5 và 27.0.
 > - **Kết quả, gợi ý, "Tìm gần đây", thanh phạm vi** là nội dung Flutter vẽ bên dưới ô tìm native. Chữ gõ chạy sang Dart từng phím; bộ gõ tiếng Việt do iOS lo (ô tìm là của UIKit).
 > - **Nút back kính:** khi chạm một kết quả, trang chi tiết đẩy lên *trong* tab Tìm, và thanh điều hướng native vẽ nút back kính tròn 44pt thật. P3b-1 làm việc này cho tab Tìm; P3b-2 làm cho mọi tab, bắt đầu bằng spike vuốt-để-quay-lại (S2) có tiêu chí đạt/không đạt rõ ràng.
 > - **iOS < 26 và Android:** cùng các trạng thái, vẽ bằng Flutter qua `LiquidGlass`. Khổ hẹp: ⌕ tách rời nở thành ô ở đáy; khổ rộng: ô ở trên cùng.
@@ -449,6 +449,7 @@ The tab's `UISearchTab` provider returns the `ShellNavController`, built once pe
 | `UISearchTab.automaticallyActivatesSearch` | false | false | false | false |
 | `prominentTabIdentifier` | — (API is 27+) | `UISearchTab.identifier` (Q10) | — | nil (Q1: the system look) |
 | `preferredSearchBarPlacement` | `.automatic` (tab-hosted at the bottom) | `.automatic` | `.stacked` | `.stacked` |
+| Placement UIKit realises (`searchBarPlacement`, measured 2026-10-23, VK-698; 402×874 view, search active) | `inline`: field (88, 798, 226×48) by the tab bar, scope bar above it at (16, 64, 370×32) | `stacked` (27.0 `24A434`): field (16, 62, 315×44) at the top with ×, scope bar under it at (16, 116, 370×36), with or without scopes; idle after the search the field stays under the nav bar (16, 116, 370×44). The system's choice, accepted (VK-698); an iOS 27 `ios-unit` CI leg is a follow-up | `stacked` | `stacked` |
 | `hidesSearchBarWhenScrolling` | default | default | false | false |
 | Root `largeTitleDisplayMode` | `.inline` (unless `pages[0].largeTitle == false`) | `.inline` | `.never` (`.always` if `pages[0].largeTitle == true`) | `.never` |
 | Root small title | UIKit's | UIKit's | a leading title item at compact width | a leading title item at compact width |
@@ -458,7 +459,7 @@ The tab's `UISearchTab` provider returns the `ShellNavController`, built once pe
 
 **iPad title item.** UIKit draws no `.never` or `.inline` title for a `UISearchTab`'s root on an iPad (measured on 26.5 and 27.0, with every `navigationItem.style`, a `titleView` and a `titleMenuProvider`; a plain `UITab`'s root does show it). Only `.always` still draws, as a large title on its own row. Apple Music's narrow window shows a small "Search" right of the window controls, with the field on the row below. The search root therefore shows its title as a leading `UIBarButtonItem(customView:)` label (headline font, Dynamic Type, header trait, `hidesSharedBackground`) at compact width. UIKit places it right of the window controls and hides it while the search is active, when the field rises onto that row. At regular width the top tab bar names the tab, and there is no item.
 
-"iPad" means `userInterfaceIdiom == .pad`, so a narrow iPad window keeps the stacked top field (the video), and an iPhone in landscape keeps the bottom field. The search tab's `title` and `image` come from the destination (`label`, `sfSymbol` when set); otherwise UIKit's localised "Search" and magnifying glass stay. `searchBar.placeholder` is `config.search.placeholder` when set.
+"iPad" means `userInterfaceIdiom == .pad`, so a narrow iPad window keeps the stacked top field (the video), and an iPhone in landscape on iOS 26 keeps the bottom field. On iPhone iOS 27.0 UIKit realises `stacked` while the search is active (field at the top with ×, measured VK-698), not the bottom field of the video. The search tab's `title` and `image` come from the destination (`label`, `sfSymbol` when set); otherwise UIKit's localised "Search" and magnifying glass stay. `searchBar.placeholder` is `config.search.placeholder` when set.
 
 ### 7.3 Selection
 
