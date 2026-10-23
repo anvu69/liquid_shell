@@ -112,7 +112,7 @@ Under `## 0.1.0-dev.8`, "Fixed": one line each for T1, T3, T4, T5 (T2 is tests o
 |---|---|
 | Walking into every navigator costs more per scan | The scan runs on navigation events and on back, not per frame; the per-frame check walks ancestors only. A nested flow adds its own subtree once. |
 | A change in Flutter's `NavigatorPopHandler` (enabled semantics) | T3's tests pin today's behaviour on 3.44.6 and fail on a change; CI `checks (stable)` runs them on the newest stable too. |
-| `keptAlive` and sliver constraints are framework details | Both are public API of `rendering.dart`; T4's tests cover PageView and ListView. |
+| `keptAlive` and sliver constraints are framework details | Both are public API of `rendering.dart`; T4's tests cover PageView (kept alive and cache extent). |
 | Two parallel branches touch `branch_navigators.dart` | No other open branch does at `bfcccb6`. |
 
 ## 11. Process

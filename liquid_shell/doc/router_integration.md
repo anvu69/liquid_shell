@@ -99,6 +99,12 @@ Known limits:
   treats a bare `Offstage` as hidden; `LiquidHideChrome` needs
   `Visibility` or `TickerMode`. Hide kept branches with `TickerMode` (or an
   `IndexedStack`) and both agree.
+- **A shell nested in another shell's body (sub-tabs).** The outer shell's
+  back reaches the inner shell's tab navigators directly, so the inner
+  shell's own order (its overlay sidebar, then its active search) is not
+  applied first. System back never reached the inner shell's own back
+  handling before either: its `PopScope` sits on a tab page's route, not
+  the outer shell's.
 
 ## A search branch
 
