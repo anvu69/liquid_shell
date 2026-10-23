@@ -167,9 +167,9 @@ void _endSearch(LiquidSearchController controller) {
 
 ## 5. Design: VK-572 bug B, a native takeover ends the Flutter search
 
-**Rule.** When native chrome takes over while the Flutter field holds the search, the search ends, its text kept, as Flutter mode ends it for hidden chrome or a size-class change. Native starts inactive anyway.
+**Rule.** When native chrome takes over while the Flutter field holds the search, the search ends, its text kept, as Flutter mode ends it for hidden chrome or a size-class change. Native is told so too (`setSearchActive(active: false)`, added in ee98009): the takeover must not leave native active.
 
-**Change:** `releaseField()` keeps its promise in both modes. Its microtask, after `_onFocus()`, calls `_endSearch(controller)` when `native` is true:
+**Change:** `releaseField()` keeps its promise in both modes. Its microtask, after `_onFocus()`, calls `_endSearch(controller)` and tells native the search is inactive when `native` is true:
 
 ```dart
 void releaseField() {
@@ -179,10 +179,15 @@ void releaseField() {
     if (_disposed) return;
     _onFocus();
     final controller = _controller;
-    if (native && controller != null) _endSearch(controller);
+    if (native && controller != null) {
+      _endSearch(controller);
+      claim()?.setSearchActive(active: false);
+    }
   });
 }
 ```
+
+- The `setSearchActive(active: false)` call runs on every takeover, also when native is already inactive. That is safe: native ignores it then (XCTest `testDeactivatingAnInactiveSearchSendsNothing`). Do not remove it as redundant: test B12 fails without it.
 
 - The gates `if (native) return;` (`_onFocus`, 484) and `if (_writing || native) return;` (`_onEditing`, 432) stay as they are for ordinary events: under native they keep the Flutter field's leftovers away from the controller.
 - In Flutter mode (`releaseField` at `liquid_shell.dart:1246-1247`) nothing changes: `native` is false.
@@ -251,7 +256,7 @@ One bullet in `doc/search.md`'s Scopes section, after "One way": the shell never
 |---|---|
 | Helper (`ShellSearch`, private) | `void _endSearch(LiquidSearchController controller)` |
 | Dart test groups (`native_search_test.dart`) | `VK-572: the native composition ends with the search`; `VK-572: native takes over a Flutter search`; the VK-604 tests inside `VK-550: the native scope bar` |
-| Dart test names | A1, A2/A4, A3, A5, R1, R2, R3 (bug A); B2, B5–B11 (bug B), as in the plan |
+| Dart test names | A1, A2/A4, A3, A5, R1, R2, R3 (bug A); B2, B5–B12 (bug B; B12 added with ee98009), as in the plan |
 | XCTests (`NativeTabsTests`) | `testADeactivateMidCompositionEndsInactiveWithNoCommitReport`, `testATabChangeMidCompositionEndsInactiveWithNoCommitReport`, `testDeactivatingAnInactiveSearchSendsNothing`; helpers `lastTextReport()`, `composingSearch()` |
 | Unit tests (`search_test.dart`, `nativeSearchBottomInset`) | `no field: nothing`; `the stacked field inside the top safe area: nothing`; `landscape, keyboard up: the raised field counts`; `landscape, keyboard down (VK-571): down to the field top` |
 | Widget test (VK-594) | `landscape: the raised field still moves the bottom inset` |
