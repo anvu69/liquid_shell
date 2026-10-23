@@ -7,7 +7,15 @@ import 'package:flutter/widgets.dart';
 /// on every blocked back, enabled or not, so the app answers back for it. A
 /// handler inside a tab's page sits on the page's route, which system back
 /// never calls, so it does not count.
-typedef BranchNavigator = ({NavigatorState navigator, bool handled});
+///
+/// `onScreen` false: a tab's own navigator that is hidden at the scan (an
+/// unselected tab, or one a router shows frames after the selection), kept
+/// so the per-frame check can see it come on screen.
+typedef BranchNavigator = ({
+  NavigatorState navigator,
+  bool handled,
+  bool onScreen,
+});
 
 /// Whether a `NavigatorPopHandler` answers back: it has a callback.
 bool _answersBack(Widget widget) => switch (widget) {
@@ -125,30 +133,47 @@ bool _hasBarrier(Element element, int depth) {
 /// comes after the navigator it is in, so "the last that can pop" pops it
 /// first, as iOS does.
 ///
-/// A branch hidden by [_hides] or [_shows] is skipped.
+/// A branch hidden by [_hides] or [_shows] is skipped, but for its first
+/// navigator (a hidden tab's own), recorded with `onScreen` false.
 ///
 /// It walks elements, so call it outside a build (after the frame).
 List<BranchNavigator> onScreenNavigatorsUnder(BuildContext root) {
   final found = <BranchNavigator>[];
-  void visit(Element element, {required bool handled, required bool inside}) {
+  void visit(
+    Element element, {
+    required bool handled,
+    required bool inside,
+    required bool shown,
+  }) {
     final widget = element.widget;
-    if (_hides(widget)) return;
+    final shownHere = shown && !_hides(widget);
+    // A hidden subtree is walked down to its first navigator (a tab's own);
+    // a hidden tab with no navigator is walked whole, at scan time only,
+    // never per frame.
+    if (!shownHere && inside) return;
     final handledHere = handled || (!inside && _answersBack(widget));
     final isNavigator =
         element is StatefulElement && element.state is NavigatorState;
     if (element case StatefulElement(state: final NavigatorState navigator)) {
-      found.add((navigator: navigator, handled: handledHere));
+      found.add((
+        navigator: navigator,
+        handled: handledHere,
+        onScreen: shownHere,
+      ));
     }
     final insideHere = inside || isNavigator;
     element.visitChildren((child) {
-      if (_shows(element, child)) {
-        visit(child, handled: handledHere, inside: insideHere);
-      }
+      visit(
+        child,
+        handled: handledHere,
+        inside: insideHere,
+        shown: shownHere && _shows(element, child),
+      );
     });
   }
 
   root.visitChildElements(
-    (child) => visit(child, handled: false, inside: false),
+    (child) => visit(child, handled: false, inside: false, shown: true),
   );
   return found;
 }

@@ -768,7 +768,7 @@ class _LiquidShellState extends State<LiquidShell>
     if (!mounted) return;
     final body = _bodyKey.currentContext;
     _branches = body == null ? const [] : onScreenNavigatorsUnder(body);
-    _checkBranches();
+    _checkBranches(rescan: false);
     _armBranchCheck();
   }
 
@@ -776,16 +776,24 @@ class _LiquidShellState extends State<LiquidShell>
   /// pop. Cheap: its ancestors plus, at a navigator's overlay, the entries
   /// after the one on the path (up to 12 levels each, looking for a route
   /// barrier), not the tree.
-  void _checkBranches() {
+  ///
+  /// A navigator that came on screen or went off it since the scan (a tab a
+  /// router shows frames after the selection) asks for a new scan: its
+  /// nested navigators were not walked.
+  void _checkBranches({bool rescan = true}) {
     final body = _bodyKey.currentContext;
-    final canPop =
-        body != null &&
-        _branches.any(
-          (b) =>
-              b.navigator.mounted &&
-              isOnScreenUnder(b.navigator.context, body) &&
-              b.navigator.canPop(),
-        );
+    var canPop = false;
+    for (final b in _branches) {
+      final onScreen =
+          body != null &&
+          b.navigator.mounted &&
+          isOnScreenUnder(b.navigator.context, body);
+      if (rescan && onScreen != b.onScreen && b.navigator.mounted) {
+        _scanBranches();
+        return;
+      }
+      if (onScreen && b.navigator.canPop()) canPop = true;
+    }
     if (canPop != _branchCanPop) setState(() => _branchCanPop = canPop);
   }
 
@@ -815,8 +823,8 @@ class _LiquidShellState extends State<LiquidShell>
         SchedulerPhase.persistentCallbacks) {
       _scanBranches();
     }
-    for (final (:navigator, :handled) in _branches.reversed) {
-      if (!navigator.mounted || !navigator.canPop()) continue;
+    for (final (:navigator, :handled, :onScreen) in _branches.reversed) {
+      if (!onScreen || !navigator.mounted || !navigator.canPop()) continue;
       // The app's NavigatorPopHandler around it asks the same navigator in
       // the same turn: a second ask would close a drawer and pop its page.
       if (handled) return;

@@ -66,6 +66,10 @@
 - **Fix (VK-775).** A second back while a dialog is still closing pops
   the page of a navigator nested in the tab's page, not the page that
   holds it: a route that is closing no longer covers the page under it.
+- **Fix (VK-680).** Back and the iOS edge swipe pop the page of a tab that
+  a router shows a few frames after the selection (the end of a
+  cross-fade), also with no `PopScope` of the app's own; before, they
+  popped the whole shell.
 
 ## 0.1.0-dev.7
 

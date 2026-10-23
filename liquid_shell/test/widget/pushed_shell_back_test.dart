@@ -1083,6 +1083,74 @@ void main() {
         expect(_page('Inner'), findsNothing, reason: 'the inner page popped');
         expect(_page('Flow'), findsOneWidget, reason: 'the outer page stays');
       });
+
+      // VK-680: with no PopScope of the app's own, the shell's answer comes
+      // from the per-frame check alone; a branch that comes on screen
+      // frames after the selection must turn it.
+      testWidgets('no app PopScope, a branch on screen 300 ms after the '
+          'selection: back pops its page, not the shell', (tester) async {
+        final app = _Pushed(mode);
+        await app.pump(
+          tester,
+          body: (index, pages) => _LateShow(index: index, children: pages),
+        );
+        await app.select(tester, 1);
+        await app.push(tester, 1, 'Kept');
+        await app.select(tester, 0);
+        app.shell.currentState!.select(1);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.pump();
+        await back(app, tester);
+        expect(app.shellPopped, isFalse, reason: 'the tab has a page');
+        expect(_page('Kept'), findsNothing);
+        expect(_page('Library'), findsOneWidget);
+      });
+
+      testWidgets('no app PopScope, a branch on screen 300 ms after the '
+          'selection: the edge swipe pops its page, not the shell', (
+        tester,
+      ) async {
+        final app = _Pushed(mode);
+        await app.pump(
+          tester,
+          body: (index, pages) => _LateShow(index: index, children: pages),
+        );
+        await app.select(tester, 1);
+        await app.push(tester, 1, 'Kept');
+        await app.select(tester, 0);
+        app.shell.currentState!.select(1);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.pump();
+        await _swipeFromTheEdge(tester);
+        expect(app.shellPopped, isFalse, reason: 'the tab has a page');
+        expect(_page('Library'), findsOneWidget);
+      });
+
+      testWidgets('no app PopScope, a branch with a nested flow on screen '
+          '300 ms after the selection: back pops the inner page', (
+        tester,
+      ) async {
+        final inner = GlobalKey<NavigatorState>();
+        final app = _Pushed(mode);
+        await app.pump(
+          tester,
+          root: (i) => i == 1 ? _flow(inner, 'Flow') : null,
+          body: (index, pages) => _LateShow(index: index, children: pages),
+        );
+        await app.select(tester, 1);
+        await _pushOn(tester, inner, 'Inner');
+        await app.select(tester, 0);
+        app.shell.currentState!.select(1);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.pump();
+        await back(app, tester);
+        expect(app.shellPopped, isFalse, reason: 'the nested flow has a page');
+        expect(_page('Inner'), findsNothing);
+        expect(_page('Flow'), findsOneWidget);
+      });
     });
   }
 
