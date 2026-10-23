@@ -82,9 +82,9 @@ the swipe on any tab's pushed page popped the whole shell.
   stays. One without a callback is ignored.
 - **A drawer or a persistent bottom sheet** on the tab's page counts too:
   back closes it first, at the tab's root as well.
-- **Several navigators on screen** (an iPad detail beside its master, or a
-  `PageView` whose neighbours stay alive): back pops the last one in tree
-  order that can pop.
+- **Several navigators on screen** (an iPad detail beside its master):
+  back pops the last one in tree order that can pop. A `PageView` or list
+  page off screen (kept alive, or in the cache extent) does not count.
 - A shell at the app's root has no edge swipe of its own; there system
   back (Android) pops the tab's page instead of leaving the app.
 

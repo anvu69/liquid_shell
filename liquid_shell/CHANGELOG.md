@@ -57,6 +57,8 @@
 - Back is no longer swallowed by a `NavigatorPopHandler` with no callback
   around a branch navigator; one with a callback answers back whether
   `enabled` or not (VK-593).
+- Back no longer pops a page in a `PageView` or list page that is off
+  screen (kept alive, or in the cache extent) (VK-593).
 
 ## 0.1.0-dev.7
 

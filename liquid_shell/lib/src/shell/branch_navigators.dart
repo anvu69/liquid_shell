@@ -26,21 +26,48 @@ bool _hides(Widget widget) => switch (widget) {
   _ => false,
 };
 
-/// Whether [parent] shows its child [child]. An `IndexedStack` shows only
-/// the child at its index, and its render object is what says so: from
-/// Flutter 3.47 it no longer wraps the others in a `Visibility` widget
-/// (a private scope does that job), so no widget above them hides them.
+/// Whether [parent] shows its child [child]:
+/// - an `IndexedStack` shows only the child at its index, and its render
+///   object is what says so: from Flutter 3.47 it no longer wraps the
+///   others in a `Visibility` widget;
+/// - a scrolling list (`PageView`, `ListView`) shows a child laid out in
+///   its visible window, not one kept alive or in the cache extent.
 bool _shows(Element parent, Element child) {
   if (parent is! RenderObjectElement) return true;
   final render = parent.renderObject;
-  if (render is! RenderIndexedStack) return true;
+  if (render is RenderIndexedStack) {
+    return _position(parent, child) == render.index;
+  }
+  if (render is RenderSliverMultiBoxAdaptor) return _inWindow(render, child);
+  return true;
+}
+
+int _position(Element parent, Element child) {
   var position = 0;
-  var shown = false;
+  var found = -1;
   parent.visitChildren((element) {
-    if (identical(element, child)) shown = position == render.index;
+    if (identical(element, child)) found = position;
     position++;
   });
-  return shown;
+  return found;
+}
+
+bool _inWindow(RenderSliverMultiBoxAdaptor sliver, Element child) {
+  final box = child.renderObject;
+  if (box is! RenderBox || !box.hasSize) return false;
+  final data = box.parentData;
+  if (data is! SliverMultiBoxAdaptorParentData || data.keptAlive) {
+    return false;
+  }
+  final start = sliver.childScrollOffset(box);
+  if (start == null) return false;
+  final constraints = sliver.constraints;
+  final extent = constraints.axis == Axis.horizontal
+      ? box.size.width
+      : box.size.height;
+  final windowStart = constraints.scrollOffset;
+  final windowEnd = windowStart + constraints.remainingPaintExtent;
+  return start < windowEnd && start + extent > windowStart;
 }
 
 /// The navigators on screen nearest under [root]: the selected tab's own

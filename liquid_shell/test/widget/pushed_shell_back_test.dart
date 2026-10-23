@@ -9,6 +9,7 @@ import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
 import '../helpers/fake_native_platform.dart';
+import '../helpers/kept_alive.dart';
 import '../helpers/shell_harness.dart';
 
 // VK-567: a shell that is itself a pushed route (the example's cases sit
@@ -286,6 +287,50 @@ class _LateShowState extends State<_LateShow> {
     children: [
       for (final (i, child) in widget.children.indexed)
         Offstage(offstage: i != _shown, child: child),
+    ],
+  );
+}
+
+/// The tabs as the pages of a `PageView`, the selected one jumped to. Each
+/// is kept alive (the tab left stays in the tree, not laid out), or, with
+/// [cached], laid out in the cache extent beside the one on screen.
+class _PagedBody extends StatefulWidget {
+  const _PagedBody({
+    required this.index,
+    required this.children,
+    this.cached = false,
+  });
+
+  final int index;
+  final List<Widget> children;
+  final bool cached;
+
+  @override
+  State<_PagedBody> createState() => _PagedBodyState();
+}
+
+class _PagedBodyState extends State<_PagedBody> {
+  late final _controller = PageController(initialPage: widget.index);
+
+  @override
+  void didUpdateWidget(_PagedBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.index != widget.index) _controller.jumpToPage(widget.index);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => PageView(
+    controller: _controller,
+    allowImplicitScrolling: widget.cached,
+    children: [
+      for (final child in widget.children)
+        widget.cached ? child : KeptAlive(child: child),
     ],
   );
 }
@@ -766,6 +811,64 @@ void main() {
         expect(_page('Detail'), findsNothing, reason: 'back not swallowed');
         expect(_page('Home'), findsOneWidget);
         expect(app.shellPopped, isFalse);
+      });
+
+      // T4: a tab kept alive in a PageView, off screen.
+      testWidgets('tabs as kept-alive PageView pages: back never pops the '
+          'page of a tab off screen', (tester) async {
+        final app = _Pushed(mode);
+        await app.pump(
+          tester,
+          body: (index, pages) => _PagedBody(index: index, children: pages),
+        );
+        await app.select(tester, 1);
+        await app.push(tester, 1, 'Kept');
+        await app.select(tester, 0);
+        final library = app.tabs[1].currentState!;
+        await app.outer.currentState!.maybePop();
+        // One frame: a pop it asked for has landed, the shell still mounted.
+        await tester.pump();
+        expect(library.canPop(), isTrue, reason: "Library's page is kept");
+        await tester.pumpAndSettle();
+        expect(app.shellPopped, isTrue, reason: 'Home is at its root');
+      });
+
+      testWidgets('tabs as kept-alive PageView pages: back pops the page of '
+          'the tab on screen', (tester) async {
+        final app = _Pushed(mode);
+        await app.pump(
+          tester,
+          body: (index, pages) => _PagedBody(index: index, children: pages),
+        );
+        await app.select(tester, 1);
+        await app.push(tester, 1, 'Kept');
+        await app.select(tester, 0);
+        await app.push(tester, 0, 'Detail');
+        await back(app, tester);
+        expect(_page('Detail'), findsNothing);
+        expect(app.tabs[1].currentState!.canPop(), isTrue, reason: 'kept');
+        expect(app.shellPopped, isFalse);
+      });
+
+      // T4: a page laid out in the cache extent, not on screen.
+      testWidgets('tabs as PageView pages in the cache extent: back never '
+          'pops the page of a tab off screen', (tester) async {
+        final app = _Pushed(mode);
+        await app.pump(
+          tester,
+          body: (index, pages) =>
+              _PagedBody(index: index, cached: true, children: pages),
+        );
+        await app.select(tester, 1);
+        await app.push(tester, 1, 'Kept');
+        await app.select(tester, 0);
+        final library = app.tabs[1].currentState!;
+        expect(library.mounted, isTrue, reason: 'in the cache extent');
+        await app.outer.currentState!.maybePop();
+        await tester.pump();
+        expect(library.canPop(), isTrue, reason: "Library's page is kept");
+        await tester.pumpAndSettle();
+        expect(app.shellPopped, isTrue, reason: 'Home is at its root');
       });
     });
   }
