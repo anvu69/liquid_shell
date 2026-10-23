@@ -75,29 +75,36 @@ the swipe on any tab's pushed page popped the whole shell.
 - **The order** is the overlay sidebar, then an active search, then the
   tab's page, then the shell's route.
 - **Remove a `NavigatorPopHandler` around a branch navigator**: the shell
-  does its job. One the app keeps answers back for its navigator, and the
-  shell then only blocks its own route, so one back is still one step: an
-  open drawer or sheet closes, and its page stays.
+  does its job. One the app keeps with a callback (`onPopWithResult`)
+  answers back for its navigator, enabled or not (Flutter calls it on
+  every blocked back), and the shell then only blocks its own route, so
+  one back is still one step: an open drawer or sheet closes, and its page
+  stays. One without a callback is ignored.
 - **A drawer or a persistent bottom sheet** on the tab's page counts too:
   back closes it first, at the tab's root as well.
-- **Several navigators on screen** (an iPad detail beside its master, or a
-  `PageView` whose neighbours stay alive): back pops the last one in tree
-  order that can pop.
+- **Several navigators on screen** (an iPad detail beside its master):
+  back pops the last one in tree order that can pop. A `PageView` or list
+  page off screen (kept alive, or in the cache extent) does not count.
+- **A navigator inside a tab's page** (a flow nested in a page, or a
+  go_router `ShellRoute` inside a branch) pops first, as on iOS: back and
+  the edge swipe pop its page, then the tab's. It counts only while its
+  page is the top route of its navigator: a dialog or sheet above it
+  closes first. An overlay entry the app inserts (a toast) is not a route.
 - A shell at the app's root has no edge swipe of its own; there system
   back (Android) pops the tab's page instead of leaving the app.
 
 Known limits:
 
-- **A navigator inside a tab's page** (a flow nested in a page, or a
-  go_router `ShellRoute` inside a `StatefulShellRoute` branch) is not
-  looked at: only the navigator nearest under `body` is. While that
-  navigator is at its root, the swipe on a page pushed in the nested one
-  still pops a pushed shell. A deeper scan is planned with the go_router
-  adapter.
 - **"On screen" for back is not quite `LiquidHideChrome`'s.** Back also
   treats a bare `Offstage` as hidden; `LiquidHideChrome` needs
   `Visibility` or `TickerMode`. Hide kept branches with `TickerMode` (or an
   `IndexedStack`) and both agree.
+- **A shell nested in another shell's body (sub-tabs).** The outer shell's
+  back reaches the inner shell's tab navigators directly, so the inner
+  shell's own order (its overlay sidebar, then its active search) is not
+  applied first. System back never reached the inner shell's own back
+  handling before either: its `PopScope` sits on a tab page's route, not
+  the outer shell's.
 
 ## A search branch
 

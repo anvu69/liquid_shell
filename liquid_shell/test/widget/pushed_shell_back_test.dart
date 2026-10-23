@@ -9,6 +9,7 @@ import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
 import '../helpers/fake_native_platform.dart';
+import '../helpers/kept_alive.dart';
 import '../helpers/shell_harness.dart';
 
 // VK-567: a shell that is itself a pushed route (the example's cases sit
@@ -54,6 +55,10 @@ class _Pushed {
   FakeNativePlatform? fake;
   late final LiquidSearchController search;
 
+  /// The root page of a tab, when a test gives its own (a nested flow);
+  /// null keeps the default.
+  Widget? Function(int index)? root;
+
   /// A tab's navigator, its root a LiquidPage; [wrap] decorates it (an
   /// app's `NavigatorPopHandler`).
   Widget branch(int index, {Widget Function(int, Widget)? wrap}) {
@@ -61,10 +66,12 @@ class _Pushed {
     final navigator = Navigator(
       key: tabs[index],
       onGenerateRoute: (_) => MaterialPageRoute<void>(
-        builder: (_) => LiquidPage(
-          title: label,
-          child: TestPage(label: label),
-        ),
+        builder: (_) =>
+            root?.call(index) ??
+            LiquidPage(
+              title: label,
+              child: TestPage(label: label),
+            ),
       ),
     );
     return wrap?.call(index, navigator) ?? navigator;
@@ -77,8 +84,10 @@ class _Pushed {
     Widget Function(int, Widget)? wrap,
     Widget Function(Widget shell)? around,
     Widget Function(int index, List<Widget> pages)? body,
+    Widget? Function(int index)? root,
     bool pushed = true,
   }) async {
+    this.root = root;
     if (mode == _Mode.native) fake = installFakeNative(state: _compact);
     search = LiquidSearchController();
     addTearDown(search.dispose);
@@ -243,6 +252,131 @@ class _LateHideState extends State<_LateHide> {
         ),
     ],
   );
+}
+
+/// Branches kept as a router keeps them, but the one selected comes on
+/// screen 300 ms after the selection (the end of a cross-fade), the one
+/// left at once: for a moment no branch is on screen.
+class _LateShow extends StatefulWidget {
+  const _LateShow({required this.index, required this.children});
+
+  final int index;
+  final List<Widget> children;
+
+  @override
+  State<_LateShow> createState() => _LateShowState();
+}
+
+class _LateShowState extends State<_LateShow> {
+  late int? _shown = widget.index;
+  Timer? _timer;
+
+  @override
+  void didUpdateWidget(_LateShow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.index == widget.index) return;
+    _shown = null;
+    _timer?.cancel();
+    _timer = Timer(
+      const Duration(milliseconds: 300),
+      () => setState(() => _shown = widget.index),
+    );
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    fit: StackFit.expand,
+    children: [
+      for (final (i, child) in widget.children.indexed)
+        Offstage(offstage: i != _shown, child: child),
+    ],
+  );
+}
+
+/// The tabs as the pages of a `PageView`, the selected one jumped to. Each
+/// is kept alive (the tab left stays in the tree, not laid out), or, with
+/// [cached], laid out in the cache extent beside the one on screen.
+class _PagedBody extends StatefulWidget {
+  const _PagedBody({
+    required this.index,
+    required this.children,
+    this.cached = false,
+  });
+
+  final int index;
+  final List<Widget> children;
+  final bool cached;
+
+  @override
+  State<_PagedBody> createState() => _PagedBodyState();
+}
+
+class _PagedBodyState extends State<_PagedBody> {
+  late final _controller = PageController(initialPage: widget.index);
+
+  @override
+  void didUpdateWidget(_PagedBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.index != widget.index) _controller.jumpToPage(widget.index);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => PageView(
+    controller: _controller,
+    allowImplicitScrolling: widget.cached,
+    children: [
+      for (final child in widget.children)
+        if (widget.cached) child else KeptAlive(child: child),
+    ],
+  );
+}
+
+/// A page that holds its own navigator (a nested flow): its root is the
+/// test page of [label].
+Widget _flow(GlobalKey<NavigatorState> inner, String label) => Navigator(
+  key: inner,
+  onGenerateRoute: (_) => MaterialPageRoute<void>(
+    builder: (_) => LiquidPage(
+      title: label,
+      child: TestPage(label: label),
+    ),
+  ),
+);
+
+/// [_flow] inside the standard `NavigatorPopHandler`, in the tab's page: its
+/// PopScope is on the tab page's route, which system back never calls.
+Widget _handledFlow(GlobalKey<NavigatorState> inner, String label) =>
+    NavigatorPopHandler(
+      onPopWithResult: (_) => inner.currentState?.maybePop(),
+      child: _flow(inner, label),
+    );
+
+/// Pushes a plain page titled [title] on [navigator].
+Future<void> _pushOn(
+  WidgetTester tester,
+  GlobalKey<NavigatorState> navigator,
+  String title,
+) async {
+  navigator.currentState!
+      .push(
+        MaterialPageRoute<void>(
+          builder: (_) => Scaffold(body: Center(child: Text('$title page: 0'))),
+        ),
+      )
+      .ignore();
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -620,6 +754,301 @@ void main() {
         await tester.pumpAndSettle();
         expect(app.shellPopped, isFalse);
         expect(_page('Form'), findsOneWidget);
+      });
+    });
+
+    group('VK-593 (${mode.name}): back finds the right navigator', () {
+      Future<void> back(_Pushed app, WidgetTester tester) async {
+        await app.outer.currentState!.maybePop();
+        await tester.pumpAndSettle();
+      }
+
+      // T2: the three re-scan mechanisms of `_popBranch`, each locked.
+      // An app's PopScope blocks the shell's route, so `_popBranch` runs
+      // even when the shell's own answer is stale.
+      testWidgets('T2: back reaches a branch that came on screen after the '
+          'last scan', (tester) async {
+        final app = _Pushed(mode);
+        await app.pump(
+          tester,
+          around: (shell) => PopScope<Object?>(canPop: false, child: shell),
+          body: (index, pages) => _LateShow(index: index, children: pages),
+        );
+        await app.select(tester, 1);
+        await app.push(tester, 1, 'Kept');
+        await app.select(tester, 0);
+        app.shell.currentState!.select(1);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        await back(app, tester);
+        expect(_page('Kept'), findsNothing, reason: 'the fresh scan found it');
+        expect(_page('Library'), findsOneWidget);
+      });
+
+      testWidgets("T2: after back pops a branch's last page, the next back "
+          "pops the shell's route", (tester) async {
+        final app = _Pushed(mode);
+        await app.pump(tester);
+        await app.push(tester, 0, 'Detail');
+        await back(app, tester);
+        expect(_page('Home'), findsOneWidget);
+        await back(app, tester);
+        expect(app.shellPopped, isTrue);
+      });
+
+      testWidgets('T2: two navigators as deep on screen: back pops the last '
+          'in tree order', (tester) async {
+        final app = _Pushed(mode);
+        await app.pump(
+          tester,
+          body: (_, pages) => Row(
+            children: [
+              Expanded(child: pages[0]),
+              Expanded(child: pages[1]),
+            ],
+          ),
+        );
+        await app.push(tester, 0, 'Master');
+        await app.push(tester, 1, 'Detail');
+        await back(app, tester);
+        expect(_page('Detail'), findsNothing);
+        expect(
+          _page('Master'),
+          findsOneWidget,
+          reason: 'the earlier one stays',
+        );
+      });
+
+      // T3: Flutter calls a disabled handler's callback too when the
+      // shell blocks the route; the shell must not pop again. A callback
+      // that pops at once shows it: the shell's `maybePop` then finds the
+      // next page on top (a `maybePop` callback is saved by the
+      // navigator's own check that its top did not change).
+      testWidgets('a disabled NavigatorPopHandler with a callback: one back '
+          'pops one page', (tester) async {
+        final app = _Pushed(mode);
+        await app.pump(
+          tester,
+          wrap: (i, navigator) => NavigatorPopHandler(
+            enabled: false,
+            onPopWithResult: (_) => app.tabs[i].currentState?.pop(),
+            child: navigator,
+          ),
+        );
+        await app.push(tester, 0, 'One');
+        await app.push(tester, 0, 'Two');
+        await back(app, tester);
+        expect(_page('Two'), findsNothing);
+        expect(_page('One'), findsOneWidget, reason: 'not two pages');
+      });
+
+      // T3: a handler with no callback answers nothing; the shell pops.
+      testWidgets('a NavigatorPopHandler with no callback: back still pops '
+          'the page', (tester) async {
+        final app = _Pushed(mode);
+        await app.pump(
+          tester,
+          wrap: (_, navigator) => NavigatorPopHandler(child: navigator),
+        );
+        await app.push(tester, 0, 'Detail');
+        await back(app, tester);
+        expect(_page('Detail'), findsNothing, reason: 'back not swallowed');
+        expect(_page('Home'), findsOneWidget);
+        expect(app.shellPopped, isFalse);
+      });
+
+      // T4: a tab kept alive in a PageView, off screen.
+      testWidgets('tabs as kept-alive PageView pages: back never pops the '
+          'page of a tab off screen', (tester) async {
+        final app = _Pushed(mode);
+        await app.pump(
+          tester,
+          body: (index, pages) => _PagedBody(index: index, children: pages),
+        );
+        await app.select(tester, 1);
+        await app.push(tester, 1, 'Kept');
+        await app.select(tester, 0);
+        final library = app.tabs[1].currentState!;
+        await app.outer.currentState!.maybePop();
+        // One frame: a pop it asked for has landed, the shell still mounted.
+        await tester.pump();
+        expect(library.canPop(), isTrue, reason: "Library's page is kept");
+        await tester.pumpAndSettle();
+        expect(app.shellPopped, isTrue, reason: 'Home is at its root');
+      });
+
+      testWidgets('tabs as kept-alive PageView pages: back pops the page of '
+          'the tab on screen', (tester) async {
+        final app = _Pushed(mode);
+        await app.pump(
+          tester,
+          body: (index, pages) => _PagedBody(index: index, children: pages),
+        );
+        await app.select(tester, 1);
+        await app.push(tester, 1, 'Kept');
+        await app.select(tester, 0);
+        await app.push(tester, 0, 'Detail');
+        await back(app, tester);
+        expect(_page('Detail'), findsNothing);
+        expect(app.tabs[1].currentState!.canPop(), isTrue, reason: 'kept');
+        expect(app.shellPopped, isFalse);
+      });
+
+      // T4: a page laid out in the cache extent, not on screen.
+      testWidgets('tabs as PageView pages in the cache extent: back never '
+          'pops the page of a tab off screen', (tester) async {
+        final app = _Pushed(mode);
+        await app.pump(
+          tester,
+          body: (index, pages) =>
+              _PagedBody(index: index, cached: true, children: pages),
+        );
+        await app.select(tester, 1);
+        await app.push(tester, 1, 'Kept');
+        await app.select(tester, 0);
+        final library = app.tabs[1].currentState!;
+        expect(library.mounted, isTrue, reason: 'in the cache extent');
+        await app.outer.currentState!.maybePop();
+        await tester.pump();
+        expect(library.canPop(), isTrue, reason: "Library's page is kept");
+        await tester.pumpAndSettle();
+        expect(app.shellPopped, isTrue, reason: 'Home is at its root');
+      });
+
+      // T5: a nested flow in the tab's root page.
+      testWidgets("a nested flow at the tab's root: back pops the inner page, "
+          'then the shell', (tester) async {
+        final inner = GlobalKey<NavigatorState>();
+        final app = _Pushed(mode);
+        await app.pump(
+          tester,
+          root: (i) => i == 0 ? _flow(inner, 'Home') : null,
+        );
+        await _pushOn(tester, inner, 'Inner');
+        await back(app, tester);
+        expect(_page('Inner'), findsNothing);
+        expect(_page('Home'), findsOneWidget);
+        expect(app.shellPopped, isFalse);
+        await back(app, tester);
+        expect(app.shellPopped, isTrue);
+      });
+
+      testWidgets("a nested flow at the tab's root: the edge swipe pops the "
+          'inner page, not the shell', (tester) async {
+        final inner = GlobalKey<NavigatorState>();
+        final app = _Pushed(mode);
+        await app.pump(
+          tester,
+          root: (i) => i == 0 ? _flow(inner, 'Home') : null,
+        );
+        await _pushOn(tester, inner, 'Inner');
+        await _swipeFromTheEdge(tester);
+        expect(app.shellPopped, isFalse);
+        expect(_page('Inner'), findsNothing);
+        expect(_page('Home'), findsOneWidget);
+      });
+
+      testWidgets('a nested flow on a pushed page: the inner page pops '
+          "first, then the tab's page", (tester) async {
+        final inner = GlobalKey<NavigatorState>();
+        final app = _Pushed(mode);
+        await app.pump(tester);
+        app.tabs[0].currentState!
+            .push(
+              MaterialPageRoute<void>(builder: (_) => _flow(inner, 'Flow')),
+            )
+            .ignore();
+        await tester.pumpAndSettle();
+        await _pushOn(tester, inner, 'Inner');
+        await back(app, tester);
+        expect(_page('Inner'), findsNothing);
+        expect(_page('Flow'), findsOneWidget, reason: 'the inner page only');
+        await back(app, tester);
+        expect(_page('Flow'), findsNothing);
+        expect(_page('Home'), findsOneWidget);
+        expect(app.shellPopped, isFalse);
+      });
+
+      testWidgets('a NavigatorPopHandler inside a pushed page: back pops the '
+          'inner page', (tester) async {
+        final inner = GlobalKey<NavigatorState>();
+        final app = _Pushed(mode);
+        await app.pump(tester);
+        app.tabs[0].currentState!
+            .push(
+              MaterialPageRoute<void>(
+                builder: (_) => _handledFlow(inner, 'Flow'),
+              ),
+            )
+            .ignore();
+        await tester.pumpAndSettle();
+        await _pushOn(tester, inner, 'Inner');
+        await back(app, tester);
+        expect(_page('Inner'), findsNothing);
+        expect(_page('Flow'), findsOneWidget);
+        expect(app.shellPopped, isFalse);
+      });
+
+      testWidgets("a NavigatorPopHandler in the tab's root page: back pops "
+          'the inner page, the shell stays', (tester) async {
+        final inner = GlobalKey<NavigatorState>();
+        final app = _Pushed(mode);
+        await app.pump(
+          tester,
+          root: (i) => i == 0 ? _handledFlow(inner, 'Home') : null,
+        );
+        await _pushOn(tester, inner, 'Inner');
+        await back(app, tester);
+        expect(_page('Inner'), findsNothing);
+        expect(_page('Home'), findsOneWidget);
+        expect(app.shellPopped, isFalse);
+      });
+
+      testWidgets('a dialog over a page with a nested flow: back closes the '
+          'dialog, the inner page stays', (tester) async {
+        final inner = GlobalKey<NavigatorState>();
+        final app = _Pushed(mode);
+        await app.pump(tester);
+        app.tabs[0].currentState!
+            .push(
+              MaterialPageRoute<void>(builder: (_) => _flow(inner, 'Flow')),
+            )
+            .ignore();
+        await tester.pumpAndSettle();
+        await _pushOn(tester, inner, 'Inner');
+        app.tabs[0].currentState!
+            .push(
+              DialogRoute<void>(
+                context: app.tabs[0].currentContext!,
+                builder: (_) => const Text('The dialog'),
+              ),
+            )
+            .ignore();
+        await tester.pumpAndSettle();
+        await back(app, tester);
+        expect(find.text('The dialog'), findsNothing);
+        expect(_page('Inner'), findsOneWidget, reason: 'under the dialog');
+      });
+
+      // T5: an entry an app inserts in the tab's overlay (a toast) is not a
+      // route: the nested flow under it still pops first.
+      testWidgets('a toast in the tab overlay over a nested flow: back still '
+          'pops the inner page', (tester) async {
+        final inner = GlobalKey<NavigatorState>();
+        final app = _Pushed(mode);
+        await app.pump(
+          tester,
+          root: (i) => i == 0 ? _flow(inner, 'Home') : null,
+        );
+        await _pushOn(tester, inner, 'Inner');
+        final toast = OverlayEntry(builder: (_) => const Text('The toast'));
+        app.tabs[0].currentState!.overlay!.insert(toast);
+        addTearDown(toast.remove);
+        await tester.pumpAndSettle();
+        await back(app, tester);
+        expect(_page('Inner'), findsNothing);
+        expect(_page('Home'), findsOneWidget);
+        expect(app.shellPopped, isFalse);
       });
     });
   }

@@ -52,6 +52,17 @@
   `LiquidSearchController.scopeIndex` on different scopes: the shell sends
   the controller's scope back to native. `doc/search.md` now says that the
   app clamps `scopeIndex` when its scopes shrink.
+- **Fix (VK-593).** A page title kept alive off screen (a `PageView`
+  page) no longer rebuilds on every frame.
+- **Fix (VK-593).** Back is no longer swallowed by a `NavigatorPopHandler`
+  with no callback around a branch navigator; one with a callback answers
+  back whether `enabled` or not.
+- **Fix (VK-593).** Back no longer pops a page in a `PageView` or list
+  page that is off screen (kept alive, or in the cache extent).
+- **Fix (VK-593).** Back and the iOS edge swipe pop a navigator nested in
+  a tab's page first (a nested flow, a go_router `ShellRoute` in a
+  branch), then the tab's page; before, they popped the tab's page or the
+  whole shell.
 
 ## 0.1.0-dev.7
 

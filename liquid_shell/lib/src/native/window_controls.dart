@@ -183,7 +183,10 @@ class _LiquidWindowControlsClearanceState
       final box = context.findRenderObject();
       if (box is! RenderBox || !box.attached || !box.hasSize) return;
       final start = _startOf(box);
-      if (start != _start) {
+      // A row kept alive off screen (a PageView page) measures NaN, and
+      // NaN != NaN: without this, every frame would set it again.
+      final same = start == _start || (start.isNaN && (_start?.isNaN ?? false));
+      if (!same) {
         setState(() {
           _jump = _start == null;
           _start = start;

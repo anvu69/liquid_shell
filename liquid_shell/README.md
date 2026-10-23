@@ -1374,12 +1374,6 @@ content viewer (see [Custom chrome](#custom-chrome)).
   your branch navigator can pop (see
   [doc/router_integration.md](doc/router_integration.md#system-back-and-the-overlay-sidebar)).
   How a router such as go_router orders back is not covered yet.
-- **A navigator inside a tab's page is not looked at for back.** Back
-  and the iOS edge swipe pop the navigator nearest under `body` first (see
-  [doc/router_integration.md](doc/router_integration.md#back-pops-the-tab-first));
-  a flow nested in a page, or a go_router `ShellRoute` inside a branch,
-  still loses the swipe to a pushed shell while the tab's own navigator is
-  at its root.
 - **Native chrome is opt-in.** It needs iOS 26,
   `LiquidShellNativeChrome` in Info.plist, and an SF Symbol on every
   destination. Strings the system draws (the sidebar button's VoiceOver
