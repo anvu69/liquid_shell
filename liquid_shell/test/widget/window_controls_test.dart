@@ -5,6 +5,7 @@ import 'package:liquid_shell/src/chrome/sidebar_toggle.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
 import '../helpers/fake_native_platform.dart';
+import '../helpers/kept_alive.dart';
 import '../helpers/shell_harness.dart';
 
 /// A floating iPad window: the cluster is 66pt wide, 30pt tall.
@@ -113,6 +114,30 @@ void main() {
       // First frame: not measured yet. Second: measured, applied at once.
       await tester.pump();
       expect(tester.getTopLeft(find.text('Title')).dx, 200);
+    });
+
+    // VK-593 T1: a row kept alive off screen measures NaN; NaN != NaN, so
+    // each measure set it again and asked for another frame, for ever.
+    testWidgets('a row kept alive off screen does not rebuild every frame', (
+      tester,
+    ) async {
+      final pages = PageController();
+      addTearDown(pages.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PageView(
+            controller: pages,
+            children: [
+              for (var i = 0; i < 2; i++) KeptAlive(child: _titlePage(i)),
+            ],
+          ),
+        ),
+      );
+      pages.jumpToPage(1);
+      await tester.pumpAndSettle();
+      pages.jumpToPage(0);
+      await tester.pumpAndSettle();
+      expect(tester.binding.hasScheduledFrame, isFalse);
     });
 
     testWidgets('a metrics change reads the controls again', (tester) async {

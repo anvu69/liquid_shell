@@ -52,6 +52,8 @@
   `LiquidSearchController.scopeIndex` on different scopes: the shell sends
   the controller's scope back to native. `doc/search.md` now says that the
   app clamps `scopeIndex` when its scopes shrink.
+- A page title kept alive off screen (a `PageView` page) no longer
+  rebuilds on every frame (VK-593).
 
 ## 0.1.0-dev.7
 
