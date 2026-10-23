@@ -729,6 +729,44 @@ void main() {
           reason: 'the earlier one stays',
         );
       });
+
+      // T3: Flutter calls a disabled handler's callback too when the
+      // shell blocks the route; the shell must not pop again. A callback
+      // that pops at once shows it: the shell's `maybePop` then finds the
+      // next page on top (a `maybePop` callback is saved by the
+      // navigator's own check that its top did not change).
+      testWidgets('a disabled NavigatorPopHandler with a callback: one back '
+          'pops one page', (tester) async {
+        final app = _Pushed(mode);
+        await app.pump(
+          tester,
+          wrap: (i, navigator) => NavigatorPopHandler(
+            enabled: false,
+            onPopWithResult: (_) => app.tabs[i].currentState?.pop(),
+            child: navigator,
+          ),
+        );
+        await app.push(tester, 0, 'One');
+        await app.push(tester, 0, 'Two');
+        await back(app, tester);
+        expect(_page('Two'), findsNothing);
+        expect(_page('One'), findsOneWidget, reason: 'not two pages');
+      });
+
+      // T3: a handler with no callback answers nothing; the shell pops.
+      testWidgets('a NavigatorPopHandler with no callback: back still pops '
+          'the page', (tester) async {
+        final app = _Pushed(mode);
+        await app.pump(
+          tester,
+          wrap: (_, navigator) => NavigatorPopHandler(child: navigator),
+        );
+        await app.push(tester, 0, 'Detail');
+        await back(app, tester);
+        expect(_page('Detail'), findsNothing, reason: 'back not swallowed');
+        expect(_page('Home'), findsOneWidget);
+        expect(app.shellPopped, isFalse);
+      });
     });
   }
 

@@ -1,10 +1,21 @@
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
-/// A navigator on screen under the shell's body, and whether an
-/// enabled `NavigatorPopHandler` between the body and it answers system
-/// back for it (an app that wraps its branch, as the README once showed).
+/// A navigator on screen under the shell's body, and whether a
+/// `NavigatorPopHandler` with a callback lies between the body and it: the
+/// route calls that callback on every blocked back, enabled or not, so the
+/// app answers back for it.
 typedef BranchNavigator = ({NavigatorState navigator, bool handled});
+
+/// Whether a `NavigatorPopHandler` answers back: it has a callback.
+bool _answersBack(Widget widget) => switch (widget) {
+  NavigatorPopHandler(:final onPopWithResult) when onPopWithResult != null =>
+    true,
+  // The deprecated callback still runs.
+  // ignore: deprecated_member_use
+  NavigatorPopHandler(:final onPop) when onPop != null => true,
+  _ => false,
+};
 
 /// Whether [widget] takes its subtree off screen: `Visibility`,
 /// `Offstage`, or `TickerMode` (a router's indexed-stack shell route).
@@ -44,8 +55,7 @@ List<BranchNavigator> onScreenNavigatorsUnder(BuildContext root) {
   void visit(Element element, {required bool handled}) {
     final widget = element.widget;
     if (_hides(widget)) return;
-    final handledHere =
-        handled || (widget is NavigatorPopHandler && widget.enabled);
+    final handledHere = handled || _answersBack(widget);
     if (element case StatefulElement(state: final NavigatorState navigator)) {
       found.add((navigator: navigator, handled: handledHere));
       return;

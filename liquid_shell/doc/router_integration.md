@@ -75,9 +75,11 @@ the swipe on any tab's pushed page popped the whole shell.
 - **The order** is the overlay sidebar, then an active search, then the
   tab's page, then the shell's route.
 - **Remove a `NavigatorPopHandler` around a branch navigator**: the shell
-  does its job. One the app keeps answers back for its navigator, and the
-  shell then only blocks its own route, so one back is still one step: an
-  open drawer or sheet closes, and its page stays.
+  does its job. One the app keeps with a callback (`onPopWithResult`)
+  answers back for its navigator, enabled or not (Flutter calls it on
+  every blocked back), and the shell then only blocks its own route, so
+  one back is still one step: an open drawer or sheet closes, and its page
+  stays. One without a callback is ignored.
 - **A drawer or a persistent bottom sheet** on the tab's page counts too:
   back closes it first, at the tab's root as well.
 - **Several navigators on screen** (an iPad detail beside its master, or a
