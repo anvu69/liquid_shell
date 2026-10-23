@@ -89,6 +89,10 @@ final class ShellSearch implements SearchDriver {
       _replay = true;
       final controller = _controller;
       if (_native && controller != null) {
+        // Standby keeps native's field alive under another shell: when the
+        // claim returns, the next entry tells native the search is inactive
+        // (ignored there when it already is).
+        _syncInactive = true;
         _writeField(controller.text);
         // The native search ends with native chrome (VK-699): its own
         // `searchActive false` never comes (a released claim) or comes in

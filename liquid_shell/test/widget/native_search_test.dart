@@ -2718,5 +2718,38 @@ void main() {
       );
       expectEnded(controller, changes);
     });
+
+    // Standby keeps the claim with another shell, not with native gone: the
+    // search ends in the controller, so the next entry must tell native too.
+    testWidgets('P4: standby, then the claim returns: native told inactive', (
+      tester,
+    ) async {
+      final (fake, controller, _) = await composing(tester);
+      final page = find.byKey(const ValueKey('list-Search'));
+      Navigator.of(tester.element(page), rootNavigator: true)
+          .push(
+            MaterialPageRoute<void>(
+              builder: (_) => const TestShell(
+                destinations: [
+                  LiquidDestination(
+                    icon: Icon(Icons.star),
+                    label: 'Starred',
+                    sfSymbol: 'star',
+                  ),
+                ],
+              ),
+            ),
+          )
+          .ignore();
+      await tester.pumpAndSettle();
+      expect(controller.isActive, isFalse, reason: 'standby ends the search');
+      fake.searchActives.clear();
+      Navigator.of(
+        tester.element(find.byType(TestShell).last),
+        rootNavigator: true,
+      ).pop();
+      await tester.pumpAndSettle();
+      expect(fake.searchActives, contains(false));
+    });
   });
 }
