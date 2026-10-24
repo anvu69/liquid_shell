@@ -87,6 +87,9 @@
   custom renderer with a non-final field or a non-const constructor now
   gets the analyzer's `must_be_immutable` or
   `prefer_const_constructors_in_immutables` (VK-702).
+- **Fix (VK-702).** A platform implementation whose `watchSignals()` throws
+  instead of returning a stream no longer breaks every `LiquidGlass`: the
+  glass uses no signals, and debug builds log the error once.
 
 ## 0.1.0-dev.7
 

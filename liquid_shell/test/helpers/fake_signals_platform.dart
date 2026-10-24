@@ -15,6 +15,10 @@ class FakeSignalsPlatform extends LiquidShellPlatform {
   /// Number of active listeners.
   int listeners = 0;
 
+  /// When set, [watchSignals] throws it synchronously, as a broken
+  /// third-party platform might.
+  Error? throwOnWatch;
+
   /// Sends [signals] to every listener.
   void emit(LiquidPlatformSignals signals) {
     current = signals;
@@ -26,6 +30,7 @@ class FakeSignalsPlatform extends LiquidShellPlatform {
 
   @override
   Stream<LiquidPlatformSignals> watchSignals() {
+    if (throwOnWatch case final error?) throw error;
     late final StreamController<LiquidPlatformSignals> controller;
     StreamSubscription<LiquidPlatformSignals>? forward;
     controller = StreamController<LiquidPlatformSignals>(

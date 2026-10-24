@@ -423,6 +423,30 @@ void main() {
     expect(logs.single, contains('first'));
   });
 
+  // VK-702 M12: a third-party platform whose watchSignals() throws
+  // synchronously: no crash, logged once, no signals.
+  testWidgets('a watchSignals() that throws falls back to no signals, '
+      'logged once', (tester) async {
+    installFakeSignals().throwOnWatch = UnsupportedError('no signal channel');
+    final logs = <String>[];
+    final originalPrint = debugPrint;
+    debugPrint = (message, {wrapWidth}) => logs.add(message ?? '');
+    try {
+      await tester.pumpWidget(_app());
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.byType(BackdropFilter), findsOneWidget, reason: 'frosted');
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(_app());
+      await tester.pump();
+      expect(tester.takeException(), isNull, reason: 'the next glass');
+    } finally {
+      debugPrint = originalPrint;
+    }
+    expect(logs, hasLength(1));
+    expect(logs.single, contains('no signal channel'));
+  });
+
   testWidgets('listens while any glass is mounted, stops after the last', (
     tester,
   ) async {

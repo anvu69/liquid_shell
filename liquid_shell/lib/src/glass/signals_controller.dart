@@ -45,6 +45,7 @@ class LiquidSignalsController extends ChangeNotifier
   LiquidPlatformSignals _value = LiquidPlatformSignals.none;
   int _users = 0;
   StreamSubscription<LiquidPlatformSignals>? _subscription;
+  bool _loggedWatchFailure = false;
 
   @override
   LiquidPlatformSignals get value => _value;
@@ -54,7 +55,20 @@ class LiquidSignalsController extends ChangeNotifier
     _users++;
     if (_users == 1) {
       var logged = false;
-      _subscription = LiquidShellPlatform.instance.watchSignals().listen(
+      final Stream<LiquidPlatformSignals> signals;
+      try {
+        signals = LiquidShellPlatform.instance.watchSignals();
+      } on Object catch (error) {
+        // A third-party platform that throws instead of streaming
+        // (VK-702): no signals, logged once per process.
+        if (kDebugMode && !_loggedWatchFailure) {
+          _loggedWatchFailure = true;
+          debugPrint('liquid_shell signals: $error; using none');
+        }
+        _set(LiquidPlatformSignals.none);
+        return;
+      }
+      _subscription = signals.listen(
         _set,
         onError: (Object error) {
           // Once per subscription: a broken channel repeats its error.
@@ -94,6 +108,7 @@ void debugResetLiquidGlassSignals() {
   LiquidSignalsController.instance
     .._cancel()
     .._users = 0
+    .._loggedWatchFailure = false
     .._set(LiquidPlatformSignals.none);
   debugResetPolicyLogging();
   LiquidShaderProgram.instance.debugReset();
