@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show SemanticsNode;
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 
 import 'package:liquid_shell/src/chrome/glass_tab_bar.dart';
 import 'package:liquid_shell/src/chrome/sidebar_toggle.dart';
+import 'package:liquid_shell/src/search/search_chrome.dart'
+    show kSearchFieldKey;
 import 'package:liquid_shell/src/shell/shell_layout.dart'
     show kTopBarGap, kTopPillExtent;
 import 'package:liquid_shell/src/shell/shell_scope.dart';
@@ -11,6 +15,14 @@ import 'package:liquid_shell/src/shell/shell_scope.dart';
 import '../helpers/shell_harness.dart';
 
 const _tablet = EdgeInsets.only(top: 24, bottom: 20);
+const _searchDestinations = [
+  LiquidDestination(icon: Icon(Icons.home), label: 'Home'),
+  LiquidDestination(
+    icon: Icon(Icons.search),
+    label: 'Search',
+    role: LiquidDestinationRole.search,
+  ),
+];
 
 void main() {
   group('chrome by width (§5.1)', () {
@@ -33,7 +45,7 @@ void main() {
       );
       expect(pill.bottom, 852 - 21);
       expect(pill.height, 62);
-    });
+    }, variant: iosDevice);
 
     testWidgets('932×430 landscape phone with compactHeight 0 (P1) → top '
         'bar, sidebar overlays', (tester) async {
@@ -91,7 +103,7 @@ void main() {
       final pill = tester.getRect(find.byKey(kTabPillKey));
       expect(pill.height, 62);
       expect(scopeOf(tester).chromeInsets, const EdgeInsets.only(bottom: 83));
-    });
+    }, variant: iosDevice);
 
     testWidgets('compactHeight 0 restores P1: a 690×430 shell keeps the '
         '62 pt bar at margin 21', (tester) async {
@@ -128,7 +140,7 @@ void main() {
       tester.view.physicalSize = kPhone;
       await tester.pump();
       expect(scopeOf(tester).chromeInsets.bottom, 62 + 21);
-    });
+    }, variant: iosDevice);
 
     testWidgets('iPad portrait 834×1194 → top bar; body never resized', (
       tester,
@@ -390,6 +402,138 @@ void main() {
       await tester.tap(find.byTooltip('Show sidebar'));
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Hide sidebar'));
+      await tester.pumpAndSettle();
+      expect(find.byType(LiquidSidebar), findsNothing);
+    });
+
+    // VK-702 M2: the overlay is modal for the keyboard too.
+    testWidgets('overlay: Tab stays in the sidebar; the page behind takes '
+        'no focus until it closes', (tester) async {
+      await pumpShell(
+        tester,
+        const TestShell(),
+        size: kTabletPortrait,
+        padding: _tablet,
+      );
+      FocusNode page() => Focus.of(tester.element(find.text('Home page: 0')));
+      await tester.tap(find.byTooltip('Show sidebar'));
+      await tester.pumpAndSettle();
+      expect(page().canRequestFocus, isFalse, reason: 'the page behind');
+      for (var i = 0; i < 12; i++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+        final focused = FocusManager.instance.primaryFocus!.context!;
+        expect(
+          focused.findAncestorWidgetOfExactType<LiquidSidebar>(),
+          isNotNull,
+          reason: 'Tab ${i + 1}',
+        );
+      }
+      await tester.tap(find.byTooltip('Hide sidebar'));
+      await tester.pumpAndSettle();
+      expect(page().canRequestFocus, isTrue, reason: 'closed');
+    });
+
+    group('with the search tab selected', () {
+      Future<LiquidSearchController> pumpSearch(WidgetTester tester) async {
+        final controller = LiquidSearchController();
+        addTearDown(controller.dispose);
+        await pumpShell(
+          tester,
+          TestShell(
+            destinations: _searchDestinations,
+            initialIndex: 1,
+            search: LiquidSearch(controller: controller),
+          ),
+          size: kTabletPortrait,
+          padding: _tablet,
+        );
+        return controller;
+      }
+
+      testWidgets('overlay: Tab does not reach the idle search field', (
+        tester,
+      ) async {
+        final controller = await pumpSearch(tester);
+        expect(
+          scopeOf(tester, 'Search').searchPhase,
+          LiquidSearchPhase.selected,
+        );
+        await tester.tap(find.byTooltip('Show sidebar'));
+        await tester.pumpAndSettle();
+        for (var i = 0; i < 12; i++) {
+          await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+          await tester.pump();
+          final focused = FocusManager.instance.primaryFocus!.context!;
+          expect(
+            focused.findAncestorWidgetOfExactType<LiquidSidebar>(),
+            isNotNull,
+            reason:
+                'Tab ${i + 1}: ${focused.widget}, active: '
+                '${controller.isActive}',
+          );
+        }
+        expect(controller.isActive, isFalse);
+      });
+
+      testWidgets('overlay: Escape in the active search field ends the '
+          'search and leaves the sidebar open', (tester) async {
+        final controller = await pumpSearch(tester);
+        await tester.tap(find.byType(TextField));
+        await tester.pumpAndSettle();
+        expect(controller.isActive, isTrue);
+        scopeOf(tester, 'Search').setSidebarVisible(true);
+        await tester.pumpAndSettle();
+        expect(controller.isActive, isTrue, reason: 'VK-774');
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pumpAndSettle();
+        expect(controller.isActive, isFalse);
+        expect(find.byType(LiquidSidebar), findsOne);
+      });
+    });
+
+    // VK-702: the overlay's Escape handler wraps the whole shell; with
+    // semantics it merged the compact search field into a node the size of
+    // the shell, and XCUITest's tap at its centre missed the field.
+    testWidgets('the Escape handler adds no semantics node: the compact '
+        "search field's node is its text input, inside the drawn field", (
+      tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      await pumpShell(
+        tester,
+        TestShell(
+          destinations: _searchDestinations,
+          initialIndex: 1,
+          search: LiquidSearch(controller: controller),
+        ),
+      );
+      expect(find.byType(LiquidSidebar), findsNothing);
+      final node = tester.getSemantics(find.byType(TextField));
+      var rect = node.rect;
+      for (SemanticsNode? n = node; n != null; n = n.parent) {
+        if (n.transform != null) {
+          rect = MatrixUtils.transformRect(n.transform!, rect);
+        }
+      }
+      expect(rect, tester.getRect(find.byType(EditableText)));
+      final field = tester.getRect(find.byKey(kSearchFieldKey));
+      expect(field.expandToInclude(rect), field, reason: 'inside $field');
+      handle.dispose();
+    });
+
+    testWidgets('overlay: Escape closes it', (tester) async {
+      await pumpShell(
+        tester,
+        const TestShell(),
+        size: kTabletPortrait,
+        padding: _tablet,
+      );
+      await tester.tap(find.byTooltip('Show sidebar'));
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
       expect(find.byType(LiquidSidebar), findsNothing);
     });
@@ -680,6 +824,32 @@ void main() {
       );
       expect(scopeOf(tester).chromeInsets.bottom, 83);
     });
+
+    // VK-702 M1: the device decides, not an app's ThemeData.platform.
+    testWidgets(
+      'an Android device themed as iOS: max(21, padding + 8)',
+      (
+        tester,
+      ) async {
+        await pumpShell(
+          tester,
+          const TestShell(),
+          size: const Size(412, 915),
+          padding: const EdgeInsets.only(top: 24, bottom: 48),
+        );
+        expect(scopeOf(tester).chromeInsets.bottom, 62 + 56);
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.android),
+    );
+
+    testWidgets('an iPhone themed as Android: 21', (tester) async {
+      await pumpShell(
+        tester,
+        const TestShell(),
+        platform: TargetPlatform.android,
+      );
+      expect(scopeOf(tester).chromeInsets.bottom, 62 + 21);
+    }, variant: iosDevice);
   });
 
   group('page helpers', () {
@@ -862,7 +1032,7 @@ void main() {
             .padding,
         const EdgeInsets.only(top: 59, bottom: 34),
       );
-    });
+    }, variant: iosDevice);
 
     testWidgets('LiquidShellScope.of outside a shell asserts', (tester) async {
       await tester.pumpWidget(
@@ -960,7 +1130,7 @@ void main() {
       );
       expect(scopeOf(tester).chromeInsets, const EdgeInsets.only(bottom: 121));
       expect(find.byType(LiquidTabBar), findsNothing);
-    });
+    }, variant: iosDevice);
 
     testWidgets('a custom bar collapsed to 0pt is measured: no inset', (
       tester,
@@ -1117,6 +1287,102 @@ void main() {
       for (final MapEntry(:key, :value) in different.entries) {
         expect(value, isNot(details()), reason: key);
       }
+    });
+  });
+
+  // VK-702 M10: a landscape phone's notch; the bars keep to the safe width.
+  group('side safe area (VK-702)', () {
+    const notchLeft = EdgeInsets.only(left: 59, bottom: 21);
+    Rect pill(WidgetTester tester) => tester.getRect(
+      find.descendant(
+        of: find.byType(LiquidTabBar),
+        matching: find.byType(LiquidGlass),
+      ),
+    );
+
+    testWidgets('landscape bottom bar: centred between the insets', (
+      tester,
+    ) async {
+      await pumpShell(
+        tester,
+        const TestShell(),
+        size: kPhoneLandscape,
+        padding: notchLeft,
+      );
+      expect(scopeOf(tester).chromeKind, LiquidChromeKind.bottomBar);
+      expect(pill(tester).center.dx, (59 + 932) / 2);
+    });
+
+    testWidgets('landscape top bar (compactHeight 0): centred between the '
+        'insets', (tester) async {
+      await pumpShell(
+        tester,
+        const TestShell(breakpoints: LiquidShellBreakpoints(compactHeight: 0)),
+        size: kPhoneLandscape,
+        padding: notchLeft,
+      );
+      expect(scopeOf(tester).chromeKind, LiquidChromeKind.topBar);
+      expect(pill(tester).center.dx, (59 + 932) / 2);
+    });
+
+    testWidgets('landscape top bar (compactHeight 0): clears the right '
+        'inset', (tester) async {
+      await pumpShell(
+        tester,
+        const TestShell(breakpoints: LiquidShellBreakpoints(compactHeight: 0)),
+        size: kPhoneLandscape,
+        padding: const EdgeInsets.only(right: 59, bottom: 21),
+      );
+      expect(scopeOf(tester).chromeKind, LiquidChromeKind.topBar);
+      expect(pill(tester).center.dx, (932 - 59) / 2);
+    });
+
+    Future<void> pumpSearchRow(WidgetTester tester, EdgeInsets padding) async {
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      await pumpShell(
+        tester,
+        TestShell(
+          destinations: _searchDestinations,
+          search: LiquidSearch(controller: controller),
+        ),
+        size: kPhoneLandscape,
+        padding: padding,
+      );
+    }
+
+    testWidgets('landscape search row: the ⌕ clears the right inset', (
+      tester,
+    ) async {
+      await pumpSearchRow(tester, const EdgeInsets.only(right: 59, bottom: 21));
+      final idle = tester.getRect(find.byKey(kSearchFieldKey));
+      expect(idle.right, lessThanOrEqualTo(932 - 59));
+    });
+
+    testWidgets('landscape search row, left inset: the ⌕ keeps the right '
+        'edge, and a drag onto it hovers it', (tester) async {
+      await pumpSearchRow(tester, const EdgeInsets.only(bottom: 21));
+      final noInset = tester.getRect(find.byKey(kSearchFieldKey));
+      await pumpSearchRow(tester, notchLeft);
+      final idle = tester.getRect(find.byKey(kSearchFieldKey));
+      expect(idle, noInset, reason: 'laid out in the safe width, then moved');
+      // The drop target is the ⌕ as drawn.
+      final g = await tester.startGesture(
+        tester.getCenter(find.bySemanticsLabel('Home')),
+      );
+      await g.moveTo(idle.center);
+      await tester.pump(const Duration(milliseconds: 100));
+      final hovered = tester
+          .widget<TabHoverHighlight>(
+            find.descendant(
+              of: find.byKey(kSearchFieldKey),
+              matching: find.byType(TabHoverHighlight),
+            ),
+          )
+          .hovered
+          .value;
+      expect(hovered, isTrue);
+      await g.cancel();
     });
   });
 }

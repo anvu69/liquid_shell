@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:liquid_shell/src/chrome/glass_tab_bar.dart';
 import 'package:liquid_shell/src/chrome/sidebar.dart';
 import 'package:liquid_shell/src/chrome/sidebar_toggle.dart';
@@ -1282,7 +1283,8 @@ class _LiquidShellState extends State<LiquidShell>
       _search.releaseField();
     }
     final bottomGap = bottomGapFor(
-      platform: Theme.of(context).platform,
+      // The device decides, not an app's ThemeData.platform (VK-702).
+      platform: defaultTargetPlatform,
       viewPaddingBottom: media.viewPadding.bottom,
       gestureInsetBottom: media.systemGestureInsets.bottom,
     );
@@ -1307,16 +1309,20 @@ class _LiquidShellState extends State<LiquidShell>
         _measured[barKey] ??
         (barForm == TabBarForm.landscape ? TabMetrics.landscapeExtent : null);
     final bottomRowExtent = measuredBar ?? kBottomPillExtent;
+    // The bars clear the side safe area: a phone's notch in landscape
+    // (VK-702). The search rects are laid out between the two insets.
+    final sideLeft = media.padding.left;
+    final sideRight = media.padding.right;
     final compactRects = phase != null && kind == LiquidChromeKind.bottomBar
         ? compactSearchRects(
             phase: phase,
-            size: size,
+            size: Size(size.width - sideLeft - sideRight, size.height),
             rowBottom: size.height - bottomGap,
             rowExtent: bottomRowExtent,
             margin: barMargin,
             keyboard: media.viewInsets.bottom,
             direction: Directionality.of(context),
-          )
+          ).shift(sideLeft)
         : null;
     // A hover on the ⌕ outlives a drag whose bar stops feeding the target
     // (search selected, chrome hidden, another layout). Cleared after the
@@ -1365,13 +1371,19 @@ class _LiquidShellState extends State<LiquidShell>
     if (tiled) {
       bodyMedia = bodyMedia.removePadding(removeLeft: !rtl, removeRight: rtl);
     }
+    // The overlay sidebar is modal for the keyboard too (VK-702): nothing
+    // behind its barrier takes focus.
+    final modal = kind == LiquidChromeKind.sidebarOverlay;
     final children = <Widget>[
       PositionedDirectional(
         start: bodyStart,
         top: 0,
         end: 0,
         bottom: 0,
-        child: MediaQuery(data: bodyMedia, child: _bodySubtree(kind)),
+        child: MediaQuery(
+          data: bodyMedia,
+          child: ExcludeFocus(excluding: modal, child: _bodySubtree(kind)),
+        ),
       ),
     ];
 
@@ -1490,15 +1502,15 @@ class _LiquidShellState extends State<LiquidShell>
           final idle = phase == LiquidSearchPhase.idle;
           // The ⌕ in the bar's own coordinates: its top-left is the row's.
           _searchTargetRect = compactRects.field.shift(
-            Offset(-margin, -(size.height - bottomGap - rowExtent)),
+            Offset(-margin - sideLeft, -(size.height - bottomGap - rowExtent)),
           );
           children.add(
             CompactSearchChrome(
               phase: phase,
               rects: compactRects,
               pill: Positioned(
-                left: margin,
-                right: margin,
+                left: margin + sideLeft,
+                right: margin + sideRight,
                 bottom: bottomGap,
                 child: IgnorePointer(
                   ignoring: phase == LiquidSearchPhase.active,
@@ -1578,8 +1590,8 @@ class _LiquidShellState extends State<LiquidShell>
             : _kBottomBarMargin;
         children.add(
           Positioned(
-            left: barRowMargin,
-            right: barRowMargin,
+            left: barRowMargin + sideLeft,
+            right: barRowMargin + sideRight,
             bottom: bottomGap,
             child: Align(
               alignment: Alignment.bottomCenter,
@@ -1664,21 +1676,24 @@ class _LiquidShellState extends State<LiquidShell>
         final active = phase == LiquidSearchPhase.active;
         children.add(
           Positioned(
-            left: 0,
-            right: 0,
+            left: sideLeft,
+            right: sideRight,
             top: media.padding.top + kTopBarGap,
-            child: phase == null
-                ? bar
-                : IgnorePointer(
-                    ignoring: active,
-                    child: AnimatedOpacity(
-                      opacity: active ? 0 : 1,
-                      duration: MediaQuery.disableAnimationsOf(context)
-                          ? Duration.zero
-                          : const Duration(milliseconds: 200),
-                      child: bar,
+            child: ExcludeFocus(
+              excluding: modal,
+              child: phase == null
+                  ? bar
+                  : IgnorePointer(
+                      ignoring: active,
+                      child: AnimatedOpacity(
+                        opacity: active ? 0 : 1,
+                        duration: MediaQuery.disableAnimationsOf(context)
+                            ? Duration.zero
+                            : const Duration(milliseconds: 200),
+                        child: bar,
+                      ),
                     ),
-                  ),
+            ),
           ),
         );
       case LiquidChromeKind.sidebarTiled || LiquidChromeKind.hidden:
@@ -1699,7 +1714,12 @@ class _LiquidShellState extends State<LiquidShell>
           right: rtl ? start : kRegularSearchMargin,
           top: regularFieldTop,
           height: kRegularSearchFieldExtent,
-          child: searchField(inlineCancel: _search.cancel),
+          // Behind the overlay an idle field takes no focus (focusing it
+          // starts the search); an active one keeps it (VK-774).
+          child: ExcludeFocus(
+            excluding: modal && phase == LiquidSearchPhase.selected,
+            child: searchField(inlineCancel: _search.cancel),
+          ),
         ),
       );
     }
@@ -1725,18 +1745,25 @@ class _LiquidShellState extends State<LiquidShell>
           top: 0,
           bottom: 0,
           width: widget.sidebarWidth,
-          child: slot(
-            details(LiquidChromeSlot.sidebar),
-            LiquidSidebar(
-              destinations: widget.destinations,
-              selectedIndex: selected,
-              onDestinationSelected: _onSelect,
-              onHide: () => _setSidebarVisible(false),
-              header: widget.sidebarHeader,
-              footer: widget.sidebarFooter,
-              trailing: widget.tabBarTrailing,
-              width: widget.sidebarWidth,
-              strings: widget.strings,
+          // Overlay: focus starts in the sidebar when nothing holds it, so
+          // Escape reaches the shell. An active search keeps its focus.
+          child: Focus(
+            autofocus: modal,
+            skipTraversal: true,
+            includeSemantics: false,
+            child: slot(
+              details(LiquidChromeSlot.sidebar),
+              LiquidSidebar(
+                destinations: widget.destinations,
+                selectedIndex: selected,
+                onDestinationSelected: _onSelect,
+                onHide: () => _setSidebarVisible(false),
+                header: widget.sidebarHeader,
+                footer: widget.sidebarFooter,
+                trailing: widget.tabBarTrailing,
+                width: widget.sidebarWidth,
+                strings: widget.strings,
+              ),
             ),
           ),
         ),
@@ -1760,8 +1787,26 @@ class _LiquidShellState extends State<LiquidShell>
         registry: this,
         pages: this,
         strings: widget.strings,
-        // One backdrop read for all chrome glass (budget rule, §5.8).
-        child: BackdropGroup(child: Stack(children: children)),
+        // Escape closes the overlay sidebar, wherever focus is in the shell.
+        // Always built (the Stack keeps its state) and without semantics: a
+        // node here would merge the search field into one the size of the
+        // shell (VK-702).
+        child: Focus(
+          canRequestFocus: false,
+          skipTraversal: true,
+          includeSemantics: false,
+          onKeyEvent: (_, event) {
+            if (!modal ||
+                event is! KeyDownEvent ||
+                event.logicalKey != LogicalKeyboardKey.escape) {
+              return KeyEventResult.ignored;
+            }
+            _setSidebarVisible(false);
+            return KeyEventResult.handled;
+          },
+          // One backdrop read for all chrome glass (budget rule, §5.8).
+          child: BackdropGroup(child: Stack(children: children)),
+        ),
       ),
     );
   }

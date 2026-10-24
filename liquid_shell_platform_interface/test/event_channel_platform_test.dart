@@ -57,6 +57,32 @@ void main() {
     expect(logs.single, contains('read-failed'));
   });
 
+  // VK-702 M11: a native side that keeps failing logs once.
+  test('repeated error events log once', () async {
+    messenger.setMockStreamHandler(
+      channel,
+      MockStreamHandler.inline(
+        onListen: (arguments, events) {
+          events
+            ..error(code: 'read-failed')
+            ..error(code: 'read-failed-again')
+            ..endOfStream();
+        },
+      ),
+    );
+
+    final events = await EventChannelLiquidShellPlatform()
+        .watchSignals()
+        .toList();
+
+    expect(events, const [
+      LiquidPlatformSignals.none,
+      LiquidPlatformSignals.none,
+    ]);
+    expect(logs, hasLength(1));
+    expect(logs.single, contains('read-failed'));
+  });
+
   test('MissingPluginException on listen emits none and logs once', () async {
     final first = await EventChannelLiquidShellPlatform().watchSignals().first;
     final second = await EventChannelLiquidShellPlatform().watchSignals().first;

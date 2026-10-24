@@ -83,6 +83,34 @@
   standby under another shell), the search now ends with its text kept,
   `composing` false and `onChanged` not called. Before, the controller
   stayed active (and blocked back) or kept `composing` true.
+- `LiquidGlassRenderer` is now marked `@immutable`. No behaviour change; a
+  custom renderer with a non-final field or a non-const constructor now
+  gets the analyzer's `must_be_immutable` or
+  `prefer_const_constructors_in_immutables` (VK-702).
+- **Fix (VK-702).** A platform implementation whose `watchSignals()` throws
+  instead of returning a stream no longer breaks every `LiquidGlass`: the
+  glass uses no signals, and debug builds log the error once.
+- **Behaviour change (VK-702).** The gap below the bottom tab bar now
+  follows the device's platform (`defaultTargetPlatform`) instead of
+  `ThemeData.platform`. An Android app themed as iOS keeps clear of a
+  3-button navigation bar; an iPhone app themed as Android sits 21 pt above
+  the home indicator. App widget tests that model an iPhone only through
+  `ThemeData.platform` now get the non-iOS gap (`flutter test` runs as
+  Android): run them with `TargetPlatformVariant.only(TargetPlatform.iOS)`
+  or `debugDefaultTargetPlatformOverride`.
+- **Behaviour change (VK-702).** While the Flutter overlay sidebar is open,
+  the page, the top tab bar and an idle search field behind its barrier
+  take no keyboard focus, focus starts in the sidebar, and Escape closes
+  it. A page text field that had focus loses it (the keyboard closes) when
+  the overlay opens, and focus is not restored to it when the sidebar
+  closes. An active search field behind it keeps its focus, and Escape
+  there still ends the search.
+- **Visual change (VK-702).** The bottom tab bar, the compact search row and
+  the top tab bar keep inside the horizontal safe area: on a phone in
+  landscape they move clear of the notch or of an Android side navigation
+  bar or display cutout. A custom `chromeBuilder` tab bar gets constraints
+  narrower by the side insets. With no side insets (portrait, iPad)
+  nothing moves.
 
 ## 0.1.0-dev.7
 

@@ -27,15 +27,20 @@ class EventChannelLiquidShellPlatform extends LiquidShellPlatform {
   static const channel = EventChannel('vn.lasoai.liquid_shell/signals');
 
   static bool _loggedListenFailure = false;
+  static bool _loggedErrorEvent = false;
 
   // The message handler of a channel is global, so the native stream is
   // shared by every listener of every instance.
   static final Set<StreamController<LiquidPlatformSignals>> _listeners = {};
   static LiquidPlatformSignals? _latest;
 
-  /// Lets tests observe the once-only listen-failure log again.
+  /// Lets tests observe the once-only listen-failure and error-event logs
+  /// again.
   @visibleForTesting
-  static void debugResetLogging() => _loggedListenFailure = false;
+  static void debugResetLogging() {
+    _loggedListenFailure = false;
+    _loggedErrorEvent = false;
+  }
 
   @override
   Stream<LiquidPlatformSignals> watchSignals() {
@@ -80,7 +85,11 @@ class EventChannelLiquidShellPlatform extends LiquidShellPlatform {
           LiquidPlatformSignals.fromMap(channel.codec.decodeEnvelope(data)),
         );
       } on PlatformException catch (error) {
-        _debugLog('error event ${error.code}; using none');
+        // Once per process: a failing native read repeats its error.
+        if (!_loggedErrorEvent) {
+          _loggedErrorEvent = true;
+          _debugLog('error event ${error.code}; using none');
+        }
         _emit(LiquidPlatformSignals.none);
       }
       return null;

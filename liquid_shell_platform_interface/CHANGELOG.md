@@ -5,6 +5,9 @@
   defaults to `true`), `setNativeMinimizeScroll(tab, offset)` and
   `expandNativeTabBar()`. Both methods have no-op defaults, so other
   platform implementations keep working.
+- Repeated error events on the signal channel are logged once, the first
+  time, in debug builds only (VK-702). Each still emits
+  `LiquidPlatformSignals.none`.
 
 ## 0.1.0-dev.7
 

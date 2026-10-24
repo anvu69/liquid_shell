@@ -29,6 +29,11 @@ const kPhoneLandscape = Size(932, 430);
 const kTabletPortrait = Size(834, 1194);
 const kTabletLandscape = Size(1194, 834);
 
+/// Runs a test as on an iOS device (`defaultTargetPlatform`). `pumpShell`'s
+/// `platform` only sets `ThemeData.platform`; the bottom gap reads the
+/// device (VK-702).
+final iosDevice = TargetPlatformVariant.only(TargetPlatform.iOS);
+
 /// Scaffolds a LiquidShell that owns its selection, like an app would.
 class TestShell extends StatefulWidget {
   const TestShell({
