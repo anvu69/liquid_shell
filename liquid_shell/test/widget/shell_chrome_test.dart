@@ -14,6 +14,14 @@ import 'package:liquid_shell/src/shell/shell_scope.dart';
 import '../helpers/shell_harness.dart';
 
 const _tablet = EdgeInsets.only(top: 24, bottom: 20);
+const _searchDestinations = [
+  LiquidDestination(icon: Icon(Icons.home), label: 'Home'),
+  LiquidDestination(
+    icon: Icon(Icons.search),
+    label: 'Search',
+    role: LiquidDestinationRole.search,
+  ),
+];
 
 void main() {
   group('chrome by width (§5.1)', () {
@@ -423,6 +431,64 @@ void main() {
       await tester.tap(find.byTooltip('Hide sidebar'));
       await tester.pumpAndSettle();
       expect(page().canRequestFocus, isTrue, reason: 'closed');
+    });
+
+    group('with the search tab selected', () {
+      Future<LiquidSearchController> pumpSearch(WidgetTester tester) async {
+        final controller = LiquidSearchController();
+        addTearDown(controller.dispose);
+        await pumpShell(
+          tester,
+          TestShell(
+            destinations: _searchDestinations,
+            initialIndex: 1,
+            search: LiquidSearch(controller: controller),
+          ),
+          size: kTabletPortrait,
+          padding: _tablet,
+        );
+        return controller;
+      }
+
+      testWidgets('overlay: Tab does not reach the idle search field', (
+        tester,
+      ) async {
+        final controller = await pumpSearch(tester);
+        expect(
+          scopeOf(tester, 'Search').searchPhase,
+          LiquidSearchPhase.selected,
+        );
+        await tester.tap(find.byTooltip('Show sidebar'));
+        await tester.pumpAndSettle();
+        for (var i = 0; i < 12; i++) {
+          await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+          await tester.pump();
+          final focused = FocusManager.instance.primaryFocus!.context!;
+          expect(
+            focused.findAncestorWidgetOfExactType<LiquidSidebar>(),
+            isNotNull,
+            reason:
+                'Tab ${i + 1}: ${focused.widget}, active: '
+                '${controller.isActive}',
+          );
+        }
+        expect(controller.isActive, isFalse);
+      });
+
+      testWidgets('overlay: Escape in the active search field ends the '
+          'search and leaves the sidebar open', (tester) async {
+        final controller = await pumpSearch(tester);
+        await tester.tap(find.byType(TextField));
+        await tester.pumpAndSettle();
+        expect(controller.isActive, isTrue);
+        scopeOf(tester, 'Search').setSidebarVisible(true);
+        await tester.pumpAndSettle();
+        expect(controller.isActive, isTrue, reason: 'VK-774');
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pumpAndSettle();
+        expect(controller.isActive, isFalse);
+        expect(find.byType(LiquidSidebar), findsOne);
+      });
     });
 
     testWidgets('overlay: Escape closes it', (tester) async {
@@ -1226,29 +1292,64 @@ void main() {
       expect(pill(tester).center.dx, (59 + 932) / 2);
     });
 
-    testWidgets('landscape search row: the ⌕ clears the right inset', (
-      tester,
-    ) async {
+    testWidgets('landscape top bar (compactHeight 0): clears the right '
+        'inset', (tester) async {
+      await pumpShell(
+        tester,
+        const TestShell(breakpoints: LiquidShellBreakpoints(compactHeight: 0)),
+        size: kPhoneLandscape,
+        padding: const EdgeInsets.only(right: 59, bottom: 21),
+      );
+      expect(scopeOf(tester).chromeKind, LiquidChromeKind.topBar);
+      expect(pill(tester).center.dx, (932 - 59) / 2);
+    });
+
+    Future<void> pumpSearchRow(WidgetTester tester, EdgeInsets padding) async {
       final controller = LiquidSearchController();
       addTearDown(controller.dispose);
       await pumpShell(
         tester,
         TestShell(
-          destinations: const [
-            LiquidDestination(icon: Icon(Icons.home), label: 'Home'),
-            LiquidDestination(
-              icon: Icon(Icons.search),
-              label: 'Search',
-              role: LiquidDestinationRole.search,
-            ),
-          ],
+          destinations: _searchDestinations,
           search: LiquidSearch(controller: controller),
         ),
         size: kPhoneLandscape,
-        padding: const EdgeInsets.only(right: 59, bottom: 21),
+        padding: padding,
       );
+    }
+
+    testWidgets('landscape search row: the ⌕ clears the right inset', (
+      tester,
+    ) async {
+      await pumpSearchRow(tester, const EdgeInsets.only(right: 59, bottom: 21));
       final idle = tester.getRect(find.byKey(kSearchFieldKey));
       expect(idle.right, lessThanOrEqualTo(932 - 59));
+    });
+
+    testWidgets('landscape search row, left inset: the ⌕ keeps the right '
+        'edge, and a drag onto it hovers it', (tester) async {
+      await pumpSearchRow(tester, const EdgeInsets.only(bottom: 21));
+      final noInset = tester.getRect(find.byKey(kSearchFieldKey));
+      await pumpSearchRow(tester, notchLeft);
+      final idle = tester.getRect(find.byKey(kSearchFieldKey));
+      expect(idle, noInset, reason: 'laid out in the safe width, then moved');
+      // The drop target is the ⌕ as drawn.
+      final g = await tester.startGesture(
+        tester.getCenter(find.bySemanticsLabel('Home')),
+      );
+      await g.moveTo(idle.center);
+      await tester.pump(const Duration(milliseconds: 100));
+      final hovered = tester
+          .widget<TabHoverHighlight>(
+            find.descendant(
+              of: find.byKey(kSearchFieldKey),
+              matching: find.byType(TabHoverHighlight),
+            ),
+          )
+          .hovered
+          .value;
+      expect(hovered, isTrue);
+      await g.cancel();
     });
   });
 }

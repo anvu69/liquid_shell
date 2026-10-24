@@ -1714,7 +1714,12 @@ class _LiquidShellState extends State<LiquidShell>
           right: rtl ? start : kRegularSearchMargin,
           top: regularFieldTop,
           height: kRegularSearchFieldExtent,
-          child: searchField(inlineCancel: _search.cancel),
+          // Behind the overlay an idle field takes no focus (focusing it
+          // starts the search); an active one keeps it (VK-774).
+          child: ExcludeFocus(
+            excluding: modal && phase == LiquidSearchPhase.selected,
+            child: searchField(inlineCancel: _search.cancel),
+          ),
         ),
       );
     }
@@ -1745,6 +1750,7 @@ class _LiquidShellState extends State<LiquidShell>
           child: Focus(
             autofocus: modal,
             skipTraversal: true,
+            includeSemantics: false,
             child: slot(
               details(LiquidChromeSlot.sidebar),
               LiquidSidebar(
