@@ -1788,11 +1788,21 @@ class _LiquidShellState extends State<LiquidShell>
         pages: this,
         strings: widget.strings,
         // Escape closes the overlay sidebar, wherever focus is in the shell.
-        child: CallbackShortcuts(
-          bindings: {
-            if (modal)
-              const SingleActivator(LogicalKeyboardKey.escape): () =>
-                  _setSidebarVisible(false),
+        // Always built (the Stack keeps its state) and without semantics: a
+        // node here would merge the search field into one the size of the
+        // shell (VK-702).
+        child: Focus(
+          canRequestFocus: false,
+          skipTraversal: true,
+          includeSemantics: false,
+          onKeyEvent: (_, event) {
+            if (!modal ||
+                event is! KeyDownEvent ||
+                event.logicalKey != LogicalKeyboardKey.escape) {
+              return KeyEventResult.ignored;
+            }
+            _setSidebarVisible(false);
+            return KeyEventResult.handled;
           },
           // One backdrop read for all chrome glass (budget rule, §5.8).
           child: BackdropGroup(child: Stack(children: children)),

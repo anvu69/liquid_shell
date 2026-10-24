@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show SemanticsNode;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
@@ -489,6 +490,38 @@ void main() {
         expect(controller.isActive, isFalse);
         expect(find.byType(LiquidSidebar), findsOne);
       });
+    });
+
+    // VK-702: the overlay's Escape handler wraps the whole shell; with
+    // semantics it merged the compact search field into a node the size of
+    // the shell, and XCUITest's tap at its centre missed the field.
+    testWidgets('the Escape handler adds no semantics node: the compact '
+        "search field's node is its text input, inside the drawn field", (
+      tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      await pumpShell(
+        tester,
+        TestShell(
+          destinations: _searchDestinations,
+          initialIndex: 1,
+          search: LiquidSearch(controller: controller),
+        ),
+      );
+      expect(find.byType(LiquidSidebar), findsNothing);
+      final node = tester.getSemantics(find.byType(TextField));
+      var rect = node.rect;
+      for (SemanticsNode? n = node; n != null; n = n.parent) {
+        if (n.transform != null) {
+          rect = MatrixUtils.transformRect(n.transform!, rect);
+        }
+      }
+      expect(rect, tester.getRect(find.byType(EditableText)));
+      final field = tester.getRect(find.byKey(kSearchFieldKey));
+      expect(field.expandToInclude(rect), field, reason: 'inside $field');
+      handle.dispose();
     });
 
     testWidgets('overlay: Escape closes it', (tester) async {
