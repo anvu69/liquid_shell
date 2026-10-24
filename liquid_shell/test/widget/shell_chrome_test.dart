@@ -33,7 +33,7 @@ void main() {
       );
       expect(pill.bottom, 852 - 21);
       expect(pill.height, 62);
-    });
+    }, variant: iosDevice);
 
     testWidgets('932×430 landscape phone with compactHeight 0 (P1) → top '
         'bar, sidebar overlays', (tester) async {
@@ -91,7 +91,7 @@ void main() {
       final pill = tester.getRect(find.byKey(kTabPillKey));
       expect(pill.height, 62);
       expect(scopeOf(tester).chromeInsets, const EdgeInsets.only(bottom: 83));
-    });
+    }, variant: iosDevice);
 
     testWidgets('compactHeight 0 restores P1: a 690×430 shell keeps the '
         '62 pt bar at margin 21', (tester) async {
@@ -128,7 +128,7 @@ void main() {
       tester.view.physicalSize = kPhone;
       await tester.pump();
       expect(scopeOf(tester).chromeInsets.bottom, 62 + 21);
-    });
+    }, variant: iosDevice);
 
     testWidgets('iPad portrait 834×1194 → top bar; body never resized', (
       tester,
@@ -680,6 +680,32 @@ void main() {
       );
       expect(scopeOf(tester).chromeInsets.bottom, 83);
     });
+
+    // VK-702 M1: the device decides, not an app's ThemeData.platform.
+    testWidgets(
+      'an Android device themed as iOS: max(21, padding + 8)',
+      (
+        tester,
+      ) async {
+        await pumpShell(
+          tester,
+          const TestShell(),
+          size: const Size(412, 915),
+          padding: const EdgeInsets.only(top: 24, bottom: 48),
+        );
+        expect(scopeOf(tester).chromeInsets.bottom, 62 + 56);
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.android),
+    );
+
+    testWidgets('an iPhone themed as Android: 21', (tester) async {
+      await pumpShell(
+        tester,
+        const TestShell(),
+        platform: TargetPlatform.android,
+      );
+      expect(scopeOf(tester).chromeInsets.bottom, 62 + 21);
+    }, variant: iosDevice);
   });
 
   group('page helpers', () {
@@ -862,7 +888,7 @@ void main() {
             .padding,
         const EdgeInsets.only(top: 59, bottom: 34),
       );
-    });
+    }, variant: iosDevice);
 
     testWidgets('LiquidShellScope.of outside a shell asserts', (tester) async {
       await tester.pumpWidget(
@@ -960,7 +986,7 @@ void main() {
       );
       expect(scopeOf(tester).chromeInsets, const EdgeInsets.only(bottom: 121));
       expect(find.byType(LiquidTabBar), findsNothing);
-    });
+    }, variant: iosDevice);
 
     testWidgets('a custom bar collapsed to 0pt is measured: no inset', (
       tester,

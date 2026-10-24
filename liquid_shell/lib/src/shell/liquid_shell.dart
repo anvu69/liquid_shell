@@ -1282,7 +1282,8 @@ class _LiquidShellState extends State<LiquidShell>
       _search.releaseField();
     }
     final bottomGap = bottomGapFor(
-      platform: Theme.of(context).platform,
+      // The device decides, not an app's ThemeData.platform (VK-702).
+      platform: defaultTargetPlatform,
       viewPaddingBottom: media.viewPadding.bottom,
       gestureInsetBottom: media.systemGestureInsets.bottom,
     );

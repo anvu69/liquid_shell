@@ -181,38 +181,42 @@ void main() {
     );
     expect(find.bySemanticsLabel('Search'), findsOneWidget);
     expect(scopeOf(tester).searchPhase, LiquidSearchPhase.idle);
-  });
+  }, variant: iosDevice);
 
-  testWidgets('tap ⌕: the search tab is selected, the field is not focused', (
-    tester,
-  ) async {
-    final (_, selections, _) = await _pump(tester);
-    await tester.tap(find.bySemanticsLabel('Search'));
-    await tester.pumpAndSettle();
-    expect(selections, [2]);
-    expect(
-      _rect(tester, kSearchFieldKey),
-      const Rect.fromLTRB(88, _rowBottom - 55, 393 - 28, _rowBottom - 7),
-    );
-    expect(
-      _rect(tester, kSearchCollapsedKey),
-      const Rect.fromLTWH(28, _rowBottom - 55, 48, 48),
-    );
-    // The circle is the tab bar itself, collapsed (spec VK-503 §11).
-    expect(_pill(tester).minimized, isTrue);
-    expect(_rect(tester, kTabPillKey), _rect(tester, kSearchCollapsedKey));
-    expect(_pillOpacity(tester), 1);
-    expect(
-      find.descendant(
-        of: find.byKey(kSearchCollapsedKey),
-        matching: find.bySemanticsLabel('Home'),
-      ),
-      findsOneWidget,
-      reason: 'the previous tab',
-    );
-    expect(tester.testTextInput.isVisible, isFalse);
-    expect(scopeOf(tester, 'Search').searchPhase, LiquidSearchPhase.selected);
-  });
+  testWidgets(
+    'tap ⌕: the search tab is selected, the field is not focused',
+    (
+      tester,
+    ) async {
+      final (_, selections, _) = await _pump(tester);
+      await tester.tap(find.bySemanticsLabel('Search'));
+      await tester.pumpAndSettle();
+      expect(selections, [2]);
+      expect(
+        _rect(tester, kSearchFieldKey),
+        const Rect.fromLTRB(88, _rowBottom - 55, 393 - 28, _rowBottom - 7),
+      );
+      expect(
+        _rect(tester, kSearchCollapsedKey),
+        const Rect.fromLTWH(28, _rowBottom - 55, 48, 48),
+      );
+      // The circle is the tab bar itself, collapsed (spec VK-503 §11).
+      expect(_pill(tester).minimized, isTrue);
+      expect(_rect(tester, kTabPillKey), _rect(tester, kSearchCollapsedKey));
+      expect(_pillOpacity(tester), 1);
+      expect(
+        find.descendant(
+          of: find.byKey(kSearchCollapsedKey),
+          matching: find.bySemanticsLabel('Home'),
+        ),
+        findsOneWidget,
+        reason: 'the previous tab',
+      );
+      expect(tester.testTextInput.isVisible, isFalse);
+      expect(scopeOf(tester, 'Search').searchPhase, LiquidSearchPhase.selected);
+    },
+    variant: iosDevice,
+  );
 
   testWidgets('tap the field: active above the keyboard with ×', (
     tester,
@@ -465,7 +469,7 @@ void main() {
       _rect(tester, kSearchFieldKey),
       const Rect.fromLTRB(88, _rowBottom - 55, 393 - 28, _rowBottom - 7),
     );
-  });
+  }, variant: iosDevice);
 
   testWidgets('RTL: the collapsed circle is on the right', (tester) async {
     await _pump(tester, initialIndex: 2, direction: TextDirection.rtl);
@@ -818,7 +822,7 @@ void main() {
       expectKeyboardDownSearchUp(tester, controller);
       // Down to the bottom row, with its ×, as UIKit's field goes.
       expect(_rect(tester, kSearchFieldKey).bottom, _rowBottom - 7);
-    });
+    }, variant: iosDevice);
 
     testWidgets('a user drag on the results dismisses the keyboard', (
       tester,

@@ -90,6 +90,11 @@
 - **Fix (VK-702).** A platform implementation whose `watchSignals()` throws
   instead of returning a stream no longer breaks every `LiquidGlass`: the
   glass uses no signals, and debug builds log the error once.
+- **Behaviour change (VK-702).** The gap below the bottom tab bar now
+  follows the device's platform (`defaultTargetPlatform`) instead of
+  `ThemeData.platform`. An Android app themed as iOS keeps clear of a
+  3-button navigation bar; an iPhone app themed as Android sits 21 pt above
+  the home indicator.
 
 ## 0.1.0-dev.7
 

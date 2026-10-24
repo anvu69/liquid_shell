@@ -76,28 +76,32 @@ void main() {
       tester.getRect(find.byKey(kSearchFieldKey)),
       const Rect.fromLTWH(393 - 21 - 62, _rowBottom - 62, 62, 62),
     );
-  });
+  }, variant: iosDevice);
 
-  testWidgets('selected: the bar itself collapses to the 48 circle at 28', (
-    tester,
-  ) async {
-    await _pump(tester);
-    await tester.tap(find.bySemanticsLabel('Search'));
-    await tester.pumpAndSettle();
-    final circle = tester.getRect(find.byKey(kSearchCollapsedKey));
-    expect(circle, const Rect.fromLTWH(28, _rowBottom - 55, 48, 48));
-    expect(tester.getRect(find.byKey(kTabPillKey)), circle);
-    expect(
-      find.descendant(
-        of: find.byKey(kSearchCollapsedKey),
-        matching: find.bySemanticsLabel('Home'),
-      ),
-      findsOneWidget,
-    );
-    await tester.tap(find.byKey(kSearchCollapsedKey));
-    await tester.pumpAndSettle();
-    expect(tester.getRect(find.byKey(kTabPillKey)).height, 62);
-  });
+  testWidgets(
+    'selected: the bar itself collapses to the 48 circle at 28',
+    (
+      tester,
+    ) async {
+      await _pump(tester);
+      await tester.tap(find.bySemanticsLabel('Search'));
+      await tester.pumpAndSettle();
+      final circle = tester.getRect(find.byKey(kSearchCollapsedKey));
+      expect(circle, const Rect.fromLTWH(28, _rowBottom - 55, 48, 48));
+      expect(tester.getRect(find.byKey(kTabPillKey)), circle);
+      expect(
+        find.descendant(
+          of: find.byKey(kSearchCollapsedKey),
+          matching: find.bySemanticsLabel('Home'),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(kSearchCollapsedKey));
+      await tester.pumpAndSettle();
+      expect(tester.getRect(find.byKey(kTabPillKey)).height, 62);
+    },
+    variant: iosDevice,
+  );
 
   testWidgets('drag from Home onto ⌕: highlight, release selects search', (
     tester,
