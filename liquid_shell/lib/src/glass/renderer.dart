@@ -28,6 +28,7 @@ class LiquidGlassSpec {
 ///
 /// Register extra renderers (for example a liquid adapter) through
 /// `LiquidGlassPolicy.renderers`.
+@immutable
 abstract class LiquidGlassRenderer {
   /// Const constructor for subclasses.
   const LiquidGlassRenderer();

@@ -74,7 +74,7 @@ class _StatefulState extends State<_Stateful> {
 
 /// A non-const custom renderer: equal in kind, never identical.
 class _CustomRenderer extends LiquidGlassRenderer {
-  _CustomRenderer();
+  // Not const on purpose: each call is a new instance. // ignore: prefer_const_constructors_in_immutables _CustomRenderer();
 
   @override
   LiquidGlassTier get tier => LiquidGlassTier.liquid;

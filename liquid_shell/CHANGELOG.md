@@ -83,6 +83,10 @@
   standby under another shell), the search now ends with its text kept,
   `composing` false and `onChanged` not called. Before, the controller
   stayed active (and blocked back) or kept `composing` true.
+- `LiquidGlassRenderer` is now marked `@immutable`. No behaviour change; a
+  custom renderer with a non-final field or a non-const constructor now
+  gets the analyzer's `must_be_immutable` or
+  `prefer_const_constructors_in_immutables` (VK-702).
 
 ## 0.1.0-dev.7
 
