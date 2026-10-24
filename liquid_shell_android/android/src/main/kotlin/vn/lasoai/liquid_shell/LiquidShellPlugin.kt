@@ -147,19 +147,24 @@ class LiquidShellPlugin : FlutterPlugin, ActivityAware, EventChannel.StreamHandl
         val observer = object : ContentObserver(main) {
             override fun onChange(selfChange: Boolean) = send()
         }
-        attempt {
-            ctx.contentResolver.registerContentObserver(
-                Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE),
-                false,
-                observer,
-            )
-            ctx.contentResolver.registerContentObserver(
-                Settings.Secure.getUriFor(HIGH_TEXT_CONTRAST),
-                false,
-                observer,
-            )
-            settingsObserver = observer
-        }
+        registerAll(
+            observer,
+            { settingsObserver = it },
+            {
+                ctx.contentResolver.registerContentObserver(
+                    Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE),
+                    false,
+                    it,
+                )
+            },
+            {
+                ctx.contentResolver.registerContentObserver(
+                    Settings.Secure.getUriFor(HIGH_TEXT_CONTRAST),
+                    false,
+                    it,
+                )
+            },
+        )
 
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) = send()

@@ -23,3 +23,13 @@ internal inline fun <T> attempt(block: () -> T): T? =
     } catch (e: LinkageError) {
         null
     }
+
+/**
+ * Hands [item] to [keep] first, then registers it with every one of
+ * [registrations] as one [attempt]. Kept first, a registration that throws
+ * part-way still leaves the remove path able to undo the earlier ones.
+ */
+internal fun <T> registerAll(item: T, keep: (T) -> Unit, vararg registrations: (T) -> Unit) {
+    keep(item)
+    attempt { registrations.forEach { it(item) } }
+}

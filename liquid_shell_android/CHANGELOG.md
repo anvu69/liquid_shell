@@ -1,6 +1,8 @@
 ## 0.1.0-dev.8
 
-- No changes; versioned with `liquid_shell`.
+- **Fix (VK-702).** If registering the settings observer fails part-way,
+  the half that did register is now removed on cancel and detach. Before,
+  it stayed registered.
 
 ## 0.1.0-dev.7
 
