@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:liquid_shell/src/chrome/glass_tab_bar.dart';
 import 'package:liquid_shell/src/chrome/sidebar.dart';
 import 'package:liquid_shell/src/chrome/sidebar_toggle.dart';
@@ -1366,13 +1367,19 @@ class _LiquidShellState extends State<LiquidShell>
     if (tiled) {
       bodyMedia = bodyMedia.removePadding(removeLeft: !rtl, removeRight: rtl);
     }
+    // The overlay sidebar is modal for the keyboard too (VK-702): nothing
+    // behind its barrier takes focus.
+    final modal = kind == LiquidChromeKind.sidebarOverlay;
     final children = <Widget>[
       PositionedDirectional(
         start: bodyStart,
         top: 0,
         end: 0,
         bottom: 0,
-        child: MediaQuery(data: bodyMedia, child: _bodySubtree(kind)),
+        child: MediaQuery(
+          data: bodyMedia,
+          child: ExcludeFocus(excluding: modal, child: _bodySubtree(kind)),
+        ),
       ),
     ];
 
@@ -1668,18 +1675,21 @@ class _LiquidShellState extends State<LiquidShell>
             left: 0,
             right: 0,
             top: media.padding.top + kTopBarGap,
-            child: phase == null
-                ? bar
-                : IgnorePointer(
-                    ignoring: active,
-                    child: AnimatedOpacity(
-                      opacity: active ? 0 : 1,
-                      duration: MediaQuery.disableAnimationsOf(context)
-                          ? Duration.zero
-                          : const Duration(milliseconds: 200),
-                      child: bar,
+            child: ExcludeFocus(
+              excluding: modal,
+              child: phase == null
+                  ? bar
+                  : IgnorePointer(
+                      ignoring: active,
+                      child: AnimatedOpacity(
+                        opacity: active ? 0 : 1,
+                        duration: MediaQuery.disableAnimationsOf(context)
+                            ? Duration.zero
+                            : const Duration(milliseconds: 200),
+                        child: bar,
+                      ),
                     ),
-                  ),
+            ),
           ),
         );
       case LiquidChromeKind.sidebarTiled || LiquidChromeKind.hidden:
@@ -1726,18 +1736,24 @@ class _LiquidShellState extends State<LiquidShell>
           top: 0,
           bottom: 0,
           width: widget.sidebarWidth,
-          child: slot(
-            details(LiquidChromeSlot.sidebar),
-            LiquidSidebar(
-              destinations: widget.destinations,
-              selectedIndex: selected,
-              onDestinationSelected: _onSelect,
-              onHide: () => _setSidebarVisible(false),
-              header: widget.sidebarHeader,
-              footer: widget.sidebarFooter,
-              trailing: widget.tabBarTrailing,
-              width: widget.sidebarWidth,
-              strings: widget.strings,
+          // Overlay: focus starts in the sidebar when nothing holds it, so
+          // Escape reaches the shell. An active search keeps its focus.
+          child: Focus(
+            autofocus: modal,
+            skipTraversal: true,
+            child: slot(
+              details(LiquidChromeSlot.sidebar),
+              LiquidSidebar(
+                destinations: widget.destinations,
+                selectedIndex: selected,
+                onDestinationSelected: _onSelect,
+                onHide: () => _setSidebarVisible(false),
+                header: widget.sidebarHeader,
+                footer: widget.sidebarFooter,
+                trailing: widget.tabBarTrailing,
+                width: widget.sidebarWidth,
+                strings: widget.strings,
+              ),
             ),
           ),
         ),
@@ -1761,8 +1777,16 @@ class _LiquidShellState extends State<LiquidShell>
         registry: this,
         pages: this,
         strings: widget.strings,
-        // One backdrop read for all chrome glass (budget rule, §5.8).
-        child: BackdropGroup(child: Stack(children: children)),
+        // Escape closes the overlay sidebar, wherever focus is in the shell.
+        child: CallbackShortcuts(
+          bindings: {
+            if (modal)
+              const SingleActivator(LogicalKeyboardKey.escape): () =>
+                  _setSidebarVisible(false),
+          },
+          // One backdrop read for all chrome glass (budget rule, §5.8).
+          child: BackdropGroup(child: Stack(children: children)),
+        ),
       ),
     );
   }

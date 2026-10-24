@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 
@@ -390,6 +391,48 @@ void main() {
       await tester.tap(find.byTooltip('Show sidebar'));
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Hide sidebar'));
+      await tester.pumpAndSettle();
+      expect(find.byType(LiquidSidebar), findsNothing);
+    });
+
+    // VK-702 M2: the overlay is modal for the keyboard too.
+    testWidgets('overlay: Tab stays in the sidebar; the page behind takes '
+        'no focus until it closes', (tester) async {
+      await pumpShell(
+        tester,
+        const TestShell(),
+        size: kTabletPortrait,
+        padding: _tablet,
+      );
+      FocusNode page() => Focus.of(tester.element(find.text('Home page: 0')));
+      await tester.tap(find.byTooltip('Show sidebar'));
+      await tester.pumpAndSettle();
+      expect(page().canRequestFocus, isFalse, reason: 'the page behind');
+      for (var i = 0; i < 12; i++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+        final focused = FocusManager.instance.primaryFocus!.context!;
+        expect(
+          focused.findAncestorWidgetOfExactType<LiquidSidebar>(),
+          isNotNull,
+          reason: 'Tab ${i + 1}',
+        );
+      }
+      await tester.tap(find.byTooltip('Hide sidebar'));
+      await tester.pumpAndSettle();
+      expect(page().canRequestFocus, isTrue, reason: 'closed');
+    });
+
+    testWidgets('overlay: Escape closes it', (tester) async {
+      await pumpShell(
+        tester,
+        const TestShell(),
+        size: kTabletPortrait,
+        padding: _tablet,
+      );
+      await tester.tap(find.byTooltip('Show sidebar'));
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
       expect(find.byType(LiquidSidebar), findsNothing);
     });

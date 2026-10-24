@@ -95,6 +95,10 @@
   `ThemeData.platform`. An Android app themed as iOS keeps clear of a
   3-button navigation bar; an iPhone app themed as Android sits 21 pt above
   the home indicator.
+- **Behaviour change (VK-702).** While the Flutter overlay sidebar is open,
+  the page and the top tab bar behind its barrier take no keyboard focus,
+  focus starts in the sidebar, and Escape closes it. An active search field
+  behind it keeps its focus, and Escape there still ends the search.
 
 ## 0.1.0-dev.7
 
