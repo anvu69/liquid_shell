@@ -102,14 +102,15 @@ In `build`, `final modal = kind == LiquidChromeKind.sidebarOverlay;` and:
 
 1. **Body:** `ExcludeFocus(excluding: modal, child: _bodySubtree(kind))` inside the body's `MediaQuery` (`:1374`).
 2. **Top bar row** (the `topBar || sidebarOverlay` case): its `Positioned` child wrapped in `ExcludeFocus(excluding: modal, …)`.
-3. **Sidebar:** its slot wrapped in `Focus(autofocus: modal, skipTraversal: true, …)`. Autofocus only acts when nothing in the scope holds focus, so it gives Escape a place to start without taking focus from an active search.
-4. **Escape:** the `Stack` (`:1764`) wrapped in `CallbackShortcuts` with `{if (modal) SingleActivator(LogicalKeyboardKey.escape): () => _setSidebarVisible(false)}`. Ancestor of every chrome child, so Escape closes the overlay from the sidebar, a sidebar row, or with nothing focused.
+3. **Regular search field** (search tab selected, not active): wrapped in `ExcludeFocus(excluding: modal && phase == LiquidSearchPhase.selected, …)`. Focusing the idle field starts the search, so Tab must not reach it behind the barrier (final review, Important 1).
+4. **Sidebar:** its slot wrapped in `Focus(autofocus: modal, skipTraversal: true, includeSemantics: false, …)` (no semantics flag on the sidebar in any kind). Autofocus only acts when nothing in the scope holds focus, so it gives Escape a place to start without taking focus from an active search.
+5. **Escape:** the `Stack` (`:1764`) wrapped in `CallbackShortcuts` with `{if (modal) SingleActivator(LogicalKeyboardKey.escape): () => _setSidebarVisible(false)}`. Ancestor of every chrome child, so Escape closes the overlay from the sidebar, a sidebar row, or with nothing focused.
 
 The wrappers are always in the tree (only their flags change), so no state is lost when the chrome kind changes. `import 'package:flutter/services.dart';` is added for `LogicalKeyboardKey`.
 
-**The active search field is not excluded.** Excluding it, or autofocusing past it, unfocuses it, and an unfocused Flutter field ends the search (`shell_search.dart:533-536`). VK-774 keeps the search alive under the overlay (back closes the sidebar, then the search). With focus in that field, Escape keeps the field's own meaning (`search_chrome.dart:117-121`: end the search), the innermost binding; see §8.
+**Only an active search field is exempt.** An idle (selected) field is excluded (item 3). Excluding the active one, or autofocusing past it, unfocuses it, and an unfocused Flutter field ends the search (`shell_search.dart:533-536`). VK-774 keeps the search alive under the overlay (back closes the sidebar, then the search). With focus in that field, Escape keeps the field's own meaning (`search_chrome.dart:117-121`: end the search), the innermost binding; see §8.
 
-**Tests** (group `sidebar` of `test/widget/shell_chrome_test.dart`): (a) overlay open: the page's focus node cannot take focus; 12 Tabs never leave the sidebar; closed: the page can again. (b) Escape closes the overlay.
+**Tests** (group `sidebar` of `test/widget/shell_chrome_test.dart`): (a) overlay open: the page's focus node cannot take focus; 12 Tabs never leave the sidebar; closed: the page can again. (b) Escape closes the overlay. (c) Search tab selected, overlay open: 12 Tabs stay in the sidebar and the search does not become active. (d) Search active, overlay open: Escape ends the search and the sidebar stays open.
 
 ### 4.5 M10: chrome clears the side safe area
 
