@@ -1309,16 +1309,20 @@ class _LiquidShellState extends State<LiquidShell>
         _measured[barKey] ??
         (barForm == TabBarForm.landscape ? TabMetrics.landscapeExtent : null);
     final bottomRowExtent = measuredBar ?? kBottomPillExtent;
+    // The bars clear the side safe area: a phone's notch in landscape
+    // (VK-702). The search rects are laid out between the two insets.
+    final sideLeft = media.padding.left;
+    final sideRight = media.padding.right;
     final compactRects = phase != null && kind == LiquidChromeKind.bottomBar
         ? compactSearchRects(
             phase: phase,
-            size: size,
+            size: Size(size.width - sideLeft - sideRight, size.height),
             rowBottom: size.height - bottomGap,
             rowExtent: bottomRowExtent,
             margin: barMargin,
             keyboard: media.viewInsets.bottom,
             direction: Directionality.of(context),
-          )
+          ).shift(sideLeft)
         : null;
     // A hover on the ⌕ outlives a drag whose bar stops feeding the target
     // (search selected, chrome hidden, another layout). Cleared after the
@@ -1498,15 +1502,15 @@ class _LiquidShellState extends State<LiquidShell>
           final idle = phase == LiquidSearchPhase.idle;
           // The ⌕ in the bar's own coordinates: its top-left is the row's.
           _searchTargetRect = compactRects.field.shift(
-            Offset(-margin, -(size.height - bottomGap - rowExtent)),
+            Offset(-margin - sideLeft, -(size.height - bottomGap - rowExtent)),
           );
           children.add(
             CompactSearchChrome(
               phase: phase,
               rects: compactRects,
               pill: Positioned(
-                left: margin,
-                right: margin,
+                left: margin + sideLeft,
+                right: margin + sideRight,
                 bottom: bottomGap,
                 child: IgnorePointer(
                   ignoring: phase == LiquidSearchPhase.active,
@@ -1586,8 +1590,8 @@ class _LiquidShellState extends State<LiquidShell>
             : _kBottomBarMargin;
         children.add(
           Positioned(
-            left: barRowMargin,
-            right: barRowMargin,
+            left: barRowMargin + sideLeft,
+            right: barRowMargin + sideRight,
             bottom: bottomGap,
             child: Align(
               alignment: Alignment.bottomCenter,
@@ -1672,8 +1676,8 @@ class _LiquidShellState extends State<LiquidShell>
         final active = phase == LiquidSearchPhase.active;
         children.add(
           Positioned(
-            left: 0,
-            right: 0,
+            left: sideLeft,
+            right: sideRight,
             top: media.padding.top + kTopBarGap,
             child: ExcludeFocus(
               excluding: modal,

@@ -99,6 +99,10 @@
   the page and the top tab bar behind its barrier take no keyboard focus,
   focus starts in the sidebar, and Escape closes it. An active search field
   behind it keeps its focus, and Escape there still ends the search.
+- **Visual change (VK-702).** The bottom tab bar, the compact search row and
+  the top tab bar keep inside the horizontal safe area: on a phone in
+  landscape they move clear of the notch. With no side insets (portrait,
+  iPad) nothing moves.
 
 ## 0.1.0-dev.7
 

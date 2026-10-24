@@ -94,6 +94,13 @@ class CompactSearchRects {
   /// The × circle.
   final Rect cancel;
 
+  /// These rects moved [dx] to the right.
+  CompactSearchRects shift(double dx) => CompactSearchRects(
+    circle: circle.translate(dx, 0),
+    field: field.translate(dx, 0),
+    cancel: cancel.translate(dx, 0),
+  );
+
   @override
   bool operator ==(Object other) =>
       other is CompactSearchRects &&

@@ -5,6 +5,8 @@ import 'package:liquid_shell/liquid_shell.dart';
 
 import 'package:liquid_shell/src/chrome/glass_tab_bar.dart';
 import 'package:liquid_shell/src/chrome/sidebar_toggle.dart';
+import 'package:liquid_shell/src/search/search_chrome.dart'
+    show kSearchFieldKey;
 import 'package:liquid_shell/src/shell/shell_layout.dart'
     show kTopBarGap, kTopPillExtent;
 import 'package:liquid_shell/src/shell/shell_scope.dart';
@@ -1186,6 +1188,67 @@ void main() {
       for (final MapEntry(:key, :value) in different.entries) {
         expect(value, isNot(details()), reason: key);
       }
+    });
+  });
+
+  // VK-702 M10: a landscape phone's notch; the bars keep to the safe width.
+  group('side safe area (VK-702)', () {
+    const notchLeft = EdgeInsets.only(left: 59, bottom: 21);
+    Rect pill(WidgetTester tester) => tester.getRect(
+      find.descendant(
+        of: find.byType(LiquidTabBar),
+        matching: find.byType(LiquidGlass),
+      ),
+    );
+
+    testWidgets('landscape bottom bar: centred between the insets', (
+      tester,
+    ) async {
+      await pumpShell(
+        tester,
+        const TestShell(),
+        size: kPhoneLandscape,
+        padding: notchLeft,
+      );
+      expect(scopeOf(tester).chromeKind, LiquidChromeKind.bottomBar);
+      expect(pill(tester).center.dx, (59 + 932) / 2);
+    });
+
+    testWidgets('landscape top bar (compactHeight 0): centred between the '
+        'insets', (tester) async {
+      await pumpShell(
+        tester,
+        const TestShell(breakpoints: LiquidShellBreakpoints(compactHeight: 0)),
+        size: kPhoneLandscape,
+        padding: notchLeft,
+      );
+      expect(scopeOf(tester).chromeKind, LiquidChromeKind.topBar);
+      expect(pill(tester).center.dx, (59 + 932) / 2);
+    });
+
+    testWidgets('landscape search row: the ⌕ clears the right inset', (
+      tester,
+    ) async {
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      await pumpShell(
+        tester,
+        TestShell(
+          destinations: const [
+            LiquidDestination(icon: Icon(Icons.home), label: 'Home'),
+            LiquidDestination(
+              icon: Icon(Icons.search),
+              label: 'Search',
+              role: LiquidDestinationRole.search,
+            ),
+          ],
+          search: LiquidSearch(controller: controller),
+        ),
+        size: kPhoneLandscape,
+        padding: const EdgeInsets.only(right: 59, bottom: 21),
+      );
+      final idle = tester.getRect(find.byKey(kSearchFieldKey));
+      expect(idle.right, lessThanOrEqualTo(932 - 59));
     });
   });
 }
