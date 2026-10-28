@@ -1,3 +1,12 @@
+## 0.1.0-dev.10
+
+- **Behaviour change (VK-445).** A pushed page's title is always inline:
+  `largeTitle` applies to root pages only. Before, the Flutter bar drew a
+  pushed page's large title on a row of its own, where UIKit drew it small.
+- **Behaviour change (VK-445).** `largeTitle: true` on a root page now means
+  the collapsing row. Before, the Flutter bar put it on the bar row, which
+  is what `largeTitle: null` gives a root page at compact width.
+
 ## 0.1.0-dev.8
 
 - The package archive no longer includes tests (they read files outside

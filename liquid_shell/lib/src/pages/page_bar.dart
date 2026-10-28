@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:liquid_shell/src/native/window_controls.dart';
 import 'package:liquid_shell/src/pages/liquid_page.dart';
+import 'package:liquid_shell/src/pages/page_title.dart';
 import 'package:liquid_shell/src/shell/shell_scope.dart';
 
 /// Height of the bar row (iOS 26: 54pt).
 const double kPageBarExtent = 54;
 
-/// Height of the large title row under the bar row (a pushed page's large
-/// title; a root page's sits on the bar row).
+/// Height of the large-title row under the bar row (a root page's
+/// collapsing large title).
 const double kLargeTitleExtent = 52;
 
 /// Fade height of the scroll-edge effect under the bar.
@@ -28,29 +29,26 @@ const double _kEdgeFade = 24;
   );
 }
 
-/// A `LiquidPage`'s bar where no native bar draws it: the
-/// glass back circle, the inline or large title, and a scroll-edge fade.
-/// A root page's large title sits on the bar row, leading, as UIKit's
-/// `.inline` large title and Apple Music draw it; under a back button it
-/// takes its own row below the bar, as UIKit's `.inline` turns `.always`.
-/// Its child gets the bar's height added to its top padding, so
+/// A `LiquidPage`'s bar where no native bar draws it: the glass back
+/// circle, the title as its [PageTitleMode] draws it, and a scroll-edge
+/// fade. Its child gets the bar's height added to its top padding, so
 /// `LiquidShellScope.contentPaddingOf` keeps content below it.
 class FlutterPageBar extends StatelessWidget {
-  /// Creates the bar.
+  /// Creates the bar. A [PageTitleMode.hidden] title has no bar.
   const FlutterPageBar({
     required this.title,
-    required this.large,
+    required this.mode,
     required this.canPop,
     required this.hideLargeTitle,
     required this.child,
     super.key,
-  });
+  }) : assert(mode != PageTitleMode.hidden, 'a hidden title has no bar');
 
   /// The title.
   final String title;
 
-  /// Large title (otherwise inline in the bar row).
-  final bool large;
+  /// How the title is drawn.
+  final PageTitleMode mode;
 
   /// Whether the page's navigator can pop: the back button shows.
   final bool canPop;
@@ -67,27 +65,15 @@ class FlutterPageBar extends StatelessWidget {
     final theme = Theme.of(context);
     // Below the shell's own chrome at the top (a Flutter top tab bar).
     final barTop = LiquidShellScope.contentPaddingOf(context).top;
-    // On the bar row with no back button; on its own row below otherwise.
-    final largeInRow = large && !canPop;
-    final showLargeRow = large && canPop && !hideLargeTitle;
+    final showLargeRow =
+        mode == PageTitleMode.largeCollapsing && !hideLargeTitle;
     final bottom =
         barTop + kPageBarExtent + (showLargeRow ? kLargeTitleExtent : 0);
     final largeStyle = theme.textTheme.headlineLarge?.copyWith(
       fontWeight: FontWeight.w700,
     );
-    final Widget rowTitle;
-    if (largeInRow && !hideLargeTitle) {
-      rowTitle = Text(
-        title,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: largeStyle,
-      );
-    } else if (large) {
-      // Hidden by an active search, or on its own row below.
-      rowTitle = const SizedBox.shrink();
-    } else {
-      rowTitle = Text(
+    final rowTitle = switch (mode) {
+      PageTitleMode.inline => Text(
         title,
         textAlign: TextAlign.center,
         maxLines: 1,
@@ -95,8 +81,16 @@ class FlutterPageBar extends StatelessWidget {
         style: theme.textTheme.titleMedium?.copyWith(
           fontWeight: FontWeight.w600,
         ),
-      );
-    }
+      ),
+      PageTitleMode.largeInRow when !hideLargeTitle => Text(
+        title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: largeStyle,
+      ),
+      // Hidden by an active search, or on its own row below.
+      _ => const SizedBox.shrink(),
+    };
     final padded = media.copyWith(
       padding: media.padding.copyWith(top: bottom),
       viewPadding: media.viewPadding.copyWith(top: bottom),
@@ -109,8 +103,8 @@ class FlutterPageBar extends StatelessWidget {
             child: ShaderMask(
               blendMode: BlendMode.dstIn,
               shaderCallback: (rect) {
-                // Ends under the large title row too: that title does not
-                // collapse here, so content must not scroll through it.
+                // Ends under the large title row too: content must not
+                // scroll through it.
                 final end = rect.height == 0 ? 0.0 : bottom / rect.height;
                 final start = rect.height == 0
                     ? 0.0

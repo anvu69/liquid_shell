@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:liquid_shell/src/glass/liquid_glass.dart';
 import 'package:liquid_shell/src/pages/page_bar.dart';
 import 'package:liquid_shell/src/pages/page_registry.dart';
+import 'package:liquid_shell/src/pages/page_title.dart';
 import 'package:liquid_shell/src/search/search_controller.dart';
 import 'package:liquid_shell/src/shell/breakpoints.dart';
 import 'package:liquid_shell/src/shell/shell_scope.dart';
@@ -12,11 +13,20 @@ import 'package:liquid_shell/src/shell/strings.dart';
 /// One page of a tab: its title for the navigation bar, and the back
 /// button when its navigator can pop.
 ///
-/// Where its tab has a native navigation bar (iOS 26 native chrome: the
-/// search tab), the platform draws the title and UIKit's glass back circle
-/// and this widget draws only [child]. Elsewhere it draws a Flutter glass
-/// bar. A root page with an inline title draws no bar: the shell's own
-/// chrome is its title row.
+/// With native chrome on iOS 26+, a page in any of the shell's tabs gets
+/// UIKit's navigation bar: the platform draws the title and the glass back
+/// circle, and this widget draws only [child]. Elsewhere (iOS before 26,
+/// Android, Flutter chrome, and pages pushed above the shell) it draws a
+/// Flutter glass bar. Both bars follow the same title rules:
+///
+/// * a pushed page: the title small and centred, with the back button;
+/// * a root page with [largeTitle] true: a large-title row under the bar
+///   row, which scrolls away as the page scrolls while the small title
+///   fades into the bar row;
+/// * a root page with [largeTitle] null: the large title on the bar row at
+///   compact width, as in Apple Music; no bar at regular width, where the
+///   shell's own chrome is the title row;
+/// * a root page with [largeTitle] false: no bar.
 class LiquidPage extends StatefulWidget {
   /// Creates a page.
   const LiquidPage({
@@ -26,24 +36,18 @@ class LiquidPage extends StatefulWidget {
     super.key,
   });
 
-  /// Navigation bar title.
+  /// The navigation bar title; also the next page's native back label.
   final String title;
 
-  /// Large title. Null: large on a tab's root page at compact width,
-  /// inline otherwise.
-  ///
-  /// A root page's large title sits on the bar row, as in Apple Music; a
-  /// pushed page's gets a row of its own below the back button. Under the
-  /// native search tab (iOS 26 native chrome), UIKit draws a pushed page's
-  /// large title small and centred instead: the tab's root uses UIKit's
-  /// `.inline` mode on iPhone and `.never` on an iPad root without a large
-  /// title, and UIKit then draws no large title for the pages pushed above
-  /// it. The Flutter bar (iOS before 26, Android, no native chrome) draws
-  /// it large.
+  /// A root page's large title. true: its own row, which collapses as
+  /// the page scrolls. null: on the bar row at compact width, no title row
+  /// at regular width. false: no title row.
+  /// Ignored on a pushed page, whose title is always inline.
   final bool? largeTitle;
 
   /// The page. Its first vertical scroll view drives the native large
-  /// title's collapse and the scroll-edge effect.
+  /// title's collapse and the scroll-edge effect, and the Flutter bar's
+  /// collapse.
   final Widget child;
 
   @override
@@ -154,17 +158,19 @@ class _LiquidPageState extends State<LiquidPage> {
     );
     if (scope?.nativePageBar ?? false) return child;
     final canPop = ModalRoute.of(context)?.impliesAppBarDismissal ?? false;
-    final sizeClass =
-        scope?.sizeClass ??
-        const LiquidShellBreakpoints().sizeClassOf(
-          MediaQuery.sizeOf(context).width,
-        );
-    final large =
-        widget.largeTitle ?? (!canPop && sizeClass == LiquidSizeClass.compact);
-    if (!canPop && !large) return child;
+    final mode = pageTitleModeFor(
+      root: !canPop,
+      largeTitle: widget.largeTitle,
+      sizeClass:
+          scope?.sizeClass ??
+          const LiquidShellBreakpoints().sizeClassOf(
+            MediaQuery.sizeOf(context).width,
+          ),
+    );
+    if (mode == PageTitleMode.hidden) return child;
     return FlutterPageBar(
       title: widget.title,
-      large: large,
+      mode: mode,
       canPop: canPop,
       hideLargeTitle: scope?.searchPhase == LiquidSearchPhase.active,
       child: child,

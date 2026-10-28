@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/pages/page_bar.dart';
 import 'package:liquid_shell/src/pages/page_registry.dart';
+import 'package:liquid_shell/src/pages/page_title.dart';
 import 'package:liquid_shell/src/shell/shell_scope.dart';
 
 /// Records registrations like a shell does.
@@ -123,6 +124,37 @@ Future<_Registry> _pump(
   return registry;
 }
 
+/// The bar's [title] in the large style (bold).
+Finder _largeTitle(String title) => find.descendant(
+  of: find.byType(FlutterPageBar),
+  matching: find.byWidgetPredicate(
+    (w) =>
+        w is Text && w.data == title && w.style?.fontWeight == FontWeight.w700,
+  ),
+);
+
+/// The bar's [title] in the inline style (semibold).
+Finder _inlineTitle(String title) => find.descendant(
+  of: find.byType(FlutterPageBar),
+  matching: find.byWidgetPredicate(
+    (w) =>
+        w is Text && w.data == title && w.style?.fontWeight == FontWeight.w600,
+  ),
+);
+
+/// A page body that records the padding it is given.
+class _Padded extends StatelessWidget {
+  const _Padded(this.paddings);
+
+  final List<EdgeInsets> paddings;
+
+  @override
+  Widget build(BuildContext context) {
+    paddings.add(MediaQuery.paddingOf(context));
+    return const SizedBox.expand();
+  }
+}
+
 void main() {
   testWidgets('pages register in push order; a pop shortens the stack', (
     tester,
@@ -231,7 +263,7 @@ void main() {
     await _pump(tester);
     expect(find.byType(FlutterPageBar), findsOneWidget);
     final bar = tester.widget<FlutterPageBar>(find.byType(FlutterPageBar));
-    expect(bar.large, isTrue);
+    expect(bar.mode, PageTitleMode.largeInRow);
     expect(bar.canPop, isFalse);
     expect(find.byType(LiquidBackButton), findsNothing);
     expect(find.text('Search'), findsOneWidget);
@@ -266,30 +298,74 @@ void main() {
     expect(padding!.top, kPageBarExtent);
   });
 
-  testWidgets('a pushed page with a large title keeps it under the bar row '
-      '(UIKit: inline turns into always under a back button)', (tester) async {
+  for (final sizeClass in LiquidSizeClass.values) {
+    testWidgets('a root page with largeTitle: true draws its large title on '
+        'a 52 pt row under the bar row, content under that row '
+        '(${sizeClass.name})', (tester) async {
+      final paddings = <EdgeInsets>[];
+      await _pump(
+        tester,
+        data: _scope(sizeClass: sizeClass),
+        home: LiquidPage(
+          title: 'Library',
+          largeTitle: true,
+          child: _Padded(paddings),
+        ),
+      );
+      final large = tester.getRect(_largeTitle('Library'));
+      expect(large.top, greaterThanOrEqualTo(kPageBarExtent));
+      expect(
+        large.bottom,
+        lessThanOrEqualTo(kPageBarExtent + kLargeTitleExtent),
+      );
+      expect(large.left, 16, reason: 'leading, like UIKit');
+      expect(paddings.last.top, kPageBarExtent + kLargeTitleExtent);
+      expect(find.byType(LiquidBackButton), findsNothing);
+    });
+  }
+
+  testWidgets("a pushed page's title is inline whatever its largeTitle", (
+    tester,
+  ) async {
     await _pump(tester);
+    final paddings = <EdgeInsets>[];
     tester
         .state<NavigatorState>(find.byType(Navigator))
         .push(
           MaterialPageRoute<void>(
-            builder: (_) => const LiquidPage(
+            builder: (_) => LiquidPage(
               title: 'Detail',
               largeTitle: true,
-              child: SizedBox.expand(),
+              child: _Padded(paddings),
             ),
           ),
         )
         .ignore();
     await tester.pumpAndSettle();
-    final title = tester.getRect(
-      find.descendant(
-        of: find.byType(FlutterPageBar),
-        matching: find.text('Detail'),
-      ),
+    expect(_largeTitle('Detail'), findsNothing);
+    expect(
+      tester.getRect(_inlineTitle('Detail')).bottom,
+      lessThanOrEqualTo(kPageBarExtent),
     );
-    expect(title.top, greaterThanOrEqualTo(kPageBarExtent));
+    expect(paddings.last.top, kPageBarExtent);
     expect(find.byType(LiquidBackButton), findsOneWidget);
+  });
+
+  testWidgets('a root page with largeTitle: false draws no bar', (
+    tester,
+  ) async {
+    for (final sizeClass in LiquidSizeClass.values) {
+      await _pump(
+        tester,
+        data: _scope(sizeClass: sizeClass),
+        home: const LiquidPage(
+          title: 'Plain',
+          largeTitle: false,
+          child: SizedBox.expand(),
+        ),
+      );
+      expect(find.byType(FlutterPageBar), findsNothing, reason: '$sizeClass');
+    }
   });
 
   testWidgets('the bar titles carry a text style without a Material above', (
@@ -368,6 +444,20 @@ void main() {
     final bar = tester.widget<FlutterPageBar>(find.byType(FlutterPageBar));
     expect(bar.hideLargeTitle, isTrue);
     expect(find.text('Search'), findsNothing);
+
+    // A collapsing title too: its row goes, and the padding with it.
+    final paddings = <EdgeInsets>[];
+    await _pump(
+      tester,
+      data: _scope(phase: LiquidSearchPhase.active),
+      home: LiquidPage(
+        title: 'Library',
+        largeTitle: true,
+        child: _Padded(paddings),
+      ),
+    );
+    expect(find.text('Library'), findsNothing);
+    expect(paddings.last.top, kPageBarExtent);
   });
 
   testWidgets(
