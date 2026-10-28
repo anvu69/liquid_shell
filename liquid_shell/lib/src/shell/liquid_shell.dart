@@ -1335,8 +1335,8 @@ class _LiquidShellState extends State<LiquidShell>
     if (_search.holdsField && (!fieldShown || sizeClassChanged)) {
       _search.releaseField();
     }
+    // The device decides, not an app's ThemeData.platform (VK-702).
     final bottomGap = bottomGapFor(
-      // The device decides, not an app's ThemeData.platform (VK-702).
       platform: defaultTargetPlatform,
       viewPaddingBottom: media.viewPadding.bottom,
       gestureInsetBottom: media.systemGestureInsets.bottom,
