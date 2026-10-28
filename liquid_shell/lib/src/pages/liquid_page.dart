@@ -46,9 +46,18 @@ class LiquidPage extends StatefulWidget {
   /// Ignored on a pushed page, whose title is always inline.
   final bool? largeTitle;
 
-  /// The page. Its first vertical scroll view drives the native large
-  /// title's collapse and the scroll-edge effect, and the Flutter bar's
-  /// collapse.
+  /// The page. Its first vertical scroll view on screen drives the native
+  /// large title's collapse and the scroll-edge effect, and the Flutter
+  /// bar's collapse: the first one to report (its first layout or a
+  /// scroll) that is on screen (not a hidden child of an `IndexedStack`, not
+  /// under an `Offstage` or an invisible `Visibility`, not a `PageView` page
+  /// out of view), not nested in another vertical scroll view, and not
+  /// inside a text field. It drives the title until it is disposed or
+  /// hidden; then the next one on screen to report takes over, so a
+  /// segment switcher's shown list takes over at its first scroll.
+  /// A vertical scroll view outside the page's list that reports first
+  /// takes the title for good, even one that cannot scroll: put a fixed
+  /// header above the list in a `Column`, not in a shrink-wrapped list.
   final Widget child;
 
   @override
