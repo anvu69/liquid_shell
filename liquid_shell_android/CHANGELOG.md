@@ -1,3 +1,7 @@
+## 0.1.0-dev.9
+
+First release on pub.dev.
+
 ## 0.1.0-dev.8
 
 - **Fix (VK-702).** If registering the settings observer fails part-way,
