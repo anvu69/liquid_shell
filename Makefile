@@ -19,7 +19,7 @@ COVERED := liquid_shell liquid_shell_platform_interface liquid_shell_ios liquid_
 COVERAGE_MIN := 90
 
 .PHONY: help get format format-check analyze test coverage goldens \
-        goldens-update provenance public-docs snippets verify pana publish-check \
+        goldens-plain goldens-liquid goldens-update provenance public-docs snippets verify pana publish-check \
         android-unit ios-unit ios-ui ios-minimize integration-ios integration-ios-native integration-android pigeon pigeon-check \
         test-impeller compare-images tab-traces tab-frames segment-traces \
         segment-frames
@@ -64,10 +64,19 @@ coverage: ## Tests with coverage; fails below COVERAGE_MIN, with no tests, with 
 	  $(DART) run tool/check_coverage.dart $$p/coverage/lcov.info $(COVERAGE_MIN); \
 	done
 
-goldens: ## Golden tests (reference toolchain: macOS + Flutter 3.44.x); liquid ones under Impeller
+goldens: goldens-plain goldens-liquid ## Golden tests (reference toolchain: macOS + Flutter 3.44.x); liquid ones under Impeller
+
+# The two halves of `goldens`. CI's latest-stable leg runs them as separate
+# steps: the plain half and the shader probes decide its colour, the liquid
+# half only informs (VK-700: newer engines draw the dark glass differently).
+goldens-plain: ## Plain golden tests (tag golden)
 	@if [ -d $(EXAMPLE)/test/goldens ]; then \
-	  cd $(EXAMPLE) && $(FLUTTER) test --tags golden && \
-	  $(FLUTTER) test --enable-impeller --tags liquid_golden; \
+	  cd $(EXAMPLE) && $(FLUTTER) test --tags golden; \
+	else echo "▸ no goldens yet"; fi
+
+goldens-liquid: ## Liquid-tier golden tests under Impeller (tag liquid_golden)
+	@if [ -d $(EXAMPLE)/test/goldens ]; then \
+	  cd $(EXAMPLE) && $(FLUTTER) test --enable-impeller --tags liquid_golden; \
 	else echo "▸ no goldens yet"; fi
 
 goldens-update: ## Regenerate every golden and doc image, then recompress them losslessly

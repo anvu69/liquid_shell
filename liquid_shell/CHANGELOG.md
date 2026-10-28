@@ -1,3 +1,32 @@
+## 0.1.0-dev.10
+
+- **Fix (VK-778).** When the Flutter overlay sidebar closes by Escape, a
+  tap on its barrier, its Hide button or system back, keyboard focus goes
+  back to what held it when the sidebar opened (a page's control or text
+  field, the sidebar toggle). Before, it stayed on the route, so a
+  hardware-keyboard user lost their place. Nothing is given back when
+  another destination is selected while the sidebar is open, in the
+  sidebar or by the app (the page changes), and the shell's own search
+  field is never refocused this way: focusing it starts a search.
+  Nothing is given back either when a route opens in the same turn (a
+  dialog or a pushed page, on any navigator; the route keeps focus), or
+  when something else takes focus as the sidebar closes (a field that
+  autofocuses). The exception is a route that takes no focus
+  (`requestFocus: false`) opened on a navigator around the shell's own.
+  An app that moves focus itself when it closes the sidebar should do so
+  after the frame: before it, the page cannot take focus yet, and the
+  give-back wins. Likewise, an app that changes the page as it closes the
+  sidebar should select before or in the same turn: a page change after
+  the closing frame, or one inside the body that the shell's
+  `selectedIndex` does not show (a nested shell's tab, the app's own
+  `Offstage` tabs), can leave a hidden field with focus.
+- **Fix (VK-778).** The regular search field (the search tab selected in
+  the top bar or sidebar layout) keeps inside the horizontal safe area, as
+  the bars do since 0.1.0-dev.8. Side insets reach that layout only through
+  breakpoints that give a landscape phone the regular layout, where the
+  field ran under the notch. Beside a tiled sidebar only the trailing inset
+  is added: the sidebar already clears the leading one.
+
 ## 0.1.0-dev.9
 
 First release on pub.dev.
