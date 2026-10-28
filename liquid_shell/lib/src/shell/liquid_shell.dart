@@ -966,13 +966,30 @@ class _LiquidShellState extends State<LiquidShell>
   /// Only focus moves: the node's widget is neither rebuilt nor written to.
   /// A node no longer in the tree is skipped: asked now, it would take
   /// focus whenever it came back.
+  ///
+  /// Nothing is given back when focus is no longer where the close left
+  /// it. Under a route opened above the shell in the same turn (a dialog, a
+  /// pushed page), the kept node would take focus, and a text field its
+  /// input connection, behind that route. A node that took focus since (a
+  /// field that autofocuses as the overlay closes) keeps it.
   void _restoreFocus() {
     final node = _focusBeforeOverlay;
     _focusBeforeOverlay = null;
     if (node == null) return;
-    SchedulerBinding.instance.addPostFrameCallback((_) {
-      if (mounted && (node.context?.mounted ?? false)) node.requestFocus();
-    });
+    // After the frame's other post-frame callbacks (a text field asks for
+    // its autofocus in one) and after the focus update the frame queued
+    // during the build, which applies what they asked for.
+    SchedulerBinding.instance.addPostFrameCallback(
+      (_) => scheduleMicrotask(() {
+        if (!mounted || !(node.context?.mounted ?? false)) return;
+        if (!(_route?.isCurrent ?? true)) return;
+        // The closing sidebar leaves focus on the scope around the shell;
+        // anywhere else, something took it since.
+        final scope = FocusScope.of(context, createDependency: false);
+        if (!identical(FocusManager.instance.primaryFocus, scope)) return;
+        node.requestFocus();
+      }),
+    );
   }
 
   void _onBarHeight(
@@ -1017,6 +1034,9 @@ class _LiquidShellState extends State<LiquidShell>
       if (current == null) return;
       index = current;
     }
+    // Another page: the focus it held is not given back (VK-778), also when
+    // the app's callback closes the overlay itself.
+    _focusBeforeOverlay = null;
     widget.onDestinationSelected(index);
     if (!mounted) return;
     if (_nativeEngaged) {
@@ -1024,8 +1044,6 @@ class _LiquidShellState extends State<LiquidShell>
         _setSidebarVisible(false);
       }
     } else if (_presentation == ShellPresentation.overlay) {
-      // Another page: the focus it held is not given back (VK-778).
-      _focusBeforeOverlay = null;
       _setSidebarVisible(false);
     }
   }

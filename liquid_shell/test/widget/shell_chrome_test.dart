@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show SemanticsNode;
 import 'package:flutter/services.dart';
@@ -669,6 +671,49 @@ void main() {
         expect(node.hasFocus, isFalse);
       });
 
+      testWidgets("a destination chosen, the app's callback closing the "
+          'overlay itself: the page left behind gets no focus', (tester) async {
+        var index = 0;
+        await pumpShell(
+          tester,
+          StatefulBuilder(
+            builder: (context, setState) => LiquidShell(
+              destinations: kDestinations,
+              selectedIndex: index,
+              onDestinationSelected: (i) {
+                // Before the shell closes it.
+                scopeOf(tester).setSidebarVisible(false);
+                setState(() => index = i);
+              },
+              // Offstage, the page left behind stays focusable.
+              body: Stack(
+                fit: StackFit.expand,
+                children: [
+                  for (final (i, d) in kDestinations.indexed)
+                    Offstage(
+                      offstage: i != index,
+                      child: TestPage(label: d.label),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          size: kTabletPortrait,
+          padding: _tablet,
+        );
+        final node = await focusThenOpen(tester);
+        await tester.tap(
+          find.descendant(
+            of: find.byType(LiquidSidebar),
+            matching: find.text('Inbox'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byType(LiquidSidebar), findsNothing);
+        expect(find.text('Inbox page: 0'), findsOne);
+        expect(node.hasFocus, isFalse);
+      });
+
       // Asked while out of the tree, a node takes focus whenever it comes
       // back (FocusNode defers the request).
       testWidgets('a node that left the tree while the overlay was open '
@@ -706,6 +751,123 @@ void main() {
         expect(find.byType(LiquidSidebar), findsNothing);
         shown.value = true;
         await tester.pumpAndSettle();
+        expect(node.hasFocus, isFalse);
+      });
+
+      LiquidShellScopeData fieldScope(WidgetTester tester) =>
+          LiquidShellScope.of(tester.element(find.byType(TextField).first));
+
+      // Page 0 is a text field with focus, then the overlay opens. Returns
+      // the field's node.
+      Future<FocusNode> focusFieldThenOpen(
+        WidgetTester tester,
+        TextEditingController text, {
+        Widget below = const SizedBox(),
+      }) async {
+        await pumpShell(
+          tester,
+          TestShell(
+            pageBuilder: (i) => i == 0
+                ? Material(
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          TextField(controller: text),
+                          below,
+                        ],
+                      ),
+                    ),
+                  )
+                : TestPage(label: kDestinations[i].label),
+          ),
+          size: kTabletPortrait,
+          padding: _tablet,
+        );
+        await tester.tap(find.byType(TextField));
+        await tester.pump();
+        final node = tester
+            .widget<EditableText>(find.byType(EditableText))
+            .focusNode;
+        expect(node.hasPrimaryFocus, isTrue, reason: 'precondition');
+        fieldScope(tester).setSidebarVisible(true);
+        await tester.pumpAndSettle();
+        expect(node.hasFocus, isFalse, reason: 'the overlay is modal');
+        expect(
+          tester.testTextInput.hasAnyClients,
+          isFalse,
+          reason: 'the field closed its connection',
+        );
+        return node;
+      }
+
+      // A sidebar action closes the overlay and opens a route in the same
+      // turn. The route above owns focus: given back, it would land, with
+      // an open input connection, in a field the user cannot see.
+      final covers = <String, void Function(BuildContext)>{
+        'a dialog shown': (context) => unawaited(
+          showDialog<void>(
+            context: context,
+            builder: (_) => const AlertDialog(content: Text('dialog')),
+          ),
+        ),
+        'a page pushed': (context) => unawaited(
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(body: Text('pushed')),
+            ),
+          ),
+        ),
+      };
+      for (final MapEntry(key: how, value: cover) in covers.entries) {
+        testWidgets('$how as the overlay closes: the field under it gets no '
+            'focus and no input connection', (tester) async {
+          final text = TextEditingController(text: 'phở');
+          addTearDown(text.dispose);
+          final node = await focusFieldThenOpen(tester, text);
+          final context = tester.element(find.byType(TextField));
+          fieldScope(tester).setSidebarVisible(false);
+          cover(context);
+          await tester.pumpAndSettle();
+          expect(find.byType(LiquidSidebar), findsNothing);
+          expect(ModalRoute.of(context)!.isCurrent, isFalse);
+          expect(node.hasFocus, isFalse);
+          expect(tester.testTextInput.hasAnyClients, isFalse);
+        });
+      }
+
+      // A sidebar action closes the overlay and opens an editor that takes
+      // focus in the closing frame (autofocus): the editor keeps it.
+      testWidgets('a field that takes focus as the overlay closes keeps it', (
+        tester,
+      ) async {
+        final text = TextEditingController(text: 'phở');
+        addTearDown(text.dispose);
+        final editor = ValueNotifier(false);
+        addTearDown(editor.dispose);
+        final node = await focusFieldThenOpen(
+          tester,
+          text,
+          below: ValueListenableBuilder<bool>(
+            valueListenable: editor,
+            builder: (context, on, _) => on
+                ? const TextField(key: ValueKey('editor'), autofocus: true)
+                : const SizedBox(),
+          ),
+        );
+        fieldScope(tester).setSidebarVisible(false);
+        editor.value = true;
+        await tester.pumpAndSettle();
+        expect(find.byType(LiquidSidebar), findsNothing);
+        final editorNode = tester
+            .widget<EditableText>(
+              find.descendant(
+                of: find.byKey(const ValueKey('editor')),
+                matching: find.byType(EditableText),
+              ),
+            )
+            .focusNode;
+        expect(FocusManager.instance.primaryFocus, same(editorNode));
         expect(node.hasFocus, isFalse);
       });
     });
