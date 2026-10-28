@@ -23,7 +23,7 @@
 
 > **Tóm tắt (cho chủ sản phẩm).**
 > - **VK-778 (1): trả lại focus khi đóng sidebar overlay.** Khi sidebar dạng overlay mở (iPad dọc), trang và thanh tab trên cùng không nhận focus bàn phím (VK-702), nên thứ đang giữ focus bị mất. Nay khi đóng bằng Escape, chạm nền mờ, nút Hide hoặc back, focus quay về đúng chỗ cũ (một nút của trang, một ô nhập chữ, nút mở sidebar).
->   - Chọn một mục trong sidebar thì không trả lại (trang đã đổi). Ô tìm của shell không bao giờ được trả focus kiểu này: focus vào ô tìm đang rảnh là bắt đầu tìm.
+>   - Chọn một mục khác trong sidebar, hoặc app tự đổi trang khi sidebar đang mở (nút ở đầu/cuối sidebar, deep link), thì không trả lại (trang đã đổi). Ô tìm của shell không bao giờ được trả focus kiểu này: focus vào ô tìm đang rảnh là bắt đầu tìm, nên lượt tìm đã kết thúc dưới overlay (Escape trong ô, hoặc Tab sang sidebar) không tự mở lại khi đóng.
 >   - Chỉ chuyển focus: không dựng lại ô nhập, không ghi gì vào ô (luật bộ gõ tiếng Việt). Có test riêng cho ô nhập chữ.
 >   - Một nút đã rời khỏi cây trong lúc sidebar mở thì bỏ qua; nếu không, nó sẽ giành focus khi xuất hiện lại.
 >   - Ghép với nhánh S (VK-776 sửa back giữa hai shell lồng nhau): thay đổi nằm trong setter hiển thị sidebar, chỉ chạy lúc chuyển từ hiện sang ẩn, nên mỗi lần đóng chỉ trả focus một lần, dù ai gọi `handleBack`. Hai nhánh không sửa chung dòng nào.
@@ -38,7 +38,7 @@
 
 ## 1. Goal
 
-1. **VK-778 (1).** When the Flutter overlay sidebar closes by Escape, by a tap on its barrier, by its Hide button or by back, the node that held primary focus when it opened has primary focus again. Not after a destination is chosen in the sidebar.
+1. **VK-778 (1).** When the Flutter overlay sidebar closes by Escape, by a tap on its barrier, by its Hide button or by back, the node that held primary focus when it opened has primary focus again. Not after another destination is selected while it is open, in the sidebar or by the app.
 2. **VK-778 (3).** The regular search field (the search tab selected or active, top bar or sidebar layout) lies inside the horizontal safe area. Beside a tiled sidebar only the trailing inset is added.
 3. **VK-778 (4), (5).** Two comments say what the code does. No behaviour change.
 4. **VK-777.** On an iPhone, the scope-bar XCTest asserts the placement UIKit realises: `inline` below iOS 27, `stacked` from iOS 27.
@@ -134,14 +134,16 @@
 
 ## 4. Design: VK-778 (1), focus comes back when the overlay closes
 
-**Rule.** In the Flutter overlay presentation the shell keeps what held primary focus when the sidebar opens. When the sidebar closes, it lets go of focus at once. After the closing frame the kept node gets focus back, unless the shell's route is no longer current or primary focus has left the scope around the shell, where the close put it. Every close goes through `_setSidebarVisible(false)`: Escape, the barrier, Hide, back, and an app's `LiquidShellScope.setSidebarVisible(false)`. Choosing a destination gives nothing back.
+**Rule.** In the Flutter overlay presentation the shell keeps what held primary focus when the sidebar opens. When the sidebar closes, it lets go of focus at once. After the closing frame the kept node gets focus back, unless the shell's route is no longer current or primary focus has left the scope around the shell, where the close put it. Every close goes through `_setSidebarVisible(false)`: Escape, the barrier, Hide, back, and an app's `LiquidShellScope.setSidebarVisible(false)`. Nothing is given back when another destination is selected while the overlay is open, in the sidebar or by the app.
 
-**Code** (`liquid_shell.dart`, line numbers at `e0bbf62`). Two fields after `_sidebarVisible` (219):
+**Code** (`liquid_shell.dart`, line numbers at `e0bbf62`). Three fields after `_sidebarVisible` (219):
 
 ```dart
   // What held focus when the overlay sidebar opened; it gets focus back
   // when the overlay closes (VK-778).
   FocusNode? _focusBeforeOverlay;
+  // The selected destination when the overlay sidebar opened.
+  int _selectedBeforeOverlay = 0;
   // The sidebar's own node: the overlay takes focus with it when it opens
   // and lets go of it when it closes (VK-778).
   final FocusNode _sidebarFocus = FocusNode(debugLabel: 'LiquidShell sidebar');
@@ -173,10 +175,12 @@ In `_applySidebarVisible`, inside the existing transition branch (940):
   /// The overlay opens: the body and the top bar stop taking focus, so the
   /// node that holds it loses it. It is kept to get it back. Not the
   /// shell's search field: an active one keeps its focus under the overlay,
-  /// and focusing an idle one starts a search.
+  /// and focusing an idle one starts a search. Tab out of an active field
+  /// ends the search; closing does not restart it.
   void _rememberFocus() {
     final focus = FocusManager.instance.primaryFocus;
     _focusBeforeOverlay = identical(focus, _search.focus) ? null : focus;
+    _selectedBeforeOverlay = widget.selectedIndex;
   }
 
   /// The overlay closes: the kept node gets focus back after the frame,
@@ -190,17 +194,23 @@ In `_applySidebarVisible`, inside the existing transition branch (940):
   /// same turn (a dialog, a pushed page, on any navigator), the kept node
   /// would take focus, and a text field its input connection, behind that
   /// route. A node that took focus since (a field that autofocuses as the
-  /// overlay closes) keeps it.
+  /// overlay closes) keeps it. Nor after the app selected another page
+  /// while the overlay was open: a body that keeps hidden pages focusable
+  /// would give focus to the page left behind.
   void _restoreFocus() {
     final node = _focusBeforeOverlay;
     _focusBeforeOverlay = null;
     if (node == null) return;
+    final selected = _selectedBeforeOverlay;
     // After the frame's other post-frame callbacks (a text field asks for
     // its autofocus in one) and after the focus update the frame queued
     // during the build, which applies what they asked for.
     SchedulerBinding.instance.addPostFrameCallback(
       (_) => scheduleMicrotask(() {
         if (!mounted || !(node.context?.mounted ?? false)) return;
+        // The app selected another page while the overlay was open, or as
+        // it closed.
+        if (widget.selectedIndex != selected) return;
         // A route above the shell's, also one that takes no focus and so
         // leaves it on the scope below.
         if (!(_route?.isCurrent ?? true)) return;
@@ -233,10 +243,11 @@ The dartdoc names no Plane id: `tool/check_public_docs.sh` rejects `VK-` in `///
 - **After the frame, in a microtask.** The rebuild lifts `ExcludeFocus`; a request before it does nothing (§3.1). The give-back runs in a microtask queued from a post-frame callback: after the closing frame's other post-frame callbacks (`EditableText` asks for its autofocus in one, `editable_text.dart:3332-3339`) and after the focus update the frame queued during the build, which applies what they asked for. In the post-frame callback itself those requests are still pending, and the give-back would win over them; it would also cancel an autofocus (`_Autofocus.applyIfValid` needs an empty scope, `focus_manager.dart:158-170`). Mutations `same-frame` and `microtask`.
 - **Not while the shell's route is covered** (`_route?.isCurrent`): a route opened on the shell's navigator in the same turn. This guard alone catches a route that takes no focus (`requestFocus: false`): focus then stays on the scope around the shell, and only the route tells that the page is covered. Mutation `route-current`.
 - **Not when focus moved:** primary focus is not `FocusScope.of(context, createDependency: false)`, the scope the close put it on. A route opened in the same turn on any other navigator (the app's root navigator over a shell in a nested navigator, a navigator inside the body as a router's shell route uses), and a request made during the closing frame or later (a build, an autofocus, a post-frame callback), keep their focus. `createDependency: false` adds no rebuild dependency. Mutation `focus-moved`.
-- **Not the shell's search field.** Active, it keeps its focus under the overlay (VK-774), so there is nothing to give back. Idle, focusing it starts a search: a search the user ended under the overlay (Escape in the field) would start again on close.
+- **Not the shell's search field.** Active, it keeps its focus under the overlay (VK-774), so there is nothing to give back. Tab out of an active field into the sidebar ends the search; closing does not restart it. Idle, focusing it starts a search: a search the user ended under the overlay (Escape in the field, or Tab) would start again on close. Mutation `search-field`.
 - **A node out of the tree is skipped** (`node.context?.mounted`). Asked anyway, it would take focus whenever it came back (§3.1).
-- **No extra code for two harmless cases.** A node that is mounted but cannot take focus (an app changed the tab under the overlay, and the page sits in an `IndexedStack`'s hidden child) ignores the request: Flutter checks `canRequestFocus` itself. With nothing focused at open, the kept node is the route's scope; asking it for focus leaves focus on that scope, where the close leaves it anyway.
-- **A destination chosen:** `_select` drops the kept node before it calls the app's `onDestinationSelected`, so also when that callback closes the overlay itself. With offstage branches (a router's indexed stack keeps the old page focusable) the old page would otherwise get focus while hidden. Mutations `selection` and `callback-order`.
+- **No extra code for two harmless cases.** A node that is mounted but can no longer take focus ignores the request: Flutter checks `canRequestFocus` itself. With nothing focused at open, the kept node is the route's scope; asking it for focus leaves focus on that scope, where the close leaves it anyway.
+- **A destination chosen:** `_select` drops the kept node before it calls the app's `onDestinationSelected`, so also when that callback closes the overlay itself. With a body that keeps hidden pages focusable the old page would otherwise get focus while hidden: `Offstage` branches, or go_router's custom `navigatorContainerBuilder` example (`example/lib/others/custom_stateful_shell_route.dart`: `AnimatedOpacity`, `IgnorePointer` and `TickerMode`, no `ExcludeFocus`). An `IndexedStack` body (the shell's default, and go_router's `StatefulShellRoute.indexedStack`) is safe: its `Visibility` excludes focus from hidden children (Flutter 3.44.6 `basic.dart:4886-4894`, `visibility.dart:267`). Since the selection check below, this line matters for an app that selects the page after the closing frame (an async router callback). Mutations `selection` and `callback-order`: red only on the test whose app selects after the frame.
+- **Another destination selected by the app** while the overlay is open or as it closes (a `sidebarHeader` or `sidebarFooter` button, a deep link, `goBranch`; final review I1): that selection does not go through `_select`. `_rememberFocus` keeps `widget.selectedIndex`, and the give-back's microtask returns when the shell's `selectedIndex` differs, so the page left behind gets neither focus nor, for a text field, an input connection. A selection the app makes after the closing frame is not seen: focus goes back to the page still shown, and what happens when the app then hides it is the body's own behaviour, as without the overlay. Mutation `app-selection`.
 - **A rotation while the overlay is open** changes the presentation; `sidebarVisibleFor` resets visibility without the setter, so nothing is given back (not one of the listed paths). The next open replaces the kept node.
 - **Not handled**, recorded in §12: a focus move an app makes in the same turn as the close, before the frame; and a route that takes no focus opened on a navigator around the shell's own.
 - **Vietnamese IME safety.** The only calls are `FocusNode.unfocus()` on the sidebar's own node and `FocusNode.requestFocus()` on the kept node. No widget is rebuilt: the body subtree and its `ExcludeFocus` wrapper stay in the tree, and only their flags change (VK-702 §4.4). Nothing is written into any controller. A page text field's composition already ended when the field lost focus at open (`EditableText` clears it on unfocus; the dev.8 CHANGELOG says the field loses focus). On focus the field reopens its input connection with its own value, as for any focus. The test pins the same `EditableTextState`, the same `TextEditingValue` and no rebuild of the page. Under a route opened in the same turn the field gets neither focus nor an input connection: the route tests assert `hasAnyClients` is false.
@@ -416,11 +427,11 @@ Move `.fvmrc`, the CI matrix, the `tool/update_goldens.sh` guard and the floor t
 
 | What | Name |
 |---|---|
-| Field (`_LiquidShellState`, private) | `FocusNode? _focusBeforeOverlay` |
+| Fields (`_LiquidShellState`, private) | `FocusNode? _focusBeforeOverlay`, `int _selectedBeforeOverlay`, `final FocusNode _sidebarFocus` |
 | Methods (private) | `void _rememberFocus()`, `void _restoreFocus()` |
 | Test group (`shell_chrome_test.dart`, in `sidebar`) | `focus returns when the overlay closes (VK-778)` |
-| Its tests | `closed by Escape: the node that held focus has it again`; the same for `the barrier`, `Hide`, `system back`; `a text field has focus again, not rebuilt or written to`; `a destination chosen in the overlay: the page left behind gets no focus`; `a node that left the tree while the overlay was open takes no focus when it comes back` |
-| Test (in `sidebar` › `with the search tab selected`) | `overlay: a search ended under it stays ended when it closes` |
+| Its tests | `closed by Escape: the node that held focus has it again`; the same for `the barrier`, `Hide`, `system back`; `a text field has focus again, not rebuilt or written to`; `a destination chosen in the overlay: the page left behind gets no focus`; `a destination chosen, the app's callback closing the overlay itself: the page left behind gets no focus`, and the same with `, the page selected after the frame` before the colon; `a node that left the tree while the overlay was open takes no focus when it comes back`; `a dialog shown as the overlay closes: the field under it gets no focus and no input connection`, and the same for `a page pushed`; `a dialog shown on the root navigator as the overlay closes, the shell in a nested navigator: the field under it gets no focus and no input connection`, and the same with `, a sidebar row focused` after `closes`; `a page pushed on a navigator inside the body as the overlay closes: the field under it gets no focus and no input connection`; `a page pushed as the overlay closes, taking no focus: the field under it gets no focus and no input connection`; `a field that takes focus as the overlay closes keeps it`; `the app selects another page while the overlay is open: the page left behind gets no focus and no input connection`; `the app selects another page as the overlay closes: the page left behind gets no focus and no input connection` |
+| Tests (in `sidebar` › `with the search tab selected`) | `overlay: a search ended under it stays ended when it closes`; `overlay: a search ended by Tab into it stays ended when it closes` |
 | Test group (`shell_chrome_test.dart`, before `side safe area (VK-702)`) | `the regular search field clears the side insets (VK-778)`; tests `top bar: both insets`, `tiled, ltr: the trailing inset only`, `tiled, rtl: the trailing inset only` |
 | XCTest | the assertion in `testTheScopeBarShowsOnlyWhileTheSearchIsActive` |
 | Make targets | `goldens-plain`, `goldens-liquid` (`goldens` runs both) |
@@ -464,6 +475,17 @@ The group's precondition lines (`reason: 'precondition'`, `'the overlay is modal
 | a page pushed on a navigator inside the body as the overlay closes: the field under it gets no focus and no input connection | green (a locker) | red under `focus-moved` and `microtask` |
 | a page pushed as the overlay closes, taking no focus: the field under it gets no focus and no input connection (`requestFocus: false`) | green (a locker) | red under `route-current` only |
 
+**Added after the final review** (I1, N1, M5; red at `99e7e2d`, before the fix). The two I1 tests use `focusFieldThenOpen` with `offstageBranches: true`; the second adds a `sidebarFooter` button.
+
+| Test | At `99e7e2d` | Why |
+|---|---|---|
+| the app selects another page while the overlay is open (`select(1)`, then Escape): the page left behind gets no focus and no input connection | red: `Expected: false`, `Actual: <true>` on `node.hasFocus`, and on `hasAnyClients` when asserted alone | only `_select` dropped the kept node; after the app's own selection the hidden page's field got focus and its input connection back |
+| the app selects another page as the overlay closes (a footer button that selects and closes in one turn): the same | red, the same lines | as above |
+| overlay: a search ended by Tab into it stays ended when it closes | green (a locker) | red under `search-field` |
+| a destination chosen, the app's callback closing the overlay itself, the page selected after the frame (added at `b2bde83`, after the fix) | green (a locker) | with the selection check, both destination tests stayed green under `selection` (`+42`): their apps select in the same turn. This one's app selects after the closing frame, so only `_select` keeps the page out. Red under `selection` and `callback-order` only |
+
+The two nested-navigator dialog tests also assert, after the close, that the field's route (the shell's) is still current (`reason: 'precondition'`, M5). They rest on `focus-moved` and `sidebar-unfocus`; a harness change that covered the shell's route would move them onto `route-current` unseen.
+
 **VK-778 (3)** (new group before `side safe area (VK-702)`; `kPhoneLandscape`, insets 59/59, bottom 21, search tab selected):
 
 | Test | At `e0bbf62` |
@@ -476,13 +498,14 @@ The group's precondition lines (`reason: 'precondition'`, `'the overlay is modal
 
 ### 10.2 Mutation checks (run, pasted into the task reports, never committed)
 
-VK-778 (1) counts are for `--plain-name 'sidebar'`: 39 tests after the re-review fix (31 at Task 1, where `selection` gave `+30 -1` and `same-frame` `+26 -5`).
+VK-778 (1) counts are for `--plain-name 'sidebar'`: 39 tests after the re-review fix (31 at Task 1, where `selection` gave `+30 -1` and `same-frame` `+26 -5`), 43 after the final review's fixes. A row's count is at 39 unless it names another.
 
 | Mutation | Must go red |
 |---|---|
-| `selection`: `_select` without `_focusBeforeOverlay = null;` | both destination tests (`Expected: false`, `Actual: <true>`), `+37 -2` |
-| `callback-order`: the kept node cleared after `widget.onDestinationSelected(index)` | the app's-callback destination test (`Expected: false`, `Actual: <true>`), `+38 -1` |
-| `search-field`: `_rememberFocus` keeps the search field too | the search-ended test (`Expected: false`, `Actual: <true>`), `+38 -1` |
+| `selection`: `_select` without `_focusBeforeOverlay = null;` | both destination tests (`Expected: false`, `Actual: <true>`), `+37 -2`. After the final review only the app's-callback test whose app selects after the frame, `+42 -1` (at 43) |
+| `callback-order`: the kept node cleared after `widget.onDestinationSelected(index)` | the app's-callback destination test (`Expected: false`, `Actual: <true>`), `+38 -1`. After the final review only its variant that selects after the frame, `+42 -1` (at 43) |
+| `search-field`: `_rememberFocus` keeps the search field too | the search-ended test (`Expected: false`, `Actual: <true>`), `+38 -1`. After the final review also the Tab test, `+40 -2` (at 42) |
+| `app-selection`: `_restoreFocus` without `if (widget.selectedIndex != selected) return;` | both app-selects-another-page tests (`Expected: false`, `Actual: <true>`), `+40 -2` (at 42) |
 | `mounted`: `_restoreFocus` without the `node.context?.mounted` check | the left-the-tree test (`Expected: false`, `Actual: <true>`), `+38 -1` |
 | `same-frame`: `_restoreFocus` asks at once, not after the frame | the four close tests and the text field test (`Actual: FocusScopeNode…(_ModalScopeState<dynamic> Focus Scope [PRIMARY…`), `+34 -5` |
 | `microtask`: the checks run in the post-frame callback itself | both nested-navigator dialog tests and the page pushed inside the body (`Expected: false`, `Actual: <true>`), the autofocus test (`Actual:` the kept field), `+35 -4` |
@@ -498,7 +521,7 @@ VK-778 (1) counts are for `--plain-name 'sidebar'`: 39 tests after the re-review
 
 ### 10.3 Unchanged, still green
 
-The rest of `shell_chrome_test.dart` (`+62` at `e0bbf62`: `+70` after Task 1, `+73` after Task 2, `+77` after the Task 1 fix, `+81` after the re-review fix), `sidebar_test.dart` (including "rows start after the safe area on the leading side"), `pushed_shell_back_test.dart`, `native_chrome_test.dart` (the native sidebar), `search_fallback_test.dart`, `liquid_glass_test.dart` (M12), the whole `liquid_shell` suite, `make goldens` (no image moves), and the rest of `RunnerTests` on CI.
+The rest of `shell_chrome_test.dart` (`+62` at `e0bbf62`: `+70` after Task 1, `+73` after Task 2, `+77` after the Task 1 fix, `+81` after the re-review fix, `+85` after the final review's fixes), `sidebar_test.dart` (including "rows start after the safe area on the leading side"), `pushed_shell_back_test.dart`, `native_chrome_test.dart` (the native sidebar), `search_fallback_test.dart`, `liquid_glass_test.dart` (M12), the whole `liquid_shell` suite, `make goldens` (no image moves), and the rest of `RunnerTests` on CI.
 
 ### 10.4 Simulators
 
@@ -521,9 +544,10 @@ The rest of `shell_chrome_test.dart` (`+62` at `e0bbf62`: `+70` after Task 1, `+
   tap on its barrier, its Hide button or system back, keyboard focus goes
   back to what held it when the sidebar opened (a page's control or text
   field, the sidebar toggle). Before, it stayed on the route, so a
-  hardware-keyboard user lost their place. Choosing a destination in the
-  sidebar gives nothing back (the page changes), and the shell's own
-  search field is never refocused this way: focusing it starts a search.
+  hardware-keyboard user lost their place. Nothing is given back when
+  another destination is selected while the sidebar is open, in the
+  sidebar or by the app (the page changes), and the shell's own search
+  field is never refocused this way: focusing it starts a search.
   Nothing is given back either when a route opens in the same turn (a
   dialog or a pushed page, on any navigator; the route keeps focus), or
   when something else takes focus as the sidebar closes (a field that
@@ -589,10 +613,10 @@ Chủ sản phẩm đã trả lời "Ok hết" cho Q1–Q18 ngày 2026-10-28, n�
 Bảng trên không nói tới những điểm dưới đây. Spec chọn như sau, chủ sản phẩm có thể đổi:
 
 1. **Trả focus chỉ cho chrome Flutter.** Sidebar native (UIKit) giữ nguyên: bàn phím ở đó là việc của UIKit (VK-702 §8), và bằng chứng chỉ đo phía Flutter.
-2. **Không bao giờ trả focus cho ô tìm của shell.** Ô đang tìm vẫn giữ focus dưới overlay (VK-774), nên không có gì để trả; focus vào ô đang rảnh là bắt đầu tìm, nên một lần tìm người dùng đã kết thúc dưới overlay sẽ tự mở lại khi đóng. Có test.
+2. **Không bao giờ trả focus cho ô tìm của shell.** Ô đang tìm vẫn giữ focus dưới overlay (VK-774), nên không có gì để trả; focus vào ô đang rảnh là bắt đầu tìm, nên một lần tìm người dùng đã kết thúc dưới overlay (Escape trong ô, hoặc Tab sang sidebar) sẽ tự mở lại khi đóng. Có test cho cả hai.
 3. **Bỏ qua nút đã rời khỏi cây** (`node.context?.mounted`). Flutter hoãn yêu cầu focus của một nút ngoài cây tới khi nó được gắn lại, nên nếu hỏi, nút sẽ giành focus lúc xuất hiện lại. Có test.
 4. **Trả focus sau frame, và chỉ khi focus vẫn ở chỗ việc đóng để lại** (sửa sau review VK-778 I1 và re-review I-A). Khi đóng, sidebar nhả focus ngay (`_sidebarFocus.unfocus()`, kiểu `scope`), trước khi một route mở cùng lượt xin focus. Nếu không, lúc bị gỡ khỏi cây trong frame đóng, sidebar sẽ đưa focus về scope bao quanh shell sau yêu cầu của route và giành mất focus của route (ví dụ dialog trên navigator gốc khi shell nằm trong một `Navigator` lồng: ô bị che nhận lại focus và kết nối bàn phím). Phải đợi frame vì `ExcludeFocus` chỉ gỡ khi dựng lại (đột biến `same-frame` cho thấy). Việc trả chạy trong một microtask, sau các post-frame callback của frame đóng (ô `TextField` xin autofocus trong một callback như vậy) và sau lượt cập nhật focus mà frame đã xếp trong lúc build. Không trả nếu route của shell không còn là route hiện tại (kể cả route không lấy focus, `requestFocus: false`), hoặc nếu focus chính không còn nằm trên scope bao quanh shell, nơi việc đóng để lại nó (route mở ở bất kỳ navigator nào, hoặc một nút khác đã giành, ví dụ một ô autofocus). Có test cho dialog, trang mới, dialog trên navigator gốc khi shell nằm trong navigator lồng (thêm biến thể một hàng sidebar đang có focus nhờ Tab), trang đẩy vào navigator bên trong body, trang không lấy focus và ô autofocus. Còn lại, ghi ở mục Rủi ro: app tự đổi focus cùng lượt với việc đóng nhưng trước frame (Flutter bỏ yêu cầu tới nút nằm sau overlay; `unfocus()` để focus trên chính scope đó), và route không lấy focus (`requestFocus: false`) mở cùng lượt ở một navigator bao ngoài navigator của shell.
-5. **Chọn mục: `_select` xoá nút đã nhớ** (một dòng) thay vì thêm tham số cho setter. Setter được đưa ra ngoài dưới dạng `ValueSetter<bool>` (scope và chrome), nên giữ nguyên chữ ký. Test dùng `offstageBranches: true`, vì đó là lúc trang cũ còn nhận focus.
+5. **Đổi trang thì không trả focus.** Chọn mục trong sidebar: `_select` xoá nút đã nhớ (một dòng) thay vì thêm tham số cho setter. Setter được đưa ra ngoài dưới dạng `ValueSetter<bool>` (scope và chrome), nên giữ nguyên chữ ký. App tự đổi trang khi overlay đang mở hoặc ngay lúc đóng (nút ở `sidebarHeader`/`sidebarFooter`, deep link, `goBranch`; sửa sau review cuối, I1) thì không đi qua `_select`: shell nhớ `selectedIndex` lúc mở, và microtask trả focus bỏ qua nếu nó đã đổi. Vẫn giữ dòng xoá trong `_select`: router bất đồng bộ đổi trang sau frame đóng, lúc đó chỉ dòng này chặn (có test riêng). Test dùng thân có trang ẩn vẫn nhận focus (`offstageBranches: true` hoặc `Offstage` tự dựng), vì đó là lúc trang cũ còn nhận focus. `IndexedStack` (mặc định, và `StatefulShellRoute.indexedStack` của go_router) đã loại focus khỏi trang ẩn qua `Visibility`; mẫu `navigatorContainerBuilder` tuỳ chỉnh của go_router thì không.
 6. **Chỉ ở bố cục overlay, chỉ trong nhánh chuyển trạng thái của setter.** Tiled và compact không đổi. Xoay máy khi overlay đang mở thì không trả (không thuộc các đường đã duyệt); lần mở sau ghi đè nút đã nhớ.
 7. **Không thêm test "không có focus trước thì sau cũng không".** Khi đó nút được nhớ là scope của route; hỏi nó thì focus vẫn ở scope, đúng chỗ việc đóng để lại. Không có đột biến nào làm test đó đỏ, nên nó không chứng minh gì.
 8. **Inset: test bằng điện thoại nằm ngang 932×430, inset 59/59, breakpoint tuỳ chỉnh** (`compactHeight: 0`; tiled thêm `tiledSidebar: 900`). Đây là đường thật duy nhất để inset ngang tới bố cục regular, thay vì máy tính bảng dọc với inset giả của bản thăm dò. Có test RTL cho tiled; top bar đối xứng nên chỉ một test.

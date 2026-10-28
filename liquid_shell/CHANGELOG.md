@@ -4,9 +4,10 @@
   tap on its barrier, its Hide button or system back, keyboard focus goes
   back to what held it when the sidebar opened (a page's control or text
   field, the sidebar toggle). Before, it stayed on the route, so a
-  hardware-keyboard user lost their place. Choosing a destination in the
-  sidebar gives nothing back (the page changes), and the shell's own
-  search field is never refocused this way: focusing it starts a search.
+  hardware-keyboard user lost their place. Nothing is given back when
+  another destination is selected while the sidebar is open, in the
+  sidebar or by the app (the page changes), and the shell's own search
+  field is never refocused this way: focusing it starts a search.
   Nothing is given back either when a route opens in the same turn (a
   dialog or a pushed page, on any navigator; the route keeps focus), or
   when something else takes focus as the sidebar closes (a field that
