@@ -386,7 +386,8 @@ Future<void> _pushOn(
 /// A shell with its own tabs (sub-tabs), Flutter chrome. Tab `j`'s page is
 /// `bare(j)` when that is not null (no navigator between), otherwise a
 /// navigator keyed `tabs[j]` whose root is the test page of [label] and the
-/// tab's label ('Inner Home').
+/// tab's label ('Inner Home'). [sidebarHeader] and [breakpoints] are the
+/// shell's.
 Widget _subTabs(
   String label, {
   required List<GlobalKey<NavigatorState>> tabs,
@@ -394,11 +395,15 @@ Widget _subTabs(
   Key? key,
   int initialIndex = 0,
   Widget? Function(int index)? bare,
+  Widget? sidebarHeader,
+  LiquidShellBreakpoints breakpoints = const LiquidShellBreakpoints(),
 }) => TestShell(
   key: key,
   nativeChrome: LiquidNativeChrome.off,
   destinations: _destinations,
   initialIndex: initialIndex,
+  sidebarHeader: sidebarHeader,
+  breakpoints: breakpoints,
   search: LiquidSearch(controller: search),
   pageBuilder: (j) =>
       bare?.call(j) ??
@@ -412,6 +417,11 @@ Widget _subTabs(
         ),
       ),
 );
+
+/// [_subTabs]' `bare` for tabs with no navigators: tab `j`'s page is the
+/// test page of [label] and the tab's label.
+Widget? Function(int index) _plainTabs(String label) =>
+    (j) => TestPage(label: '$label ${_destinations[j].label}');
 
 /// A shell with its own tabs (sub-tabs) as the root page of tab 1 of a
 /// [_Pushed] app, on its search tab, Flutter chrome; [tabs] holds its tab
@@ -452,9 +462,11 @@ class _SameRoute {
     for (var i = 0; i < 3; i++) GlobalKey<NavigatorState>(),
   ];
   final search = LiquidSearchController();
+  final _loaded = Completer<void>();
 
   /// Pumps [app] with this shell as tab 1's page, then selects tab 1;
-  /// [bare] as [_subTabs]'.
+  /// [bare], [sidebarHeader] and [breakpoints] as [_subTabs]'. With
+  /// [loading], a `FutureBuilder` stands in for the shell until [load].
   Future<void> pump(
     _Pushed app,
     WidgetTester tester, {
@@ -462,24 +474,47 @@ class _SameRoute {
     bool pushed = true,
     int initialIndex = 0,
     Widget? Function(int index)? bare,
+    Widget? sidebarHeader,
+    LiquidShellBreakpoints breakpoints = const LiquidShellBreakpoints(),
+    bool loading = false,
   }) async {
     addTearDown(search.dispose);
+    Widget inner() => _subTabs(
+      'Inner',
+      key: shell,
+      tabs: tabs,
+      search: search,
+      initialIndex: initialIndex,
+      bare: bare,
+      sidebarHeader: sidebarHeader,
+      breakpoints: breakpoints,
+    );
     await app.pump(
       tester,
       size: size,
       pushed: pushed,
       bare: (i) => i != 1
           ? null
-          : _subTabs(
-              'Inner',
-              key: shell,
-              tabs: tabs,
-              search: search,
-              initialIndex: initialIndex,
-              bare: bare,
+          : !loading
+          ? inner()
+          : FutureBuilder<void>(
+              future: _loaded.future,
+              builder: (_, snapshot) =>
+                  snapshot.connectionState == ConnectionState.done
+                  ? inner()
+                  : const SizedBox.expand(),
             ),
     );
     await app.select(tester, 1);
+  }
+
+  /// Ends the load of a shell pumped `loading`: it is built after the
+  /// outer shell last walked its body, with no navigator event to tell.
+  Future<void> load(WidgetTester tester) async {
+    expect(find.byKey(shell), findsNothing, reason: 'loading');
+    _loaded.complete();
+    await tester.pumpAndSettle();
+    expect(find.byKey(shell), findsOneWidget, reason: 'loaded');
   }
 }
 
@@ -1563,6 +1598,110 @@ void main() {
         expect(inner.search.isActive, isFalse);
         expect(app.shellPopped, isFalse);
       });
+
+      // At its tab root, with no page, a nested shell's search and overlay
+      // sidebar hold back only through the outer shell's per-frame check.
+      testWidgets("VK-776: a nested shell's search active at its tab root: "
+          'back ends the search, then pops the shell', (tester) async {
+        final app = _Pushed(mode);
+        final inner = _SameRoute();
+        await inner.pump(app, tester, initialIndex: 2);
+        inner.search.activate();
+        await tester.pumpAndSettle();
+        expect(inner.search.isActive, isTrue, reason: 'precondition');
+        await back(app, tester);
+        expect(inner.search.isActive, isFalse, reason: 'the search only');
+        expect(app.shellPopped, isFalse);
+        await back(app, tester);
+        expect(app.shellPopped, isTrue, reason: 'nothing left inside');
+      });
+
+      testWidgets("VK-776: iPad, a nested shell's overlay sidebar open at its "
+          'tab root: back closes the sidebar, then pops the shell', (
+        tester,
+      ) async {
+        final app = _Pushed(mode);
+        final inner = _SameRoute();
+        await inner.pump(app, tester, size: kTabletPortrait);
+        // The outer shell's bar covers the inner one's button: the inner
+        // shell's scope opens its sidebar, as the button does.
+        LiquidShellScopeData scope() =>
+            LiquidShellScope.of(tester.element(_page('Inner Home')));
+        scope().setSidebarVisible(true);
+        await tester.pumpAndSettle();
+        expect(
+          scope().chromeKind,
+          LiquidChromeKind.sidebarOverlay,
+          reason: 'precondition',
+        );
+        await back(app, tester);
+        expect(scope().sidebarVisible, isFalse, reason: 'the sidebar only');
+        expect(app.shellPopped, isFalse);
+        await back(app, tester);
+        expect(app.shellPopped, isTrue, reason: 'nothing left inside');
+      });
+
+      // A nested shell built after the outer shell last walked its body (a
+      // loader's result, its tabs with no navigators) sends the outer shell
+      // nothing: the nested shell tells it.
+      testWidgets('VK-776: a nested shell built after a loader, its search '
+          'active: back ends the search', (tester) async {
+        final app = _Pushed(mode);
+        final inner = _SameRoute();
+        await inner.pump(
+          app,
+          tester,
+          initialIndex: 2,
+          bare: _plainTabs('Inner'),
+          loading: true,
+        );
+        await inner.load(tester);
+        inner.search.activate();
+        await tester.pumpAndSettle();
+        expect(inner.search.isActive, isTrue, reason: 'precondition');
+        await back(app, tester);
+        expect(app.shellPopped, isFalse, reason: 'the search first');
+        expect(inner.search.isActive, isFalse);
+      });
+
+      // A shell in a nested shell's sidebar header is on the same route but
+      // in no body the outer shells walk: it keeps its own PopScope.
+      testWidgets("VK-776: iPad, a shell in a nested shell's sidebar header, "
+          'its search active: back ends that search', (tester) async {
+        final app = _Pushed(mode);
+        final inner = _SameRoute();
+        final header = GlobalKey<TestShellState>();
+        final headerSearch = LiquidSearchController();
+        addTearDown(headerSearch.dispose);
+        await inner.pump(
+          app,
+          tester,
+          size: kTabletLandscape,
+          // Tiled at the outer shell's body width, so the header shows.
+          breakpoints: const LiquidShellBreakpoints(
+            regular: 400,
+            tiledSidebar: 400,
+          ),
+          sidebarHeader: SizedBox(
+            height: 300,
+            child: _subTabs(
+              'Header',
+              key: header,
+              tabs: const [],
+              search: headerSearch,
+              initialIndex: 2,
+              bare: _plainTabs('Header'),
+            ),
+          ),
+        );
+        expect(find.byKey(header), findsOneWidget, reason: 'precondition');
+        headerSearch.activate();
+        await tester.pumpAndSettle();
+        expect(headerSearch.isActive, isTrue, reason: 'precondition');
+        await back(app, tester);
+        expect(app.shellPopped, isFalse, reason: "the header shell's search");
+        expect(headerSearch.isActive, isFalse);
+      });
     });
   }
 
@@ -1621,6 +1760,33 @@ void main() {
       expect(asks(), 1, reason: 'one back, one ask');
       expect(find.text('Discard?'), findsOneWidget);
       expect(android.exits, 0);
+    });
+  });
+
+  testWidgets('Android, a root shell, a nested shell built after a loader, '
+      'its search active: back ends the search, the app stays', (
+    tester,
+  ) async {
+    await _onAndroid(tester, (android) async {
+      final app = _Pushed(_Mode.flutter);
+      final inner = _SameRoute();
+      await inner.pump(
+        app,
+        tester,
+        pushed: false,
+        initialIndex: 2,
+        bare: _plainTabs('Inner'),
+        loading: true,
+      );
+      await inner.load(tester);
+      inner.search.activate();
+      await tester.pumpAndSettle();
+      final claimed = android.claims.last;
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(android.exits, 0, reason: 'the app stays');
+      expect(inner.search.isActive, isFalse);
+      expect(claimed, isTrue, reason: 'the search held back');
     });
   });
 }

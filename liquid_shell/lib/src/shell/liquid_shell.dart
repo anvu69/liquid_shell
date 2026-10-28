@@ -372,11 +372,19 @@ class _LiquidShellState extends State<LiquidShell>
     }
     _routeCurrent = route?.isCurrent ?? true;
     // VK-776: with no navigator between, this shell's PopScope would sit on
-    // the host's route, a second voice beside the host's walk.
+    // the host's route, a second voice beside the host's walk. Only the
+    // shell right around this one walks it: in another slot of a nested
+    // shell (its sidebar header), the nearest body is an outer one's.
     final host = context
         .dependOnInheritedWidgetOfExactType<_ShellBody>()
         ?.shell;
-    _hosted = host != null && identical(host._route, route);
+    final hosted =
+        host != null &&
+        identical(host._route, route) &&
+        identical(context.findAncestorStateOfType<_LiquidShellState>(), host);
+    // The host learns of a shell built after its last walk (VK-776).
+    if (hosted && !_hosted) host._scheduleBranchScan();
+    _hosted = hosted;
     _coveredByPush =
         route?.secondaryAnimation?.status.isForwardOrCompleted ?? false;
     // A dependency: the change rebuilds us. The layout builder still runs
