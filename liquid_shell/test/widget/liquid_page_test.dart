@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
@@ -7,6 +8,9 @@ import 'package:liquid_shell/src/pages/page_bar.dart';
 import 'package:liquid_shell/src/pages/page_registry.dart';
 import 'package:liquid_shell/src/pages/page_title.dart';
 import 'package:liquid_shell/src/shell/shell_scope.dart';
+
+import '../helpers/fake_native_platform.dart';
+import '../helpers/shell_harness.dart';
 
 /// Records registrations like a shell does.
 class _Registry implements PageRegistry {
@@ -832,5 +836,107 @@ void main() {
     // Below the bar the content is opaque.
     expect(green(x, 80), 0, reason: 'content right below the bar');
     expect(green(x, 200), 0, reason: 'content below the bar');
+  });
+
+  // Same API, same bar wherever the shell draws Flutter chrome: iOS before
+  // 26, Android, `nativeChrome: off` and a `chromeBuilder` (the last two
+  // on a platform that offers native chrome).
+  group('the Flutter bar on every Flutter-chrome target', () {
+    /// Pumps a phone shell whose Home tab is a root page with a collapsing
+    /// title over a [_Padded] list, and returns the list's controller.
+    Future<ScrollController> pumpHome(
+      WidgetTester tester,
+      List<EdgeInsets> paddings, {
+      LiquidNativeChrome nativeChrome = LiquidNativeChrome.auto,
+      LiquidChromeBuilder? chromeBuilder,
+    }) async {
+      final scroll = ScrollController();
+      addTearDown(scroll.dispose);
+      await pumpShell(
+        tester,
+        TestShell(
+          destinations: kNative,
+          nativeChrome: nativeChrome,
+          chromeBuilder: chromeBuilder,
+          pageBuilder: (i) => i == 0
+              ? LiquidPage(
+                  title: 'Home',
+                  largeTitle: true,
+                  child: _Padded(paddings, controller: scroll),
+                )
+              : TestPage(label: kNative[i].label),
+        ),
+        platform: defaultTargetPlatform,
+      );
+      return scroll;
+    }
+
+    /// The bar sits under the status bar (59 pt on [kPhone]); its large row
+    /// collapses by 52 and the page's padding stays.
+    Future<void> expectFlutterBar(
+      WidgetTester tester,
+      ScrollController scroll,
+      List<EdgeInsets> paddings,
+    ) async {
+      final scope = LiquidShellScope.of(tester.element(find.byType(ListView)));
+      expect(scope.nativeChrome, isFalse, reason: 'Flutter chrome');
+      expect(scope.nativePageBar, isFalse);
+      const barTop = 59.0;
+      const padding = barTop + kPageBarExtent + kLargeTitleExtent;
+      final rest = tester.getRect(_largeTitle('Home')).top;
+      expect(rest, greaterThanOrEqualTo(barTop + kPageBarExtent));
+      expect(paddings.last.top, padding);
+      scroll.jumpTo(kLargeTitleExtent);
+      await tester.pump();
+      expect(tester.getRect(_largeTitle('Home')).top, rest - kLargeTitleExtent);
+      expect(
+        tester
+            .widget<Opacity>(
+              find
+                  .ancestor(
+                    of: _inlineTitle('Home'),
+                    matching: find.byType(Opacity),
+                  )
+                  .first,
+            )
+            .opacity,
+        1,
+      );
+      expect(paddings.last.top, padding);
+    }
+
+    testWidgets('iOS before 26', (tester) async {
+      final paddings = <EdgeInsets>[];
+      final scroll = await pumpHome(tester, paddings);
+      await expectFlutterBar(tester, scroll, paddings);
+    }, variant: iosDevice);
+
+    testWidgets('Android', (tester) async {
+      final paddings = <EdgeInsets>[];
+      final scroll = await pumpHome(tester, paddings);
+      await expectFlutterBar(tester, scroll, paddings);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
+    testWidgets('iOS 26 with nativeChrome: off', (tester) async {
+      installFakeNative();
+      final paddings = <EdgeInsets>[];
+      final scroll = await pumpHome(
+        tester,
+        paddings,
+        nativeChrome: LiquidNativeChrome.off,
+      );
+      await expectFlutterBar(tester, scroll, paddings);
+    }, variant: iosDevice);
+
+    testWidgets('iOS 26 with a chromeBuilder', (tester) async {
+      installFakeNative();
+      final paddings = <EdgeInsets>[];
+      final scroll = await pumpHome(
+        tester,
+        paddings,
+        chromeBuilder: (context, details, chrome) => chrome,
+      );
+      await expectFlutterBar(tester, scroll, paddings);
+    }, variant: iosDevice);
   });
 }
