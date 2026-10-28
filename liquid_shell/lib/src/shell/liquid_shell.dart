@@ -220,6 +220,9 @@ class _LiquidShellState extends State<LiquidShell>
   // What held focus when the overlay sidebar opened; it gets focus back
   // when the overlay closes (VK-778).
   FocusNode? _focusBeforeOverlay;
+  // The sidebar's own node: the overlay takes focus with it when it opens
+  // and lets go of it when it closes (VK-778).
+  final FocusNode _sidebarFocus = FocusNode(debugLabel: 'LiquidShell sidebar');
   bool _guardPending = false;
   int _hideRequests = 0;
   bool _hiddenSelectionReported = false;
@@ -413,6 +416,7 @@ class _LiquidShellState extends State<LiquidShell>
     _minimized.dispose();
     _searchTarget.dispose();
     _search.dispose();
+    _sidebarFocus.dispose();
     super.dispose();
   }
 
@@ -945,6 +949,12 @@ class _LiquidShellState extends State<LiquidShell>
         if (visible) {
           _rememberFocus();
         } else {
+          // Focus leaves the sidebar now, before a route opened in this
+          // turn asks for it. Removed in the closing frame with focus, the
+          // sidebar would give it to the scope around the shell after that
+          // request, taking it from the route. `scope`, not the previous
+          // child: a row focused by Tab would get it again.
+          if (_sidebarFocus.hasFocus) _sidebarFocus.unfocus();
           _restoreFocus();
         }
       }
@@ -968,10 +978,11 @@ class _LiquidShellState extends State<LiquidShell>
   /// focus whenever it came back.
   ///
   /// Nothing is given back when focus is no longer where the close left
-  /// it. Under a route opened above the shell in the same turn (a dialog, a
-  /// pushed page), the kept node would take focus, and a text field its
-  /// input connection, behind that route. A node that took focus since (a
-  /// field that autofocuses as the overlay closes) keeps it.
+  /// it, or while the shell's route is covered. Under a route opened in the
+  /// same turn (a dialog, a pushed page, on any navigator), the kept node
+  /// would take focus, and a text field its input connection, behind that
+  /// route. A node that took focus since (a field that autofocuses as the
+  /// overlay closes) keeps it.
   void _restoreFocus() {
     final node = _focusBeforeOverlay;
     _focusBeforeOverlay = null;
@@ -982,6 +993,8 @@ class _LiquidShellState extends State<LiquidShell>
     SchedulerBinding.instance.addPostFrameCallback(
       (_) => scheduleMicrotask(() {
         if (!mounted || !(node.context?.mounted ?? false)) return;
+        // A route above the shell's, also one that takes no focus and so
+        // leaves it on the scope below.
         if (!(_route?.isCurrent ?? true)) return;
         // The closing sidebar leaves focus on the scope around the shell;
         // anywhere else, something took it since.
@@ -1806,6 +1819,7 @@ class _LiquidShellState extends State<LiquidShell>
           // Overlay: focus starts in the sidebar when nothing holds it, so
           // Escape reaches the shell. An active search keeps its focus.
           child: Focus(
+            focusNode: _sidebarFocus,
             autofocus: modal,
             skipTraversal: true,
             includeSemantics: false,

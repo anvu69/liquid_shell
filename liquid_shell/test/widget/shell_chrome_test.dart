@@ -758,29 +758,33 @@ void main() {
           LiquidShellScope.of(tester.element(find.byType(TextField).first));
 
       // Page 0 is a text field with focus, then the overlay opens. Returns
-      // the field's node.
+      // the field's node. [around] wraps the shell, [branch] page 0.
       Future<FocusNode> focusFieldThenOpen(
         WidgetTester tester,
         TextEditingController text, {
         Widget below = const SizedBox(),
+        Widget Function(Widget shell)? around,
+        Widget Function(Widget page)? branch,
       }) async {
+        final page = Material(
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: text),
+                below,
+              ],
+            ),
+          ),
+        );
+        final shell = TestShell(
+          pageBuilder: (i) => i == 0
+              ? branch?.call(page) ?? page
+              : TestPage(label: kDestinations[i].label),
+        );
         await pumpShell(
           tester,
-          TestShell(
-            pageBuilder: (i) => i == 0
-                ? Material(
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          TextField(controller: text),
-                          below,
-                        ],
-                      ),
-                    ),
-                  )
-                : TestPage(label: kDestinations[i].label),
-          ),
+          around?.call(shell) ?? shell,
           size: kTabletPortrait,
           padding: _tablet,
         );
@@ -801,40 +805,140 @@ void main() {
         return node;
       }
 
+      // What a route opened over the field shows.
+      const cover = ValueKey('cover');
+      void showCoverDialog(BuildContext context) => unawaited(
+        showDialog<void>(
+          context: context,
+          builder: (_) =>
+              const AlertDialog(content: Text('dialog', key: cover)),
+        ),
+      );
+      void pushCoverPage(BuildContext context, {bool? requestFocus}) =>
+          unawaited(
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                requestFocus: requestFocus,
+                builder: (_) =>
+                    const Scaffold(body: Text('pushed', key: cover)),
+              ),
+            ),
+          );
+
+      // Closes the overlay and, in the same turn, opens a route from the
+      // field's context with [open].
+      Future<void> closeAndCover(
+        WidgetTester tester,
+        void Function(BuildContext) open,
+      ) async {
+        final context = tester.element(find.byType(TextField));
+        fieldScope(tester).setSidebarVisible(false);
+        open(context);
+        await tester.pumpAndSettle();
+        expect(find.byType(LiquidSidebar), findsNothing);
+      }
+
+      // Primary focus is in the route that opened over the field.
+      void expectFocusInCover(WidgetTester tester) => expect(
+        ModalRoute.of(FocusManager.instance.primaryFocus!.context!),
+        same(ModalRoute.of(tester.element(find.byKey(cover)))),
+        reason: 'the route above holds focus',
+      );
+
       // A sidebar action closes the overlay and opens a route in the same
       // turn. The route above owns focus: given back, it would land, with
       // an open input connection, in a field the user cannot see.
       final covers = <String, void Function(BuildContext)>{
-        'a dialog shown': (context) => unawaited(
-          showDialog<void>(
-            context: context,
-            builder: (_) => const AlertDialog(content: Text('dialog')),
-          ),
-        ),
-        'a page pushed': (context) => unawaited(
-          Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => const Scaffold(body: Text('pushed')),
-            ),
-          ),
-        ),
+        'a dialog shown': showCoverDialog,
+        'a page pushed': pushCoverPage,
       };
-      for (final MapEntry(key: how, value: cover) in covers.entries) {
+      for (final MapEntry(key: how, value: open) in covers.entries) {
         testWidgets('$how as the overlay closes: the field under it gets no '
             'focus and no input connection', (tester) async {
           final text = TextEditingController(text: 'phở');
           addTearDown(text.dispose);
           final node = await focusFieldThenOpen(tester, text);
           final context = tester.element(find.byType(TextField));
-          fieldScope(tester).setSidebarVisible(false);
-          cover(context);
-          await tester.pumpAndSettle();
-          expect(find.byType(LiquidSidebar), findsNothing);
+          await closeAndCover(tester, open);
           expect(ModalRoute.of(context)!.isCurrent, isFalse);
           expect(node.hasFocus, isFalse);
           expect(tester.testTextInput.hasAnyClients, isFalse);
+          expectFocusInCover(tester);
         });
       }
+
+      // The same where the shell's own route stays current. `showDialog`
+      // uses the app's root navigator: it covers a shell in a nested
+      // navigator (VK-567's pushed shell) from outside. The closing sidebar
+      // lets go of focus first, so its removal in the closing frame does
+      // not take focus back from the dialog, a row focused by Tab included.
+      Widget inNavigator(Widget child) => Navigator(
+        onGenerateRoute: (_) => MaterialPageRoute<void>(builder: (_) => child),
+      );
+      for (final row in [false, true]) {
+        testWidgets('a dialog shown on the root navigator as the overlay '
+            'closes${row ? ', a sidebar row focused' : ''}, the shell in a '
+            'nested navigator: the field under it gets no focus and no input '
+            'connection', (tester) async {
+          final text = TextEditingController(text: 'phở');
+          addTearDown(text.dispose);
+          final node = await focusFieldThenOpen(
+            tester,
+            text,
+            around: inNavigator,
+          );
+          if (row) {
+            await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+            await tester.pump();
+            final focused = FocusManager.instance.primaryFocus!.context!;
+            expect(
+              focused.findAncestorWidgetOfExactType<LiquidSidebar>(),
+              isNotNull,
+              reason: 'precondition',
+            );
+          }
+          await closeAndCover(tester, showCoverDialog);
+          expect(node.hasFocus, isFalse);
+          expect(tester.testTextInput.hasAnyClients, isFalse);
+          expectFocusInCover(tester);
+        });
+      }
+
+      // A router's shell route (a `StatefulShellRoute`) pushes on a
+      // navigator inside the body: the shell's route stays current.
+      testWidgets('a page pushed on a navigator inside the body as the '
+          'overlay closes: the field under it gets no focus and no input '
+          'connection', (tester) async {
+        final text = TextEditingController(text: 'phở');
+        addTearDown(text.dispose);
+        final node = await focusFieldThenOpen(
+          tester,
+          text,
+          branch: inNavigator,
+        );
+        await closeAndCover(tester, pushCoverPage);
+        expect(node.hasFocus, isFalse);
+        expect(tester.testTextInput.hasAnyClients, isFalse);
+        expectFocusInCover(tester);
+      });
+
+      // A route that takes no focus leaves it where the close puts it, on
+      // the scope around the shell: only the shell's route, no longer
+      // current, tells that the field is covered.
+      testWidgets('a page pushed as the overlay closes, taking no focus: the '
+          'field under it gets no focus and no input connection', (
+        tester,
+      ) async {
+        final text = TextEditingController(text: 'phở');
+        addTearDown(text.dispose);
+        final node = await focusFieldThenOpen(tester, text);
+        await closeAndCover(
+          tester,
+          (context) => pushCoverPage(context, requestFocus: false),
+        );
+        expect(node.hasFocus, isFalse);
+        expect(tester.testTextInput.hasAnyClients, isFalse);
+      });
 
       // A sidebar action closes the overlay and opens an editor that takes
       // focus in the closing frame (autofocus): the editor keeps it.
