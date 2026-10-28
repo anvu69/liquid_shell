@@ -13,6 +13,21 @@ const double kLargeTitleExtent = 52;
 /// Fade height of the scroll-edge effect under the bar.
 const double _kEdgeFade = 24;
 
+/// The collapse of a collapsing large title at scroll [offset] (points
+/// scrolled below the top): the large row moves up by `largeShift`, from 0
+/// to [extent]; the inline title's opacity rises from 0 at half of [extent]
+/// to 1 at [extent].
+({double largeShift, double inlineOpacity}) pageBarCollapse(
+  double offset, {
+  double extent = kLargeTitleExtent,
+}) {
+  final half = extent / 2;
+  return (
+    largeShift: offset.clamp(0.0, extent),
+    inlineOpacity: ((offset - half) / half).clamp(0.0, 1.0),
+  );
+}
+
 /// A `LiquidPage`'s bar where no native bar draws it: the
 /// glass back circle, the inline or large title, and a scroll-edge fade.
 /// A root page's large title sits on the bar row, leading, as UIKit's
