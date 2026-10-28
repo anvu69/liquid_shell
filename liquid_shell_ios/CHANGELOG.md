@@ -1,3 +1,7 @@
+## 0.1.0-dev.9
+
+First release on pub.dev.
+
 ## 0.1.0-dev.8
 
 - Swift Package Manager: CI builds the example with it (Flutter 3.44), so
