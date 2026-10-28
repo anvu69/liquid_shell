@@ -462,6 +462,11 @@ The rest of `shell_chrome_test.dart` (`+62` at `e0bbf62`: `+70` after Task 1, `+
   hardware-keyboard user lost their place. Choosing a destination in the
   sidebar gives nothing back (the page changes), and the shell's own
   search field is never refocused this way: focusing it starts a search.
+  Nothing is given back either when a route opens above the shell in the
+  same turn (a dialog, a pushed page), or when something else takes focus
+  as the sidebar closes (a field that autofocuses). An app that moves
+  focus itself when it closes the sidebar should do so after the frame:
+  before it, the page cannot take focus yet, and the give-back wins.
 - **Fix (VK-778).** The regular search field (the search tab selected in
   the top bar or sidebar layout) keeps inside the horizontal safe area, as
   the bars do since 0.1.0-dev.8. Side insets reach that layout only through
@@ -478,7 +483,7 @@ The rest of `shell_chrome_test.dart` (`+62` at `e0bbf62`: `+70` after Task 1, `+
 | Risk | Handling |
 |---|---|
 | Focus given back to a text field on a touch-only iPad brings the software keyboard back | The field had it when the overlay opened; it is what a dismissed UIKit alert does. On a hardware keyboard nothing shows |
-| An app moves focus itself when the overlay closes (it listens to `sidebarVisible`) | The give-back runs after the frame and would win over a request made during that frame's build. Rare; an app that wants its own target can request focus a frame later. Recorded, not handled ("Quyết định phát sinh" 4) |
+| An app moves focus itself when the overlay closes (it listens to `sidebarVisible`), or opens a route in the same turn | Handled after review (VK-778 I1): the give-back runs after the closing frame's post-frame callbacks and the focus update they queue, and only while the shell's route is current and primary focus is still on the scope around the shell, where the closing sidebar leaves it. A dialog or page opened in the same turn, and a request made during the closing frame or later (a build, an autofocus, a post-frame callback), keep their focus; tests pin both. Left, recorded, not handled ("Quyết định phát sinh" 4): (1) a move made in the same turn as the close, before the frame: Flutter drops a request to a node behind the overlay (it cannot take focus until the rebuild), and `unfocus()` parks focus on that same scope, so the kept node still gets focus back; an app that wants its own target requests it after the frame. (2) Only the shell's own route is checked: in a shell inside a nested `Navigator`, a route opened on an outer navigator in the same turn is not seen, and the kept node, a text field with its input connection, gets focus under it (probe, no test) |
 | VK-776 (branch S) changes back delegation in the same file at the same time | No shared lines (§4). Each close gives back once, whoever calls `handleBack`. If S merges first, F merges `main` and reruns the focus group and `pushed_shell_back_test.dart` |
 | VK-779 (branch S) adds compact-row tests near the side-safe-area group | F's inset tests sit in their own group before `side safe area (VK-702)`; VK-779's code is in `search_chrome.dart`, this is `liquid_shell.dart` |
 | CHANGELOG merge with R (`## 0.1.0-dev.9`) and S (`## 0.1.0-dev.10`) | All three insert at the top. Resolution: one `## 0.1.0-dev.10` section (S's and F's bullets) above `## 0.1.0-dev.9`, above `## 0.1.0-dev.8` |
@@ -521,7 +526,7 @@ Bảng trên không nói tới những điểm dưới đây. Spec chọn như s
 1. **Trả focus chỉ cho chrome Flutter.** Sidebar native (UIKit) giữ nguyên: bàn phím ở đó là việc của UIKit (VK-702 §8), và bằng chứng chỉ đo phía Flutter.
 2. **Không bao giờ trả focus cho ô tìm của shell.** Ô đang tìm vẫn giữ focus dưới overlay (VK-774), nên không có gì để trả; focus vào ô đang rảnh là bắt đầu tìm, nên một lần tìm người dùng đã kết thúc dưới overlay sẽ tự mở lại khi đóng. Có test.
 3. **Bỏ qua nút đã rời khỏi cây** (`node.context?.mounted`). Flutter hoãn yêu cầu focus của một nút ngoài cây tới khi nó được gắn lại, nên nếu hỏi, nút sẽ giành focus lúc xuất hiện lại. Có test.
-4. **Trả focus sau frame, không kiểm tra "đã có ai giữ focus chưa".** Phải đợi frame vì `ExcludeFocus` chỉ gỡ khi dựng lại (đột biến `same-frame` cho thấy). Nếu app tự đặt focus đúng trong frame đóng sidebar thì việc trả focus thắng; hiếm, ghi ở mục Rủi ro.
+4. **Trả focus sau frame, và chỉ khi focus vẫn ở chỗ việc đóng để lại** (sửa sau review VK-778 I1). Phải đợi frame vì `ExcludeFocus` chỉ gỡ khi dựng lại (đột biến `same-frame` cho thấy). Việc trả chạy trong một microtask, sau các post-frame callback của frame đóng (ô `TextField` xin autofocus trong một callback như vậy) và sau lượt cập nhật focus mà frame đã xếp trong lúc build. Không trả nếu route của shell không còn là route hiện tại (dialog hay trang mở cùng lượt với việc đóng), hoặc nếu focus chính không còn nằm trên scope bao quanh shell, nơi sidebar đóng để lại nó (đã có nút khác giành, ví dụ một ô autofocus). Có test cho dialog, trang mới và ô autofocus. Còn lại, ghi ở mục Rủi ro: app tự đổi focus cùng lượt với việc đóng nhưng trước frame (Flutter bỏ yêu cầu tới nút nằm sau overlay; `unfocus()` để focus trên chính scope đó), và shell nằm trong một `Navigator` lồng khi route mở ở navigator ngoài.
 5. **Chọn mục: `_select` xoá nút đã nhớ** (một dòng) thay vì thêm tham số cho setter. Setter được đưa ra ngoài dưới dạng `ValueSetter<bool>` (scope và chrome), nên giữ nguyên chữ ký. Test dùng `offstageBranches: true`, vì đó là lúc trang cũ còn nhận focus.
 6. **Chỉ ở bố cục overlay, chỉ trong nhánh chuyển trạng thái của setter.** Tiled và compact không đổi. Xoay máy khi overlay đang mở thì không trả (không thuộc các đường đã duyệt); lần mở sau ghi đè nút đã nhớ.
 7. **Không thêm test "không có focus trước thì sau cũng không".** Khi đó nút được nhớ là scope của route; hỏi nó thì focus vẫn ở scope, đúng chỗ việc đóng để lại. Không có đột biến nào làm test đó đỏ, nên nó không chứng minh gì.

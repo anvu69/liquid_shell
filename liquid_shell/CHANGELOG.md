@@ -7,6 +7,11 @@
   hardware-keyboard user lost their place. Choosing a destination in the
   sidebar gives nothing back (the page changes), and the shell's own
   search field is never refocused this way: focusing it starts a search.
+  Nothing is given back either when a route opens above the shell in the
+  same turn (a dialog, a pushed page), or when something else takes focus
+  as the sidebar closes (a field that autofocuses). An app that moves
+  focus itself when it closes the sidebar should do so after the frame:
+  before it, the page cannot take focus yet, and the give-back wins.
 - **Fix (VK-778).** The regular search field (the search tab selected in
   the top bar or sidebar layout) keeps inside the horizontal safe area, as
   the bars do since 0.1.0-dev.8. Side insets reach that layout only through
