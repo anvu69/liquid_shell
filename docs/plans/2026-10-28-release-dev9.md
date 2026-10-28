@@ -355,7 +355,7 @@ for p in liquid_shell_platform_interface liquid_shell_ios liquid_shell_android l
   echo "-- $p"; (cd $p && flutter pub publish --dry-run 2>&1 | grep -E "warning|Failed|rror"); done
 ```
 
-Expected, four times: `Package has 0 warnings.` (the prototype printed it for all four at this commit). `dart pub publish --dry-run` uploads nothing. If `liquid_shell` shows "checked-in files are modified in git", the tree is dirty: commit or revert, then rerun. `rtk make publish-check` does the same loop (it can take a few minutes).
+Expected, four times: `Package has 0 warnings.` (the prototype printed it for all four at this commit). `flutter pub publish --dry-run` uploads nothing. If `liquid_shell` shows "checked-in files are modified in git", the tree is dirty: commit or revert, then rerun. `rtk make publish-check` does the same loop (it can take a few minutes).
 
 - [ ] **Step 2: the Dart part of `make verify`**
 
@@ -372,25 +372,40 @@ Expected: `Analyzing ... No issues found!`, `✓ provenance clean`, `✓ glass s
 > **Owner hand-off: publishing 0.1.0-dev.9.** Claude does not run any of this.
 >
 > **Before the first upload.**
-> 1. Merge the PR into `main` first. pub.dev checks `repository` against GitHub `main`, and the bump must be there.
-> 2. `git switch main && git pull` in a clean checkout of the merge commit. `git status --short` must be empty.
-> 3. Open `https://pub.dev/publishers/lasoai.vn/admin` and confirm the Google account you will upload with is an admin. If the saved login is not that account: `dart pub logout` then `dart pub login`.
-> 4. A published version cannot be deleted or reused, only retracted. The number is final.
+> 1. Merge the PR into `main` first (merge commit, as usual). pub.dev checks `repository` against GitHub `main`, and the bump must be there.
+> 2. Hold every other liquid_shell merge (S, F, P3b-2) until all four uploads are done, so `main` and the upload are the same code.
+> 3. Publish from a clean checkout of exactly the PR's merge commit, not from `~/Projects/tuvi/liquid_shell` (it sits on another branch with uncommitted changes). Claude prepares one after the merge: `git -C ~/Projects/tuvi/liquid_shell worktree add --detach ~/Projects/tuvi/liquid_shell-publish <merge sha>`. In it, `git status --short` must be empty and `git log -1` must show the merge commit.
+> 4. Open `https://pub.dev/publishers/lasoai.vn/admin` and confirm the Google account you will upload with is an admin. If the saved login is not that account (or you are unsure which it is): `dart pub logout` then `dart pub login`.
+> 5. `flutter --version` must be 3.44 or newer. A published version cannot be deleted or reused, only retracted. The number is final.
 >
-> **Publish, in this order** (each command asks `Do you want to publish ... (y/n)?`: answer `y`; do not pass `--force`). After each one, wait until `https://pub.dev/packages/<name>/versions` lists `0.1.0-dev.9` (a minute or two) before the next.
+> **Publish, in this order, one command at a time, each from the root of that checkout.** Each asks `Do you want to publish ... (y/n)?`: answer `y`; do not pass `--force`. Use `flutter pub publish`, not `dart pub publish` (these are Flutter plugins). After each one, wait until `https://pub.dev/packages/<name>/versions` lists `0.1.0-dev.9` (a minute or two) before the next. If one fails, stop and tell Claude; do not run the next.
 >
 > ```bash
-> cd liquid_shell_platform_interface && flutter pub publish
-> cd ../liquid_shell_ios && flutter pub publish
-> cd ../liquid_shell_android && flutter pub publish
-> cd ../liquid_shell && flutter pub publish
+> (cd liquid_shell_platform_interface && flutter pub publish)
+> ```
+> ```bash
+> (cd liquid_shell_ios && flutter pub publish)
+> ```
+> ```bash
+> (cd liquid_shell_android && flutter pub publish)
+> ```
+> ```bash
+> (cd liquid_shell && flutter pub publish)
 > ```
 >
 > `liquid_shell_ios` and `liquid_shell_android` both depend only on the interface, so their order is free, but both come before `liquid_shell`. Do not publish from `liquid_shell/example` or `example_go_router` (`publish_to: none`).
 >
-> **Transfer to the publisher.** For each of the four packages, open `https://pub.dev/packages/<name>/admin`, find "Publisher", choose `lasoai.vn`, and confirm. The order of the four does not matter. Check that each package page then shows the verified-publisher badge.
+> **Transfer to the publisher.** For each of the four packages, open `https://pub.dev/packages/<name>/admin`, find "Publisher", choose `lasoai.vn`, and confirm. The order of the four does not matter. Check that each package page then shows the verified-publisher badge, and look at each package's pana score about 30 minutes after its upload.
 >
-> **Then tell Claude "published".** On that word, Claude creates one tag `v0.1.0-dev.9` on the merge commit and a GitHub pre-release for it (`gh release create v0.1.0-dev.9 --prerelease --title "0.1.0-dev.9" --notes "First release on pub.dev."`), and opens the small follow-up PR that makes the three informational pana steps in `.github/workflows/ci.yaml` blocking. Claude pushes the tag only on your word.
+> **Then tell Claude "published".** That word is the go-ahead (Q5) for exactly these three steps, run on the published merge commit:
+>
+> ```bash
+> git tag -a v0.1.0-dev.9 <merge sha> -m "0.1.0-dev.9"
+> git push origin v0.1.0-dev.9
+> gh release create v0.1.0-dev.9 --verify-tag --prerelease --title "0.1.0-dev.9" --notes "First release on pub.dev."
+> ```
+>
+> After that Claude opens the small follow-up PR that makes the three informational pana steps in `.github/workflows/ci.yaml` blocking (Q6), and the held merges can go ahead.
 
 - [ ] **Step 4: leave the tree clean**
 
@@ -406,4 +421,5 @@ Expected: empty status; the log shows the Task 2 and Task 1 commits on top of th
 ## After the tasks
 
 - PR to `main` linking Plane VK-703 and VK-681, with the Task 3 dry-run lines, the `make verify` output, and the hand-off text of Task 3 Step 3.
-- The PR must merge before the owner publishes. S, F and P3b-2 branches merge `main` into themselves afterwards and keep their entries under `## 0.1.0-dev.10`.
+- The PR must merge before the owner publishes, and the S, F and P3b-2 PRs wait until all four uploads are done. Those branches then merge `main` into themselves and keep their entries under `## 0.1.0-dev.10`, which goes above `## 0.1.0-dev.9` (the guard test does not check heading order).
+- The Q6 follow-up: CI's pana steps lack the webp tools pana uses for screenshots, so `liquid_shell` loses the 10 screenshot points on CI. Install `webp` in that job or give `liquid_shell` a threshold of 10 before making the step blocking.
