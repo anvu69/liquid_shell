@@ -1,3 +1,13 @@
+## 0.1.0-dev.10
+
+- **Fix (VK-778).** When the Flutter overlay sidebar closes by Escape, a
+  tap on its barrier, its Hide button or system back, keyboard focus goes
+  back to what held it when the sidebar opened (a page's control or text
+  field, the sidebar toggle). Before, it stayed on the route, so a
+  hardware-keyboard user lost their place. Choosing a destination in the
+  sidebar gives nothing back (the page changes), and the shell's own
+  search field is never refocused this way: focusing it starts a search.
+
 ## 0.1.0-dev.8
 
 - The package archive no longer includes tests (they read files outside

@@ -490,6 +490,25 @@ void main() {
         expect(controller.isActive, isFalse);
         expect(find.byType(LiquidSidebar), findsOne);
       });
+
+      // VK-778: the shell's own field never gets focus back. Focusing it
+      // idle starts a search, so a search ended under the overlay would
+      // start again when the overlay closes.
+      testWidgets('overlay: a search ended under it stays ended when it '
+          'closes', (tester) async {
+        final controller = await pumpSearch(tester);
+        await tester.tap(find.byType(TextField));
+        await tester.pumpAndSettle();
+        scopeOf(tester, 'Search').setSidebarVisible(true);
+        await tester.pumpAndSettle();
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pumpAndSettle();
+        expect(controller.isActive, isFalse, reason: 'the field ended it');
+        await tester.tapAt(const Offset(800, 600));
+        await tester.pumpAndSettle();
+        expect(find.byType(LiquidSidebar), findsNothing);
+        expect(controller.isActive, isFalse);
+      });
     });
 
     // VK-702: the overlay's Escape handler wraps the whole shell; with
@@ -536,6 +555,159 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
       expect(find.byType(LiquidSidebar), findsNothing);
+    });
+
+    // VK-778: the open overlay takes focus from the page and the top bar
+    // (VK-702 M2). Closing it gives focus back to the node that held it,
+    // but not after a destination is chosen: the page changes.
+    group('focus returns when the overlay closes (VK-778)', () {
+      Future<FocusNode> focusThenOpen(WidgetTester tester) async {
+        final node = Focus.of(tester.element(find.text('Home page: 0')))
+          ..requestFocus();
+        await tester.pump();
+        expect(node.hasPrimaryFocus, isTrue, reason: 'precondition');
+        scopeOf(tester).setSidebarVisible(true);
+        await tester.pumpAndSettle();
+        expect(node.hasFocus, isFalse, reason: 'the overlay is modal');
+        return node;
+      }
+
+      final closers = <String, Future<void> Function(WidgetTester)>{
+        'Escape': (tester) => tester.sendKeyEvent(LogicalKeyboardKey.escape),
+        'the barrier': (tester) => tester.tapAt(const Offset(800, 600)),
+        'Hide': (tester) => tester.tap(find.byTooltip('Hide sidebar')),
+        'system back': (tester) => tester.binding.handlePopRoute(),
+      };
+      for (final MapEntry(key: how, value: close) in closers.entries) {
+        testWidgets('closed by $how: the node that held focus has it again', (
+          tester,
+        ) async {
+          await pumpShell(
+            tester,
+            const TestShell(),
+            size: kTabletPortrait,
+            padding: _tablet,
+          );
+          final node = await focusThenOpen(tester);
+          await close(tester);
+          await tester.pumpAndSettle();
+          expect(find.byType(LiquidSidebar), findsNothing);
+          expect(FocusManager.instance.primaryFocus, same(node));
+        });
+      }
+
+      // Vietnamese IME rule: focus moves, nothing else. The field is not
+      // rebuilt and nothing is written into it.
+      testWidgets('a text field has focus again, not rebuilt or written to', (
+        tester,
+      ) async {
+        final text = TextEditingController(text: 'phở');
+        addTearDown(text.dispose);
+        var builds = 0;
+        await pumpShell(
+          tester,
+          TestShell(
+            pageBuilder: (i) => i == 0
+                ? Builder(
+                    builder: (context) {
+                      builds++;
+                      return Material(
+                        child: Center(child: TextField(controller: text)),
+                      );
+                    },
+                  )
+                : TestPage(label: kDestinations[i].label),
+          ),
+          size: kTabletPortrait,
+          padding: _tablet,
+        );
+        await tester.tap(find.byType(TextField));
+        await tester.pump();
+        final field = tester.state<EditableTextState>(
+          find.byType(EditableText),
+        );
+        final node = field.widget.focusNode;
+        expect(node.hasPrimaryFocus, isTrue, reason: 'precondition');
+        LiquidShellScope.of(
+          tester.element(find.byType(TextField)),
+        ).setSidebarVisible(true);
+        await tester.pumpAndSettle();
+        expect(node.hasFocus, isFalse, reason: 'the overlay is modal');
+        final value = text.value;
+        final built = builds;
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pumpAndSettle();
+        expect(FocusManager.instance.primaryFocus, same(node));
+        expect(
+          tester.state<EditableTextState>(find.byType(EditableText)),
+          same(field),
+        );
+        expect(text.value, value);
+        expect(builds, built);
+      });
+
+      testWidgets('a destination chosen in the overlay: the page left behind '
+          'gets no focus', (tester) async {
+        await pumpShell(
+          tester,
+          // Offstage branches stay focusable: focus given back would land
+          // in a hidden page.
+          const TestShell(offstageBranches: true),
+          size: kTabletPortrait,
+          padding: _tablet,
+        );
+        final node = await focusThenOpen(tester);
+        await tester.tap(
+          find.descendant(
+            of: find.byType(LiquidSidebar),
+            matching: find.text('Inbox'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byType(LiquidSidebar), findsNothing);
+        expect(find.text('Inbox page: 0'), findsOne);
+        expect(node.hasFocus, isFalse);
+      });
+
+      // Asked while out of the tree, a node takes focus whenever it comes
+      // back (FocusNode defers the request).
+      testWidgets('a node that left the tree while the overlay was open '
+          'takes no focus when it comes back', (tester) async {
+        final node = FocusNode(debugLabel: 'app node');
+        addTearDown(node.dispose);
+        final shown = ValueNotifier(true);
+        addTearDown(shown.dispose);
+        await pumpShell(
+          tester,
+          TestShell(
+            pageBuilder: (i) => i == 0
+                ? ValueListenableBuilder<bool>(
+                    valueListenable: shown,
+                    builder: (context, on, _) => on
+                        ? Focus(focusNode: node, child: const Text('node'))
+                        : const SizedBox(),
+                  )
+                : TestPage(label: kDestinations[i].label),
+          ),
+          size: kTabletPortrait,
+          padding: _tablet,
+        );
+        node.requestFocus();
+        await tester.pump();
+        expect(node.hasPrimaryFocus, isTrue, reason: 'precondition');
+        LiquidShellScope.of(
+          tester.element(find.text('node')),
+        ).setSidebarVisible(true);
+        await tester.pumpAndSettle();
+        shown.value = false;
+        await tester.pump();
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pumpAndSettle();
+        expect(find.byType(LiquidSidebar), findsNothing);
+        shown.value = true;
+        await tester.pumpAndSettle();
+        expect(node.hasFocus, isFalse);
+      });
     });
 
     testWidgets('the overlay barrier hides the content behind it from '

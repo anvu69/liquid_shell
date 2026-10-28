@@ -217,6 +217,9 @@ class _LiquidShellState extends State<LiquidShell>
   Map<(LiquidSizeClass, TabBarForm, double), double> _measured = const {};
   ShellPresentation? _presentation;
   bool _sidebarVisible = false;
+  // What held focus when the overlay sidebar opened; it gets focus back
+  // when the overlay closes (VK-778).
+  FocusNode? _focusBeforeOverlay;
   bool _guardPending = false;
   int _hideRequests = 0;
   bool _hiddenSelectionReported = false;
@@ -938,8 +941,38 @@ class _LiquidShellState extends State<LiquidShell>
       return;
     }
     if (_sidebarVisible != visible) {
+      if (_presentation == ShellPresentation.overlay) {
+        if (visible) {
+          _rememberFocus();
+        } else {
+          _restoreFocus();
+        }
+      }
       setState(() => _sidebarVisible = visible);
     }
+  }
+
+  /// The overlay opens: the body and the top bar stop taking focus, so the
+  /// node that holds it loses it. It is kept to get it back. Not the
+  /// shell's search field: an active one keeps its focus under the overlay,
+  /// and focusing an idle one starts a search.
+  void _rememberFocus() {
+    final focus = FocusManager.instance.primaryFocus;
+    _focusBeforeOverlay = identical(focus, _search.focus) ? null : focus;
+  }
+
+  /// The overlay closes: the kept node gets focus back after the frame,
+  /// once the rebuild has made the body and the top bar focusable again.
+  /// Only focus moves: the node's widget is neither rebuilt nor written to.
+  /// A node no longer in the tree is skipped: asked now, it would take
+  /// focus whenever it came back.
+  void _restoreFocus() {
+    final node = _focusBeforeOverlay;
+    _focusBeforeOverlay = null;
+    if (node == null) return;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (mounted && (node.context?.mounted ?? false)) node.requestFocus();
+    });
   }
 
   void _onBarHeight(
@@ -991,6 +1024,8 @@ class _LiquidShellState extends State<LiquidShell>
         _setSidebarVisible(false);
       }
     } else if (_presentation == ShellPresentation.overlay) {
+      // Another page: the focus it held is not given back (VK-778).
+      _focusBeforeOverlay = null;
       _setSidebarVisible(false);
     }
   }
