@@ -68,6 +68,9 @@ class _LiquidPageState extends State<LiquidPage> {
   // The child keeps its State when the bar switches between native and
   // Flutter (native chrome on or off).
   final GlobalKey _childKey = GlobalKey();
+  // The first vertical scroll view's offset: the Flutter bar's collapse
+  // listens to it, so a scroll frame never rebuilds the page.
+  final ValueNotifier<double> _scrollOffset = ValueNotifier(0);
   PageRegistry? _registry;
   PageHandle? _handle;
 
@@ -123,6 +126,12 @@ class _LiquidPageState extends State<LiquidPage> {
     super.deactivate();
   }
 
+  @override
+  void dispose() {
+    _scrollOffset.dispose();
+    super.dispose();
+  }
+
   // Scrolls, and the first layout of a scroll position. A position
   // restored from PageStorage reports its offset only through its metrics.
   // So does a page moved with a GlobalKey, which registers again with a
@@ -141,6 +150,7 @@ class _LiquidPageState extends State<LiquidPage> {
       _ => (-1, null),
     };
     if (depth == 0 && metrics != null && metrics.axis == Axis.vertical) {
+      _scrollOffset.value = metrics.pixels;
       _handle?.scrolled(metrics.pixels);
     }
     return false;
@@ -173,6 +183,7 @@ class _LiquidPageState extends State<LiquidPage> {
       mode: mode,
       canPop: canPop,
       hideLargeTitle: scope?.searchPhase == LiquidSearchPhase.active,
+      scrollOffset: _scrollOffset,
       child: child,
     );
   }

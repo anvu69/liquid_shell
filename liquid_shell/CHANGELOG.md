@@ -1,5 +1,10 @@
 ## 0.1.0-dev.10
 
+- **Flutter page bar, complete (VK-445).** On iOS before 26, on Android and
+  with Flutter chrome, `LiquidPage(largeTitle: true)` on a root page now
+  draws its large title on a row of its own that scrolls away as the page
+  scrolls, while the inline title fades into the bar row, as UIKit's does.
+  The page's top padding stays put while it collapses.
 - **Behaviour change (VK-445).** A pushed page's title is always inline:
   `largeTitle` applies to root pages only. Before, the Flutter bar drew a
   pushed page's large title on a row of its own, where UIKit drew it small.

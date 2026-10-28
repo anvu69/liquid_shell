@@ -142,17 +142,44 @@ Finder _inlineTitle(String title) => find.descendant(
   ),
 );
 
-/// A page body that records the padding it is given.
+/// A page body that records the padding of each of its builds. With a
+/// [controller] it is a list of 40 rows of 40 pt.
 class _Padded extends StatelessWidget {
-  const _Padded(this.paddings);
+  const _Padded(this.paddings, {this.controller});
 
   final List<EdgeInsets> paddings;
+  final ScrollController? controller;
 
   @override
   Widget build(BuildContext context) {
     paddings.add(MediaQuery.paddingOf(context));
-    return const SizedBox.expand();
+    if (controller == null) return const SizedBox.expand();
+    return ListView(
+      controller: controller,
+      children: [
+        for (var i = 0; i < 40; i++)
+          SizedBox(height: 40, child: Text('row $i')),
+      ],
+    );
   }
+}
+
+/// Pumps a root page with a collapsing large title over a [_Padded] list.
+Future<ScrollController> _pumpCollapsing(
+  WidgetTester tester,
+  List<EdgeInsets> paddings,
+) async {
+  final scroll = ScrollController();
+  addTearDown(scroll.dispose);
+  await _pump(
+    tester,
+    home: LiquidPage(
+      title: 'Library',
+      largeTitle: true,
+      child: _Padded(paddings, controller: scroll),
+    ),
+  );
+  return scroll;
 }
 
 void main() {
@@ -366,6 +393,202 @@ void main() {
       );
       expect(find.byType(FlutterPageBar), findsNothing, reason: '$sizeClass');
     }
+  });
+
+  testWidgets('scrolling collapses the large row and fades the inline '
+      'title in', (tester) async {
+    final scroll = await _pumpCollapsing(tester, []);
+    final rest = tester.getRect(_largeTitle('Library')).top;
+    const steps = <(double, double, double)>[
+      // (offset, large row shift, inline opacity)
+      (0, 0, 0),
+      (26, 26, 0),
+      (39, 39, 0.5),
+      (52, 52, 1),
+      (120, 52, 1),
+    ];
+    final tops = <double>[];
+    for (final (offset, _, _) in steps) {
+      scroll.jumpTo(offset);
+      await tester.pump();
+      tops.add(tester.getRect(_largeTitle('Library')).top);
+    }
+    expect(tops, [for (final (_, shift, _) in steps) rest - shift]);
+
+    final opacities = <double>[];
+    for (final (offset, _, _) in steps) {
+      scroll.jumpTo(offset);
+      await tester.pump();
+      opacities.add(
+        tester
+            .widget<Opacity>(
+              find
+                  .ancestor(
+                    of: _inlineTitle('Library'),
+                    matching: find.byType(Opacity),
+                  )
+                  .first,
+            )
+            .opacity,
+      );
+    }
+    expect(opacities, [for (final (_, _, opacity) in steps) opacity]);
+
+    // The large row is clipped to its own row, under the bar row.
+    final clip = tester.getRect(
+      find
+          .ancestor(of: _largeTitle('Library'), matching: find.byType(ClipRect))
+          .first,
+    );
+    expect(clip.top, kPageBarExtent);
+    expect(clip.height, kLargeTitleExtent);
+  });
+
+  testWidgets('the scroll-edge fade follows the collapsing row', (
+    tester,
+  ) async {
+    const red = Color(0xFFFF0000);
+    final boundary = GlobalKey();
+    final scroll = ScrollController();
+    addTearDown(scroll.dispose);
+    await _pump(
+      tester,
+      home: RepaintBoundary(
+        key: boundary,
+        child: ColoredBox(
+          color: const Color(0xFFFFFFFF),
+          child: LiquidPage(
+            title: 'Library',
+            largeTitle: true,
+            child: ListView(
+              controller: scroll,
+              children: const [
+                SizedBox(height: 2000, child: ColoredBox(color: red)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    scroll.jumpTo(26);
+    await tester.pump();
+    final image = (await tester.runAsync(
+      () => captureImage(boundary.currentContext! as Element),
+    ))!;
+    final bytes = (await tester.runAsync(image.toByteData))!;
+    int green(int x, int y) => bytes.getUint8((y * image.width + x) * 4 + 1);
+
+    final x = image.width - 8;
+    // The bar row (0–54) shows no content.
+    expect(green(x, 20), 255, reason: 'bar row');
+    // The large row moved up by 26: what is left of it ends at 80, and the
+    // content below it is opaque.
+    expect(green(x, 90), 0, reason: 'content right below the large row');
+    expect(green(x, 300), 0, reason: 'content below the large row');
+  });
+
+  testWidgets("the page's top padding stays under the large row while the "
+      'title collapses', (tester) async {
+    final paddings = <EdgeInsets>[];
+    final scroll = await _pumpCollapsing(tester, paddings);
+    for (final offset in const <double>[0, 26, 52, 120]) {
+      scroll.jumpTo(offset);
+      await tester.pump();
+      expect(
+        paddings.last.top,
+        kPageBarExtent + kLargeTitleExtent,
+        reason: 'offset $offset',
+      );
+    }
+  });
+
+  testWidgets('the collapse never rebuilds the page', (tester) async {
+    final paddings = <EdgeInsets>[];
+    final scroll = await _pumpCollapsing(tester, paddings);
+    final rest = tester.getRect(_largeTitle('Library')).top;
+    final builds = paddings.length;
+    for (var frame = 1; frame <= 10; frame++) {
+      scroll.jumpTo(frame * 6);
+      await tester.pump();
+    }
+    expect(
+      tester.getRect(_largeTitle('Library')).top,
+      lessThan(rest),
+      reason: 'the title collapsed',
+    );
+    expect(paddings, hasLength(builds), reason: 'no build of the page');
+  });
+
+  testWidgets('IME: a focused, composing field in a collapsing page keeps '
+      'its state and its composition through a scroll and a bar switch', (
+    tester,
+  ) async {
+    final registry = _Registry();
+    final scroll = ScrollController();
+    addTearDown(scroll.dispose);
+    final field = TextEditingController();
+    addTearDown(field.dispose);
+    final focus = FocusNode();
+    addTearDown(focus.dispose);
+    final page = LiquidPage(
+      title: 'Library',
+      largeTitle: true,
+      child: ListView(
+        controller: scroll,
+        children: [
+          TextField(controller: field, focusNode: focus),
+          for (var i = 0; i < 40; i++)
+            SizedBox(height: 40, child: Text('row $i')),
+        ],
+      ),
+    );
+    Widget app({required bool native}) => ShellScopeMarker(
+      data: _scope(nativePageBar: native),
+      registry: null,
+      pages: registry,
+      child: MaterialApp(home: Material(child: page)),
+    );
+    await tester.pumpWidget(app(native: false));
+    await tester.showKeyboard(find.byType(TextField));
+    // Telex mid-word: "hoa" is marked text, as an IME composes it.
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(
+        text: 'hoa',
+        selection: TextSelection.collapsed(offset: 3),
+        composing: TextRange(start: 0, end: 3),
+      ),
+    );
+    await tester.pump();
+    final editable = tester.state<EditableTextState>(
+      find.byType(EditableText),
+    );
+    tester.testTextInput.log.clear();
+
+    scroll.jumpTo(30);
+    await tester.pump();
+    await tester.pumpWidget(app(native: true));
+    await tester.pumpWidget(app(native: false));
+    scroll.jumpTo(10);
+    await tester.pump();
+
+    expect(
+      tester.state<EditableTextState>(find.byType(EditableText)),
+      same(editable),
+    );
+    expect(focus.hasFocus, isTrue);
+    expect(field.value.composing, const TextRange(start: 0, end: 3));
+    expect(
+      tester.testTextInput.log.map((call) => call.method),
+      everyElement(
+        isNot(
+          anyOf(
+            'TextInput.clearClient',
+            'TextInput.setClient',
+            'TextInput.setEditingState',
+          ),
+        ),
+      ),
+    );
   });
 
   testWidgets('the bar titles carry a text style without a Material above', (
