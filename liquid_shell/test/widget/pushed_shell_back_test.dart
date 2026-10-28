@@ -85,6 +85,7 @@ class _Pushed {
     Widget Function(Widget shell)? around,
     Widget Function(int index, List<Widget> pages)? body,
     Widget? Function(int index)? root,
+    Widget? Function(int index)? bare,
     bool pushed = true,
     Size size = kPhone,
   }) async {
@@ -98,7 +99,8 @@ class _Pushed {
       initialIndex: initialIndex,
       offstageBranches: offstageBranches,
       bodyBuilder: body,
-      pageBuilder: (i) => branch(i, wrap: wrap),
+      // [bare]: a tab's page with no navigator between (VK-776).
+      pageBuilder: (i) => bare?.call(i) ?? branch(i, wrap: wrap),
       search: LiquidSearch(controller: search),
     );
     final inRoute = around?.call(shellWidget) ?? shellWidget;
@@ -381,6 +383,36 @@ Future<void> _pushOn(
   await tester.pumpAndSettle();
 }
 
+/// A shell with its own tabs (sub-tabs), Flutter chrome. Tab `j`'s page is
+/// `bare(j)` when that is not null (no navigator between), otherwise a
+/// navigator keyed `tabs[j]` whose root is the test page of [label] and the
+/// tab's label ('Inner Home').
+Widget _subTabs(
+  String label, {
+  required List<GlobalKey<NavigatorState>> tabs,
+  required LiquidSearchController search,
+  Key? key,
+  int initialIndex = 0,
+  Widget? Function(int index)? bare,
+}) => TestShell(
+  key: key,
+  nativeChrome: LiquidNativeChrome.off,
+  destinations: _destinations,
+  initialIndex: initialIndex,
+  search: LiquidSearch(controller: search),
+  pageBuilder: (j) =>
+      bare?.call(j) ??
+      Navigator(
+        key: tabs[j],
+        onGenerateRoute: (_) => MaterialPageRoute<void>(
+          builder: (_) => LiquidPage(
+            title: '$label ${_destinations[j].label}',
+            child: TestPage(label: '$label ${_destinations[j].label}'),
+          ),
+        ),
+      ),
+);
+
 /// A shell with its own tabs (sub-tabs) as the root page of tab 1 of a
 /// [_Pushed] app, on its search tab, Flutter chrome; [tabs] holds its tab
 /// navigators.
@@ -390,35 +422,135 @@ class _Inner {
   ];
   final search = LiquidSearchController();
 
-  /// Pumps [app] with this shell in tab 1, then selects it.
+  /// Pumps [app] with this shell in tab 1, then selects it; [wrap] as
+  /// [_Pushed.pump]'s.
   Future<void> pump(
     _Pushed app,
     WidgetTester tester, {
     Size size = kPhone,
+    Widget Function(int, Widget)? wrap,
   }) async {
     addTearDown(search.dispose);
     await app.pump(
       tester,
       size: size,
+      wrap: wrap,
       root: (i) => i != 1
           ? null
-          : TestShell(
-              nativeChrome: LiquidNativeChrome.off,
-              destinations: _destinations,
-              initialIndex: 2,
-              search: LiquidSearch(controller: search),
-              pageBuilder: (j) => Navigator(
-                key: tabs[j],
-                onGenerateRoute: (_) => MaterialPageRoute<void>(
-                  builder: (_) => LiquidPage(
-                    title: 'Inner ${_destinations[j].label}',
-                    child: TestPage(label: 'Inner ${_destinations[j].label}'),
-                  ),
-                ),
-              ),
+          : _subTabs('Inner', tabs: tabs, search: search, initialIndex: 2),
+    );
+    await app.select(tester, 1);
+  }
+}
+
+/// VK-776: a shell with its own tabs as the page of tab 1 of a [_Pushed]
+/// app, with no navigator between, so its `PopScope` sits on the outer
+/// shell's route. Flutter chrome; [tabs] holds its tab navigators.
+class _SameRoute {
+  final shell = GlobalKey<TestShellState>();
+  final List<GlobalKey<NavigatorState>> tabs = [
+    for (var i = 0; i < 3; i++) GlobalKey<NavigatorState>(),
+  ];
+  final search = LiquidSearchController();
+
+  /// Pumps [app] with this shell as tab 1's page, then selects tab 1;
+  /// [bare] as [_subTabs]'.
+  Future<void> pump(
+    _Pushed app,
+    WidgetTester tester, {
+    Size size = kPhone,
+    bool pushed = true,
+    int initialIndex = 0,
+    Widget? Function(int index)? bare,
+  }) async {
+    addTearDown(search.dispose);
+    await app.pump(
+      tester,
+      size: size,
+      pushed: pushed,
+      bare: (i) => i != 1
+          ? null
+          : _subTabs(
+              'Inner',
+              key: shell,
+              tabs: tabs,
+              search: search,
+              initialIndex: initialIndex,
+              bare: bare,
             ),
     );
     await app.select(tester, 1);
+  }
+}
+
+/// Pushes a page titled [title] on [navigator] that refuses to pop, as an
+/// unsaved form does: each refusal asks "Discard?" in a dialog. Returns how
+/// many times it asked so far.
+Future<int Function()> _pushForm(
+  WidgetTester tester,
+  GlobalKey<NavigatorState> navigator,
+  String title,
+) async {
+  var asks = 0;
+  navigator.currentState!
+      .push(
+        MaterialPageRoute<void>(
+          builder: (context) => PopScope<Object?>(
+            canPop: false,
+            onPopInvokedWithResult: (didPop, _) {
+              if (didPop) return;
+              asks++;
+              showDialog<void>(
+                context: context,
+                builder: (_) => const AlertDialog(title: Text('Discard?')),
+              ).ignore();
+            },
+            child: Scaffold(body: Center(child: Text('$title page: 0'))),
+          ),
+        ),
+      )
+      .ignore();
+  await tester.pumpAndSettle();
+  return () => asks;
+}
+
+/// What the framework tells Android about back: each
+/// `setFrameworkHandlesBack` argument, and how often it let the app leave
+/// (`SystemNavigator.pop`).
+class _AndroidBack {
+  final claims = <Object?>[];
+  int exits = 0;
+}
+
+/// Runs [body] as on an Android device, recording [_AndroidBack].
+Future<void> _onAndroid(
+  WidgetTester tester,
+  Future<void> Function(_AndroidBack android) body,
+) async {
+  final android = _AndroidBack();
+  tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+    SystemChannels.platform,
+    (call) async {
+      if (call.method == 'SystemNavigator.setFrameworkHandlesBack') {
+        android.claims.add(call.arguments);
+      } else if (call.method == 'SystemNavigator.pop') {
+        android.exits++;
+      }
+      return null;
+    },
+  );
+  addTearDown(
+    () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      null,
+    ),
+  );
+  tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+  debugDefaultTargetPlatformOverride = TargetPlatform.android;
+  try {
+    await body(android);
+  } finally {
+    debugDefaultTargetPlatformOverride = null;
   }
 }
 
@@ -1278,6 +1410,159 @@ void main() {
         expect(_page('Deep'), findsNothing, reason: 'the page last');
         expect(app.shellPopped, isFalse);
       });
+
+      // VK-776: a shell that is a tab's page with no navigator between puts
+      // its PopScope on the outer shell's route, which calls every PopScope
+      // on it. The inner shell steps aside; the outer one hands it back in
+      // its own order, and only while it is on screen.
+      testWidgets('VK-776: a shell nested with no navigator between: an '
+          'unsaved form in its tab asks once per back', (tester) async {
+        final app = _Pushed(mode);
+        final inner = _SameRoute();
+        await inner.pump(app, tester);
+        final asks = await _pushForm(tester, inner.tabs[0], 'Form');
+        await back(app, tester);
+        expect(asks(), 1, reason: 'one back, one ask');
+        expect(find.text('Discard?'), findsOneWidget, reason: 'one dialog');
+        expect(_page('Form'), findsOneWidget);
+        expect(app.shellPopped, isFalse);
+      });
+
+      testWidgets('VK-776: three shells on one route: the form asks once', (
+        tester,
+      ) async {
+        final app = _Pushed(mode);
+        final middle = _SameRoute();
+        final leafTabs = [
+          for (var i = 0; i < 3; i++) GlobalKey<NavigatorState>(),
+        ];
+        final leafSearch = LiquidSearchController();
+        addTearDown(leafSearch.dispose);
+        await middle.pump(
+          app,
+          tester,
+          initialIndex: 1,
+          bare: (j) => j != 1
+              ? null
+              : _subTabs('Leaf', tabs: leafTabs, search: leafSearch),
+        );
+        final asks = await _pushForm(tester, leafTabs[0], 'Form');
+        await back(app, tester);
+        expect(asks(), 1, reason: 'one ask, not one per shell');
+        expect(find.text('Discard?'), findsOneWidget);
+      });
+
+      testWidgets('VK-776: a nested shell in a hidden tab, a page in its '
+          "tab: back pops the shell's route", (tester) async {
+        final app = _Pushed(mode);
+        final inner = _SameRoute();
+        await inner.pump(app, tester);
+        await _pushOn(tester, inner.tabs[0], 'Hidden');
+        await app.select(tester, 0);
+        await back(app, tester);
+        expect(app.shellPopped, isTrue, reason: 'Home is at its root');
+      });
+
+      testWidgets('VK-776: the outer search active, a nested shell hidden '
+          'with a page: back ends the outer search only', (tester) async {
+        final app = _Pushed(mode);
+        final inner = _SameRoute();
+        await inner.pump(app, tester);
+        await _pushOn(tester, inner.tabs[0], 'Hidden');
+        await app.select(tester, 2);
+        app.search.activate();
+        // Natively, the search is active once UIKit says so.
+        app.fake?.emitNative(const LiquidNativeSearchActiveChanged(true));
+        await tester.pumpAndSettle();
+        expect(app.search.isActive, isTrue, reason: 'precondition');
+        await back(app, tester);
+        if (app.fake case final fake?) {
+          // The shell asks UIKit to end it; the fake never answers.
+          expect(fake.searchActives.last, isFalse);
+        } else {
+          expect(app.search.isActive, isFalse);
+        }
+        expect(
+          find.text('Hidden page: 0', skipOffstage: false),
+          findsOneWidget,
+          reason: 'the hidden page stays',
+        );
+        expect(app.shellPopped, isFalse);
+      });
+
+      if (mode == _Mode.flutter) {
+        testWidgets('VK-776: iPad, the outer overlay sidebar open over a '
+            'nested shell with a page: back closes the sidebar only', (
+          tester,
+        ) async {
+          final app = _Pushed(mode);
+          final inner = _SameRoute();
+          await inner.pump(app, tester, size: kTabletPortrait);
+          await _pushOn(tester, inner.tabs[0], 'Deep');
+          // The outer shell's scope, as seen by the inner shell.
+          LiquidShellScopeData outer() =>
+              LiquidShellScope.of(tester.element(find.byKey(inner.shell)));
+          outer().setSidebarVisible(true);
+          await tester.pumpAndSettle();
+          expect(
+            outer().chromeKind,
+            LiquidChromeKind.sidebarOverlay,
+            reason: 'precondition',
+          );
+          await back(app, tester);
+          expect(outer().sidebarVisible, isFalse);
+          expect(_page('Deep'), findsOneWidget, reason: 'the sidebar only');
+          await back(app, tester);
+          expect(_page('Deep'), findsNothing, reason: 'the page next');
+          expect(app.shellPopped, isFalse);
+        });
+      }
+
+      testWidgets("VK-776: the edge swipe on a nested shell's page pops "
+          'that page, not the shell', (tester) async {
+        final app = _Pushed(mode);
+        final inner = _SameRoute();
+        await inner.pump(app, tester);
+        await _pushOn(tester, inner.tabs[0], 'Swiped');
+        await _swipeFromTheEdge(tester);
+        expect(_page('Swiped'), findsNothing);
+        expect(app.shellPopped, isFalse);
+      });
+
+      testWidgets("VK-776: a nested shell's search active over a page: back "
+          'ends the search, then pops the page', (tester) async {
+        final app = _Pushed(mode);
+        final inner = _SameRoute();
+        await inner.pump(app, tester, initialIndex: 2);
+        await _pushOn(tester, inner.tabs[2], 'Deep');
+        inner.search.activate();
+        await tester.pumpAndSettle();
+        expect(inner.search.isActive, isTrue, reason: 'precondition');
+        await back(app, tester);
+        expect(inner.search.isActive, isFalse, reason: 'the search first');
+        expect(_page('Deep'), findsOneWidget);
+        await back(app, tester);
+        expect(_page('Deep'), findsNothing, reason: 'the page next');
+        expect(app.shellPopped, isFalse);
+      });
+
+      // The route check: with a navigator between, the inner shell keeps
+      // its own PopScope (on the tab's root route), where the app's
+      // NavigatorPopHandler finds it.
+      testWidgets('VK-776: a nested shell at the root of a tab navigator '
+          "inside the app's NavigatorPopHandler: back ends its search", (
+        tester,
+      ) async {
+        final app = _Pushed(mode);
+        final inner = _Inner();
+        await inner.pump(app, tester, wrap: _popHandlers(app));
+        inner.search.activate();
+        await tester.pumpAndSettle();
+        expect(inner.search.isActive, isTrue, reason: 'precondition');
+        await back(app, tester);
+        expect(inner.search.isActive, isFalse);
+        expect(app.shellPopped, isFalse);
+      });
     });
   }
 
@@ -1286,36 +1571,56 @@ void main() {
   // back at the tab's root, so the app can be left.
   testWidgets('Android, a root shell: the framework claims back only while '
       'the tab can pop', (tester) async {
-    final claims = <Object?>[];
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-      SystemChannels.platform,
-      (call) async {
-        if (call.method == 'SystemNavigator.setFrameworkHandlesBack') {
-          claims.add(call.arguments);
-        }
-        return null;
-      },
-    );
-    addTearDown(
-      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-        SystemChannels.platform,
-        null,
-      ),
-    );
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    try {
+    await _onAndroid(tester, (android) async {
       final app = _Pushed(_Mode.flutter);
       await app.pump(tester, pushed: false);
       await app.push(tester, 0, 'Detail');
-      expect(claims.last, isTrue);
+      expect(android.claims.last, isTrue);
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
       expect(_page('Detail'), findsNothing);
       expect(_page('Home'), findsOneWidget);
-      expect(claims.last, isFalse);
-    } finally {
-      debugDefaultTargetPlatformOverride = null;
-    }
+      expect(android.claims.last, isFalse);
+    });
+  });
+
+  // VK-776: a shell nested with no navigator between, in a root shell.
+  testWidgets('Android, a root shell, a nested shell in a hidden tab with a '
+      'page: at the root of the tab shown, back leaves the app', (
+    tester,
+  ) async {
+    await _onAndroid(tester, (android) async {
+      final app = _Pushed(_Mode.flutter);
+      final inner = _SameRoute();
+      await inner.pump(app, tester, pushed: false);
+      await _pushOn(tester, inner.tabs[0], 'Hidden');
+      expect(android.claims.last, isTrue, reason: 'shown, it can pop');
+      await app.select(tester, 0);
+      expect(android.claims.last, isFalse, reason: 'Home is at its root');
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(android.exits, 1, reason: 'the app leaves');
+      expect(
+        find.text('Hidden page: 0', skipOffstage: false),
+        findsOneWidget,
+        reason: 'the hidden page stays',
+      );
+    });
+  });
+
+  testWidgets('Android, a root shell, a nested shell shown with an unsaved '
+      'form: one back asks once', (tester) async {
+    await _onAndroid(tester, (android) async {
+      final app = _Pushed(_Mode.flutter);
+      final inner = _SameRoute();
+      await inner.pump(app, tester, pushed: false);
+      final asks = await _pushForm(tester, inner.tabs[0], 'Form');
+      expect(android.claims.last, isTrue);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(asks(), 1, reason: 'one back, one ask');
+      expect(find.text('Discard?'), findsOneWidget);
+      expect(android.exits, 0);
+    });
   });
 }

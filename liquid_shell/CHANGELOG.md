@@ -1,3 +1,17 @@
+## 0.1.0-dev.10
+
+- **Fix (VK-776).** A shell nested in another shell's body with no
+  navigator between (a tab's page that is itself a `LiquidShell`) no
+  longer answers back beside the outer shell. One back asked a page's
+  `PopScope` twice (an unsaved form showed two dialogs; with three shells,
+  three). A nested shell in a tab that was not shown still held back: back
+  popped a page the user could not see, and at a root shell on Android the
+  app could not be left. With the outer shell's overlay sidebar open or
+  its search active, one back also popped the nested shell's page. The
+  outer shell now asks the nested one in its own order, and only while it
+  is on screen. With a navigator between (go_router's `StatefulShellRoute`
+  and `ShellRoute` always put one there) nothing changes.
+
 ## 0.1.0-dev.8
 
 - The package archive no longer includes tests (they read files outside
