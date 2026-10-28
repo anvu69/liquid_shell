@@ -1360,7 +1360,7 @@ void main() {
     });
 
     testWidgets('landscape search row, left inset: the ⌕ keeps the right '
-        'edge, and a drag onto it hovers it', (tester) async {
+        'edge, and a drag dropped on it opens the search', (tester) async {
       await pumpSearchRow(tester, const EdgeInsets.only(bottom: 21));
       final noInset = tester.getRect(find.byKey(kSearchFieldKey));
       await pumpSearchRow(tester, notchLeft);
@@ -1382,7 +1382,11 @@ void main() {
           .hovered
           .value;
       expect(hovered, isTrue);
-      await g.cancel();
+      // VK-779: the drop opens the field, with no overflow on the way.
+      await g.up();
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(scopeOf(tester, 'Search').searchPhase, LiquidSearchPhase.selected);
     });
   });
 }

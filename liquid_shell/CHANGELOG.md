@@ -11,6 +11,12 @@
   outer shell now asks the nested one in its own order, and only while it
   is on screen. With a navigator between (go_router's `StatefulShellRoute`
   and `ShellRoute` always put one there) nothing changes.
+- **Fix (VK-779).** Compact landscape with the Flutter chrome: selecting
+  the search tab from idle (a tap on the ⌕, a lens drag dropped on it, or
+  the app) no longer reports "A RenderFlex overflowed by 12 pixels" in
+  debug builds for the first frame of the morph. The field's row keeps the
+  width of its fixed parts and is clipped while it grows out of the
+  44-point ⌕. Release builds showed nothing wrong.
 
 ## 0.1.0-dev.8
 
