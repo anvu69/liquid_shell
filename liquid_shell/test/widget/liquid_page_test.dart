@@ -186,6 +186,47 @@ Future<ScrollController> _pumpCollapsing(
   return scroll;
 }
 
+/// A scroll controller disposed when the test ends.
+ScrollController _scroll() {
+  final scroll = ScrollController();
+  addTearDown(scroll.dispose);
+  return scroll;
+}
+
+/// A list of 40 rows of 40 pt.
+Widget _rows(ScrollController scroll) {
+  // Its paddings are recorded, and not read.
+  final paddings = <EdgeInsets>[];
+  return _Padded(paddings, controller: scroll);
+}
+
+/// The top of the large title of a page titled 'Library'.
+double _largeTop(WidgetTester tester) =>
+    tester.getRect(_largeTitle('Library')).top;
+
+/// Pumps a root page titled 'Library' with a collapsing large title over
+/// [child], in a [Material] for text fields, and returns the large title's
+/// resting top.
+Future<double> _pumpLargeTitle(WidgetTester tester, Widget child) async {
+  await _pump(
+    tester,
+    home: Material(
+      child: LiquidPage(title: 'Library', largeTitle: true, child: child),
+    ),
+  );
+  return _largeTop(tester);
+}
+
+/// Scrolls [scroll] to [offset] and pumps the frame.
+Future<void> _jump(
+  WidgetTester tester,
+  ScrollController scroll,
+  double offset,
+) async {
+  scroll.jumpTo(offset);
+  await tester.pump();
+}
+
 void main() {
   testWidgets('pages register in push order; a pop shortens the stack', (
     tester,
@@ -592,6 +633,193 @@ void main() {
           ),
         ),
       ),
+    );
+  });
+
+  testWidgets('a multi-line text field never moves the large title', (
+    tester,
+  ) async {
+    final list = _scroll();
+    // A composer under the list: the field, not flexible, is laid out and
+    // reports first.
+    final rest = await _pumpLargeTitle(
+      tester,
+      Column(
+        children: [
+          Expanded(child: _rows(list)),
+          const TextField(maxLines: 2),
+        ],
+      ),
+    );
+    final field = find.descendant(
+      of: find.byType(TextField),
+      matching: find.byType(Scrollable),
+    );
+    double fieldOffset() =>
+        tester.state<ScrollableState>(field).position.pixels;
+
+    await tester.enterText(find.byType(TextField), 'một\nhai\nba');
+    await tester.pumpAndSettle();
+    expect(fieldOffset(), greaterThan(0), reason: 'the field scrolled');
+    expect(_largeTop(tester), rest, reason: 'typing a third line');
+
+    await _jump(tester, list, 120);
+    expect(_largeTop(tester), rest - kLargeTitleExtent, reason: 'the list');
+
+    await tester.enterText(find.byType(TextField), '');
+    await tester.pumpAndSettle();
+    expect(fieldOffset(), 0, reason: 'the field scrolled back');
+    expect(
+      _largeTop(tester),
+      rest - kLargeTitleExtent,
+      reason: 'clearing the field',
+    );
+  });
+
+  testWidgets('of two lists side by side, only the first drives the large '
+      'title', (tester) async {
+    final first = _scroll();
+    final second = _scroll();
+    final rest = await _pumpLargeTitle(
+      tester,
+      Column(
+        children: [
+          Expanded(child: _rows(first)),
+          Expanded(child: _rows(second)),
+        ],
+      ),
+    );
+    await _jump(tester, first, 120);
+    expect(_largeTop(tester), rest - kLargeTitleExtent);
+    await _jump(tester, second, 5);
+    expect(
+      _largeTop(tester),
+      rest - kLargeTitleExtent,
+      reason: 'the second list',
+    );
+    await _jump(tester, first, 26);
+    expect(_largeTop(tester), rest - 26);
+  });
+
+  testWidgets('when the list that drives the large title is disposed, the '
+      'next list to report drives it', (tester) async {
+    final first = _scroll();
+    final second = _scroll();
+    final showFirst = ValueNotifier(true);
+    addTearDown(showFirst.dispose);
+    final rest = await _pumpLargeTitle(
+      tester,
+      ValueListenableBuilder<bool>(
+        valueListenable: showFirst,
+        builder: (context, show, _) => Column(
+          children: [
+            if (show)
+              Expanded(key: const ValueKey('first'), child: _rows(first)),
+            Expanded(key: const ValueKey('second'), child: _rows(second)),
+          ],
+        ),
+      ),
+    );
+    await _jump(tester, first, 120);
+    await _jump(tester, second, 30);
+    expect(
+      _largeTop(tester),
+      rest - kLargeTitleExtent,
+      reason: 'the first list drives',
+    );
+
+    showFirst.value = false;
+    // The frame lays the second list out taller, which it reports after the
+    // frame; the next frame draws the title.
+    await tester.pump();
+    await tester.pump();
+    expect(_largeTop(tester), rest - 30, reason: 'the second list reported');
+    await _jump(tester, second, 40);
+    expect(_largeTop(tester), rest - 40);
+  });
+
+  testWidgets("a list nested in the page's list never drives the large "
+      'title', (tester) async {
+    final outer = _scroll();
+    final inner = _scroll();
+    // The inner list is laid out, and reports, before the outer one.
+    final rest = await _pumpLargeTitle(
+      tester,
+      ListView(
+        controller: outer,
+        children: [
+          SizedBox(height: 200, child: _rows(inner)),
+          for (var i = 0; i < 40; i++)
+            SizedBox(height: 40, child: Text('row $i')),
+        ],
+      ),
+    );
+    await _jump(tester, inner, 40);
+    expect(_largeTop(tester), rest, reason: 'the nested list');
+    await _jump(tester, outer, 26);
+    expect(_largeTop(tester), rest - 26, reason: "the page's list");
+  });
+
+  testWidgets("in a PageView of lists, the first page's list drives the "
+      'large title; once that page is disposed, the shown list takes over '
+      'at its first scroll', (tester) async {
+    final first = _scroll();
+    final second = _scroll();
+    final pages = PageController();
+    addTearDown(pages.dispose);
+    final rest = await _pumpLargeTitle(
+      tester,
+      PageView(controller: pages, children: [_rows(first), _rows(second)]),
+    );
+    await _jump(tester, first, 120);
+    expect(
+      _largeTop(tester),
+      rest - kLargeTitleExtent,
+      reason: "the first page's list",
+    );
+
+    await tester.fling(find.byType(PageView), const Offset(-400, 0), 1000);
+    await tester.pumpAndSettle();
+    expect(pages.page, 1);
+    expect(first.hasClients, isFalse, reason: 'the first page is disposed');
+    expect(
+      _largeTop(tester),
+      rest - kLargeTitleExtent,
+      reason: 'the title keeps the last offset until a list reports',
+    );
+    await _jump(tester, second, 30);
+    expect(_largeTop(tester), rest - 30, reason: "the shown page's list");
+  });
+
+  testWidgets("in a PageView whose pages stay alive, only the first page's "
+      'list drives the large title', (tester) async {
+    final first = _scroll();
+    final second = _scroll();
+    final pages = PageController();
+    addTearDown(pages.dispose);
+    final rest = await _pumpLargeTitle(
+      tester,
+      PageView(
+        controller: pages,
+        allowImplicitScrolling: true,
+        children: [_rows(first), _rows(second)],
+      ),
+    );
+    await _jump(tester, first, 120);
+    expect(
+      _largeTop(tester),
+      rest - kLargeTitleExtent,
+      reason: "the first page's list",
+    );
+    await tester.fling(find.byType(PageView), const Offset(-400, 0), 1000);
+    await tester.pumpAndSettle();
+    expect(pages.page, 1);
+    expect(first.hasClients, isTrue, reason: 'the first page is kept');
+    await _jump(tester, second, 30);
+    expect(
+      _largeTop(tester),
+      rest - kLargeTitleExtent,
+      reason: "the second page's list",
     );
   });
 

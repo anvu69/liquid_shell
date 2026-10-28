@@ -71,6 +71,9 @@ class _LiquidPageState extends State<LiquidPage> {
   // The first vertical scroll view's offset: the Flutter bar's collapse
   // listens to it, so a scroll frame never rebuilds the page.
   final ValueNotifier<double> _scrollOffset = ValueNotifier(0);
+  // The notification context of the scroll view that drives the large
+  // title (see _drivesLargeTitle).
+  BuildContext? _titleScrollView;
   PageRegistry? _registry;
   PageHandle? _handle;
 
@@ -138,22 +141,69 @@ class _LiquidPageState extends State<LiquidPage> {
   // new handle: the moved Scrollable builds a new position (its
   // didChangeDependencies), whose first layout reports the kept offset.
   bool _onScroll(Notification notification) {
-    final (depth, metrics) = switch (notification) {
-      ScrollUpdateNotification(:final depth, :final metrics) => (
-        depth,
-        metrics,
-      ),
-      ScrollMetricsNotification(:final depth, :final metrics) => (
-        depth,
-        metrics,
-      ),
-      _ => (-1, null),
+    final (depth, metrics, origin) = switch (notification) {
+      ScrollUpdateNotification(:final depth, :final metrics, :final context) =>
+        (depth, metrics, context),
+      ScrollMetricsNotification(
+        :final depth,
+        :final metrics,
+        :final context,
+      ) =>
+        (depth, metrics, context),
+      _ => (-1, null, null),
     };
-    if (depth == 0 && metrics != null && metrics.axis == Axis.vertical) {
-      _scrollOffset.value = metrics.pixels;
-      _handle?.scrolled(metrics.pixels);
-    }
+    if (metrics == null || metrics.axis != Axis.vertical) return false;
+    if (_drivesLargeTitle(origin)) _scrollOffset.value = metrics.pixels;
+    // The native bar still follows every vertical scroll view that no
+    // other scroll view holds (depth 0).
+    if (depth == 0) _handle?.scrolled(metrics.pixels);
     return false;
+  }
+
+  /// Whether a vertical scroll view's report, sent from [origin] (its
+  /// notification's context), drives the large title.
+  ///
+  /// The large title follows the page's first vertical scroll view: the
+  /// first scroll view to report (its first layout or a scroll) that
+  /// scrolls vertically, is not inside another vertical scroll view of the
+  /// page, and is not inside a text field (an `EditableText`, whose
+  /// multi-line text scrolls vertically). Horizontal scroll views around it
+  /// do not count. That scroll view drives the title until it is disposed;
+  /// the next scroll view that qualifies and reports then takes over, and
+  /// until one does the title keeps the last offset. Every other scroll
+  /// view is ignored. So in a `PageView` of lists (a `TabBarView` too) the
+  /// first page's list drives the title: for good while that page is kept
+  /// alive (as every child of an `IndexedStack` is); once it has left the
+  /// screen and been disposed, the shown page's list takes over at its
+  /// first scroll.
+  bool _drivesLargeTitle(BuildContext? origin) {
+    if (origin == null) return false;
+    final driver = _titleScrollView;
+    if (driver != null && driver.mounted) return identical(origin, driver);
+    if (!_isPageScrollView(origin)) return false;
+    _titleScrollView = origin;
+    return true;
+  }
+
+  // Whether the scroll view that reports from [origin] is inside neither
+  // another vertical scroll view of this page nor a text field. The first
+  // Scrollable above origin is that scroll view itself.
+  bool _isPageScrollView(BuildContext origin) {
+    var own = true;
+    var result = true;
+    origin.visitAncestorElements((element) {
+      if (identical(element, context)) return false;
+      switch (element.widget) {
+        case EditableText():
+          result = false;
+        case Scrollable() when own:
+          own = false;
+        case Scrollable(:final axis) when axis == Axis.vertical:
+          result = false;
+      }
+      return result;
+    });
+    return result;
   }
 
   @override
