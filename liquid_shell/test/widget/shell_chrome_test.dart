@@ -511,6 +511,26 @@ void main() {
         expect(find.byType(LiquidSidebar), findsNothing);
         expect(controller.isActive, isFalse);
       });
+
+      // The same for a search ended by Tab: focus leaves the active field
+      // for the sidebar, and closing does not start the search again.
+      testWidgets('overlay: a search ended by Tab into it stays ended when it '
+          'closes', (tester) async {
+        final controller = await pumpSearch(tester);
+        await tester.tap(find.byType(TextField));
+        await tester.pumpAndSettle();
+        scopeOf(tester, 'Search').setSidebarVisible(true);
+        await tester.pumpAndSettle();
+        expect(controller.isActive, isTrue, reason: 'VK-774');
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+        expect(controller.isActive, isFalse, reason: 'Tab ended it');
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pumpAndSettle();
+        expect(find.byType(LiquidSidebar), findsNothing);
+        expect(controller.isActive, isFalse);
+        expect(tester.testTextInput.hasAnyClients, isFalse);
+      });
     });
 
     // VK-702: the overlay's Escape handler wraps the whole shell; with
@@ -758,13 +778,16 @@ void main() {
           LiquidShellScope.of(tester.element(find.byType(TextField).first));
 
       // Page 0 is a text field with focus, then the overlay opens. Returns
-      // the field's node. [around] wraps the shell, [branch] page 0.
+      // the field's node. [around] wraps the shell, [branch] page 0;
+      // [offstageBranches] and [sidebarFooter] go to the `TestShell`.
       Future<FocusNode> focusFieldThenOpen(
         WidgetTester tester,
         TextEditingController text, {
         Widget below = const SizedBox(),
         Widget Function(Widget shell)? around,
         Widget Function(Widget page)? branch,
+        bool offstageBranches = false,
+        Widget? sidebarFooter,
       }) async {
         final page = Material(
           child: Center(
@@ -778,6 +801,8 @@ void main() {
           ),
         );
         final shell = TestShell(
+          offstageBranches: offstageBranches,
+          sidebarFooter: sidebarFooter,
           pageBuilder: (i) => i == 0
               ? branch?.call(page) ?? page
               : TestPage(label: kDestinations[i].label),
@@ -897,7 +922,15 @@ void main() {
               reason: 'precondition',
             );
           }
+          final context = tester.element(find.byType(TextField));
           await closeAndCover(tester, showCoverDialog);
+          // The shell's route stays current: only the focus checks see the
+          // dialog, not `route-current`.
+          expect(
+            ModalRoute.of(context)!.isCurrent,
+            isTrue,
+            reason: 'precondition',
+          );
           expect(node.hasFocus, isFalse);
           expect(tester.testTextInput.hasAnyClients, isFalse);
           expectFocusInCover(tester);
@@ -973,6 +1006,61 @@ void main() {
             .focusNode;
         expect(FocusManager.instance.primaryFocus, same(editorNode));
         expect(node.hasFocus, isFalse);
+      });
+
+      // The app selects another page itself, not through a destination row
+      // (a sidebar header or footer button, a deep link). Offstage branches
+      // keep the page left behind focusable: given back, its field would
+      // take focus, and an input connection, while hidden.
+      void expectNothingGivenBack(WidgetTester tester, FocusNode node) {
+        expect(find.byType(LiquidSidebar), findsNothing);
+        expect(find.text('Inbox page: 0'), findsOne);
+        expect(node.hasFocus, isFalse);
+        expect(tester.testTextInput.hasAnyClients, isFalse);
+      }
+
+      testWidgets('the app selects another page while the overlay is open: '
+          'the page left behind gets no focus and no input connection', (
+        tester,
+      ) async {
+        final text = TextEditingController(text: 'phở');
+        addTearDown(text.dispose);
+        final node = await focusFieldThenOpen(
+          tester,
+          text,
+          offstageBranches: true,
+        );
+        tester.state<TestShellState>(find.byType(TestShell)).select(1);
+        await tester.pumpAndSettle();
+        expect(find.byType(LiquidSidebar), findsOne, reason: 'precondition');
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pumpAndSettle();
+        expectNothingGivenBack(tester, node);
+      });
+
+      testWidgets('the app selects another page as the overlay closes: the '
+          'page left behind gets no focus and no input connection', (
+        tester,
+      ) async {
+        final text = TextEditingController(text: 'phở');
+        addTearDown(text.dispose);
+        final node = await focusFieldThenOpen(
+          tester,
+          text,
+          offstageBranches: true,
+          sidebarFooter: Builder(
+            builder: (context) => TextButton(
+              onPressed: () {
+                context.findAncestorStateOfType<TestShellState>()!.select(1);
+                LiquidShellScope.of(context).setSidebarVisible(false);
+              },
+              child: const Text('Open Inbox'),
+            ),
+          ),
+        );
+        await tester.tap(find.text('Open Inbox'));
+        await tester.pumpAndSettle();
+        expectNothingGivenBack(tester, node);
       });
     });
 

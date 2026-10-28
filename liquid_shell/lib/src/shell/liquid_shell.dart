@@ -220,6 +220,8 @@ class _LiquidShellState extends State<LiquidShell>
   // What held focus when the overlay sidebar opened; it gets focus back
   // when the overlay closes (VK-778).
   FocusNode? _focusBeforeOverlay;
+  // The selected destination when the overlay sidebar opened.
+  int _selectedBeforeOverlay = 0;
   // The sidebar's own node: the overlay takes focus with it when it opens
   // and lets go of it when it closes (VK-778).
   final FocusNode _sidebarFocus = FocusNode(debugLabel: 'LiquidShell sidebar');
@@ -965,10 +967,12 @@ class _LiquidShellState extends State<LiquidShell>
   /// The overlay opens: the body and the top bar stop taking focus, so the
   /// node that holds it loses it. It is kept to get it back. Not the
   /// shell's search field: an active one keeps its focus under the overlay,
-  /// and focusing an idle one starts a search.
+  /// and focusing an idle one starts a search. Tab out of an active field
+  /// ends the search; closing does not restart it.
   void _rememberFocus() {
     final focus = FocusManager.instance.primaryFocus;
     _focusBeforeOverlay = identical(focus, _search.focus) ? null : focus;
+    _selectedBeforeOverlay = widget.selectedIndex;
   }
 
   /// The overlay closes: the kept node gets focus back after the frame,
@@ -982,17 +986,23 @@ class _LiquidShellState extends State<LiquidShell>
   /// same turn (a dialog, a pushed page, on any navigator), the kept node
   /// would take focus, and a text field its input connection, behind that
   /// route. A node that took focus since (a field that autofocuses as the
-  /// overlay closes) keeps it.
+  /// overlay closes) keeps it. Nor after the app selected another page
+  /// while the overlay was open: a body that keeps hidden pages focusable
+  /// would give focus to the page left behind.
   void _restoreFocus() {
     final node = _focusBeforeOverlay;
     _focusBeforeOverlay = null;
     if (node == null) return;
+    final selected = _selectedBeforeOverlay;
     // After the frame's other post-frame callbacks (a text field asks for
     // its autofocus in one) and after the focus update the frame queued
     // during the build, which applies what they asked for.
     SchedulerBinding.instance.addPostFrameCallback(
       (_) => scheduleMicrotask(() {
         if (!mounted || !(node.context?.mounted ?? false)) return;
+        // The app selected another page while the overlay was open, or as
+        // it closed.
+        if (widget.selectedIndex != selected) return;
         // A route above the shell's, also one that takes no focus and so
         // leaves it on the scope below.
         if (!(_route?.isCurrent ?? true)) return;
