@@ -1,3 +1,7 @@
+## 0.1.0-dev.9
+
+First release on pub.dev.
+
 ## 0.1.0-dev.8
 
 - The package archive no longer includes tests (they read files outside
