@@ -366,6 +366,10 @@ ShellContainerController (PassThroughView)
 
 - Same API, same title model (§4.2), same actions (§4.3), drawn by `FlutterPageBar` with `LiquidGlass` (tier policy: liquid, frosted, solid).
 - `largeCollapsing`: the child's top padding is `barTop + 54 + 52` and stays so while collapsing (as the native held top); the large row is drawn at `barTop + 54 − largeShift` and clipped to the area below the bar row; the inline title in the bar row has opacity `inlineOpacity`; the scroll-edge fade ends at `barTop + 54 + 52 − largeShift` (§8.3 `pageBarCollapse`).
+- **The scroll view that drives the collapse** (owner's decision of 2026-10-28, after the B3 Task 3 review): the page's first vertical scroll view. That is the first scroll view to report (its first layout or a scroll) that scrolls vertically, is not inside another vertical scroll view of the page, and is not inside a text field (an `EditableText`: a multi-line field scrolls its own text vertically). Horizontal scroll views around it do not count. It drives the title until it is disposed; the next scroll view that qualifies and reports then takes over, and until one does the title keeps the last offset. Every other scroll view is ignored: a multi-line composer beside the list, a second list beside the first, a list nested in the page's list.
+  - **A `PageView` of lists** (a `TabBarView` too): the first page's list drives the title. If that page is kept alive (`allowImplicitScrolling`, a keep-alive), it drives the title for good, and the other pages' lists never move it. If it is disposed when it leaves the screen (`PageView`'s default), the shown page's list takes over at its first scroll; until then the title keeps the first list's last offset. Measured (B3 probe): the shown page's list first lays out, and reports, during the swipe while the first page still lives, so that report is ignored, and nothing reports after the first page is disposed.
+  - **An `IndexedStack` of lists** (a segment switcher) keeps every list alive, so its first list drives the title for good, even while another one is shown (B3 probe: the second list at 30 left the title collapsed by the first). Before this rule the last list to scroll drove it.
+  - The rule is written once, on `_LiquidPageState._drivesLargeTitle` (`liquid_shell/lib/src/pages/liquid_page.dart`). In B3 only the Flutter bar follows it: the native report (`PageHandle.scrolled`) keeps the depth-0 vertical filter, and B2 applies the same rule to it.
 - Back: `LiquidBackButton` (`Navigator.maybePop`); system back pops the selected tab's top page first (§6.9); the edge swipe and the transition are the app's route's (Cupertino on iOS, the app's `PageTransitionsTheme` on Android, Q17).
 - Window controls: `LiquidWindowControlsClearance` on the bar row, as today (`page_bar.dart:123-124`).
 
@@ -637,7 +641,7 @@ Targets: iPhone 17 Pro and iPad Air 11-inch (M4) on iOS 26.5 for the whole `Runn
 
 ### 8.3 B3 `VK-445-flutter-page-bar`
 
-**Scope.** The title model of §4.2 in the Flutter bar: the collapsing row for `largeTitle: true` roots, pushed pages inline, the `hidden` and `inline` modes; the collapse driven by the page's first vertical scroll view; dartdoc of `LiquidPage` (native bars on every tab, the title model).
+**Scope.** The title model of §4.2 in the Flutter bar: the collapsing row for `largeTitle: true` roots, pushed pages inline, the `hidden` and `inline` modes; the collapse driven by the page's first vertical scroll view (§6.5's rule); dartdoc of `LiquidPage` (native bars on every tab, the title model).
 
 **Interfaces consumed.** P3b-1's `FlutterPageBar` (`page_bar.dart:23-158`), `kPageBarExtent`, `kLargeTitleExtent`, `LiquidPage`'s `_onScroll` filter and `_childKey` (`liquid_page.dart:66`, `:127-154`), `LiquidShellScopeData.sizeClass` and `searchPhase`, `LiquidShellScope.contentPaddingOf`, `LiquidWindowControlsClearance`, `LiquidBackButton`. Nothing from B2.
 
@@ -682,7 +686,7 @@ class FlutterPageBar extends StatelessWidget {
 ```
 
 - `pageBarCollapse`: `largeShift = offset.clamp(0, extent)`; `inlineOpacity = ((offset − extent / 2) / (extent / 2)).clamp(0, 1)`. Values: −30 → (0, 0); 0 → (0, 0); 26 → (26, 0); 39 → (39, 0.5); 52 → (52, 1); 200 → (52, 1).
-- `LiquidPage` (B3): its public constructor is unchanged; its state gains a `ValueNotifier<double>` set from the existing `_onScroll` filter (depth 0, vertical; `liquid_page.dart:127-143`), passed as `scrollOffset`. It returns its child for `hidden`; it keeps the child under `_childKey` in every mode (§5.4). Notification callbacks never run during build or layout (`ScrollMetricsNotification` is dispatched after the frame), so the notifier is safe to set there.
+- `LiquidPage` (B3): its public constructor is unchanged; its state gains a `ValueNotifier<double>`, passed as `scrollOffset`. `_onScroll` sets it only from the scroll view that `_drivesLargeTitle` latches (§6.5's rule: the first vertical scroll view to report that is neither nested in another vertical one nor inside an `EditableText`, horizontal ancestors allowed, handed over when disposed); the native report keeps the existing depth-0 vertical filter (`liquid_page.dart:127-143`) until B2 mirrors the rule. It returns its child for `hidden`; it keeps the child under `_childKey` in every mode (§5.4). Notification callbacks never run during build or layout (`ScrollMetricsNotification` is dispatched after the frame), so the notifier is safe to set there.
 - The collapse rebuilds only the title rows and the scroll-edge mask: `ValueListenableBuilder(valueListenable: scrollOffset, child: <the page>, builder: …)`.
 
 **Files touched.** `liquid_shell/lib/src/pages/{liquid_page,page_bar}.dart`, new `page_title.dart`, `liquid_shell/test/unit/page_bar_test.dart` (new), `liquid_shell/test/widget/liquid_page_test.dart`, `liquid_shell/CHANGELOG.md`. Nothing else (§8.0).
@@ -702,6 +706,12 @@ class FlutterPageBar extends StatelessWidget {
 | the large row hides while the search is active (adapts `:364`) | green, kept | unchanged rule |
 | the same geometry with `debugDefaultTargetPlatformOverride = TargetPlatform.android` | green, a locker | parity (Q17) |
 | IME: a focused, composing field in a collapsing page keeps its state and composing range through a scroll and a bar switch | green, a locker | red with `_childKey` removed |
+| a multi-line text field (a composer under the list) never moves the large title: typing a third line and clearing it (list at 120) | red: typing moves the title 60 → 36 | §6.5's rule; red with the `EditableText` check removed |
+| of two lists side by side, only the first drives the large title | red: the second at 5 moves the title to 55 | §6.5's rule; red without the latch |
+| when the driving list is disposed, the next list to report drives the title | red: the second list moves it while the first lives | §6.5's rule; red without the hand-over (the `mounted` check) |
+| a list nested in the page's list never drives the title (it reports first) | green, a locker | red with the vertical-ancestor check removed |
+| in a `PageView` of lists the first page's list drives the title; once that page is disposed, the shown list takes over at its first scroll | red: never collapses | §6.5's rule; red when a horizontal ancestor disqualifies |
+| in a `PageView` whose pages stay alive, only the first page's list drives the title | red: never collapses | §6.5's rule; red without the latch |
 
 The `inline` and `largeInRow` modes keep today's geometry pixel for pixel. No goldens change in B3: no existing golden uses `largeTitle: true` (`example/lib/cases/search.dart:138-141` passes none), and pushed pages there are inline already. New images come in B5. `make verify` on the branch.
 
