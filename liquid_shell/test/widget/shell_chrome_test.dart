@@ -691,48 +691,70 @@ void main() {
         expect(node.hasFocus, isFalse);
       });
 
-      testWidgets("a destination chosen, the app's callback closing the "
-          'overlay itself: the page left behind gets no focus', (tester) async {
-        var index = 0;
-        await pumpShell(
+      // [later]: an async router selects the page after the close, so the
+      // shell's own selected-index check cannot see the change; only
+      // `_select` dropping the kept node keeps the page left behind out.
+      for (final later in [false, true]) {
+        final when = later ? ', the page selected after the frame' : '';
+        testWidgets("a destination chosen, the app's callback closing the "
+            'overlay itself$when: the page left behind gets no focus', (
           tester,
-          StatefulBuilder(
-            builder: (context, setState) => LiquidShell(
-              destinations: kDestinations,
-              selectedIndex: index,
-              onDestinationSelected: (i) {
-                // Before the shell closes it.
-                scopeOf(tester).setSidebarVisible(false);
-                setState(() => index = i);
+        ) async {
+          var index = 0;
+          int? requested;
+          late StateSetter select;
+          await pumpShell(
+            tester,
+            StatefulBuilder(
+              builder: (context, setState) {
+                select = setState;
+                return LiquidShell(
+                  destinations: kDestinations,
+                  selectedIndex: index,
+                  onDestinationSelected: (i) {
+                    // Before the shell closes it.
+                    scopeOf(tester).setSidebarVisible(false);
+                    if (later) {
+                      requested = i;
+                    } else {
+                      setState(() => index = i);
+                    }
+                  },
+                  // Offstage, the page left behind stays focusable.
+                  body: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      for (final (i, d) in kDestinations.indexed)
+                        Offstage(
+                          offstage: i != index,
+                          child: TestPage(label: d.label),
+                        ),
+                    ],
+                  ),
+                );
               },
-              // Offstage, the page left behind stays focusable.
-              body: Stack(
-                fit: StackFit.expand,
-                children: [
-                  for (final (i, d) in kDestinations.indexed)
-                    Offstage(
-                      offstage: i != index,
-                      child: TestPage(label: d.label),
-                    ),
-                ],
-              ),
             ),
-          ),
-          size: kTabletPortrait,
-          padding: _tablet,
-        );
-        final node = await focusThenOpen(tester);
-        await tester.tap(
-          find.descendant(
-            of: find.byType(LiquidSidebar),
-            matching: find.text('Inbox'),
-          ),
-        );
-        await tester.pumpAndSettle();
-        expect(find.byType(LiquidSidebar), findsNothing);
-        expect(find.text('Inbox page: 0'), findsOne);
-        expect(node.hasFocus, isFalse);
-      });
+            size: kTabletPortrait,
+            padding: _tablet,
+          );
+          final node = await focusThenOpen(tester);
+          await tester.tap(
+            find.descendant(
+              of: find.byType(LiquidSidebar),
+              matching: find.text('Inbox'),
+            ),
+          );
+          await tester.pumpAndSettle();
+          expect(find.byType(LiquidSidebar), findsNothing);
+          if (later) {
+            expect(find.text('Home page: 0'), findsOne, reason: 'precondition');
+            select(() => index = requested!);
+            await tester.pumpAndSettle();
+          }
+          expect(find.text('Inbox page: 0'), findsOne);
+          expect(node.hasFocus, isFalse);
+        });
+      }
 
       // Asked while out of the tree, a node takes focus whenever it comes
       // back (FocusNode defers the request).
