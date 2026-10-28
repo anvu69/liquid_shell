@@ -227,6 +227,29 @@ Future<void> _jump(
   await tester.pump();
 }
 
+/// A list of 40 rows of 40 pt that jumps back to the top when [filter]
+/// changes, from `didUpdateWidget`: a jump made during a build.
+class _ResetList extends StatefulWidget {
+  const _ResetList({required this.controller, required this.filter});
+
+  final ScrollController controller;
+  final int filter;
+
+  @override
+  State<_ResetList> createState() => _ResetListState();
+}
+
+class _ResetListState extends State<_ResetList> {
+  @override
+  void didUpdateWidget(_ResetList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.filter != widget.filter) widget.controller.jumpTo(0);
+  }
+
+  @override
+  Widget build(BuildContext context) => _rows(widget.controller);
+}
+
 void main() {
   testWidgets('pages register in push order; a pop shortens the stack', (
     tester,
@@ -908,6 +931,116 @@ void main() {
     );
     await _jump(tester, second, 30);
     expect(_largeTop(tester), rest - 30, reason: 'the shown list');
+  });
+
+  testWidgets('when lists jump during the build that removes the list that '
+      'drives the large title, the first of them takes over after the '
+      'frame', (tester) async {
+    final header = _scroll();
+    final list = _scroll();
+    final other = _scroll();
+    final state = ValueNotifier((header: true, filter: 0));
+    addTearDown(state.dispose);
+    final rest = await _pumpLargeTitle(
+      tester,
+      ValueListenableBuilder<({bool header, int filter})>(
+        valueListenable: state,
+        // No keys: the header list is then deactivated before the lists
+        // update (a keyed one would leave after them).
+        builder: (context, value, _) => Column(
+          children: [
+            if (value.header) SizedBox(height: 80, child: _rows(header)),
+            Expanded(
+              child: _ResetList(controller: list, filter: value.filter),
+            ),
+            Expanded(
+              child: _ResetList(controller: other, filter: value.filter),
+            ),
+          ],
+        ),
+      ),
+    );
+    // The header list, not flexible, lays out and reports first.
+    await _jump(tester, header, 10);
+    expect(_largeTop(tester), rest - 10, reason: 'the header list drives');
+    await _jump(tester, list, 200);
+    await _jump(tester, other, 40);
+    expect(_largeTop(tester), rest - 10, reason: 'the other lists');
+
+    // One build removes the header list while both lists jump to the top,
+    // the first list first.
+    state.value = (header: false, filter: 1);
+    await tester.pump();
+    expect(tester.takeException(), isNull, reason: 'the jumps in the build');
+    expect(find.byType(ErrorWidget), findsNothing);
+    await tester.pump();
+    expect(_largeTop(tester), rest, reason: 'the first list, at the top');
+    await _jump(tester, other, 30);
+    expect(_largeTop(tester), rest, reason: 'the second list');
+    await _jump(tester, list, 30);
+    expect(_largeTop(tester), rest - 30, reason: 'the first list drives');
+  });
+
+  testWidgets('when the list that drives the large title jumps during a '
+      'build, the title follows it after the frame', (tester) async {
+    final list = _scroll();
+    final filter = ValueNotifier(0);
+    addTearDown(filter.dispose);
+    final rest = await _pumpLargeTitle(
+      tester,
+      ValueListenableBuilder<int>(
+        valueListenable: filter,
+        builder: (context, value, _) =>
+            _ResetList(controller: list, filter: value),
+      ),
+    );
+    await _jump(tester, list, 200);
+    expect(_largeTop(tester), rest - kLargeTitleExtent, reason: 'the list');
+
+    // The list jumps to the top in the build.
+    filter.value = 1;
+    await tester.pump();
+    expect(tester.takeException(), isNull, reason: 'the jump in the build');
+    await tester.pump();
+    expect(_largeTop(tester), rest, reason: 'the list, at the top');
+  });
+
+  testWidgets('a page in a hidden tab still follows its own list: on screen '
+      'is decided up to the page only', (tester) async {
+    final list = _scroll();
+    final tab = ValueNotifier(0);
+    addTearDown(tab.dispose);
+    await _pump(
+      tester,
+      home: Material(
+        child: ValueListenableBuilder<int>(
+          valueListenable: tab,
+          builder: (context, index, _) => IndexedStack(
+            index: index,
+            children: [
+              LiquidPage(
+                title: 'Library',
+                largeTitle: true,
+                child: _rows(list),
+              ),
+              const SizedBox.expand(),
+            ],
+          ),
+        ),
+      ),
+    );
+    final rest = _largeTop(tester);
+
+    tab.value = 1;
+    await tester.pump();
+    await _jump(tester, list, 120);
+    tab.value = 0;
+    await tester.pump();
+    expect(
+      _largeTop(tester),
+      rest - kLargeTitleExtent,
+      reason: 'the list scrolled while its tab was hidden',
+    );
   });
 
   testWidgets('the bar titles carry a text style without a Material above', (

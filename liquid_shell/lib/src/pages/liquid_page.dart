@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:liquid_shell/src/glass/liquid_glass.dart';
 import 'package:liquid_shell/src/pages/page_bar.dart';
 import 'package:liquid_shell/src/pages/page_registry.dart';
@@ -84,6 +85,12 @@ class _LiquidPageState extends State<LiquidPage> {
   // The notification context of the scroll view that drives the large
   // title (see _drivesLargeTitle).
   BuildContext? _titleScrollView;
+  // Reports made while the frame builds or lays out, decided after it (see
+  // _onScroll): each scroll view's latest offset, in the order the scroll
+  // views first reported, so the first of them to report takes the title
+  // as it would outside a build. One post-frame callback is pending while
+  // it is not empty.
+  final Map<BuildContext, double> _reportsInFrame = {};
   PageRegistry? _registry;
   PageHandle? _handle;
 
@@ -150,6 +157,15 @@ class _LiquidPageState extends State<LiquidPage> {
   // So does a page moved with a GlobalKey, which registers again with a
   // new handle: the moved Scrollable builds a new position (its
   // didChangeDependencies), whose first layout reports the kept offset.
+  //
+  // Most reports come outside a build: a drag, a fling's frames, and the
+  // metrics of a layout (sent after the frame). A jump made while the frame
+  // builds or lays out (a jumpTo in didUpdateWidget, didChangeDependencies
+  // or a LayoutBuilder) reports at once, from inside the build: the scroll
+  // view that drives the title may have just left the tree (inactive, its
+  // ancestors cannot be walked), and the bar cannot be marked dirty. Such
+  // a report is decided after the frame, when a scroll view removed in it
+  // is unmounted.
   bool _onScroll(Notification notification) {
     final (depth, metrics, origin) = switch (notification) {
       ScrollUpdateNotification(:final depth, :final metrics, :final context) =>
@@ -163,11 +179,39 @@ class _LiquidPageState extends State<LiquidPage> {
       _ => (-1, null, null),
     };
     if (metrics == null || metrics.axis != Axis.vertical) return false;
-    if (_drivesLargeTitle(origin)) _scrollOffset.value = metrics.pixels;
+    if (origin != null) {
+      if (SchedulerBinding.instance.schedulerPhase ==
+          SchedulerPhase.persistentCallbacks) {
+        if (_reportsInFrame.isEmpty) {
+          SchedulerBinding.instance.addPostFrameCallback(
+            (_) => _decideReportsInFrame(),
+          );
+        }
+        _reportsInFrame[origin] = metrics.pixels;
+      } else {
+        _followScroll(origin, metrics.pixels);
+      }
+    }
     // The native bar still follows every vertical scroll view that no
     // other scroll view holds (depth 0).
     if (depth == 0) _handle?.scrolled(metrics.pixels);
     return false;
+  }
+
+  void _decideReportsInFrame() {
+    final reports = [..._reportsInFrame.entries];
+    _reportsInFrame.clear();
+    if (!mounted) return;
+    for (final MapEntry(key: origin, value: pixels) in reports) {
+      // A scroll view removed in that frame is unmounted by now.
+      if (origin.mounted) _followScroll(origin, pixels);
+    }
+  }
+
+  /// A vertical scroll view that reports from [origin] is at [pixels]: the
+  /// large title follows it when it drives the title.
+  void _followScroll(BuildContext origin, double pixels) {
+    if (_drivesLargeTitle(origin)) _scrollOffset.value = pixels;
   }
 
   /// Whether a vertical scroll view's report, sent from [origin] (its
@@ -197,8 +241,12 @@ class _LiquidPageState extends State<LiquidPage> {
   /// view outside the page's list that reports first (a shrink-wrapped
   /// header list above it, even one that cannot scroll) takes the title
   /// for good: such a header belongs in a `Column`.
-  bool _drivesLargeTitle(BuildContext? origin) {
-    if (origin == null || !isOnScreenUnder(origin, context)) return false;
+  ///
+  /// It runs outside a build and a layout only (see `_onScroll`), where
+  /// every element in the tree is active: a scroll view that left the tree
+  /// is unmounted, so a driver that left it is released, never walked.
+  bool _drivesLargeTitle(BuildContext origin) {
+    if (!isOnScreenUnder(origin, context)) return false;
     final driver = _titleScrollView;
     if (identical(origin, driver)) return true;
     if (driver != null && driver.mounted && isOnScreenUnder(driver, context)) {
