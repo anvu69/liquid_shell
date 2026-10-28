@@ -10,7 +10,7 @@
 
 **Architecture:**
 
-1. **Task 1 (VK-776).** A private `InheritedWidget`, `_ShellBody`, marks each shell's body. A shell whose nearest `_ShellBody` belongs to a shell on the same `ModalRoute` is *hosted*: its `PopScope` gets `canPop: true` and its callback does nothing. The host's walk (unchanged) already records the hosted shell with its on-screen flag, counts its claim and calls its `handleBack()`.
+1. **Task 1 (VK-776).** A private `InheritedWidget`, `_ShellBody`, marks each shell's body. A shell whose nearest `_ShellBody` belongs to a shell on the same `ModalRoute` that is also the nearest shell around it is *hosted*: its `PopScope` gets `canPop: true` and its callback does nothing. When a shell becomes hosted, it asks the host for a walk, so a shell built after the host's last walk is not missed. The host's walk (unchanged) already records the hosted shell with its on-screen flag, counts its claim and calls its `handleBack()`. (The nearest-shell check and the walk request come from the final review's fixes, I1 and I2. Spec §4.1 and §4.2.)
 2. **Task 2 (VK-779).** The search field's `Row` goes inside an unconditional `ConstraintsTransformBox` that raises `maxWidth` to the Row's fixed parts (56), aligned to the start and clipped. Layout only: the field keeps its element and nothing writes to it.
 
 **Tech Stack:** Flutter 3.44.6 through fvm (`.fvmrc`), Dart 3.12, `flutter_test` on the VM with the shell harness (`liquid_shell/test/helpers/shell_harness.dart`) and the fake native platform (`test/helpers/fake_native_platform.dart`); `TargetPlatformVariant` and `debugDefaultTargetPlatformOverride` for iOS and Android; `make verify`.
@@ -717,6 +717,8 @@ with:
     _hosted = host != null && identical(host._route, route);
     _coveredByPush =
 ```
+
+(After the final review, the line `_hosted = …` became the three-part rule with the walk request of spec §4.2.)
 
 (c) The end of `_backScope`'s doc comment. Replace:
 

@@ -134,6 +134,8 @@ class _ShellBody extends InheritedWidget {
 
 Only the host's **body** counts, the part its walk covers. A shell elsewhere in the host (a sidebar header, a chrome builder's slot) is not walked, so it keeps its own `PopScope` ("Quyết định phát sinh" 1).
 
+The nearest marker alone does not say that a shell is in its host's body. A shell in the sidebar header of a nested shell M, with M in the body of a shell O on the same route, has no marker of M above it (M marks only its body), so the nearest marker is O's. O's walk records M and stops there, and M's walk covers only M's body, so nobody would hand that shell back. The host must therefore also be the nearest shell around the hosted one (final review, I2).
+
 ### 4.2 The hosted shell
 
 `_hosted` is computed in `didChangeDependencies`, after the existing `ModalRoute.of` (`:364`), so it is recomputed whenever the route changes or the shell moves:
@@ -147,14 +149,24 @@ Only the host's **body** counts, the part its walk covers. A shell elsewhere in 
 ```dart
     _routeCurrent = route?.isCurrent ?? true;
     // VK-776: with no navigator between, this shell's PopScope would sit on
-    // the host's route, a second voice beside the host's walk.
+    // the host's route, a second voice beside the host's walk. Only the
+    // shell right around this one walks it: in another slot of a nested
+    // shell (its sidebar header), the nearest body is an outer one's.
     final host = context
         .dependOnInheritedWidgetOfExactType<_ShellBody>()
         ?.shell;
-    _hosted = host != null && identical(host._route, route);
+    final hosted =
+        host != null &&
+        identical(host._route, route) &&
+        identical(context.findAncestorStateOfType<_LiquidShellState>(), host);
+    // The host learns of a shell built after its last walk (VK-776).
+    if (hosted && !_hosted) host._scheduleBranchScan();
+    _hosted = hosted;
 ```
 
-The nearest marker is the nearest host. The host's `didChangeDependencies` runs before its body builds, so `host._route` is current. With a navigator between, the two routes differ and the shell is not hosted: it keeps today's `PopScope` on the tab's root route (the VK-774 layout).
+A shell is hosted when three things hold: it has a nearest marker, the marker's shell is on its route, and that shell is also the nearest shell around it (§4.1). The host's `didChangeDependencies` runs before its body builds, so `host._route` is current. With a navigator between, the two routes differ and the shell is not hosted: it keeps today's `PopScope` on the tab's root route (the VK-774 layout). The ancestor lookup runs only here and adds no dependency.
+
+When a shell becomes hosted, it asks its host for a walk (`_scheduleBranchScan`). The host's walks otherwise run only on its own triggers (a new shell, a new selection, a moved shell), on a `NavigationNotification` from its body, or when a known branch changes its on-screen state. A nested shell that is built after the host's last walk and has no tab navigators sends none of these: for example, a loader's result, or a re-keyed subtree. The host would never read that shell's search or overlay claim, and on an Android root shell back would leave the app with the search open (final review, I1).
 
 `_backScope` (`:868-882`) keeps the same widget in every state, so a change of `_hosted` rebuilds nothing below it:
 
@@ -381,7 +393,8 @@ No other package changes, so no other CHANGELOG. No pubspec version changes (onl
 | A hosted shell's new claim (its search just activated, a page just pushed) blocks the route one frame later, through the host's per-frame check (`liquid_shell.dart:811-820`) | The lag VK-774 accepted for the navigator-between case (`docs/specs/2026-10-23-back-followups-design.md` §6). A back in that frame acts as if the nested shell had nothing |
 | An app `NavigatorPopHandler` with a callback put directly around a same-route nested shell (no navigator): the hosted shell steps aside and the app's callback answers alone | The existing rule ("the app answers back for its navigator", `doc/router_integration.md:77-82`). Before, both acted. Not tested: no known app does it ("Quyết định phát sinh" 8) |
 | `_hosted` reads `host._route`, set in the host's own `didChangeDependencies` | A parent's `didChangeDependencies` runs before its children build. A move under another route changes the nested shell's `ModalRoute` dependency too, so both recompute |
-| A shell on the host's route but outside its body (a sidebar header, a chrome builder slot) keeps today's two voices | Out of scope: the host's walk does not cover it, so stepping aside there would lose its claims |
+| A shell on the host's route but outside its body (a sidebar header, a chrome builder slot) keeps today's two voices | Out of scope: the host's walk does not cover it, so stepping aside there would lose its claims. That holds in a nested shell's sidebar header too, through the nearest-shell check (§4.1) |
+| A hosted shell built after the host's last walk, with no tab navigators (a loader's result) | It asks the host for a walk when it becomes hosted (§4.2) |
 | The hidden-inner fix rests on the walk's on-screen check; Flutter 3.47's `IndexedStack` drops `Visibility` | The walk reads `RenderIndexedStack` (`branch_navigators.dart:60-62`), already 3.47-ready (VK-700) |
 | VK-779: the 56 floor does not cover the regular field's inline × (at least 90 with it) | That field spans the body width minus 40; the comment says so |
 | VK-779: after a first clip, the box keeps a clip-layer handle | Flutter's own design (`LayerHandle`); no paint cost while not overflowing |
@@ -410,7 +423,7 @@ Chủ sản phẩm đã trả lời "Ok hết" ngày 2026-10-28 (Q1–Q18 của 
 
 Bảng trên không nói tới những điểm dưới đây. Spec chọn như sau, chủ sản phẩm có thể đổi:
 
-1. **Shell trong tìm shell chủ qua một `InheritedWidget` riêng (`_ShellBody`) đặt trong body của shell chủ**, không qua `findAncestorStateOfType` như bản thăm dò. Lý do: chỉ shell nằm trong body (phần shell chủ duyệt) mới được đứng sang một bên; shell ở chỗ khác (header sidebar, ô của `chromeBuilder`) giữ `PopScope` của nó. Dùng `dependOnInheritedWidgetOfExactType`, `updateShouldNotify` trả `false` (shell chủ không bao giờ đổi).
+1. **Shell trong tìm shell chủ qua một `InheritedWidget` riêng (`_ShellBody`) đặt trong body của shell chủ**, không qua `findAncestorStateOfType` như bản thăm dò. Lý do: chỉ shell nằm trong body (phần shell chủ duyệt) mới được đứng sang một bên; shell ở chỗ khác (header sidebar, ô của `chromeBuilder`) giữ `PopScope` của nó. Dùng `dependOnInheritedWidgetOfExactType`, `updateShouldNotify` trả `false` (shell chủ không bao giờ đổi). Sau review cuối (I2), có thêm một điều kiện: shell chủ cũng phải là shell gần nhất bao quanh (`findAncestorStateOfType`). Lý do: một shell nằm trong header sidebar của một shell trong (shell trong này đã có chủ) chỉ thấy marker của shell ngoài cùng (§4.1).
 2. **Không sửa phép duyệt cây (`branch_navigators.dart`).** Đột biến M4 (cách A đặt lên trên bản sửa) cho thấy phép duyệt phải tiếp tục ghi nhận shell trong: test vuốt cạnh, test ô tìm của shell trong và hai test Android đỏ.
 3. **Chỗ đặt test VK-776:** trong nhóm VK-593 của `pushed_shell_back_test.dart`, chạy cả hai chế độ; hai test Android đặt sau test Android có sẵn. Test Android có sẵn chuyển sang hàm chung `_onAndroid` (ba chỗ dùng). Hàm dựng shell của `_Inner` tách thành `_subTabs`, dùng chung cho `_Inner`, `_SameRoute` và test ba shell.
 4. **Gộp S1 và S1b thành một test** (trang từ chối vừa đếm vừa hiện hộp thoại); S1n của bản thăm dò là lần chạy chế độ native của test đó. Không thêm S2 (hai trang thường): `maybePop` tự kiểm lại trang trên cùng, vô hại, và test có sẵn đã phủ việc pop thường.
