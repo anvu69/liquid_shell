@@ -18,6 +18,10 @@
   width of its fixed parts and is clipped while it grows out of the
   44-point ⌕. Release builds showed nothing wrong.
 
+## 0.1.0-dev.9
+
+First release on pub.dev.
+
 ## 0.1.0-dev.8
 
 - The package archive no longer includes tests (they read files outside
