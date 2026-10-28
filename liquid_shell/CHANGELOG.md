@@ -15,7 +15,11 @@
   (`requestFocus: false`) opened on a navigator around the shell's own.
   An app that moves focus itself when it closes the sidebar should do so
   after the frame: before it, the page cannot take focus yet, and the
-  give-back wins.
+  give-back wins. Likewise, an app that changes the page as it closes the
+  sidebar should select before or in the same turn: a page change after
+  the closing frame, or one inside the body that the shell's
+  `selectedIndex` does not show (a nested shell's tab, the app's own
+  `Offstage` tabs), can leave a hidden field with focus.
 - **Fix (VK-778).** The regular search field (the search tab selected in
   the top bar or sidebar layout) keeps inside the horizontal safe area, as
   the bars do since 0.1.0-dev.8. Side insets reach that layout only through

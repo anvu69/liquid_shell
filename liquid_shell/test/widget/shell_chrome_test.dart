@@ -748,6 +748,7 @@ void main() {
           expect(find.byType(LiquidSidebar), findsNothing);
           if (later) {
             expect(find.text('Home page: 0'), findsOne, reason: 'precondition');
+            expect(node.hasFocus, isFalse);
             select(() => index = requested!);
             await tester.pumpAndSettle();
           }
@@ -972,6 +973,11 @@ void main() {
           branch: inNavigator,
         );
         await closeAndCover(tester, pushCoverPage);
+        expect(
+          ModalRoute.of(tester.element(find.byType(LiquidShell)))!.isCurrent,
+          isTrue,
+          reason: 'precondition',
+        );
         expect(node.hasFocus, isFalse);
         expect(tester.testTextInput.hasAnyClients, isFalse);
         expectFocusInCover(tester);
