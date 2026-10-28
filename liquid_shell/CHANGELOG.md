@@ -12,6 +12,10 @@
   the collapsing row. Before, the Flutter bar put it on the bar row, which
   is what `largeTitle: null` gives a root page at compact width.
 
+## 0.1.0-dev.9
+
+First release on pub.dev.
+
 ## 0.1.0-dev.8
 
 - The package archive no longer includes tests (they read files outside
