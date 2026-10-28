@@ -862,16 +862,18 @@ void main() {
               const AlertDialog(content: Text('dialog', key: cover)),
         ),
       );
+      // `.ignore()`, not `unawaited`: Flutter stable marks `push` as
+      // `@awaitNotRequired`, and its analyzer flags `unawaited` around it.
       void pushCoverPage(BuildContext context, {bool? requestFocus}) =>
-          unawaited(
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                requestFocus: requestFocus,
-                builder: (_) =>
-                    const Scaffold(body: Text('pushed', key: cover)),
-              ),
-            ),
-          );
+          Navigator.of(context)
+              .push(
+                MaterialPageRoute<void>(
+                  requestFocus: requestFocus,
+                  builder: (_) =>
+                      const Scaffold(body: Text('pushed', key: cover)),
+                ),
+              )
+              .ignore();
 
       // Closes the overlay and, in the same turn, opens a route from the
       // field's context with [open].
