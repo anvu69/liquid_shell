@@ -791,8 +791,9 @@ void main() {
     expect(_largeTop(tester), rest - 30, reason: "the shown page's list");
   });
 
-  testWidgets("in a PageView whose pages stay alive, only the first page's "
-      'list drives the large title', (tester) async {
+  testWidgets("in a PageView whose pages stay alive, the shown page's list "
+      'takes over at its first scroll; a page off screen never drives the '
+      'large title', (tester) async {
     final first = _scroll();
     final second = _scroll();
     final pages = PageController();
@@ -815,12 +816,98 @@ void main() {
     await tester.pumpAndSettle();
     expect(pages.page, 1);
     expect(first.hasClients, isTrue, reason: 'the first page is kept');
-    await _jump(tester, second, 30);
     expect(
       _largeTop(tester),
       rest - kLargeTitleExtent,
-      reason: "the second page's list",
+      reason: 'the title keeps the last offset until a list scrolls',
     );
+    await _jump(tester, second, 30);
+    expect(_largeTop(tester), rest - 30, reason: "the shown page's list");
+    await _jump(tester, first, 10);
+    expect(
+      _largeTop(tester),
+      rest - 30,
+      reason: "the first page's list, off screen",
+    );
+  });
+
+  testWidgets('in an IndexedStack of lists (a segment switcher), the shown '
+      'list takes over at its first scroll; a hidden list never drives the '
+      'large title', (tester) async {
+    final first = _scroll();
+    final second = _scroll();
+    final shown = ValueNotifier(0);
+    addTearDown(shown.dispose);
+    final rest = await _pumpLargeTitle(
+      tester,
+      ValueListenableBuilder<int>(
+        valueListenable: shown,
+        builder: (context, index, _) => IndexedStack(
+          index: index,
+          children: [_rows(first), _rows(second)],
+        ),
+      ),
+    );
+    await _jump(tester, first, 120);
+    expect(
+      _largeTop(tester),
+      rest - kLargeTitleExtent,
+      reason: 'the first list',
+    );
+
+    shown.value = 1;
+    await tester.pump();
+    expect(
+      _largeTop(tester),
+      rest - kLargeTitleExtent,
+      reason: 'nothing reports at a switch',
+    );
+    await _jump(tester, second, 30);
+    expect(_largeTop(tester), rest - 30, reason: 'the shown list');
+    await _jump(tester, first, 10);
+    expect(_largeTop(tester), rest - 30, reason: 'the hidden list');
+
+    shown.value = 0;
+    await tester.pump();
+    await _jump(tester, first, 40);
+    expect(_largeTop(tester), rest - 40, reason: 'the shown list again');
+  });
+
+  testWidgets('of two Offstage lists, the hidden one never drives the large '
+      'title, even the one that drove it', (tester) async {
+    final first = _scroll();
+    final second = _scroll();
+    final showFirst = ValueNotifier(true);
+    addTearDown(showFirst.dispose);
+    final rest = await _pumpLargeTitle(
+      tester,
+      ValueListenableBuilder<bool>(
+        valueListenable: showFirst,
+        builder: (context, show, _) => Stack(
+          children: [
+            Offstage(offstage: !show, child: _rows(first)),
+            Offstage(offstage: show, child: _rows(second)),
+          ],
+        ),
+      ),
+    );
+    await _jump(tester, first, 120);
+    expect(
+      _largeTop(tester),
+      rest - kLargeTitleExtent,
+      reason: 'the first list',
+    );
+
+    showFirst.value = false;
+    await tester.pump();
+    await _jump(tester, first, 20);
+    expect(
+      _largeTop(tester),
+      rest - kLargeTitleExtent,
+      reason: 'the first list, hidden',
+    );
+    await _jump(tester, second, 30);
+    expect(_largeTop(tester), rest - 30, reason: 'the shown list');
   });
 
   testWidgets('the bar titles carry a text style without a Material above', (

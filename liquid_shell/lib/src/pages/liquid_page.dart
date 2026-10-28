@@ -6,6 +6,7 @@ import 'package:liquid_shell/src/pages/page_bar.dart';
 import 'package:liquid_shell/src/pages/page_registry.dart';
 import 'package:liquid_shell/src/pages/page_title.dart';
 import 'package:liquid_shell/src/search/search_controller.dart';
+import 'package:liquid_shell/src/shell/branch_navigators.dart';
 import 'package:liquid_shell/src/shell/breakpoints.dart';
 import 'package:liquid_shell/src/shell/shell_scope.dart';
 import 'package:liquid_shell/src/shell/strings.dart';
@@ -163,23 +164,37 @@ class _LiquidPageState extends State<LiquidPage> {
   /// Whether a vertical scroll view's report, sent from [origin] (its
   /// notification's context), drives the large title.
   ///
-  /// The large title follows the page's first vertical scroll view: the
-  /// first scroll view to report (its first layout or a scroll) that
-  /// scrolls vertically, is not inside another vertical scroll view of the
-  /// page, and is not inside a text field (an `EditableText`, whose
-  /// multi-line text scrolls vertically). Horizontal scroll views around it
-  /// do not count. That scroll view drives the title until it is disposed;
-  /// the next scroll view that qualifies and reports then takes over, and
-  /// until one does the title keeps the last offset. Every other scroll
-  /// view is ignored. So in a `PageView` of lists (a `TabBarView` too) the
-  /// first page's list drives the title: for good while that page is kept
-  /// alive (as every child of an `IndexedStack` is); once it has left the
-  /// screen and been disposed, the shown page's list takes over at its
-  /// first scroll.
+  /// The large title follows the page's first vertical scroll view on
+  /// screen: the first scroll view to report (its first layout or a scroll)
+  /// that scrolls vertically, is on screen, is not inside another vertical
+  /// scroll view of the page, and is not inside a text field (an
+  /// `EditableText`, whose multi-line text scrolls vertically). Horizontal
+  /// scroll views around it do not count. On screen means that nothing
+  /// between it and the page hides it (`isOnScreenUnder`): not an
+  /// `IndexedStack` child other than the shown one, not under an `Offstage`,
+  /// an invisible `Visibility` or a disabled `TickerMode`, not a
+  /// `PageView` page outside the visible window. The walk stops at the
+  /// page, so a page in a hidden tab or under a pushed route still follows
+  /// its own list. That scroll view drives the title until it is disposed
+  /// or leaves the screen; the next scroll view that qualifies and reports
+  /// then takes over, and until one does the title keeps the last offset.
+  /// A scroll view off screen neither takes the title nor keeps it, and
+  /// every other scroll view is ignored.
+  ///
+  /// So in a segment switcher (an `IndexedStack` or `Offstage` of lists)
+  /// and in a `PageView` of lists (a `TabBarView` too), kept alive or not,
+  /// the shown list takes over at its first scroll after a switch; until
+  /// then the title keeps the previous list's offset. A vertical scroll
+  /// view outside the page's list that reports first (a shrink-wrapped
+  /// header list above it, even one that cannot scroll) takes the title
+  /// for good: such a header belongs in a `Column`.
   bool _drivesLargeTitle(BuildContext? origin) {
-    if (origin == null) return false;
+    if (origin == null || !isOnScreenUnder(origin, context)) return false;
     final driver = _titleScrollView;
-    if (driver != null && driver.mounted) return identical(origin, driver);
+    if (identical(origin, driver)) return true;
+    if (driver != null && driver.mounted && isOnScreenUnder(driver, context)) {
+      return false;
+    }
     if (!_isPageScrollView(origin)) return false;
     _titleScrollView = origin;
     return true;
