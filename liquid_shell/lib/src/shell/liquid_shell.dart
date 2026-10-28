@@ -1739,14 +1739,19 @@ class _LiquidShellState extends State<LiquidShell>
       final indent = _windowControls.value.value.indentFor(
         rowTop: regularFieldTop - media.padding.top,
       );
-      final start = bodyStart + kRegularSearchMargin + indent;
+      // The safe width, as for the bars (VK-778). Tiled, the sidebar
+      // already clears the leading inset: only the trailing one is added.
+      final sideStart = tiled ? 0.0 : (rtl ? sideRight : sideLeft);
+      final sideEnd = rtl ? sideLeft : sideRight;
+      final start = bodyStart + sideStart + kRegularSearchMargin + indent;
+      final end = sideEnd + kRegularSearchMargin;
       children.add(
         AnimatedPositioned(
           key: kSearchFieldKey,
           duration: morph,
           curve: kSearchMorphCurve,
-          left: rtl ? kRegularSearchMargin : start,
-          right: rtl ? start : kRegularSearchMargin,
+          left: rtl ? end : start,
+          right: rtl ? start : end,
           top: regularFieldTop,
           height: kRegularSearchFieldExtent,
           // Behind the overlay an idle field takes no focus (focusing it

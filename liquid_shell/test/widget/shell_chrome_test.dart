@@ -1462,6 +1462,65 @@ void main() {
     });
   });
 
+  // VK-778: the regular search field keeps to the safe width too. Side
+  // insets reach the regular layout only through an app's breakpoints (a
+  // landscape phone); beside a tiled sidebar, the sidebar clears the
+  // leading inset itself.
+  group('the regular search field clears the side insets (VK-778)', () {
+    const notches = EdgeInsets.only(left: 59, right: 59, bottom: 21);
+
+    Future<Rect> searchField(
+      WidgetTester tester,
+      LiquidShellBreakpoints breakpoints, {
+      TextDirection direction = TextDirection.ltr,
+    }) async {
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      await pumpShell(
+        tester,
+        TestShell(
+          destinations: _searchDestinations,
+          initialIndex: 1,
+          search: LiquidSearch(controller: controller),
+          breakpoints: breakpoints,
+        ),
+        size: kPhoneLandscape,
+        padding: notches,
+        direction: direction,
+      );
+      return tester.getRect(find.byKey(kSearchFieldKey));
+    }
+
+    testWidgets('top bar: both insets', (tester) async {
+      final field = await searchField(
+        tester,
+        const LiquidShellBreakpoints(compactHeight: 0),
+      );
+      expect(scopeOf(tester, 'Search').chromeKind, LiquidChromeKind.topBar);
+      expect(field.left, 59 + 20);
+      expect(field.right, 932 - 59 - 20);
+    });
+
+    for (final direction in TextDirection.values) {
+      testWidgets('tiled, ${direction.name}: the trailing inset only', (
+        tester,
+      ) async {
+        final field = await searchField(
+          tester,
+          const LiquidShellBreakpoints(compactHeight: 0, tiledSidebar: 900),
+          direction: direction,
+        );
+        expect(
+          scopeOf(tester, 'Search').chromeKind,
+          LiquidChromeKind.sidebarTiled,
+        );
+        final ltr = direction == TextDirection.ltr;
+        expect(field.left, ltr ? 300 + 20 : 59 + 20);
+        expect(field.right, ltr ? 932 - 59 - 20 : 932 - 300 - 20);
+      });
+    }
+  });
+
   // VK-702 M10: a landscape phone's notch; the bars keep to the safe width.
   group('side safe area (VK-702)', () {
     const notchLeft = EdgeInsets.only(left: 59, bottom: 21);

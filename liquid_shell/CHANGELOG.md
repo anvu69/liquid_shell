@@ -7,6 +7,12 @@
   hardware-keyboard user lost their place. Choosing a destination in the
   sidebar gives nothing back (the page changes), and the shell's own
   search field is never refocused this way: focusing it starts a search.
+- **Fix (VK-778).** The regular search field (the search tab selected in
+  the top bar or sidebar layout) keeps inside the horizontal safe area, as
+  the bars do since 0.1.0-dev.8. Side insets reach that layout only through
+  breakpoints that give a landscape phone the regular layout, where the
+  field ran under the notch. Beside a tiled sidebar only the trailing inset
+  is added: the sidebar already clears the leading one.
 
 ## 0.1.0-dev.8
 
