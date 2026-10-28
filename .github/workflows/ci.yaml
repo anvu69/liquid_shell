@@ -72,28 +72,36 @@ jobs:
           channel: stable
           cache: true
       - run: make get
+      # pana reads screenshots with webpinfo/cwebp/gif2webp. Without them
+      # liquid_shell loses the 10 "screenshots" points on the runner.
+      - run: sudo apt-get update && sudo apt-get install -y webp
       - run: dart pub global activate pana
-      # pana checks that `repository` on GitHub main contains this pubspec.
-      # On a branch that adds a package, main does not have it yet, so those
-      # 10 points are allowed off main only.
+      # All four packages are on pub.dev (0.1.0-dev.9), so pana resolves the
+      # siblings and every step must reach the max score. pana also checks
+      # that `repository` on GitHub main contains the pubspec; on a branch
+      # that adds a package, main does not have it yet, so those 10 points
+      # are allowed off main only. One step each so a failure in one does not
+      # hide the other scores.
       - name: pana liquid_shell_platform_interface (max score on main)
         run: >
           dart pub global run pana --no-warning
           --exit-code-threshold ${{ github.ref == 'refs/heads/main' && '0' || '10' }}
           liquid_shell_platform_interface
-      # These three depend on liquid_shell_platform_interface, which pana can
-      # only resolve from pub.dev. Informational until P6 publishes it first.
-      # One step each: in a single `bash -e` loop the first failure stopped
-      # the loop, so the other two were never scored.
-      - name: pana liquid_shell (informational until P6)
-        continue-on-error: true
-        run: dart pub global run pana --no-warning --exit-code-threshold 0 liquid_shell
-      - name: pana liquid_shell_ios (informational until P6)
-        continue-on-error: true
-        run: dart pub global run pana --no-warning --exit-code-threshold 0 liquid_shell_ios
-      - name: pana liquid_shell_android (informational until P6)
-        continue-on-error: true
-        run: dart pub global run pana --no-warning --exit-code-threshold 0 liquid_shell_android
+      - name: pana liquid_shell (max score on main)
+        run: >
+          dart pub global run pana --no-warning
+          --exit-code-threshold ${{ github.ref == 'refs/heads/main' && '0' || '10' }}
+          liquid_shell
+      - name: pana liquid_shell_ios (max score on main)
+        run: >
+          dart pub global run pana --no-warning
+          --exit-code-threshold ${{ github.ref == 'refs/heads/main' && '0' || '10' }}
+          liquid_shell_ios
+      - name: pana liquid_shell_android (max score on main)
+        run: >
+          dart pub global run pana --no-warning
+          --exit-code-threshold ${{ github.ref == 'refs/heads/main' && '0' || '10' }}
+          liquid_shell_android
       - run: make publish-check
 
   android-unit:
