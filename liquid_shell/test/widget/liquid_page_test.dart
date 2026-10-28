@@ -250,6 +250,29 @@ class _ResetListState extends State<_ResetList> {
   Widget build(BuildContext context) => _rows(widget.controller);
 }
 
+class _Trigger extends StatefulWidget {
+  const _Trigger({required this.controller, required this.filter});
+
+  final ScrollController controller;
+  final int filter;
+
+  @override
+  State<_Trigger> createState() => _TriggerState();
+}
+
+/// A zero-size widget that jumps [_Trigger.controller] to the top in the
+/// build when its filter changes.
+class _TriggerState extends State<_Trigger> {
+  @override
+  void didUpdateWidget(_Trigger oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.filter != widget.filter) widget.controller.jumpTo(0);
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
+}
+
 void main() {
   testWidgets('pages register in push order; a pop shortens the stack', (
     tester,
@@ -979,6 +1002,49 @@ void main() {
     expect(_largeTop(tester), rest, reason: 'the second list');
     await _jump(tester, list, 30);
     expect(_largeTop(tester), rest - 30, reason: 'the first list drives');
+  });
+
+  testWidgets('when lists jump during a build, the first to report takes '
+      'over after the frame, not the first to lay out', (tester) async {
+    final header = _scroll();
+    final list = _scroll();
+    final other = _scroll();
+    final state = ValueNotifier((header: true, filter: 0));
+    addTearDown(state.dispose);
+    final rest = await _pumpLargeTitle(
+      tester,
+      ValueListenableBuilder<({bool header, int filter})>(
+        valueListenable: state,
+        builder: (context, value, _) => Column(
+          children: [
+            if (value.header) SizedBox(height: 80, child: _rows(header)),
+            // Builds before the lists: `other` reports first.
+            _Trigger(controller: other, filter: value.filter),
+            // Lays out before `other`: its metrics are re-reported first.
+            Expanded(
+              child: _ResetList(controller: list, filter: value.filter),
+            ),
+            Expanded(child: _rows(other)),
+          ],
+        ),
+      ),
+    );
+    await _jump(tester, header, 10);
+    expect(_largeTop(tester), rest - 10, reason: 'the header list drives');
+    await _jump(tester, list, 200);
+    await _jump(tester, other, 40);
+
+    // One build removes the header list; `other` then `list` jump to the
+    // top, but `list` lays out first.
+    state.value = (header: false, filter: 1);
+    await tester.pump();
+    expect(tester.takeException(), isNull, reason: 'the jumps in the build');
+    await tester.pump();
+    expect(_largeTop(tester), rest, reason: 'the lists, at the top');
+    await _jump(tester, list, 30);
+    expect(_largeTop(tester), rest, reason: 'list, which reported second');
+    await _jump(tester, other, 20);
+    expect(_largeTop(tester), rest - 20, reason: 'other, which reported first');
   });
 
   testWidgets('when the list that drives the large title jumps during a '
