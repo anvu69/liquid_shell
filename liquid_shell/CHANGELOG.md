@@ -1,5 +1,22 @@
 ## 0.1.0-dev.10
 
+- **Fix (VK-776).** A shell nested in another shell's body with no
+  navigator between (a tab's page that is itself a `LiquidShell`) no
+  longer answers back beside the outer shell. One back asked a page's
+  `PopScope` twice (an unsaved form showed two dialogs; with three shells,
+  three). A nested shell in a tab that was not shown still held back: back
+  popped a page the user could not see, and at a root shell on Android the
+  app could not be left. With the outer shell's overlay sidebar open or
+  its search active, one back also popped the nested shell's page. The
+  outer shell now asks the nested one in its own order, and only while it
+  is on screen. With a navigator between (go_router's `StatefulShellRoute`
+  and `ShellRoute` always put one there) nothing changes.
+- **Fix (VK-779).** Compact landscape with the Flutter chrome: selecting
+  the search tab from idle (a tap on the ⌕, a lens drag dropped on it, or
+  the app) no longer reports "A RenderFlex overflowed by 12 pixels" in
+  debug builds for the first frame of the morph. The field's row keeps the
+  width of its fixed parts and is clipped while it grows out of the
+  44-point ⌕. Release builds showed nothing wrong.
 - **Fix (VK-778).** When the Flutter overlay sidebar closes by Escape, a
   tap on its barrier, its Hide button or system back, keyboard focus goes
   back to what held it when the sidebar opened (a page's control or text

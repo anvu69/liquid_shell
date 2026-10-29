@@ -300,6 +300,9 @@ class _LiquidShellState extends State<LiquidShell>
   // What the last build's [_backScope] blocks for (VK-774).
   bool _backOverlay = false;
   bool _backSearch = false;
+  // In another shell's body on the same route: that shell answers back for
+  // this one (VK-776). Set in [didChangeDependencies].
+  bool _hosted = false;
 
   @override
   void initState() {
@@ -376,6 +379,20 @@ class _LiquidShellState extends State<LiquidShell>
       route?.secondaryAnimation?.addStatusListener(_onCoverChanged);
     }
     _routeCurrent = route?.isCurrent ?? true;
+    // VK-776: with no navigator between, this shell's PopScope would sit on
+    // the host's route, a second voice beside the host's walk. Only the
+    // shell right around this one walks it: in another slot of a nested
+    // shell (its sidebar header), the nearest body is an outer one's.
+    final host = context
+        .dependOnInheritedWidgetOfExactType<_ShellBody>()
+        ?.shell;
+    final hosted =
+        host != null &&
+        identical(host._route, route) &&
+        identical(context.findAncestorStateOfType<_LiquidShellState>(), host);
+    // The host learns of a shell built after its last walk (VK-776).
+    if (hosted && !_hosted) host._scheduleBranchScan();
+    _hosted = hosted;
     _coveredByPush =
         route?.secondaryAnimation?.status.isForwardOrCompleted ?? false;
     // A dependency: the change rebuilds us. The layout builder still runs
@@ -874,6 +891,11 @@ class _LiquidShellState extends State<LiquidShell>
   /// (an exit wrapper, an unsaved form) lands here too. A
   /// `NavigatorPopHandler` with a callback around the branch answers back
   /// for its navigator; the shell then only blocks its own route.
+  ///
+  /// A shell in another shell's body with no navigator between is on that
+  /// shell's route. It steps aside (never blocks, never acts): the outer
+  /// shell's walk hands it back in the outer order, and only while it is
+  /// on screen.
   Widget _backScope({
     required bool overlay,
     required bool searchActive,
@@ -882,9 +904,9 @@ class _LiquidShellState extends State<LiquidShell>
     _backOverlay = overlay;
     _backSearch = searchActive;
     return PopScope(
-      canPop: !claimsBack,
+      canPop: _hosted || !claimsBack,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) handleBack();
+        if (!didPop && !_hosted) handleBack();
       },
       child: child,
     );
@@ -915,11 +937,14 @@ class _LiquidShellState extends State<LiquidShell>
   /// [kind] null: native chrome.
   Widget _bodySubtree(LiquidChromeKind? kind) => KeyedSubtree(
     key: _bodyKey,
-    child: NotificationListener<NavigationNotification>(
-      onNotification: _onBranchNavigation,
-      child: NotificationListener<ScrollNotification>(
-        onNotification: (n) => _onBodyScroll(n, kind),
-        child: widget.body,
+    child: _ShellBody(
+      shell: this,
+      child: NotificationListener<NavigationNotification>(
+        onNotification: _onBranchNavigation,
+        child: NotificationListener<ScrollNotification>(
+          onNotification: (n) => _onBodyScroll(n, kind),
+          child: widget.body,
+        ),
       ),
     ),
   );
@@ -2153,6 +2178,17 @@ class _LiquidShellState extends State<LiquidShell>
       ),
     );
   }
+}
+
+/// Marks a shell's body: a shell nested in it finds its host here.
+class _ShellBody extends InheritedWidget {
+  const _ShellBody({required this.shell, required super.child});
+
+  final _LiquidShellState shell;
+
+  // Built by [shell] itself, so it never changes.
+  @override
+  bool updateShouldNotify(_ShellBody oldWidget) => false;
 }
 
 /// One `LiquidPage` registered with a shell.
