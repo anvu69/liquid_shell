@@ -36,3 +36,21 @@ Beside a tiled sidebar the bar lays out right of it. Screenshots:
 page: equal at rest, and in every one of 32 samples during an animated
 push (left inset 280), on 26.5 and 27.0. Recorded only: `isTiled` reads
 the top page's view (Task 7), the view whose insets reach Flutter.
+
+## M2: the tab bar's minimize on a pushed page
+
+Real swipes (XCUITest) on the example's `tabs` demo with a probe build:
+every plain tab in a navigation controller, a second tab host pushed by a
+native button, its proxy carrying the tab's offset over (as Dart's resend
+after a stack change does). iPhone 17 Pro, iOS 26.5 and 27.0.
+
+| Step | 26.5 | 27.0 |
+|---|---|---|
+| A swipe on the pushed host minimizes | yes | yes |
+| A pop while minimized keeps the circle | yes | yes |
+| A push while minimized keeps the circle | yes | yes |
+| A fling to the top on the pushed host expands | yes | yes |
+
+**Decision: the main design.** UIKit's tab bar follows the top page's
+`.bottom` proxy; pushed pages minimize, and a push or a pop keeps the
+bar's form. Not measured on iPad: the regular top bar never minimizes.
