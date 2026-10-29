@@ -4561,3 +4561,75 @@ final class SignalsPayloadTests: XCTestCase {
       ])
   }
 }
+
+// MARK: - VK-441: a large title set in the config that selects its tab
+
+/// Samples a navigation bar's height on every display frame.
+@available(iOS 26.0, *)
+private final class BarHeightSampler: NSObject {
+  private let nav: UINavigationController
+  private(set) var highest: CGFloat = 0
+  private var link: CADisplayLink?
+  init(_ nav: UINavigationController) { self.nav = nav }
+  func start() {
+    link = CADisplayLink(target: self, selector: #selector(tick))
+    link?.add(to: .main, forMode: .common)
+  }
+  @objc private func tick() {
+    highest = max(highest, nav.isNavigationBarHidden ? 0 : nav.navigationBar.frame.height)
+  }
+  func stop() {
+    link?.invalidate()
+    link = nil
+  }
+}
+
+@available(iOS 26.0, *)
+extension NativeTabsTests {
+  /// Library as the app sends it: its pages come in the config that
+  /// selects the tab, so `applyPages` turns the root `.always` before
+  /// `select` puts it in the window. iOS 26.5 animates the switch and
+  /// lays the bar out collapsed (54 pt against 106; 27.0 switches at once).
+  func testALargeTitleSetInTheConfigThatSelectsItsTabIsDrawnOut() throws {
+    let library = [NativePage(title: "Library", largeTitle: true)]
+    let expanded = try expandedBarHeight(library)
+    let tabs = try installedShell()
+    let nav = try XCTUnwrap(tabs.navControllers[1])
+    XCTAssertNil(nav.rootHost.viewIfLoaded?.window, "precondition: the root is off screen")
+    let sampler = BarHeightSampler(nav)
+    sampler.start()
+    var selecting = config()
+    selecting.tabs[1].pages = library
+    selecting.selectedIndex = 1
+    tabs.apply(selecting)
+    tabs.setPageScroll(tab: 1, offset: 0)
+    let height = barHeight(of: nav)
+    sampler.stop()
+    XCTAssertEqual(height, expanded, accuracy: 0.5, "the large title is out at rest")
+    XCTAssertLessThanOrEqual(sampler.highest, expanded + 0.5, "never pulled past expanded")
+    tabs.setPageScroll(tab: 1, offset: 400)
+    XCTAssertLessThan(barHeight(of: nav), expanded - 20, "a scroll collapses it")
+    tabs.setPageScroll(tab: 1, offset: 0)
+    XCTAssertEqual(barHeight(of: nav), expanded, accuracy: 0.5, "back at 0, the title returns")
+  }
+
+  /// A title UIKit lays out by itself (pages a turn before the selection,
+  /// M5 P2) is revealed too: the pull must not stretch it.
+  func testALargeTitleSetOffScreenBeforeItsTabIsSelectedIsNotStretched() throws {
+    let library = [NativePage(title: "Library", largeTitle: true)]
+    let tabs = try installedShell()
+    let nav = try XCTUnwrap(tabs.navControllers[1])
+    var pages = config()
+    pages.tabs[1].pages = library
+    tabs.apply(pages)
+    settle()
+    let sampler = BarHeightSampler(nav)
+    sampler.start()
+    pages.selectedIndex = 1
+    tabs.apply(pages)
+    let height = barHeight(of: nav)
+    sampler.stop()
+    XCTAssertGreaterThan(height, 80, "the large title is out at rest")
+    XCTAssertLessThanOrEqual(sampler.highest, height + 0.5, "never pulled past expanded")
+  }
+}

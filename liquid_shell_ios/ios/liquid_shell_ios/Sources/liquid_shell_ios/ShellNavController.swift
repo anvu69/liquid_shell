@@ -260,11 +260,26 @@ final class PageHostController: UIViewController {
   /// brings the title out, as on a real scroll view. So, [delay] seconds
   /// from now (the bar's show animation): lay out, pull, and on the next
   /// run-loop turn put the proxy back at Flutter's offset. Off screen UIKit
-  /// lays the title out by itself (P2). Scrolled, or under an active
-  /// search, a collapsed title is right for now: the reveal waits until
-  /// the page is back at offset 0 with the search inactive.
+  /// lays the title out by itself only when the mode change has settled
+  /// before the tab is selected (M5 P2); in the config that selects the
+  /// tab, iOS 26.5's animated switch lays it out collapsed. So a plain
+  /// root that is on top but not yet in a window waits for the window.
+  /// Scrolled, or under an active search, a collapsed title is right for
+  /// now: the reveal waits until the page is back at offset 0 with the
+  /// search inactive.
   func revealLargeTitle(after delay: TimeInterval = 0) {
-    guard !revealing, isOnTopInAWindow else { return }
+    guard !revealing else { return }
+    // Library's case: a plain root's mode turns on in the config that
+    // selects its tab, before the root is in the window. iOS 26.5 animates
+    // that tab switch and lays the bar out collapsed: reveal once the root
+    // is in (`rereadRestingTop` on its first safe-area change).
+    if viewIfLoaded?.window == nil, let nav = navigationController as? ShellNavController,
+      !nav.isSearch, nav.topViewController === self
+    {
+      pendingReveal = true
+      return
+    }
+    guard isOnTopInAWindow else { return }
     guard offset <= 0, !searchIsActive else {
       pendingReveal = true
       return
