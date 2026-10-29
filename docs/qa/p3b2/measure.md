@@ -75,3 +75,9 @@ simulators.
 **Decision: the main design** (`tabBarHidden`), pending Task 8's gate:
 `MinimizeUITests` and the whole `RunnerTests` and `RunnerUITests` on the
 finished tree.
+
+### The UI half of the gate (Task 16)
+
+`RunnerUITests` on iPhone 17 Pro and iPad Air 11-inch (M4), iOS 26.5:
+30/30 and 20/20, no failure; `MinimizeUITests`
+on an iPhone 17 (iOS 26.5): 7/7. The main design stands.

@@ -177,6 +177,24 @@ final class MinimizeUITests: XCTestCase {
     waitMinimized(app, false, "a fling that reaches the top expands")
   }
 
+  /// Spec P3b-2 §6.8: a page pushed on a plain tab minimizes the bar too,
+  /// and the pop keeps its form (M2). The `pages` demo: Home's detail.
+  func testAPushedPageOnHomeMinimizesTheBar() throws {
+    try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .phone, "compact bar")
+    let app = launch("pages")
+    let detail = flutterRow(app, "Detail 1")
+    XCTAssertTrue(detail.waitForExistence(timeout: 10), "Home's rows")
+    detail.tap()
+    let bar = app.navigationBars["Detail 1"]
+    XCTAssertTrue(bar.waitForExistence(timeout: 10), "precondition: Home's pushed page")
+    drag(app, dy: -300)
+    waitMinimized(app, true, "a swipe on the pushed page minimizes", other: "Library")
+    app.navigationBars.buttons["BackButton"].tap()
+    XCTAssertTrue(bar.waitForNonExistence(timeout: 10), "popped")
+    sleep(1)
+    XCTAssertTrue(isMinimized(app, other: "Library"), "the pop keeps the bar's form")
+  }
+
   func testATapOnTheCircleExpands() throws {
     try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .phone, "compact bar")
     let app = launch()
