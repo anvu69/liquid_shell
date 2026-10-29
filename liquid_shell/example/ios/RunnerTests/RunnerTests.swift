@@ -159,6 +159,18 @@ final class SearchMathTests: XCTestCase {
     XCTAssertFalse(pad.titleItem)
   }
 
+  /// Spec P3b-2 §4.2, decision 12: `largeTitle: true` on the iPhone's
+  /// search root is the collapsing row, as on every tab (it was the bar
+  /// row, `.inline`, which is now `null`'s).
+  func testAnIPhoneSearchRootWithALargeTitleCollapses() {
+    for os in [26, 27] {
+      XCTAssertEqual(
+        SearchMath.style(isPad: false, osMajor: os, rootLargeTitle: true).titleMode, .always)
+      XCTAssertEqual(
+        SearchMath.style(isPad: false, osMajor: os, rootLargeTitle: nil).titleMode, .inline)
+    }
+  }
+
   func testTheTopIsHeldOnlyWhileTheProxyIsScrolled() {
     XCTAssertEqual(SearchMath.heldTop(current: 116, resting: 168.7, scrolled: true), 168.7)
     XCTAssertEqual(SearchMath.heldTop(current: 116, resting: 168.7, scrolled: false), 116)
@@ -170,6 +182,136 @@ final class SearchMathTests: XCTestCase {
     XCTAssertTrue(SearchMath.frameChanged(nil, a))
     XCTAssertFalse(SearchMath.frameChanged(a, NativeRect(x: 8.2, y: 490.4, width: 330, height: 48)))
     XCTAssertTrue(SearchMath.frameChanged(a, NativeRect(x: 8, y: 489, width: 330, height: 48)))
+  }
+}
+
+/// Spec P3b-2 §4.2: the native half of the page title table, row by row
+/// (a plain tab; the search tab keeps `SearchMath.style`). The rows, and
+/// the cases each covers, are those of the Flutter bar's suite
+/// (`liquid_shell/test/unit/page_bar_test.dart`, group `pageTitleModeFor:
+/// the title table`): 6 rows, 24 cases (page × largeTitle × width ×
+/// actions). The native bar has no page actions yet: its 12 cases without
+/// actions are checked here; branch B4 adds actions to `PageTitleMath` and
+/// checks the other 12 (spec §8.4).
+@available(iOS 26.0, *)
+final class PageTitleMathTests: XCTestCase {
+  /// (page, largeTitle, size class, actions, mode), each cell as the
+  /// spec's table writes it; the same records as the Dart suite.
+  private typealias Row = (String, String, String, String, String)
+
+  private static let table: [Row] = [
+    ("pushed", "any", "any", "any", "inline"),
+    ("root", "true", "any", "any", "largeCollapsing"),
+    ("root", "null", "compact", "any", "largeInRow"),
+    ("root", "null", "regular", "none", "hidden"),
+    ("root", "false", "any", "none", "hidden"),
+    ("root", "null (regular) or false", "as left", "≥ 1", "inline"),
+  ]
+
+  private struct Case: Hashable {
+    let root: Bool
+    let largeTitle: Bool?
+    let compact: Bool
+    let hasActions: Bool
+  }
+
+  private static func largeTitles(_ cell: String) -> [Bool?] {
+    switch cell {
+    case "any": return [true, nil, false]
+    case "true": return [true]
+    case "null": return [nil]
+    case "false": return [false]
+    default: preconditionFailure("largeTitle \(cell)")
+    }
+  }
+
+  /// Compact (true) and regular (false) width.
+  private static func widths(_ cell: String) -> [Bool] {
+    switch cell {
+    case "any": return [true, false]
+    case "compact": return [true]
+    case "regular": return [false]
+    default: preconditionFailure("size class \(cell)")
+    }
+  }
+
+  /// Every concrete case a row covers, as the Dart suite's `_casesOf`.
+  private static func cases(of row: Row) -> [Case] {
+    let (page, largeTitle, size, actions, _) = row
+    let root: Bool
+    switch page {
+    case "pushed": root = false
+    case "root": root = true
+    default: preconditionFailure("page \(page)")
+    }
+    let titlesAndWidths: [(Bool?, Bool)] =
+      (largeTitle, size) == ("null (regular) or false", "as left")
+      ? [(nil, false), (false, true), (false, false)]
+      : largeTitles(largeTitle).flatMap { title in widths(size).map { (title, $0) } }
+    let withActions: [Bool]
+    switch actions {
+    case "any": withActions = [false, true]
+    case "none": withActions = [false]
+    case "≥ 1": withActions = [true]
+    default: preconditionFailure("actions \(actions)")
+    }
+    return titlesAndWidths.flatMap { title, compact in
+      withActions.map {
+        Case(root: root, largeTitle: title, compact: compact, hasActions: $0)
+      }
+    }
+  }
+
+  func testTheRowsCoverEveryCaseExactlyOnce() {
+    let all = Self.table.flatMap { Self.cases(of: $0) }
+    // page × largeTitle × size class × actions
+    XCTAssertEqual(all.count, 2 * 3 * 2 * 2)
+    XCTAssertEqual(Set(all).count, all.count)
+  }
+
+  func testPageTitleMathFollowsTheTitleTable() {
+    func page(_ largeTitle: Bool?) -> NativePage {
+      NativePage(title: "Page", largeTitle: largeTitle)
+    }
+    var checked = 0
+    for (i, row) in Self.table.enumerated() {
+      for c in Self.cases(of: row) where !c.hasActions {
+        let label = "row \(i + 1) (\(row.4)): \(c)"
+        // A pushed page sits on a root without a large title.
+        let pages = c.root ? [page(c.largeTitle)] : [page(nil), page(c.largeTitle)]
+        let mode =
+          c.root
+          ? PageTitleMath.rootMode(largeTitle: c.largeTitle, compact: c.compact)
+          : PageTitleMath.pushedMode
+        let hidden = PageTitleMath.barHidden(pages: pages, compact: c.compact)
+        switch row.4 {
+        case "inline":
+          XCTAssertEqual(mode, .never, label)
+          XCTAssertFalse(hidden, label)
+        case "largeCollapsing":
+          XCTAssertEqual(mode, .always, label)
+          XCTAssertFalse(hidden, label)
+        case "largeInRow":
+          XCTAssertEqual(mode, .inline, label)
+          XCTAssertFalse(hidden, label)
+        case "hidden":
+          XCTAssertEqual(mode, .never, label)
+          XCTAssertTrue(hidden, label)
+        default:
+          XCTFail("mode \(row.4)")
+        }
+        checked += 1
+      }
+    }
+    // Rows 1–5 without actions: 6 + 2 + 1 + 1 + 2.
+    XCTAssertEqual(checked, 12)
+  }
+
+  /// No pages: the tab does not use LiquidPage, and looks as before.
+  func testATabWithoutPagesHidesItsBar() {
+    for compact in [true, false] {
+      XCTAssertTrue(PageTitleMath.barHidden(pages: [], compact: compact))
+    }
   }
 }
 
