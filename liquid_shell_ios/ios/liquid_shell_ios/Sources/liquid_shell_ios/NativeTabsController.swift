@@ -165,6 +165,12 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
         self.applyBottomEdgePolicy(config)  // `applyPages` may have built hosts
         self.select(Int(config.selectedIndex))
       }
+      // A sidebar kept while compact must not show under a hidden tab bar.
+      // `isTiled` reads insets: lay out at the new size class first.
+      if self.tabBarHiddenApplied, !self.isCompact, !self.sidebar.isHidden {
+        self.view.layoutIfNeeded()
+        self.hideSidebarWithTheTabBar()
+      }
       // Regular takes the pan back and resets the proxies; compact again
       // puts it back (spec VK-600 §8.3).
       self.updateMinimizePan()
@@ -262,16 +268,26 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     tabBarHiddenApplied = hide
     let animated = wasVisible && chromeVisible && !UIAccessibility.isReduceMotionEnabled
     if hide {
-      sidebarTiledBeforeTabBarHid = !isCompact && !sidebar.isHidden && isTiled
-      // UIKit leaves a tiled sidebar shown under a hidden tab bar (M3).
-      if !isCompact, !sidebar.isHidden { sidebar.isHidden = true }
+      sidebarTiledBeforeTabBarHid = false
+      hideSidebarWithTheTabBar()
       searchBridge.dismissKeepingText()
       setTabBarHidden(true, animated: animated)
     } else {
       setTabBarHidden(false, animated: animated)
-      if sidebarTiledBeforeTabBarHid, !isCompact { sidebar.isHidden = false }
+      // At compact width too: UIKit shows it as fits the width it gets.
+      if sidebarTiledBeforeTabBarHid { sidebar.isHidden = false }
       sidebarTiledBeforeTabBarHid = false
     }
+  }
+
+  /// At regular width, hides the sidebar for the hidden tab bar and
+  /// remembers a tiled one. Also on a size-class change into regular
+  /// width during the request: a compact window keeps the sidebar.
+  private func hideSidebarWithTheTabBar() {
+    guard !isCompact, !sidebar.isHidden else { return }
+    sidebarTiledBeforeTabBarHid = isTiled
+    // UIKit leaves a tiled sidebar shown under a hidden tab bar (M3).
+    sidebar.isHidden = true
   }
 
   /// Creates the tabs when the structure changes; `showTabs` hands them to

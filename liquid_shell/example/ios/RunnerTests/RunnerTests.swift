@@ -3726,6 +3726,58 @@ extension NativeTabsTests {
     XCTAssertEqual(tabs.flutter.view.safeAreaInsets.left, tiledLeft, accuracy: 0.5)
   }
 
+  /// Hidden at regular width, shown while compact (Split View, Stage
+  /// Manager): back at regular width, the tiled sidebar is still there.
+  func testATiledSidebarHiddenWithTheTabBarSurvivesACompactShow() throws {
+    try requireIPad()
+    let tabs = try installedShell(landscape: true)
+    let container = try XCTUnwrap(tabs.parent)
+    openSidebar(tabs)
+    XCTAssertEqual(tabs.currentState().sidebar, .tiled, "precondition: a landscape iPad tiles")
+    let pages = [NativePage(title: "Home"), NativePage(title: "Photo")]
+    tabs.apply(pagesConfig(pages))
+    settle()
+    let tiledLeft = tabs.flutter.view.safeAreaInsets.left
+    tabs.apply(pagesConfig(pages, tabBarHidden: true))
+    settle()
+    XCTAssertTrue(tabs.sidebar.isHidden, "precondition: hidden with the tab bar")
+    container.traitOverrides.horizontalSizeClass = .compact
+    settle()
+    tabs.apply(pagesConfig(pages))
+    settle()
+    container.traitOverrides.horizontalSizeClass = .regular
+    let left = stable({ tabs.flutter.view.safeAreaInsets.left }, until: { $0 > 200 })
+    XCTAssertEqual(tabs.currentState().sidebar, .tiled, "tiled again")
+    XCTAssertEqual(left, tiledLeft, accuracy: 0.5)
+  }
+
+  /// Hidden while compact, back to regular width before the request ends:
+  /// the tiled sidebar does not show under the hidden tab bar, and comes
+  /// back when the request ends.
+  func testATiledSidebarStaysHiddenWhenTheWindowWidensDuringTheRequest() throws {
+    try requireIPad()
+    let tabs = try installedShell(landscape: true)
+    let container = try XCTUnwrap(tabs.parent)
+    openSidebar(tabs)
+    XCTAssertEqual(tabs.currentState().sidebar, .tiled, "precondition: a landscape iPad tiles")
+    let pages = [NativePage(title: "Home"), NativePage(title: "Photo")]
+    tabs.apply(pagesConfig(pages))
+    settle()
+    let tiledLeft = tabs.flutter.view.safeAreaInsets.left
+    container.traitOverrides.horizontalSizeClass = .compact
+    settle()
+    tabs.apply(pagesConfig(pages, tabBarHidden: true))
+    settle()
+    container.traitOverrides.horizontalSizeClass = .regular
+    let hiddenLeft = stable({ tabs.flutter.view.safeAreaInsets.left })
+    XCTAssertTrue(tabs.sidebar.isHidden, "not under the hidden tab bar")
+    XCTAssertEqual(hiddenLeft, 0, accuracy: 0.5)
+    tabs.apply(pagesConfig(pages))
+    let left = stable({ tabs.flutter.view.safeAreaInsets.left }, until: { $0 > 200 })
+    XCTAssertEqual(tabs.currentState().sidebar, .tiled, "tiled again")
+    XCTAssertEqual(left, tiledLeft, accuracy: 0.5)
+  }
+
   func testTabBarHiddenDismissesAnActiveSearchKeepingItsText() throws {
     let tabs = try installedSearchShell(selected: 2)
     let bridge = tabs.searchBridge
