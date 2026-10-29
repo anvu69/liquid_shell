@@ -54,3 +54,24 @@ after a stack change does). iPhone 17 Pro, iOS 26.5 and 27.0.
 **Decision: the main design.** UIKit's tab bar follows the top page's
 `.bottom` proxy; pushed pages minimize, and a push or a pop keeps the
 bar's form. Not measured on iPad: the regular top bar never minimizes.
+
+## M3: `setTabBarHidden` in the tab sidebar mode (Q16)
+
+UIKit's `setTabBarHidden(_:animated:)` on today's shell (`.tabSidebar`),
+the search tab with a pushed page standing in for a plain tab's. All four
+simulators.
+
+| Row of spec §6.6 | iPhone 26.5 | iPad 26.5 | iPhone 27.0 | iPad 27.0 |
+|---|---|---|---|---|
+| 1. A touch where the tab bar was, and beside the navigation bar, reaches Flutter; the back circle stays native | yes | yes | yes | yes |
+| 2. Flutter's top stays; its bottom becomes the window's | 116 → 116; 83 → 34 | 86 → 86; 77 → 20 | as 26.5 | as 26.5 |
+| 3. A tiled sidebar comes back tiled, start inset 280 | n/a | yes | n/a | yes |
+| 4. The tab bar comes back at its frame (unit test) | yes | yes | yes | yes |
+| 5. Hidden through a push, a pop, two size-class changes | yes | yes | yes | yes |
+
+`setTabBarHidden` alone leaves a tiled sidebar shown (the left inset stays
+280): the shell hides it and puts it back (Task 8).
+
+**Decision: the main design** (`tabBarHidden`), pending Task 8's gate:
+`MinimizeUITests` and the whole `RunnerTests` and `RunnerUITests` on the
+finished tree.
