@@ -206,6 +206,10 @@ final class PageHostController: UIViewController {
   /// A reveal (`revealLargeTitle`) is under way: Flutter's offset waits for
   /// its end, and the expanded top is not learned from the collapsed bar.
   private var revealing = false
+  /// A reveal asked for while scrolled or under an active search: it runs
+  /// once the page is back at offset 0 with the search inactive
+  /// (`revealIfPending`).
+  private var pendingReveal = false
   /// The native back button's proposal (set for pushed pages).
   var onBack: (() -> Void)? {
     didSet {
@@ -228,6 +232,7 @@ final class PageHostController: UIViewController {
     // the large title back out, as a real scroll view does.
     let top = max(expandedTop, proxy.adjustedContentInset.top)
     proxy.contentOffset.y = -top + CGFloat(offset)
+    revealIfPending()
   }
 
   /// Re-reads the resting top: at rest, or always with [force] (a search
@@ -235,9 +240,10 @@ final class PageHostController: UIViewController {
   /// The expanded top only at rest with the search inactive.
   func rereadRestingTop(force: Bool = false) {
     if force || offset <= 0 { restingTop = view.safeAreaInsets.top }
-    if offset <= 0, !revealing, !(navigationItem.searchController?.isActive ?? false) {
+    if offset <= 0, !revealing, !searchIsActive {
       expandedTop = view.safeAreaInsets.top
     }
+    revealIfPending()
   }
 
   /// How far past rest `revealLargeTitle` pulls the proxy: more than the
@@ -254,30 +260,54 @@ final class PageHostController: UIViewController {
   /// brings the title out, as on a real scroll view. So, [delay] seconds
   /// from now (the bar's show animation): lay out, pull, and on the next
   /// run-loop turn put the proxy back at Flutter's offset. Off screen UIKit
-  /// lays the title out by itself (P2); scrolled, or under an active
-  /// search, a collapsed title is right.
+  /// lays the title out by itself (P2). Scrolled, or under an active
+  /// search, a collapsed title is right for now: the reveal waits until
+  /// the page is back at offset 0 with the search inactive.
   func revealLargeTitle(after delay: TimeInterval = 0) {
-    guard !revealing, isOnTopInAWindow, offset <= 0,
-      !(navigationItem.searchController?.isActive ?? false)
-    else { return }
+    guard !revealing, isOnTopInAWindow else { return }
+    guard offset <= 0, !searchIsActive else {
+      pendingReveal = true
+      return
+    }
+    pendingReveal = false
     revealing = true
     DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
       guard let self else { return }
-      if self.offset <= 0, self.isOnTopInAWindow {
+      let pulls = self.offset <= 0 && self.isOnTopInAWindow && !self.searchIsActive
+      if pulls {
         self.navigationController?.view.layoutIfNeeded()
         self.proxy.contentOffset.y =
           -self.proxy.adjustedContentInset.top - PageHostController.largeTitlePull
+      } else if self.isOnTopInAWindow {
+        self.pendingReveal = true
       }
       DispatchQueue.main.async { [weak self] in
         guard let self else { return }
         self.revealing = false
         self.navigationController?.view.layoutIfNeeded()
+        // Pulled, the title is out: the proxy's base whatever Flutter's
+        // offset is by now.
+        if pulls, !self.searchIsActive { self.expandedTop = self.view.safeAreaInsets.top }
         self.rereadRestingTop()
         self.setScrollOffset(self.offset)
         self.shell?.syncFlutter()
       }
     }
   }
+
+  /// Runs a reveal that waited (`pendingReveal`) once the page is back at
+  /// offset 0 with the search inactive; dropped if the title was turned off
+  /// meanwhile.
+  private func revealIfPending() {
+    guard pendingReveal, offset <= 0, !searchIsActive else { return }
+    guard navigationItem.largeTitleDisplayMode == .always else {
+      pendingReveal = false
+      return
+    }
+    revealLargeTitle()
+  }
+
+  private var searchIsActive: Bool { navigationItem.searchController?.isActive ?? false }
 
   private var isOnTopInAWindow: Bool {
     viewIfLoaded?.window != nil && navigationController?.topViewController === self

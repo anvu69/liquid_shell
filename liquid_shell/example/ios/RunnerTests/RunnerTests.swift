@@ -3879,6 +3879,77 @@ extension NativeTabsTests {
     tabs.apply(searchConfig(selected: 2, pages: large))
     XCTAssertEqual(barHeight(of: nav), expanded, accuracy: 0.5, "the large title is out")
   }
+
+  /// A large title that turns on on screen while Flutter is scrolled stays
+  /// collapsed while scrolled, and comes out once Flutter is back at 0: the
+  /// reveal waits for the top instead of being dropped.
+  func testALargeTitleTurnedOnWhileScrolledComesOutAtTheTop() throws {
+    let library = [NativePage(title: "Library", largeTitle: true)]
+    let expanded = try expandedBarHeight(library)
+    let tabs = try installedShell()
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    tabs.setPageScroll(tab: 0, offset: 400)
+    tabs.apply(pagesConfig(library))
+    XCTAssertLessThan(barHeight(of: nav), expanded - 20, "scrolled: collapsed")
+    tabs.setPageScroll(tab: 0, offset: 0)
+    XCTAssertEqual(barHeight(of: nav), expanded, accuracy: 0.5, "at the top, the title is out")
+  }
+
+  /// The same with the scroll arriving while the reveal waits for the bar's
+  /// show animation.
+  func testALargeTitleScrolledBeforeItsRevealComesOutAtTheTop() throws {
+    let library = [NativePage(title: "Library", largeTitle: true)]
+    let expanded = try expandedBarHeight(library)
+    let tabs = try installedShell()
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    tabs.apply(pagesConfig(library))
+    tabs.setPageScroll(tab: 0, offset: 400)
+    XCTAssertLessThan(barHeight(of: nav), expanded - 20, "scrolled: collapsed")
+    tabs.setPageScroll(tab: 0, offset: 0)
+    XCTAssertEqual(barHeight(of: nav), expanded, accuracy: 0.5, "at the top, the title is out")
+  }
+
+  /// The same with the scroll arriving right after the pull, before the
+  /// proxy is put back: the base is learned from the pulled, expanded bar.
+  func testALargeTitleScrolledDuringItsRevealComesOutAtTheTop() throws {
+    let library = [NativePage(title: "Library", largeTitle: true)]
+    let expanded = try expandedBarHeight(library)
+    let tabs = try installedShell()
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    let proxy = nav.rootHost.proxy
+    var pulled = false
+    let observation = proxy.observe(\.contentOffset) { proxy, _ in
+      guard !pulled, proxy.contentOffset.y < -proxy.adjustedContentInset.top - 50 else { return }
+      pulled = true
+      tabs.setPageScroll(tab: 0, offset: 400)
+    }
+    tabs.apply(pagesConfig(library))
+    XCTAssertLessThan(barHeight(of: nav), expanded - 20, "scrolled: collapsed")
+    observation.invalidate()
+    XCTAssertTrue(pulled, "precondition: the reveal pulled")
+    tabs.setPageScroll(tab: 0, offset: 0)
+    XCTAssertEqual(barHeight(of: nav), expanded, accuracy: 0.5, "at the top, the title is out")
+  }
+
+  /// An iPad search root asking for a large title while its search is
+  /// active: the search hides the title on purpose; after it, the title is
+  /// out.
+  func testASearchRootAskingForALargeTitleUnderASearchShowsItAfter() throws {
+    try requireIPad()
+    let large = [NativePage(title: "Search", largeTitle: true)]
+    let baseline = try installedSearchShell(selected: 2, pages: large)
+    let expanded = try barHeight(of: XCTUnwrap(baseline.navControllers[2]))
+    takeDownWindow()
+    let tabs = try installedSearchShell(
+      selected: 2, pages: [NativePage(title: "Search", largeTitle: false)])
+    let nav = try XCTUnwrap(tabs.navControllers[2])
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    tabs.apply(searchConfig(selected: 2, pages: large))
+    settle()
+    XCTAssertTrue(tabs.searchBridge.controller.isActive, "precondition: the search stays active")
+    settle(sending: "searchActive false") { tabs.setSearchActive(false) }
+    XCTAssertEqual(barHeight(of: nav), expanded, accuracy: 0.5, "the large title is out after it")
+  }
 }
 
 // MARK: - P3b-2: the per-tab debug snapshot (spec P3b-2 §5.2)
