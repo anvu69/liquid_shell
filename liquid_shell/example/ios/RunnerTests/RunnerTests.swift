@@ -1570,19 +1570,21 @@ final class NativeTabsTests: XCTestCase {
     XCTAssertEqual(tabs.tabBarMinimizeBehavior, .never)
   }
 
-  /// §8.2, §8.6: each destination's host has a proxy for the bottom edge,
-  /// and Dart's offset reaches that tab's proxy only.
+  /// §8.2, §8.6: each destination's root page has a proxy for the bottom
+  /// edge (spec P3b-2 §6.8), and Dart's offset reaches that tab's proxy
+  /// only.
   func testAMinimizeOffsetReachesItsTabsProxy() throws {
     let tabs = try installedShell()
-    let home = try XCTUnwrap(tabs.minimizeHost(0))
-    let inbox = try XCTUnwrap(tabs.minimizeHost(1))
-    home.loadViewIfNeeded()
-    XCTAssertTrue(home.contentScrollView(for: .bottom) === home.minimizeProxy)
+    let host = try XCTUnwrap(tabs.topHost(ofTab: 0))
+    let home = try XCTUnwrap(tabs.minimizeProxy(ofTab: 0))
+    let inbox = try XCTUnwrap(tabs.minimizeProxy(ofTab: 1))
+    host.loadViewIfNeeded()
+    XCTAssertTrue(host.contentScrollView(for: .bottom) === home)
     tabs.setMinimizeScroll(tab: 1, offset: 240)
     tabs.setMinimizeScroll(tab: 0, offset: .nan)
     tabs.setMinimizeScroll(tab: 9, offset: 50)
-    XCTAssertEqual(inbox.minimizeProxy.offset, 240)
-    XCTAssertEqual(home.minimizeProxy.offset, 0)
+    XCTAssertEqual(inbox.offset, 240)
+    XCTAssertEqual(home.offset, 0)
   }
 
   /// §8.5, spike §3.2: the toggle is the public "expand now"; it does
@@ -1610,12 +1612,12 @@ final class NativeTabsTests: XCTestCase {
     let shell = try tabs(in: window)
     try installer.setMinimizeScroll(tab: 0, offset: 77)
     try installer.expandTabBar()
-    XCTAssertEqual(shell.minimizeHost(0)?.minimizeProxy.offset, 77)
+    XCTAssertEqual(shell.minimizeProxy(ofTab: 0)?.offset, 77)
     XCTAssertEqual(shell.minimizeExpands, 1)
   }
 
   private func panIsOnFlutter(_ tabs: NativeTabsController, host index: Int) -> Bool {
-    guard let pan = tabs.minimizeHost(index)?.minimizeProxy.panGestureRecognizer else { return false }
+    guard let pan = tabs.minimizeProxy(ofTab: index)?.panGestureRecognizer else { return false }
     return tabs.flutter.view.gestureRecognizers?.contains(pan) ?? false
   }
 
@@ -1633,11 +1635,11 @@ final class NativeTabsTests: XCTestCase {
     tabs.apply(config(minimize: true))
     settle()
     XCTAssertTrue(panIsOnFlutter(tabs, host: 0))
-    let pan = try XCTUnwrap(tabs.minimizeHost(0)?.minimizeProxy.panGestureRecognizer)
+    let pan = try XCTUnwrap(tabs.minimizeProxy(ofTab: 0)?.panGestureRecognizer)
     XCTAssertFalse(pan.cancelsTouchesInView)
     XCTAssertFalse(pan.delaysTouchesBegan)
     XCTAssertFalse(pan.delaysTouchesEnded)
-    XCTAssertTrue(tabs.minimizeHost(0)?.minimizeProxy.contentView === tabs.flutter.view)
+    XCTAssertTrue(tabs.minimizeProxy(ofTab: 0)?.contentView === tabs.flutter.view)
     XCTAssertTrue(tabs.debugSnapshot().minimizePanAttached)
   }
 
@@ -1653,7 +1655,7 @@ final class NativeTabsTests: XCTestCase {
     XCTAssertTrue(
       try hit(tabs, CGPoint(x: root.bounds.midX, y: root.bounds.midY)) === tabs.flutter.view,
       "PassThroughView guard: the body's point still hit-tests to the Flutter view")
-    let pan = try XCTUnwrap(tabs.minimizeHost(0)?.minimizeProxy.panGestureRecognizer)
+    let pan = try XCTUnwrap(tabs.minimizeProxy(ofTab: 0)?.panGestureRecognizer)
     XCTAssertEqual(pan.allowedScrollTypesMask, [])
     XCTAssertEqual(pans(on: tabs.flutter.view), 1)
     tabs.apply(config(minimize: true))
@@ -1670,7 +1672,7 @@ final class NativeTabsTests: XCTestCase {
     settle()
     XCTAssertFalse(panIsOnFlutter(tabs, host: 0))
     XCTAssertFalse(panIsOnFlutter(tabs, host: 1))
-    XCTAssertEqual(tabs.minimizeHost(0)?.minimizeProxy.offset, 0)
+    XCTAssertEqual(tabs.minimizeProxy(ofTab: 0)?.offset, 0)
   }
 
   /// Spec §10: a window narrowed to compact takes the pan; widened to
@@ -1688,7 +1690,7 @@ final class NativeTabsTests: XCTestCase {
 
     container.traitOverrides.horizontalSizeClass = .regular
     XCTAssertFalse(stable({ panIsOnFlutter(tabs, host: 0) }, until: { !$0 }), "widened")
-    XCTAssertEqual(tabs.minimizeHost(0)?.minimizeProxy.offset, 0)
+    XCTAssertEqual(tabs.minimizeProxy(ofTab: 0)?.offset, 0)
     XCTAssertEqual(pans(on: tabs.flutter.view), 0)
   }
 
@@ -1708,7 +1710,7 @@ final class NativeTabsTests: XCTestCase {
   /// view, back to its proxy: minimize off, hidden, inert, dormant.
   func testEveryEndOfEligibilityGivesThePanBack() throws {
     let tabs = try installedShell(sizeClass: .compact)
-    let home = try XCTUnwrap(tabs.minimizeHost(0)?.minimizeProxy)
+    let home = try XCTUnwrap(tabs.minimizeProxy(ofTab: 0))
     for (label, ineligible) in [
       ("minimize off", config(minimize: false)),
       ("hidden", config(hidden: true, minimize: true)),
@@ -1733,7 +1735,7 @@ final class NativeTabsTests: XCTestCase {
     settle()
     XCTAssertTrue(panIsOnFlutter(tabs, host: 1))
     XCTAssertFalse(panIsOnFlutter(tabs, host: 0))
-    let home = try XCTUnwrap(tabs.minimizeHost(0)?.minimizeProxy)
+    let home = try XCTUnwrap(tabs.minimizeProxy(ofTab: 0))
     XCTAssertTrue(home.gestureRecognizers?.contains(home.panGestureRecognizer) ?? false)
   }
 
@@ -1763,12 +1765,12 @@ final class NativeTabsTests: XCTestCase {
     weak var old: MinimizeProxy?
     autoreleasepool {
       tabs.apply(config(minimize: true))
-      old = tabs.minimizeHost(0)?.minimizeProxy
+      old = tabs.minimizeProxy(ofTab: 0)
       XCTAssertTrue(panIsOnFlutter(tabs, host: 0), "precondition")
       tabs.apply(config(trailing: true, minimize: true))
     }
     settle()
-    XCTAssertFalse(tabs.minimizeHost(0)?.minimizeProxy === old, "precondition: a new host")
+    XCTAssertFalse(tabs.minimizeProxy(ofTab: 0) === old, "precondition: a new host")
     XCTAssertTrue(panIsOnFlutter(tabs, host: 0))
     XCTAssertEqual(pans(on: tabs.flutter.view), 1)
   }
@@ -1889,7 +1891,7 @@ final class NativeTabsTests: XCTestCase {
 
   /// Q10: no proxy competes with Flutter for the status-bar tap.
   func testThePageProxyLeavesTheStatusBarTapToFlutter() {
-    let page = PageHostController()
+    let page = PageHostController(minimizes: true)
     page.loadViewIfNeeded()
     XCTAssertFalse(page.proxy.scrollsToTop)
     XCTAssertTrue(page.proxy.accessibilityElementsHidden)
@@ -1905,7 +1907,7 @@ final class NativeTabsTests: XCTestCase {
     for (minimize, trailing) in [(true, false), (false, false), (false, true), (true, true)] {
       tabs.apply(config(trailing: trailing, minimize: minimize))
       for index in [0, 1] {
-        let proxy = try XCTUnwrap(tabs.minimizeHost(index)?.minimizeProxy)
+        let proxy = try XCTUnwrap(tabs.minimizeProxy(ofTab: index))
         XCTAssertEqual(
           proxy.bottomEdgeEffect.isHidden, !minimize,
           "tab \(index), minimize \(minimize), trailing \(trailing)")
@@ -3455,6 +3457,151 @@ extension NativeTabsTests {
     XCTAssertFalse(bar.searchTextField.isFirstResponder, "no keyboard")
     XCTAssertFalse(bar.showsScopeBar, "no scope bar")
     XCTAssertFalse(events.sent.contains("searchActive true"), "\(events.sent)")
+  }
+}
+
+// MARK: - P3b-2: a navigation controller on every tab (spec P3b-2 §6.1, §6.8)
+
+@available(iOS 26.0, *)
+extension NativeTabsTests {
+  /// [config()] with [home] as Home's pages (root first); Inbox has none.
+  fileprivate func pagesConfig(
+    _ home: [NativePage], selected: Int64 = 0, minimize: Bool = false,
+    tabBarHidden: Bool = false
+  ) -> NativeChromeConfig {
+    var result = config(selected: selected, minimize: minimize)
+    result.tabs[0].pages = home
+    result.tabBarHidden = tabBarHidden
+    return result
+  }
+
+  func testEveryDestinationTabIsANavigationController() throws {
+    let tabs = try installedShell()
+    for index in [0, 1] {
+      let nav = try XCTUnwrap(tabs.navControllers[index], "tab \(index)")
+      XCTAssertEqual(nav.viewControllers.count, 1, "its root, built with the tabs")
+    }
+    XCTAssertTrue(tabs.selectedViewController === tabs.navControllers[0])
+  }
+
+  func testATabWithoutPagesHidesItsNavigationBar() throws {
+    let tabs = try installedShell()
+    for index in [0, 1] {
+      let nav = try XCTUnwrap(tabs.navControllers[index], "tab \(index)")
+      XCTAssertTrue(nav.isNavigationBarHidden, "tab \(index): no LiquidPage, no bar")
+    }
+    let page = try XCTUnwrap(tabs.topHost(ofTab: 0)?.view)
+    XCTAssertEqual(
+      tabs.flutter.view.safeAreaInsets.top, page.safeAreaInsets.top, accuracy: 0.5,
+      "Flutter's top has no bar in it")
+  }
+
+  /// The title table's plain-tab rows on the real tree (spec P3b-2 §4.2):
+  /// a root with no title row hides the bar, a push shows it with the back
+  /// circle, the pop hides it again; `null` is on the bar row at compact
+  /// width only; `true` is the collapsing row.
+  func testAnInlineRootHidesTheBarAndAPushShowsIt() throws {
+    let tabs = try installedShell()
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    let compact = tabs.isCompact
+    tabs.apply(pagesConfig([NativePage(title: "Home", largeTitle: false)]))
+    settle()
+    XCTAssertTrue(nav.isNavigationBarHidden, "a root with no title row")
+    tabs.apply(
+      pagesConfig([NativePage(title: "Home", largeTitle: false), NativePage(title: "Detail")]))
+    settle()
+    XCTAssertFalse(nav.isNavigationBarHidden, "a pushed page shows the bar")
+    let top = try XCTUnwrap(nav.topViewController)
+    XCTAssertEqual(top.title, "Detail")
+    XCTAssertEqual(top.navigationItem.largeTitleDisplayMode, .never, "pushed: inline")
+    XCTAssertNotNil(top.navigationItem.backAction, "the back circle proposes")
+    tabs.apply(pagesConfig([NativePage(title: "Home", largeTitle: false)]))
+    settle()
+    XCTAssertTrue(nav.isNavigationBarHidden, "popped back to the root")
+    tabs.apply(pagesConfig([NativePage(title: "Home")]))
+    settle()
+    XCTAssertEqual(nav.isNavigationBarHidden, !compact, "null: the bar row at compact width")
+    XCTAssertEqual(nav.rootHost.navigationItem.largeTitleDisplayMode, compact ? .inline : .never)
+    tabs.apply(pagesConfig([NativePage(title: "Home", largeTitle: true)]))
+    settle()
+    XCTAssertFalse(nav.isNavigationBarHidden)
+    XCTAssertEqual(nav.rootHost.navigationItem.largeTitleDisplayMode, .always)
+  }
+
+  /// Spec P3b-2 §6.8: the pan and Dart's offset follow the selected tab's
+  /// top page, pushed pages included.
+  func testMinimizeFollowsTheTopPageOfAnyTab() throws {
+    let tabs = try installedShell(sizeClass: .compact)
+    tabs.apply(pagesConfig([NativePage(title: "Home")], minimize: true))
+    settle()
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    let root = try XCTUnwrap(nav.rootHost.minimizeProxy)
+    XCTAssertTrue(tabs.attachedMinimizeProxy === root, "the root page's")
+    tabs.apply(
+      pagesConfig([NativePage(title: "Home"), NativePage(title: "Detail")], minimize: true))
+    settle()
+    let pushed = try XCTUnwrap(tabs.minimizeProxy(ofTab: 0))
+    XCTAssertFalse(pushed === root, "a pushed page has its own")
+    XCTAssertTrue(nav.topViewController?.contentScrollView(for: .bottom) === pushed)
+    XCTAssertTrue(tabs.attachedMinimizeProxy === pushed, "the pan moved to the pushed page")
+    XCTAssertEqual(pans(on: tabs.flutter.view), 1)
+    tabs.setMinimizeScroll(tab: 0, offset: 320)
+    XCTAssertEqual(pushed.offset, 320, "Dart's offset reaches the top page")
+    XCTAssertEqual(root.offset, 0)
+    tabs.apply(
+      pagesConfig([NativePage(title: "Home"), NativePage(title: "Detail")], minimize: false))
+    XCTAssertTrue(pushed.bottomEdgeEffect.isHidden, "the edge policy reaches pushed pages")
+    XCTAssertTrue(root.bottomEdgeEffect.isHidden)
+  }
+
+  func testTheRootHostKeepsItsMinimizeProxyThroughAPushAndAPop() throws {
+    let tabs = try installedShell(sizeClass: .compact)
+    tabs.apply(pagesConfig([NativePage(title: "Home")], minimize: true))
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    let host = nav.rootHost
+    let proxy = try XCTUnwrap(host.minimizeProxy)
+    tabs.apply(
+      pagesConfig([NativePage(title: "Home"), NativePage(title: "Detail")], minimize: true))
+    settle()
+    tabs.apply(pagesConfig([NativePage(title: "Home")], minimize: true))
+    settle()
+    XCTAssertTrue(tabs.navControllers[0] === nav, "no rebuild")
+    XCTAssertTrue(nav.rootHost === host)
+    XCTAssertTrue(tabs.minimizeProxy(ofTab: 0) === proxy)
+    XCTAssertTrue(tabs.attachedMinimizeProxy === proxy, "the pan is back on the root's")
+  }
+
+  func testAPoppedHostGivesItsPanBack() throws {
+    let tabs = try installedShell(sizeClass: .compact)
+    weak var popped: MinimizeProxy?
+    autoreleasepool {
+      tabs.apply(
+        pagesConfig([NativePage(title: "Home"), NativePage(title: "Detail")], minimize: true))
+      settle()
+      popped = tabs.minimizeProxy(ofTab: 0)
+      XCTAssertTrue(tabs.attachedMinimizeProxy === popped, "precondition: the pushed page's")
+      tabs.apply(pagesConfig([NativePage(title: "Home")], minimize: true))
+      settle()
+    }
+    settle()
+    XCTAssertEqual(pans(on: tabs.flutter.view), 1, "only the root's")
+    XCTAssertTrue(tabs.attachedMinimizeProxy === tabs.navControllers[0]?.rootHost.minimizeProxy)
+    if let popped {
+      XCTAssertTrue(
+        popped.gestureRecognizers?.contains(popped.panGestureRecognizer) ?? false, "given back")
+    }
+  }
+
+  /// Spec P3b-2 §6.1: under the compact bar the cluster is real while the
+  /// selected tab's navigation bar is hidden, zero while it shows.
+  func testWindowControlsAreRealUnderAHiddenBarAndZeroUnderAShownOne() throws {
+    let tabs = try installedShell(sizeClass: .compact)
+    let windowed = NativeWindowControls(leading: 66, top: 44)
+    tabs.readWindowControls = { _ in windowed }
+    XCTAssertEqual(tabs.windowControls(), windowed, "no pages: the bar is hidden")
+    tabs.apply(pagesConfig([NativePage(title: "Home"), NativePage(title: "Detail")]))
+    settle()
+    XCTAssertEqual(tabs.windowControls(), NativeWindowControls(leading: 0, top: 0), "it shows")
   }
 }
 

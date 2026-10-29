@@ -31,12 +31,10 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   private(set) var searchTab: UISearchTab?
   /// Its index in Dart's destinations.
   private(set) var searchIndex: Int?
-  /// Tabs with a native navigation bar, by destination index (P3b-1: the
-  /// search tab only).
+  /// Every destination's navigation controller, by index (spec P3b-2
+  /// §6.1). Built with the tabs; a plain tab's root host carries its
+  /// minimize proxy (spec VK-600 §8.2), and so does every page pushed there.
   private(set) var navControllers: [Int: ShellNavController] = [:]
-  /// The host of every non-search destination, by index: its proxy takes
-  /// Dart's minimize offset (spec VK-600 §8.2). Built with the tabs.
-  private var minimizeHosts: [Int: TabHostController] = [:]
   /// The search field and its delegates; one per shell, re-hosted when the
   /// tabs are rebuilt.
   let searchBridge = SearchBridge()
@@ -202,13 +200,7 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       }
       showTabs(new)
       applySearch(new)
-      for (index, nav) in navControllers where new.tabs.indices.contains(index) {
-        nav.applyPages(
-          new.tabs[index].pages, rootTitle: new.tabs[index].title, tabIndex: index,
-          // Before `select`: the tab shown now, and still after it.
-          shown: selectedViewController === nav && Int(new.selectedIndex) == index,
-          events: events)
-      }
+      applyPages(new, animated: true)
       // A page pushed over the search root drops a kept activation: the
       // pop back must not bring the search (VK-634, `isSearchRootOnTop`).
       if !isSearchRootOnTop { searchBridge.dropPendingActivation() }
@@ -217,9 +209,10 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     setFooter(new.footer)
     let behavior: UITabBarController.MinimizeBehavior = new.minimizeOnScroll ? .onScrollDown : .never
     if tabBarMinimizeBehavior != behavior { tabBarMinimizeBehavior = behavior }
-    // Q14: the policy is `MinimizeProxy.hidesBottomEdgeEffect`'s.
+    // Q14: the policy is `MinimizeProxy.hidesBottomEdgeEffect`'s, on every
+    // page host's proxy, pushed ones included (after `applyPages`).
     let hidesEdge = MinimizeProxy.hidesBottomEdgeEffect(minimizeOnScroll: new.minimizeOnScroll)
-    for host in minimizeHosts.values { host.minimizeProxy.bottomEdgeEffect.isHidden = hidesEdge }
+    for proxy in allMinimizeProxies { proxy.bottomEdgeEffect.isHidden = hidesEdge }
     view.tintColor = UIColor(argb: new.tintArgb)
     traitOverrides.userInterfaceStyle = new.dark ? .dark : .light
     traitOverrides.layoutDirection = new.rtl ? .rightToLeft : .leftToRight
@@ -264,13 +257,12 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     searchTab = nil
     searchIndex = nil
     navControllers = [:]
-    minimizeHosts = [:]
     destinationTabs = new.tabs.enumerated().map { index, spec in
       if spec.search {
-        let root = PageHostController()
+        let root = PageHostController(minimizes: false)
         root.installSearch(
           searchBridge, style: searchStyle(rootLargeTitle: spec.pages.first?.largeTitle ?? nil))
-        let nav = ShellNavController(root: root)
+        let nav = ShellNavController(root: root, search: true)
         navControllers[index] = nav
         let tab = UISearchTab { _ in nav }
         // The video's state 2: selecting search does not focus the field (Q13).
@@ -280,10 +272,12 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
         return tab
       }
       // Created now, not in the provider: Dart's minimize offset reaches
-      // a host UIKit has not asked for yet. The provider runs once per tab.
-      let host = TabHostController()
-      minimizeHosts[index] = host
-      let tab = UITab(title: "", image: nil, identifier: "destination\(index)") { _ in host }
+      // a root UIKit has not asked for yet, and the root keeps the tab's
+      // proxy for the tabs' life (spec P3b-2 §6.8). The provider runs once
+      // per tab.
+      let nav = ShellNavController(root: PageHostController(minimizes: true), search: false)
+      navControllers[index] = nav
+      let tab = UITab(title: "", image: nil, identifier: "destination\(index)") { _ in nav }
       // `.fixed`: nothing to add, remove or reorder, so no sidebar "Edit".
       tab.preferredPlacement = spec.sidebarOnly ? .sidebarOnly : .fixed
       return tab
@@ -323,6 +317,20 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       isPad: traitCollection.userInterfaceIdiom == .pad,
       osMajor: ProcessInfo.processInfo.operatingSystemVersion.majorVersion,
       rootLargeTitle: rootLargeTitle)
+  }
+
+  /// Every tab's stack, title modes and bar (spec P3b-2 §6.1), at UIKit's
+  /// size class. [animated]: the tab shown now may animate; never after a
+  /// size-class change.
+  private func applyPages(_ config: NativeChromeConfig, animated: Bool) {
+    let compact = isCompact
+    for (index, nav) in navControllers where config.tabs.indices.contains(index) {
+      nav.applyPages(
+        config.tabs[index].pages, rootTitle: config.tabs[index].title, tabIndex: index,
+        // Before `select`: the tab shown now, and still after it.
+        shown: animated && selectedViewController === nav && Int(config.selectedIndex) == index,
+        compact: compact, events: events)
+    }
   }
 
   /// Placeholder, scopes and placement of the search tab (spec §7.2,
@@ -527,9 +535,10 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   /// corner read is meaningless there: Flutter's safe top (the bar row) is
   /// below the cluster, so the vertical delta is 0 and the leading one
   /// alone would read as a cluster (`ShellMath.fallbackClusterTop`). The
-  /// compact bar is at the bottom: the top is Flutter's, so it is read.
+  /// compact bar is at the bottom: the top is Flutter's, so it is read,
+  /// unless the selected tab's navigation bar shows (spec P3b-2 §6.1).
   func windowControls() -> NativeWindowControls {
-    if chromeVisible, !isCompact || selectedHasNavigationBar {
+    if chromeVisible, !isCompact || selectedShowsNavigationBar {
       return NativeWindowControls(leading: 0, top: 0)
     }
     return readWindowControls(flutter.viewIfLoaded)
@@ -711,7 +720,12 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     navControllers[index]?.topViewController as? PageHostController
   }
 
-  private var selectedHasNavigationBar: Bool { selectedViewController is ShellNavController }
+  /// Whether the selected tab's navigation bar is on screen: the search
+  /// tab's always, a plain tab's while it has a title to show.
+  private var selectedShowsNavigationBar: Bool {
+    guard let nav = selectedViewController as? ShellNavController else { return false }
+    return !nav.isNavigationBarHidden
+  }
 
   /// The selected destination's index in Dart's list, nil when none is. The
   /// search destination is read from the selected controller
@@ -744,19 +758,19 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   /// this shell in it, until UIKit lets it go.
   private(set) var retired = false
 
-  /// Puts the selected tab's proxy pan on the Flutter view when the native
-  /// bar may minimize, and takes it back otherwise. Leaving compact resets
-  /// every proxy, so the top bar's edge effect never sees an old offset.
+  /// Puts the pan of the selected tab's top page's proxy on the Flutter
+  /// view when the native bar may minimize, and takes it back otherwise.
+  /// Leaving compact resets every proxy, so the top bar's edge effect never
+  /// sees an old offset.
   func updateMinimizePan() {
     var want: MinimizeProxy?
     if !retired, let config, chromeVisible, config.interactive, config.minimizeOnScroll,
-      isCompact, let host = selectedViewController as? TabHostController,
-      let content = flutter.viewIfLoaded
+      isCompact, let proxy = selectedMinimizeProxy, let content = flutter.viewIfLoaded
     {
-      host.minimizeProxy.contentView = content
-      want = host.minimizeProxy
+      proxy.contentView = content
+      want = proxy
     }
-    if !isCompact { for host in minimizeHosts.values { host.minimizeProxy.setOffset(0) } }
+    if !isCompact { for proxy in allMinimizeProxies { proxy.setOffset(0) } }
     guard want !== attachedMinimizeProxy else { return }
     detachMinimizePan()
     guard let proxy = want, let content = flutter.viewIfLoaded else { return }
@@ -766,6 +780,13 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     pan.delaysTouchesEnded = false
     content.addGestureRecognizer(pan)
     attachedMinimizeProxy = proxy
+  }
+
+  /// The selected tab's top page's proxy: the one UIKit's tab bar follows
+  /// (spec P3b-2 §6.8). nil on the search tab.
+  private var selectedMinimizeProxy: MinimizeProxy? {
+    ((selectedViewController as? ShellNavController)?.topViewController as? PageHostController)?
+      .minimizeProxy
   }
 
   /// Gives the attached pan back to its proxy.
@@ -784,12 +805,21 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     detachMinimizePan()
   }
 
-  func minimizeHost(_ index: Int) -> TabHostController? { minimizeHosts[index] }
+  /// The minimize proxy of tab [index]'s top page (spec P3b-2 §6.8); nil
+  /// for the search tab.
+  func minimizeProxy(ofTab index: Int) -> MinimizeProxy? { topHost(ofTab: index)?.minimizeProxy }
 
-  /// Dart's body offset for destination [tab] (spec §8.6).
+  /// Every page host's minimize proxy, pushed pages included.
+  private var allMinimizeProxies: [MinimizeProxy] {
+    navControllers.values.flatMap { nav in nav.hosts.compactMap(\.minimizeProxy) }
+  }
+
+  /// Dart's body offset for destination [tab] (spec §8.6): its top page's
+  /// proxy. Dart's offset is the tab's, continuous across pages, and is
+  /// sent again after every config with another stack.
   func setMinimizeScroll(tab: Int, offset: Double) {
-    guard offset.isFinite, let host = minimizeHosts[tab] else { return }
-    host.minimizeProxy.setOffset(offset)
+    guard offset.isFinite, let proxy = minimizeProxy(ofTab: tab) else { return }
+    proxy.setOffset(offset)
   }
 
   /// Expands a minimized bar: `.never` then `.onScrollDown` (spike §3.2;
@@ -910,8 +940,9 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   }
 }
 
-/// The empty, transparent controller of every tab. The Flutter view never
-/// moves in here: the host only reports its frame and safe area.
+/// The empty, transparent controller of the trailing action's tab (never
+/// selected). The Flutter view never moves in here: the host only reports
+/// its frame and safe area.
 @available(iOS 26.0, *)
 final class TabHostController: UIViewController {
   private var shell: NativeTabsController? { tabBarController as? NativeTabsController }

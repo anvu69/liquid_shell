@@ -1,9 +1,11 @@
 import UIKit
 
-/// The clear navigation controller of a tab with a native navigation bar
-/// (spec P3b §7.1; P3b-1: the search tab). Its pages are clear
-/// `PageHostController`s that mirror the tab's Flutter pages; the Flutter
-/// view stays underneath and never moves.
+/// The clear navigation controller of every destination tab (spec P3b
+/// §7.1; P3b-2 §6.1). Its pages are clear `PageHostController`s that
+/// mirror the tab's Flutter pages; the Flutter view stays underneath and
+/// never moves. A plain tab hides its bar while it has no title to show
+/// (`PageTitleMath.barHidden`); the search tab's holds the field and
+/// always shows.
 @available(iOS 26.0, *)
 final class ShellNavController: UINavigationController {
   /// iPhone, a page pushed inside the search tab: whether it hides the tab
@@ -13,15 +15,25 @@ final class ShellNavController: UINavigationController {
   static var hidesBarWhenPushed = false
 
   let rootHost: PageHostController
+  /// The search tab's: its bar is never hidden, its root's title mode is
+  /// `SearchMath.style`'s, and its pages do not minimize the tab bar.
+  let isSearch: Bool
 
-  init(root: PageHostController) {
+  /// [root] is built with the tabs and kept for their life. A plain tab
+  /// starts with its bar hidden: it has no pages yet.
+  init(root: PageHostController, search: Bool) {
     rootHost = root
+    isSearch = search
     super.init(nibName: nil, bundle: nil)
     setViewControllers([root], animated: false)
+    if !search { setNavigationBarHidden(true, animated: false) }
   }
 
   @available(*, unavailable)
   required init?(coder: NSCoder) { nil }
+
+  /// The page hosts, root first.
+  var hosts: [PageHostController] { viewControllers.compactMap { $0 as? PageHostController } }
 
   /// Dart's answer to every pop UIKit starts by itself (spec P3b §7.6):
   /// the page index that should end on top. Set by `applyPages`.
@@ -78,9 +90,10 @@ final class ShellNavController: UINavigationController {
   /// that selects the tab, or leaves it, is a restore, set without a
   /// transition. The window does not tell: UIKit keeps a tab just left in
   /// it for a while (iOS 26.5), and longer after a transition ran as the
-  /// tab went.
+  /// tab went. Title modes and a plain tab's bar follow the title table
+  /// (`PageTitleMath`, spec P3b-2 §4.2) at UIKit's size class [compact].
   func applyPages(
-    _ pages: [NativePage], rootTitle: String, tabIndex: Int, shown: Bool,
+    _ pages: [NativePage], rootTitle: String, tabIndex: Int, shown: Bool, compact: Bool,
     events: NativeShellFlutterApiProtocol
   ) {
     let wanted = pages.isEmpty ? [NativePage(title: rootTitle, largeTitle: nil)] : pages
@@ -94,10 +107,16 @@ final class ShellNavController: UINavigationController {
       }
     }
     rootHost.title = wanted[0].title
-    var hosts = viewControllers.compactMap { $0 as? PageHostController }
+    if !isSearch {
+      rootHost.navigationItem.largeTitleDisplayMode = PageTitleMath.rootMode(
+        largeTitle: wanted[0].largeTitle, compact: compact)
+    }
+    var hosts = self.hosts
     if hosts.count > wanted.count { hosts = Array(hosts.prefix(wanted.count)) }
     while hosts.count < wanted.count {
-      let host = PageHostController()
+      // A plain tab's pushed pages minimize the tab bar too (spec P3b-2
+      // §6.8); the search tab's never do (VK-600 Q5).
+      let host = PageHostController(minimizes: !isSearch)
       host.hidesBottomBarWhenPushed = Self.hidesBarWhenPushed
       host.onBack = {
         events.onBackTapped(tab: Int64(tabIndex)) { result in
@@ -112,13 +131,15 @@ final class ShellNavController: UINavigationController {
     }
     for (host, page) in zip(hosts, wanted).dropFirst() {
       host.title = page.title
-      host.navigationItem.largeTitleDisplayMode = (page.largeTitle ?? false) ? .always : .never
-    }
-    guard hosts.map(ObjectIdentifier.init) != viewControllers.map(ObjectIdentifier.init) else {
-      return
+      host.navigationItem.largeTitleDisplayMode = PageTitleMath.pushedMode
     }
     let animated =
       shown && viewIfLoaded?.window != nil && !UIAccessibility.isReduceMotionEnabled
+    let hideBar = !isSearch && PageTitleMath.barHidden(pages: pages, compact: compact)
+    if isNavigationBarHidden != hideBar { setNavigationBarHidden(hideBar, animated: animated) }
+    guard hosts.map(ObjectIdentifier.init) != viewControllers.map(ObjectIdentifier.init) else {
+      return
+    }
     setViewControllers(hosts, animated: animated)
     // Spec §7.9: once more when the push or pop ends, so Flutter ends on the
     // new top page's insets. Without an animation the shell syncs at the end
@@ -135,6 +156,27 @@ final class ShellNavController: UINavigationController {
 @available(iOS 26.0, *)
 final class PageHostController: UIViewController {
   private var shell: NativeTabsController? { tabBarController as? NativeTabsController }
+
+  /// The tab bar's minimize proxy (spec VK-600 §8.2, P3b-2 §6.8): this
+  /// page's `.bottom` content scroll view, so UIKit's tab bar follows the
+  /// top page of a plain tab. nil on the search tab, which never
+  /// minimizes (VK-600 Q5).
+  let minimizeProxy: MinimizeProxy?
+
+  init(minimizes: Bool) {
+    minimizeProxy = minimizes ? MinimizeProxy() : nil
+    super.init(nibName: nil, bundle: nil)
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) { nil }
+
+  /// A host goes (a pop, a rebuild, the shell's release) while its pan may
+  /// still be on the Flutter view, which outlives it: take it back first,
+  /// as `TabHostController` does (Swift 5 mode, see its `deinit`).
+  deinit {
+    if let minimizeProxy { minimizeProxy.addGestureRecognizer(minimizeProxy.panGestureRecognizer) }
+  }
 
   /// Invisible scroll view UIKit reads for the large title's collapse and
   /// the scroll-edge effect, moved by code from Flutter's scroll offset
@@ -201,6 +243,12 @@ final class PageHostController: UIViewController {
     proxy.accessibilityElementsHidden = true
     view.addSubview(proxy)
     setContentScrollView(proxy, for: .top)
+    if let minimizeProxy {
+      minimizeProxy.frame = view.bounds
+      minimizeProxy.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+      view.addSubview(minimizeProxy)
+      setContentScrollView(minimizeProxy, for: .bottom)
+    }
   }
 
   override func viewIsAppearing(_ animated: Bool) {
