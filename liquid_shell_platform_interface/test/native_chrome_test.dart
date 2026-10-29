@@ -572,4 +572,19 @@ void main() {
     );
     expect(on.toString(), contains('minimizeOnScroll: true'));
   });
+
+  test('tabBarHidden: off by default, part of equality (VK-442)', () {
+    const shown = LiquidNativeChromeConfig(engaged: true);
+    const hidden = LiquidNativeChromeConfig(engaged: true, tabBarHidden: true);
+    expect(shown.tabBarHidden, isFalse);
+    expect(LiquidNativeChromeConfig.dormant.tabBarHidden, isFalse);
+    expect(hidden, isNot(shown));
+    expect(hidden.hashCode, isNot(shown.hashCode));
+    expect(
+      hidden,
+      const LiquidNativeChromeConfig(engaged: true, tabBarHidden: true),
+    );
+    expect(hidden.toString(), contains('tabBarHidden: true'));
+    expect(hidden.visible, isTrue, reason: 'only the tab bar hides');
+  });
 }
