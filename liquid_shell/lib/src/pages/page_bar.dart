@@ -1,41 +1,58 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:liquid_shell/src/native/window_controls.dart';
 import 'package:liquid_shell/src/pages/liquid_page.dart';
+import 'package:liquid_shell/src/pages/page_title.dart';
 import 'package:liquid_shell/src/shell/shell_scope.dart';
 
 /// Height of the bar row (iOS 26: 54pt).
 const double kPageBarExtent = 54;
 
-/// Height of the large title row under the bar row (a pushed page's large
-/// title; a root page's sits on the bar row).
+/// Height of the large-title row under the bar row (a root page's
+/// collapsing large title).
 const double kLargeTitleExtent = 52;
 
 /// Fade height of the scroll-edge effect under the bar.
 const double _kEdgeFade = 24;
 
-/// A `LiquidPage`'s bar where no native bar draws it: the
-/// glass back circle, the inline or large title, and a scroll-edge fade.
-/// A root page's large title sits on the bar row, leading, as UIKit's
-/// `.inline` large title and Apple Music draw it; under a back button it
-/// takes its own row below the bar, as UIKit's `.inline` turns `.always`.
-/// Its child gets the bar's height added to its top padding, so
-/// `LiquidShellScope.contentPaddingOf` keeps content below it.
+/// The collapse of a collapsing large title at scroll [offset] (points
+/// scrolled below the top): the large row moves up by `largeShift`, from 0
+/// to [extent]; the inline title's opacity rises from 0 at half of [extent]
+/// to 1 at [extent].
+({double largeShift, double inlineOpacity}) pageBarCollapse(
+  double offset, {
+  double extent = kLargeTitleExtent,
+}) {
+  final half = extent / 2;
+  return (
+    largeShift: offset.clamp(0.0, extent),
+    inlineOpacity: ((offset - half) / half).clamp(0.0, 1.0),
+  );
+}
+
+/// A `LiquidPage`'s bar where no native bar draws it: the glass back
+/// circle, the title as its [PageTitleMode] draws it, and a scroll-edge
+/// fade. Its child gets the bar's height added to its top padding, so
+/// `LiquidShellScope.contentPaddingOf` keeps content below it. A collapsing
+/// large title keeps that padding while it collapses, as UIKit holds the
+/// top inset, so the page is never rebuilt for a scroll frame.
 class FlutterPageBar extends StatelessWidget {
-  /// Creates the bar.
+  /// Creates the bar. A [PageTitleMode.hidden] title has no bar.
   const FlutterPageBar({
     required this.title,
-    required this.large,
+    required this.mode,
     required this.canPop,
     required this.hideLargeTitle,
     required this.child,
+    this.scrollOffset,
     super.key,
-  });
+  }) : assert(mode != PageTitleMode.hidden, 'a hidden title has no bar');
 
   /// The title.
   final String title;
 
-  /// Large title (otherwise inline in the bar row).
-  final bool large;
+  /// How the title is drawn.
+  final PageTitleMode mode;
 
   /// Whether the page's navigator can pop: the back button shows.
   final bool canPop;
@@ -43,45 +60,74 @@ class FlutterPageBar extends StatelessWidget {
   /// Hides the large title (an active search hides it, as UIKit does).
   final bool hideLargeTitle;
 
+  /// The scroll offset of the page's first vertical scroll view: it
+  /// collapses a [PageTitleMode.largeCollapsing] title. Null: the title
+  /// stays expanded.
+  final ValueListenable<double>? scrollOffset;
+
   /// The page.
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
+    final offset = scrollOffset;
+    if (mode != PageTitleMode.largeCollapsing || offset == null) {
+      return _bar(context, pageBarCollapse(0), child);
+    }
+    // Rebuilds the title rows and the fade for a scroll frame, never the
+    // page: it is the builder's child.
+    return ValueListenableBuilder<double>(
+      valueListenable: offset,
+      builder: (context, value, page) =>
+          _bar(context, pageBarCollapse(value), page!),
+      child: child,
+    );
+  }
+
+  Widget _bar(
+    BuildContext context,
+    ({double largeShift, double inlineOpacity}) collapse,
+    Widget page,
+  ) {
     final media = MediaQuery.of(context);
     final theme = Theme.of(context);
     // Below the shell's own chrome at the top (a Flutter top tab bar).
     final barTop = LiquidShellScope.contentPaddingOf(context).top;
-    // On the bar row with no back button; on its own row below otherwise.
-    final largeInRow = large && !canPop;
-    final showLargeRow = large && canPop && !hideLargeTitle;
-    final bottom =
-        barTop + kPageBarExtent + (showLargeRow ? kLargeTitleExtent : 0);
+    final rowBottom = barTop + kPageBarExtent;
+    final showLargeRow =
+        mode == PageTitleMode.largeCollapsing && !hideLargeTitle;
+    // The page's top padding: it stays under the large row while the row
+    // collapses.
+    final bottom = rowBottom + (showLargeRow ? kLargeTitleExtent : 0);
+    // Content shows below what is left of the large row.
+    final fadeEnd = bottom - (showLargeRow ? collapse.largeShift : 0);
     final largeStyle = theme.textTheme.headlineLarge?.copyWith(
       fontWeight: FontWeight.w700,
     );
-    final Widget rowTitle;
-    if (largeInRow && !hideLargeTitle) {
-      rowTitle = Text(
+    final inline = Text(
+      title,
+      textAlign: TextAlign.center,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: theme.textTheme.titleMedium?.copyWith(
+        fontWeight: FontWeight.w600,
+      ),
+    );
+    final rowTitle = switch (mode) {
+      PageTitleMode.inline => inline,
+      PageTitleMode.largeInRow when !hideLargeTitle => Text(
         title,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: largeStyle,
-      );
-    } else if (large) {
-      // Hidden by an active search, or on its own row below.
-      rowTitle = const SizedBox.shrink();
-    } else {
-      rowTitle = Text(
-        title,
-        textAlign: TextAlign.center,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w600,
-        ),
-      );
-    }
+      ),
+      PageTitleMode.largeCollapsing when showLargeRow => Opacity(
+        opacity: collapse.inlineOpacity,
+        child: inline,
+      ),
+      // Hidden by an active search.
+      _ => const SizedBox.shrink(),
+    };
     final padded = media.copyWith(
       padding: media.padding.copyWith(top: bottom),
       viewPadding: media.viewPadding.copyWith(top: bottom),
@@ -94,12 +140,12 @@ class FlutterPageBar extends StatelessWidget {
             child: ShaderMask(
               blendMode: BlendMode.dstIn,
               shaderCallback: (rect) {
-                // Ends under the large title row too: that title does not
-                // collapse here, so content must not scroll through it.
-                final end = rect.height == 0 ? 0.0 : bottom / rect.height;
+                // Content must not scroll through the bar row or what is
+                // left of the large row.
+                final end = rect.height == 0 ? 0.0 : fadeEnd / rect.height;
                 final start = rect.height == 0
                     ? 0.0
-                    : (bottom - _kEdgeFade) / rect.height;
+                    : (fadeEnd - _kEdgeFade) / rect.height;
                 return LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -107,7 +153,7 @@ class FlutterPageBar extends StatelessWidget {
                   stops: [start.clamp(0, 1), end.clamp(0, 1)],
                 ).createShader(rect);
               },
-              child: child,
+              child: page,
             ),
           ),
         ),
@@ -135,19 +181,28 @@ class FlutterPageBar extends StatelessWidget {
           ),
         ),
         if (showLargeRow)
-          PositionedDirectional(
-            top: barTop + kPageBarExtent,
-            start: 16,
-            end: 16,
+          Positioned(
+            top: rowBottom,
+            left: 0,
+            right: 0,
             height: kLargeTitleExtent,
-            child: _Typography(
-              child: Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: largeStyle,
+            // The row scrolls up under the bar row, clipped to its own box.
+            child: ClipRect(
+              child: Transform.translate(
+                offset: Offset(0, -collapse.largeShift),
+                child: _Typography(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: largeStyle,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),

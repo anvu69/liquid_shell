@@ -69,7 +69,8 @@ the swipe on any tab's pushed page popped the whole shell.
   shell's `body` that is on screen. A branch hidden with `Visibility` (an
   `IndexedStack`), `Offstage` or `TickerMode` (a router's indexed-stack
   shell route) is not the selected one, so a page kept in another tab
-  never holds back the shell's own pop.
+  never holds back the shell's own pop. Neither does a page in a shell
+  nested in another tab.
 - **Every back goes through `maybePop`.** A page's `PopScope` keeps its
   say: a refusing page stays, and the shell's route stays with it.
 - **The order** is the overlay sidebar, then an active search, then the
@@ -90,9 +91,12 @@ the swipe on any tab's pushed page popped the whole shell.
   the edge swipe pop its page, then the tab's. It counts only while its
   page is the top route of its navigator: a dialog or sheet above it
   closes first. An overlay entry the app inserts (a toast) is not a route.
-- **A shell nested in another shell's body (sub-tabs)** answers back in
-  its own order, as back to its own route would: its overlay sidebar
-  closes, then its active search ends, then its tab's page pops. The
+- **A shell nested in another shell's body (sub-tabs)**, with or without
+  a navigator between, answers back in its own order, as back to its own
+  route would: its overlay sidebar closes, then its active search ends,
+  then its tab's page pops. The outer shell asks it only while it is on
+  screen, after the outer shell's own overlay sidebar and search, so one
+  back does one thing: a refusing page's `PopScope` is asked once. The
   outer shell's route and edge swipe wait until it has nothing left.
 - A shell at the app's root has no edge swipe of its own; there system
   back (Android) pops the tab's page instead of leaving the app.

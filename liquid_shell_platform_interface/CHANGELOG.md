@@ -1,3 +1,7 @@
+## 0.1.0-dev.9
+
+First release on pub.dev.
+
 ## 0.1.0-dev.8
 
 - Native minimize on scroll (VK-600): `LiquidNativeChromeConfig.minimizeOnScroll`
