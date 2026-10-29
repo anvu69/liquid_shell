@@ -3968,6 +3968,12 @@ extension NativeTabsTests {
     XCTAssertEqual(snapshot.first?.titleModes, ["always", "never"])
     XCTAssertEqual(snapshot.last?.pageTitles, ["Inbox"], "no pages: the destination's label")
     XCTAssertEqual(snapshot.last?.barHidden, true)
+    let home = try XCTUnwrap(tabs.navControllers[0])
+    XCTAssertEqual(
+      snapshot.first?.barHeight ?? -1, Double(home.navigationBar.frame.height), accuracy: 0.5,
+      "the bar as UIKit lays it out")
+    XCTAssertGreaterThan(snapshot.first?.barHeight ?? 0, 0)
+    XCTAssertEqual(snapshot.last?.barHeight, 0, "a hidden bar")
   }
 }
 

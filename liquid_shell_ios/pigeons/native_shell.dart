@@ -125,6 +125,7 @@ class NativeTabSnapshot {
     required this.pageTitles,
     required this.barHidden,
     required this.titleModes,
+    required this.barHeight,
   });
 
   /// The destination's index in the config's tabs.
@@ -139,6 +140,11 @@ class NativeTabSnapshot {
   /// Each page's `largeTitleDisplayMode`, root first: "inline", "always",
   /// "never" or "automatic".
   List<String> titleModes;
+
+  /// The navigation bar's height in points as UIKit lays it out, 0 while
+  /// hidden. A root's large title row is in it: it drops by that row when
+  /// the title collapses.
+  double barHeight;
 }
 
 /// Debug builds: the native search and page state, for integration tests.

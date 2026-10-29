@@ -1018,7 +1018,8 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
               barHidden: nav.isNavigationBarHidden,
               titleModes: nav.viewControllers.map {
                 Self.titleModeName($0.navigationItem.largeTitleDisplayMode)
-              })
+              },
+              barHeight: nav.isNavigationBarHidden ? 0 : Double(nav.navigationBar.frame.height))
           }
         })
     #else

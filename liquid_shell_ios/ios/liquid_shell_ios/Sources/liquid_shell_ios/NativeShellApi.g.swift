@@ -596,6 +596,10 @@ struct NativeTabSnapshot: Hashable, CustomStringConvertible {
   /// Each page's `largeTitleDisplayMode`, root first: "inline", "always",
   /// "never" or "automatic".
   var titleModes: [String]
+  /// The navigation bar's height in points as UIKit lays it out, 0 while
+  /// hidden. A root's large title row is in it: it drops by that row when
+  /// the title collapses.
+  var barHeight: Double
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -604,12 +608,14 @@ struct NativeTabSnapshot: Hashable, CustomStringConvertible {
     let pageTitles = pigeonVar_list[1] as! [String]
     let barHidden = pigeonVar_list[2] as! Bool
     let titleModes = pigeonVar_list[3] as! [String]
+    let barHeight = pigeonVar_list[4] as! Double
 
     return NativeTabSnapshot(
       tab: tab,
       pageTitles: pageTitles,
       barHidden: barHidden,
-      titleModes: titleModes
+      titleModes: titleModes,
+      barHeight: barHeight
     )
   }
   func toList() -> [Any?] {
@@ -618,13 +624,14 @@ struct NativeTabSnapshot: Hashable, CustomStringConvertible {
       pageTitles,
       barHidden,
       titleModes,
+      barHeight,
     ]
   }
   static func == (lhs: NativeTabSnapshot, rhs: NativeTabSnapshot) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return NativeShellApiPigeonInternal.deepEquals(lhs.tab, rhs.tab) && NativeShellApiPigeonInternal.deepEquals(lhs.pageTitles, rhs.pageTitles) && NativeShellApiPigeonInternal.deepEquals(lhs.barHidden, rhs.barHidden) && NativeShellApiPigeonInternal.deepEquals(lhs.titleModes, rhs.titleModes)
+    return NativeShellApiPigeonInternal.deepEquals(lhs.tab, rhs.tab) && NativeShellApiPigeonInternal.deepEquals(lhs.pageTitles, rhs.pageTitles) && NativeShellApiPigeonInternal.deepEquals(lhs.barHidden, rhs.barHidden) && NativeShellApiPigeonInternal.deepEquals(lhs.titleModes, rhs.titleModes) && NativeShellApiPigeonInternal.deepEquals(lhs.barHeight, rhs.barHeight)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -633,10 +640,11 @@ struct NativeTabSnapshot: Hashable, CustomStringConvertible {
     NativeShellApiPigeonInternal.deepHash(value: pageTitles, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: barHidden, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: titleModes, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: barHeight, hasher: &hasher)
   }
 
   public var description: String {
-    return "NativeTabSnapshot(tab: \(String(describing: tab)), pageTitles: \(String(describing: pageTitles)), barHidden: \(String(describing: barHidden)), titleModes: \(String(describing: titleModes)))"
+    return "NativeTabSnapshot(tab: \(String(describing: tab)), pageTitles: \(String(describing: pageTitles)), barHidden: \(String(describing: barHidden)), titleModes: \(String(describing: titleModes)), barHeight: \(String(describing: barHeight)))"
   }
 }
 

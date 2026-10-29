@@ -603,6 +603,7 @@ class NativeTabSnapshot {
     required this.pageTitles,
     required this.barHidden,
     required this.titleModes,
+    required this.barHeight,
   });
 
   /// The destination's index in the config's tabs.
@@ -618,12 +619,18 @@ class NativeTabSnapshot {
   /// "never" or "automatic".
   List<String> titleModes;
 
+  /// The navigation bar's height in points as UIKit lays it out, 0 while
+  /// hidden. A root's large title row is in it: it drops by that row when
+  /// the title collapses.
+  double barHeight;
+
   List<Object?> _toList() {
     return <Object?>[
       tab,
       pageTitles,
       barHidden,
       titleModes,
+      barHeight,
     ];
   }
 
@@ -638,6 +645,7 @@ class NativeTabSnapshot {
       pageTitles: (result[1]! as List<Object?>).cast<String>(),
       barHidden: result[2]! as bool,
       titleModes: (result[3]! as List<Object?>).cast<String>(),
+      barHeight: result[4]! as double,
     );
   }
 
@@ -653,7 +661,8 @@ class NativeTabSnapshot {
     return _deepEquals(tab, other.tab) &&
         _deepEquals(pageTitles, other.pageTitles) &&
         _deepEquals(barHidden, other.barHidden) &&
-        _deepEquals(titleModes, other.titleModes);
+        _deepEquals(titleModes, other.titleModes) &&
+        _deepEquals(barHeight, other.barHeight);
   }
 
   @override
@@ -662,7 +671,7 @@ class NativeTabSnapshot {
 
   @override
   String toString() {
-    return 'NativeTabSnapshot(tab: $tab, pageTitles: $pageTitles, barHidden: $barHidden, titleModes: $titleModes)';
+    return 'NativeTabSnapshot(tab: $tab, pageTitles: $pageTitles, barHidden: $barHidden, titleModes: $titleModes, barHeight: $barHeight)';
   }
 }
 

@@ -119,6 +119,7 @@ class _FakeHost extends NativeShellHostApi {
         pageTitles: ['Home', 'Detail'],
         barHidden: false,
         titleModes: ['inline', 'never'],
+        barHeight: 54,
       ),
     ],
   );
@@ -579,6 +580,7 @@ void main() {
     expect(snapshot.tabs.single.pageTitles, ['Home', 'Detail']);
     expect(snapshot.tabs.single.barHidden, isFalse);
     expect(snapshot.tabs.single.titleModes, ['inline', 'never']);
+    expect(snapshot.tabs.single.barHeight, 54);
     expect(host.calls, ['debugSnapshot']);
   });
 
