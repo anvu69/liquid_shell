@@ -456,13 +456,23 @@ jobs:
           flutter-version: ${{ matrix.flutter != 'stable' && matrix.flutter || '' }}
           cache: true
       - run: make get
-      - run: make goldens
+      # `make goldens` in two steps. On 3.44.x (the floor and the golden
+      # reference) both block. On stable the plain goldens and the shader
+      # probes decide the leg's colour, and the liquid goldens only inform:
+      # newer engines draw the dark glass slightly differently (VK-700),
+      # until the reference moves to a newer Flutter at 0.1.0.
+      - run: make goldens-plain
+      - id: liquid
+        run: make goldens-liquid
+        continue-on-error: ${{ matrix.experimental }}
+      - if: ${{ steps.liquid.outcome == 'failure' }}
+        run: echo "::warning title=Liquid goldens differ on Flutter ${{ matrix.flutter }}::Informational on this leg until the golden reference moves (CONTRIBUTING.md, Toolchain)."
       # The shader probes (lens placement and direction) are the early
       # warning for an engine change; on the informational stable leg they
       # must run even when its goldens drift.
       - if: ${{ success() || (always() && matrix.experimental) }}
         run: make test-impeller
-      - if: failure()
+      - if: ${{ failure() || steps.liquid.outcome == 'failure' }}
         uses: actions/upload-artifact@v4
         with:
           name: golden-failures-${{ matrix.flutter }}
