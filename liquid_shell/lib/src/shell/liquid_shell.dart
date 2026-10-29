@@ -272,6 +272,9 @@ class _LiquidShellState extends State<LiquidShell>
   final Map<int, List<LiquidNativePage>> _pageStacks = {};
   // The records behind each sent stack, kept while no page is on top.
   final Map<int, List<_PageRecord>> _stackRecords = {};
+  // The tabs whose native stack starts with a stand-in root (spec P3b-2
+  // §6.1): native index i is then record i - 1.
+  final Set<int> _standInRoots = {};
   bool _nativePageBar = false;
   bool _searchDeactivatedForRoute = false;
   // The scroll offset native has for the top page (spec P3b §7.7).
@@ -571,12 +574,28 @@ class _LiquidShellState extends State<LiquidShell>
     ];
   }
 
-  /// Computes [tab]'s stack for the config. After the frame: the pages
-  /// have heard of this frame's changes by then.
-  void _updatePageStack(int tab) {
+  /// Computes [tab]'s stack for the config and returns it. After the
+  /// frame: the pages have heard of this frame's changes by then.
+  ///
+  /// A first LiquidPage above a route without one gets a stand-in root
+  /// titled with the destination's label, so the native bar shows the
+  /// back circle where the Flutter bar shows `LiquidBackButton`.
+  List<LiquidNativePage> _updatePageStack(int tab) {
     final stack = _stackFor(tab);
     _stackRecords[tab] = stack;
-    _pageStacks[tab] = [
+    final standIn =
+        stack.isNotEmpty && !(stack.first.entry.route?.isFirst ?? true);
+    if (standIn) {
+      _standInRoots.add(tab);
+    } else {
+      _standInRoots.remove(tab);
+    }
+    return _pageStacks[tab] = [
+      if (standIn)
+        LiquidNativePage(
+          title: widget.destinations[tab].label,
+          largeTitle: false,
+        ),
       for (final record in stack)
         LiquidNativePage(
           title: record.entry.title,
@@ -615,11 +634,13 @@ class _LiquidShellState extends State<LiquidShell>
   /// menu, an accessibility escape, a pop-to-root. Native did not pop; the
   /// pages above [index] pop here, top first, each through its PopScope.
   /// A refused pop ends it, and the native stack follows what is left.
-  /// One page down is exactly a back tap.
+  /// One page down is exactly a back tap. Under a stand-in root native
+  /// index i is record i - 1, and index 0 pops every page.
   Future<void> _onNativePopTo(int tab, int index) async {
     final stack = _stackRecords[tab];
-    if (stack == null || index < 0 || index >= stack.length - 1) return;
-    if (index == stack.length - 2) return _onNativeBack(tab);
+    final target = index - (_standInRoots.contains(tab) ? 1 : 0);
+    if (stack == null || index < 0 || target >= stack.length - 1) return;
+    if (target == stack.length - 2) return _onNativeBack(tab);
     if (tab !=
             resolveSelectedIndex(
               widget.selectedIndex,
@@ -629,7 +650,7 @@ class _LiquidShellState extends State<LiquidShell>
         _covered) {
       return;
     }
-    for (final record in stack.sublist(index + 1).reversed) {
+    for (final record in stack.sublist(target + 1).reversed) {
       final route = record.entry.route;
       final navigator = record.entry.navigator;
       if (!mounted || route == null || navigator == null) return;

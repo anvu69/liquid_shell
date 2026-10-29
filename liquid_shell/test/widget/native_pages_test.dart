@@ -115,6 +115,65 @@ void main() {
     });
   });
 
+  group('VK-442: the stand-in root (spec §6.1)', () {
+    testWidgets('a LiquidPage above a root without one gets a root titled '
+        "with the destination's label", (tester) async {
+      final fake = await _pump(tester, initialIndex: 2);
+      expect(fake.last.tabs[2].pages, isEmpty, reason: 'no LiquidPage yet');
+      await _push(tester, 2, _liquid('About'));
+      expect(fake.last.tabs[2].pages, const [
+        LiquidNativePage(title: 'Settings', largeTitle: false),
+        LiquidNativePage(title: 'About'),
+      ]);
+    });
+
+    testWidgets('a native pop to the stand-in root pops every page', (
+      tester,
+    ) async {
+      final fake = await _pump(tester, initialIndex: 2);
+      await _push(tester, 2, _liquid('About'));
+      await _push(tester, 2, _liquid('Profile'));
+      expect(_titles(fake, 2), ['Settings', 'About', 'Profile']);
+      fake.emitNative(const LiquidNativePopToPage(2, index: 0));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('list-About')), findsNothing);
+      expect(find.byKey(const ValueKey('list-Settings')), findsOneWidget);
+      expect(fake.last.tabs[2].pages, isEmpty);
+    });
+
+    testWidgets('a native pop-to above the stand-in maps its index', (
+      tester,
+    ) async {
+      final fake = await _pump(tester, initialIndex: 2);
+      for (final title in ['About', 'Profile', 'Licences']) {
+        await _push(tester, 2, _liquid(title));
+      }
+      fake.emitNative(const LiquidNativePopToPage(2, index: 1));
+      await tester.pumpAndSettle();
+      expect(_titles(fake, 2), ['Settings', 'About']);
+    });
+
+    testWidgets('the back circle over the stand-in pops the page', (
+      tester,
+    ) async {
+      final fake = await _pump(tester, initialIndex: 2);
+      await _push(tester, 2, _liquid('About'));
+      fake.emitNative(const LiquidNativeBackTapped(2));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('list-About')), findsNothing);
+      expect(fake.last.tabs[2].pages, isEmpty);
+    });
+
+    testWidgets('a LiquidPage root of its navigator gets none', (
+      tester,
+    ) async {
+      final fake = await _pump(tester);
+      await _push(tester, 0, _liquid('Detail'));
+      expect(fake.last.tabs[0].pages.first.title, 'Home');
+      expect(fake.last.tabs[0].pages, hasLength(2));
+    });
+  });
+
   group('VK-442: window controls (spec §4.5)', () {
     const controls = LiquidWindowControls(leading: 66, top: 24);
 
