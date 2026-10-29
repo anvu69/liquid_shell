@@ -2,9 +2,30 @@
 
 > **Approval:** the owner answered "Ok hết" to Q1–Q18 on 2026-10-28; Q12 approves the delta spec `docs/specs/2026-10-28-p3b2-page-bars-design.md` and its per-branch plans together. This plan implements the spec's branch B2 (§8.2): VK-441, VK-442 and VK-444's NO-GO guards, under the parent VK-780. The spec's "Quyết định phát sinh" are applied as listed in "Spec additions applied".
 >
-> **Start condition (spec decision 22):** branch S (`VK-776-back-overflow`, nested-shell back delegation in `liquid_shell.dart`) merges into `main` first. The controller then merges `main` into this branch **before Task 1** (`git merge main`, never a rebase or force-push). This plan was written and checked against `a9a3a97` (main `e0bbf62` + the spec). After the merge, line numbers in `liquid_shell.dart` move: every replacement below is anchored on text, not on lines. B2 never edits `_backScope`, `handleBack`, `_popBranch`, the route logic of `didChangeDependencies`, `_bodySubtree` or `branch_navigators.dart`.
+> **Start condition (spec decision 22):** branch S (`VK-776-back-overflow`, nested-shell back delegation in `liquid_shell.dart`) merges into `main` first. The controller then merges `main` into this branch **before Task 1** (`git merge main`, never a rebase or force-push). This plan was written and checked against `a9a3a97` (main `e0bbf62` + the spec). After the merge, line numbers in `liquid_shell.dart` move: every replacement below is anchored on text, not on lines. B2 never edits `_backScope`, `handleBack`, `_popBranch`, the route logic of `didChangeDependencies`, `_bodySubtree` or `branch_navigators.dart` (Task 13 Step 5 mutates `_backScope` for one run and puts it back, as Task 13 does with `liquid_page.dart`).
+>
+> **Merged (2026-10-29):** `main` with branches R, S, F and B3 is merged into this branch at `443e385` (not pushed). Task 1 Step 1's `main merged` check holds. The plan was re-checked against `443e385`; see "Addendum 2026-10-29".
 >
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+## Addendum 2026-10-29
+
+Amendments from the reviews of branches S, F and B3, folded into the tasks after `main` (R, S, F, B3) was merged at `443e385`:
+
+1. **The native large title follows B3's rule** (B3 spec §6.5, §8.0's exception, §8.2; B3 re-review m-3) → **Task 10, Steps 7–9** (a second commit). B2's one edit to `liquid_shell/lib/src/pages/liquid_page.dart`: `_followScroll` gates `_handle?.scrolled(pixels)` with the same `_drivesLargeTitle` result as the Flutter bar's offset; `_onScroll`'s `depth == 0` line, its comment and the `depth` binding go. Five tests in `liquid_page_test.dart` (a multi-line field beside a list, two sibling lists, a kept-alive `PageView`, a `TabBarView`, an `IndexedStack` segment switcher). Native change: the lists of a `PageView` or `TabBarView` start to drive UIKit's large title. Global Constraints "Scope", the File map and "Spec additions applied" (row 23) say so.
+2. **Dartdoc checklist** (B3 m-5; B5's release check repeats it) → **Task 17, Step 4** (new): `LiquidPage.child` and `PageHandle.scrolled`.
+3. **Native back and nested shells** (S final review, owner note 3) → **Task 13, Step 1** (two tests, two helpers) and **Step 5** (new, a reverted mutation of S's `_backScope`). `_onNativeBack` pops a page directly and skips `handleBack`. In B2 it never reaches a nested shell's pages (they register with the nested shell, decision 19), and when it lands on the outer shell's own route the outer order runs once (a same-route nested shell steps aside, S). B2 changes no back code.
+4. **The title table** → **Task 5, Step 2**: `PageTitleMathTests` now carries B3's `_titleTable` (`liquid_shell/test/unit/page_bar_test.dart`, group `pageTitleModeFor: the title table`) as data, row by row: the same 6 records, expanded to the same 24 cases, a coverage test, and the 12 cases without actions checked (B2's native bar has no page actions; branch B4 checks the other 12, spec §8.4). The values of the old test had no drift. Step 5 now expects 11 tests.
+5. **Merge order:** done (`443e385`), header.
+6. **Disk** → Global Constraints "Simulators" rewritten: at most two of this branch's simulators exist at once; every task deletes the ones it used at its end. Task 1 Step 1 creates only the iPad pair; Task 3 Step 2 and Task 15 Step 3 run their four devices as two pairs; Task 8 runs Step 6 before Step 5.
+
+Stale anchors and numbers fixed (every `→` replacement block of the plan, 101 before this addendum and 104 with it, was replayed in order on `443e385`: each old block is found where the plan says; every insertion anchor is present once):
+
+- `liquid_page.dart:66` (Task 13) → `:81`.
+- Whole-package Dart counts (`+1294`, `+1302`, `+1306` at `a9a3a97`) → `+1391` / `+1396` (Task 10), `+1404` (Task 12), `+1410` (Task 13) at `443e385`; the per-file baselines (`+142`, `+131`, `+33`) are unchanged; Task 13's file count `+16` → `+18`. The example package still has 160 tests (Task 14's `+166` holds).
+- `RunnerTests` totals quoted "when this plan was checked" gain the two new `PageTitleMathTests` tests (205 → 207; 21 → 23 on 27.0).
+- Task 10 Step 4: deleting a block leaves an empty line; delete it too, or Step 5's format reports changes.
+- Task 17's CHANGELOG step: `## 0.1.0-dev.10` now exists in `liquid_shell/CHANGELOG.md` (S, F, B3) and not yet in the interface and iOS ones; the script handles both (run on `443e385` and reverted). One entry added for amendment 1.
 
 **Goal:** With native chrome on iOS 26+, every destination tab is a clear UIKit navigation controller, so a `LiquidPage` on any tab gets UIKit's bar (title, glass back circle, large title), following the title table of spec §4.2. The tab bar's minimize follows the top page of any tab, pushed pages included. `LiquidHideChrome` over a `LiquidPage` hides only the tab bar and the sidebar and keeps the page's bar. The edge swipe stays Flutter's (NO-GO guards).
 
@@ -13,7 +34,7 @@
 1. **Measurements first (Tasks 1–3).** Throwaway probes, never committed, measure on iPhone 17 Pro and iPad Air 11-inch (M4), iOS 26.5 and 27.0: M1 (a pushed page's bar beside the iPad's top tab bar, tiled sidebar and overlay) with M4 (`isTiled` on a navigation tree), M2 (UIKit's minimize on a pushed host's `.bottom` proxy) and M3 (`setTabBarHidden` in `.tabSidebar` mode against the regression list of spec §6.6). Each writes `docs/qa/p3b2/measure.md` and picks the main design or its fall-back by a stated rule.
 2. **Channel (Task 4).** `LiquidNativeChromeConfig.tabBarHidden`, Pigeon `NativeChromeConfig.tabBarHidden`, `NativeTabSnapshot` and `NativeDebugSnapshot.tabs`, the iOS mapping.
 3. **Native (Tasks 5–9).** `PageTitleMath` (the native half of the title table); every destination tab is a `ShellNavController(root:search:)` whose root `PageHostController(minimizes: true)` is built with the tabs and owns the tab's `MinimizeProxy` as its `.bottom` content scroll view; pushed hosts own one too. Bar visibility and title modes per the table, re-applied on a size-class change. Window controls zero only while the selected tab's bar shows. `tabBarHidden` hides the tab bar and the sidebar (a tiled one comes back) and keeps the navigation bar. A per-tab debug snapshot.
-4. **Dart (Tasks 10–13).** `_nativePageBar = engaged`; the selected tab's stack is sent whenever native chrome is engaged; the stand-in root for a `LiquidPage` above a page without one, with the native index shift in pop-to; the hide split (`tabBarHidden` vs `hidden`); the scope's window-controls rule; lockers for the NO-GO swipe, the IME and nested shells.
+4. **Dart (Tasks 10–13).** `_nativePageBar = engaged`; the native large-title report gated by B3's `_drivesLargeTitle` (Task 10, the one edit to `liquid_page.dart`); the selected tab's stack is sent whenever native chrome is engaged; the stand-in root for a `LiquidPage` above a page without one, with the native index shift in pop-to; the hide split (`tabBarHidden` vs `hidden`); the scope's window-controls rule; lockers for the NO-GO swipe, the IME and nested shells.
 5. **Example and end-to-end (Tasks 14–16).** `PagesCase` (`pages`), the integration test `native_pages_test.dart`, the XCUITests `PagesUITests` and `MinimizeUITests.testAPushedPageOnHomeMinimizesTheBar`.
 6. **Docs and verification (Task 17).** `doc/native_chrome.md`, three CHANGELOGs under `## 0.1.0-dev.10`, the measurement file, the full suites on the four simulators, `make verify`.
 
@@ -37,14 +58,51 @@ This plan's own values:
 
 - **Worktree and branch:** `/Users/invoker/Projects/tuvi/liquid_shell-b2` only, branch `VK-441-native-bar-every-tab`. Every command block starts with `cd /Users/invoker/Projects/tuvi/liquid_shell-b2`: an agent's shell resets its directory between calls, and shell variables do not survive between calls either. A block that needs `$SCRATCH` sets it first (`SCRATCH=<your scratchpad directory>`).
 - **Raw diffs:** `rtk git diff` prints a summary, not a patch. Whenever a step saves or applies a patch, use `rtk proxy git diff`.
-- **Scope (file ownership, spec §8.0):** only the files of the File map. B2 never edits `liquid_shell/lib/src/pages/liquid_page.dart` or `page_bar.dart` (branch B3 owns them; Task 13 mutates `liquid_page.dart` for one run and puts it back), and never the back code named in the start condition. No new dependency, no pubspec version change, no `analysis_options.yaml` change, no `.github/` change.
+- **Scope (file ownership, spec §8.0):** only the files of the File map. B2 never edits `page_bar.dart` (branch B3's), and edits `liquid_shell/lib/src/pages/liquid_page.dart` in one place only, §8.0's exception: `_onScroll` and `_followScroll` (Task 10 Step 8). Task 13 mutates `liquid_page.dart` and `_backScope` for one run each and puts them back. B2 never edits the back code named in the start condition. No new dependency, no pubspec version change, no `analysis_options.yaml` change, no `.github/` change.
 - **Generated channel:** edit `liquid_shell_ios/pigeons/native_shell.dart`, run `rtk make pigeon`, commit the source and both generated files (`liquid_shell_ios/lib/src/native_shell_api.g.dart`, `NativeShellApi.g.swift`). `make pigeon-check` (part of `make verify`) passes once they are committed.
 - **Public docs:** dartdoc, READMEs and `doc/` carry no `§`, no `VK-`, no phase codes (`rtk make public-docs`). Swift and test comments may cite the spec.
 - **Dart tests:** in `liquid_shell/`, `rtk proxy fvm flutter test <file>`; `--plain-name '<group or test>'` narrows a run. `rtk proxy fvm dart format <files>` must report `(0 changed)` on the plan's code; `rtk make analyze` must end with `No issues found!`.
 - **XCTest and XCUITest:** `FLUTTER="fvm flutter" rtk proxy tool/ios_xctest.sh <udid> <result.xcresult> <suite seconds> <default allowance> <max allowance> <-only-testing:…>…` runs a selection on one simulator (it builds, warms the simulator up, then tests); `rtk proxy xcrun xcresulttool get test-results summary --path <result>` reads the result. Pass several selections as an array (`T=(-only-testing:A -only-testing:B)`, then `"${T[@]}"`): the agents' shell is zsh, which does not split an unquoted `$VAR` into words, and `xcodebuild` then runs 0 tests. The first build of a session takes 5–8 minutes, later ones 2–4. Keep `liquid_shell/example/build` between tasks (incremental builds); delete it at the end of Task 17, or earlier when `df -h /` shows less than 12 GB free.
 - **New Swift file:** `PageTitleMath.swift` (Task 5) joins the plugin's CocoaPods sources (`source_files` is a glob). If the build says `cannot find 'PageTitleMath' in scope` after the file exists, run `cd liquid_shell/example/ios && rtk proxy pod install` once and build again.
 - **TDD:** no production code without a test that failed first for the reason the step names. A test that passes before the change (a locker) is shown red by the temporary mutation the task gives, then the mutation is reverted. **Paste every red run and every mutation run into the task's report.**
-- **Simulators (this branch's, created in Task 1, reused by every task, deleted in Task 17):**
+- **Simulators (this branch's; at most two exist at once; each task creates the ones it needs and deletes them at its end).** On 2026-10-28 this branch's writer saw free disk dip to about 10 GB with four simulators alive, and `df -h /` showed 12 GB free on 2026-10-29. So: run simulators one or two at a time, never more than two of this branch's at once, and delete them (by UDID) at the end of every task that used one, after its commit. Keep `liquid_shell/example/build` (incremental builds). A step that names four devices runs as two pairs: the 26.5 pair, delete it, then the 27.0 pair. Create with this block, listing only what the task needs (at most two specs; the table below gives the values):
+
+  ```bash
+  cd /Users/invoker/Projects/tuvi/liquid_shell-b2
+  NEED=("iPhone 17 Pro 26.5|iPhone-17-Pro|iOS-26-5" "iPad Air 11 M4 26.5|iPad-Air-11-inch-M4|iOS-26-5")
+  for spec in "${NEED[@]}"; do
+    IFS='|' read -r name type runtime <<< "$spec"
+    xcrun simctl list devices | grep -qF "vk441 $name (" \
+      || rtk proxy xcrun simctl create "vk441 $name" "com.apple.CoreSimulator.SimDeviceType.$type" "com.apple.CoreSimulator.SimRuntime.$runtime"
+  done
+  xcrun simctl list devices | grep -cF "vk441 "    # 1 or 2
+  df -h / | tail -1                                # at least 10 GB free
+  ```
+
+  Delete with this block (the end of every task that used a simulator, and between the pairs of a four-device step):
+
+  ```bash
+  cd /Users/invoker/Projects/tuvi/liquid_shell-b2
+  for udid in $(xcrun simctl list devices | grep -F "vk441 " | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/'); do
+    rtk proxy xcrun simctl shutdown "$udid" 2> /dev/null || true
+    rtk proxy xcrun simctl delete "$udid"
+  done
+  xcrun simctl list devices | grep -c "vk441 " || true   # 0
+  df -h / | tail -1
+  ```
+
+  | Task | Simulators, in order |
+  |---|---|
+  | 1 | iPad Air 11 M4 26.5 + 27.0 |
+  | 2 | iPhone 17 Pro 26.5 + 27.0 |
+  | 3 | the 26.5 pair, then the 27.0 pair (Step 2) |
+  | 4, 5, 9 | iPhone 17 Pro 26.5 |
+  | 6, 7 | the 26.5 pair |
+  | 8 | the 26.5 pair (Steps 1–4, then Step 6), then the 27.0 pair (Step 5) |
+  | 10–14 | none |
+  | 15 | the 26.5 pair (Steps 2–3), then the 27.0 pair (Step 3) |
+  | 16 | the 26.5 pair (Steps 2–4's `RunnerUITests`), then delete the iPad and create iPhone 17 26.5 (Step 4's `MinimizeUITests`) |
+  | 17 | the 26.5 pair (Step 3's whole suites), then the 27.0 pair (Step 3's new tests) |
 
   | Name | Device type | Runtime |
   |---|---|---|
@@ -54,7 +112,7 @@ This plan's own values:
   | `vk441 iPad Air 11 M4 27.0` | `com.apple.CoreSimulator.SimDeviceType.iPad-Air-11-inch-M4` | `com.apple.CoreSimulator.SimRuntime.iOS-27-0` |
   | `vk441 iPhone 17 26.5` (Task 16 only: CI's blocking `ios-minimize` device) | `com.apple.CoreSimulator.SimDeviceType.iPhone-17` | `com.apple.CoreSimulator.SimRuntime.iOS-26-5` |
 
-  A block finds a UDID by this branch's own unique name, then passes the **UDID** to every tool: `IPHONE=$(xcrun simctl list devices | grep -F "vk441 iPhone 17 Pro 26.5 (" | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/' | head -n1)` (likewise `IPAD` for `vk441 iPad Air 11 M4 26.5`, `IPHONE27` and `IPAD27` for the `27.0` pair). Shut down or delete only by UDID. If the iOS 27.0 runtime is missing (`xcrun simctl list runtimes`), skip those simulators and say so in the report. Each simulator grows to 4–5 GB once the example and the test runners are installed: when `df -h /` falls near 12 GB free, delete the 27.0 pair (by UDID) after the task that used it, and create it again with Task 1 Step 1's loop when a later task needs it.
+  A block finds a UDID by this branch's own unique name, then passes the **UDID** to every tool: `IPHONE=$(xcrun simctl list devices | grep -F "vk441 iPhone 17 Pro 26.5 (" | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/' | head -n1)` (likewise `IPAD` for `vk441 iPad Air 11 M4 26.5`, `IPHONE27` and `IPAD27` for the `27.0` pair). Shut down or delete only by UDID. If the iOS 27.0 runtime is missing (`xcrun simctl list runtimes`), skip those simulators and say so in the report. Each simulator grows to 4–5 GB once the example and the test runners are installed, which is why at most two live at once; a re-created simulator has a new UDID, so every block looks it up by name again. When `df -h /` shows less than 12 GB free with two alive, run the task's devices one at a time (delete each before creating the next).
 - **Pinned names** (spec §8.2 "Interfaces produced"; later tasks rely on them):
 
   | What | Name |
@@ -68,6 +126,7 @@ This plan's own values:
   | Dart, `native_layout.dart` | `nativePageBarFor` deleted (main design); `nativeConfigFor(…, bool tabBarHidden = false, …)` |
   | Dart, `_LiquidShellState` | `List<LiquidNativePage> _updatePageStack(int tab)` (now returns the stack), `final Set<int> _standInRoots` |
   | Dart test file | `liquid_shell/test/widget/native_pages_test.dart` (new) |
+  | Dart, `_LiquidPageState` (B3's, §8.0's exception) | `void _followScroll(BuildContext origin, double pixels)` gates `_scrollOffset.value` and `_handle?.scrolled` with one `_drivesLargeTitle(origin)` result; `_onScroll` has no `depth` |
   | XCTest extension helper | `fileprivate func pagesConfig(_ home: [NativePage], selected:minimize:tabBarHidden:)` |
   | Example | `liquid_shell/example/lib/cases/pages.dart` (`PagesCase`, case id `pages`, demo `pages`) |
   | XCUITest | `PagesUITests` (`testABackTapAndSwipeOnHomesPushedPage`, `testHideChromeOverAPageKeepsTheNavigationBar`), `MinimizeUITests.testAPushedPageOnHomeMinimizesTheBar` |
@@ -82,7 +141,7 @@ This plan's own values:
   - Task 7: `feat(ios): a size-class change re-applies the page titles (VK-441)`
   - Task 8: `feat(ios): hide the tab bar and keep a page's navigation bar (VK-442)`
   - Task 9: `feat(ios): the debug snapshot lists every tab (VK-441)`
-  - Task 10: `feat(shell): every tab of an engaged shell has a native page bar (VK-442)`
+  - Task 10: `feat(shell): every tab of an engaged shell has a native page bar (VK-442)` then `feat(shell): the native large title follows the page's first scroll view on screen (VK-442)`
   - Task 11: `feat(shell): a stand-in root under a LiquidPage above a plain page (VK-442)`
   - Task 12: `feat(shell): LiquidHideChrome keeps a page's native bar (VK-442)`
   - Task 13: `test(shell): the edge swipe stays Flutter's, IME and nested-shell lockers (VK-444)`
@@ -123,6 +182,7 @@ This plan's own values:
 | 20. A size-class change re-applies title modes and bar visibility natively | 7 |
 | 21. `tabBarHidden` dismisses an active search keeping its text; a tiled sidebar comes back, an overlay does not | 8 |
 | 22. B2 starts after S and stays out of the back code | header |
+| 23. The scroll view that drives the large title (B3's rule); B2 gates the native report with the same result (§6.5, §8.0's exception) | 10 (Steps 7–9), 17 (Step 4) |
 | 8–11, 14, 15, 17, 18 | other branches (B1, B3, B4, B5) |
 
 ## What the checks of this plan measured (2026-10-28)
@@ -161,6 +221,8 @@ The probes of Tasks 1–3 were run while this plan was written, on this branch's
 | `liquid_shell/lib/src/shell/shell_scope.dart` | 10, 12 | Dartdoc of `windowControls`, `nativePageBar`, `LiquidHideChrome` |
 | `liquid_shell/test/unit/native_layout_test.dart` | 10, 12 | `nativePageBarFor` test deleted; `tabBarHidden` test |
 | `liquid_shell/test/widget/native_pages_test.dart` (new) | 10–13 | The Dart tests of spec §8.2 |
+| `liquid_shell/lib/src/pages/liquid_page.dart` (B3's) | 10 | `_onScroll` and `_followScroll` only (spec §8.0's exception): the native report gated by `_drivesLargeTitle` |
+| `liquid_shell/test/widget/liquid_page_test.dart` (B3's) | 10 | `_pumpNative` and the group `the native large title follows the Flutter bar` |
 | `liquid_shell/test/widget/native_search_test.dart` | 10 | Three tests rewritten for native bars on every tab |
 | `liquid_shell/example/lib/cases/pages.dart` (new), `cases/cases.dart`, `lib/main.dart` | 14 | `PagesCase`, its entry, the `pages` demo |
 | `liquid_shell/example/test/cases_smoke_test.dart` | 14 | `pages` in the native ids; the push-and-pop test |
@@ -169,7 +231,7 @@ The probes of Tasks 1–3 were run while this plan was written, on this branch's
 | `liquid_shell/doc/native_chrome.md` | 17 | "Page stacks and the back button": every tab, minimize, hide chrome |
 | `liquid_shell/CHANGELOG.md`, `liquid_shell_platform_interface/CHANGELOG.md`, `liquid_shell_ios/CHANGELOG.md` | 17 | Spec §8.2's entries under `## 0.1.0-dev.10` |
 
-Not touched: `liquid_page.dart`, `page_bar.dart` (B3), `branch_navigators.dart` and the back code (S), `PassThroughView.swift` (its rule already starts at the top page), Android.
+Not touched: `page_bar.dart` and the rest of `liquid_page.dart` (B3), `branch_navigators.dart` and the back code (S), `PassThroughView.swift` (its rule already starts at the top page), Android.
 
 
 ## How this plan's code was checked (2026-10-28, against `a9a3a97`)
@@ -184,6 +246,14 @@ Every code block of this plan was applied in this worktree and run, then the wor
 - **Task 16:** `PagesUITests` and the new `MinimizeUITests` test green on both 26.5 simulators; both mutations red as quoted. The whole `RunnerUITests` passed on both 26.5 simulators (iPhone 32 tests: 30 passed, 2 skipped; iPad 32: 20 passed, 12 skipped, `SearchUITests` included), and `MinimizeUITests` (9: 7 passed, 2 skipped) on the iPhone 17 Pro 26.5. `PagesUITests` and the new minimize test also passed on an iPhone 17 Pro 27.0 (3 of 3).
 - **Task 17:** the guide and CHANGELOG steps applied (`make public-docs` green); the whole-suite and 27.0 runs are those of Tasks 8 and 16.
 - **Not checked, and why:** the M2 and M3 fall-back blocks (Tasks 4, 6, 12, 14–17): both measurements picked the main design, so the fall-backs were not built. `pigeon-check` passes only once the generated files are committed; `make pigeon` regenerated them identically. Task 15 on the 27.0 pair and `PagesUITests` on the iPad 27.0 (disk space: each simulator with the example installed takes 4–5 GB, and other agents' simulators shared the disk); `ios-minimize` on an iPhone 17 (it ran on the iPhone 17 Pro 26.5); Task 17's `make verify` as one command (its parts ran one by one on the end state, `pigeon-check` aside).
+
+### Re-checked 2026-10-29, against `443e385` (main with R, S, F and B3 merged)
+
+- **Every `→` replacement block (101, and the addendum's three; 104)** was replayed in order on `443e385`: each old block is found once in the file the step names (the five that match in several files are the ones a step names by path: the Pigeon source, `cases.dart`, `main.dart`; `RunnerTests.swift`'s dormant configs match twice, as Task 4 Step 7 says). Every insertion anchor (`// MARK: - VK-550: …`, `final class ArgbColorTests`, `group('P3b search'`, `^      key: _childKey,$`, the `keepPageBar` and `_nativePageBar` lines of the mutations) is present once.
+- **Tasks 10–13 (Dart), with this addendum:** applied to `443e385` (`native_pages_test.dart` assembled from Tasks 10–13's blocks); `dart format` `(0 changed)`, `make analyze` `No issues found!`, `make public-docs` green; `native_pages_test.dart` `+18`, Task 10's three files `+158` at the end of Task 13, `liquid_page_test.dart` `+48`, the whole package `+1410` (baseline `+1387` at `443e385`). Amendment 1's five tests red with the quoted failures before the edit and green after; the ungated mutation four red. Amendment 3's two tests green; the outermost-registry mutation (Task 13 Step 4) three red, the `_backScope` mutation (Step 5) two red with `Actual: <2>`. Then the worktree was put back.
+- **Task 5's new `PageTitleMathTests`:** type-checked with `PageTitleMath.swift` against the iPhoneSimulator 27.1 SDK (`swiftc -typecheck`, exit 0), and its table logic run on macOS with a stub display-mode enum (all pass; a mutation of the `nil`/compact row fails). **Not run under XCTest on a simulator** in this addendum (no simulators were used); Task 5 Steps 2 and 5 run it.
+- **Task 17's CHANGELOG script:** run on `443e385` (adds under the existing `## 0.1.0-dev.10` of `liquid_shell/CHANGELOG.md`, creates it in the other two), then reverted.
+- **Not re-run:** the probes and every XCTest / XCUITest / integration step (Tasks 1–9, 14–17): no simulators in this addendum. The merge changed `RunnerTests.swift` in one test of `NativeTabsTests` (VK-777 pins the iPhone search placement per OS, from line 2985) and no plugin Swift source.
 
 
 ---
@@ -212,8 +282,8 @@ rtk proxy git merge-base --is-ancestor main HEAD && echo "main merged"
 rtk proxy git log --oneline -1 main            # the merge of VK-776 (branch S) is in main
 df -h / | tail -1                              # at least 10 GB free
 [ -f .dart_tool/package_config.json ] || rtk make get
-for spec in "iPhone 17 Pro 26.5|iPhone-17-Pro|iOS-26-5" "iPad Air 11 M4 26.5|iPad-Air-11-inch-M4|iOS-26-5" \
-            "iPhone 17 Pro 27.0|iPhone-17-Pro|iOS-27-0" "iPad Air 11 M4 27.0|iPad-Air-11-inch-M4|iOS-27-0"; do
+# This task's pair only (Global Constraints, Simulators: at most two at once).
+for spec in "iPad Air 11 M4 26.5|iPad-Air-11-inch-M4|iOS-26-5" "iPad Air 11 M4 27.0|iPad-Air-11-inch-M4|iOS-27-0"; do
   IFS='|' read -r name type runtime <<< "$spec"
   xcrun simctl list devices | grep -qF "vk441 $name (" \
     || rtk proxy xcrun simctl create "vk441 $name" "com.apple.CoreSimulator.SimDeviceType.$type" "com.apple.CoreSimulator.SimRuntime.$runtime"
@@ -221,7 +291,7 @@ done
 xcrun simctl list devices | grep -F "vk441 "
 ```
 
-Expected: a clean tree on the branch, `main merged`, at least 10 GB free, then four lines `vk441 … (UUID) (Shutdown)`. If `main merged` does not print, stop: the controller merges `main` (with S) first.
+Expected: a clean tree on the branch, `main merged`, at least 10 GB free, then two lines `vk441 iPad Air 11 M4 … (UUID) (Shutdown)`. If `main merged` does not print, stop: the controller merges `main` (with S) first.
 
 - [ ] **Step 2: Append the probe.** Append this class to the end of `liquid_shell/example/ios/RunnerTests/RunnerTests.swift` (a heredoc `cat >> … <<'EOF'`, or an editor):
 
@@ -1016,7 +1086,7 @@ extension NativeTabsTests {
 }
 ```
 
-- [ ] **Step 2: Run it on the four simulators.**
+- [ ] **Step 2: Run it on the four simulators, as two pairs** (Global Constraints, Simulators). Create the 26.5 pair, run the block with `PAIR=("iPhone 17 Pro 26.5" "iPad Air 11 M4 26.5")`, run the delete block; then create the 27.0 pair and run it again with `PAIR=("iPhone 17 Pro 27.0" "iPad Air 11 M4 27.0")`. Keep both pairs' `$SCRATCH/m3-*` results for Step 4.
 
 ```bash
 cd /Users/invoker/Projects/tuvi/liquid_shell-b2
@@ -1025,7 +1095,8 @@ ONLY=(-only-testing:RunnerTests/NativeTabsTests/testM3HitTestAndInsetsUnderAHidd
       -only-testing:RunnerTests/NativeTabsTests/testM3UIKitKeepsTheTabBarHiddenThroughAPushAPopAndASizeClassChange
       -only-testing:RunnerTests/NativeTabsTests/testM3ATiledSidebarComesBackTiled
       -only-testing:RunnerTests/NativeTabsTests/testM3TheTabBarComesBackAtItsFrame)
-for name in "iPhone 17 Pro 26.5" "iPad Air 11 M4 26.5" "iPhone 17 Pro 27.0" "iPad Air 11 M4 27.0"; do
+PAIR=("iPhone 17 Pro 26.5" "iPad Air 11 M4 26.5")   # the second run: the 27.0 pair
+for name in "${PAIR[@]}"; do
   UDID=$(xcrun simctl list devices | grep -F "vk441 $name (" | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/' | head -n1)
   out="$SCRATCH/m3-${name// /_}"
   # An array: the agents' shell is zsh, which does not split an unquoted $VAR.
@@ -1605,47 +1676,134 @@ rtk proxy xcrun xcresulttool get test-results summary --path "$SCRATCH/t5-red.xc
 
 Expected: `exit 65`, `"failedTests" : 1`, `"passedTests" : 6`, and `XCTAssertEqual failed: ("UINavigationItemLargeTitleDisplayMode(rawValue: 3)") is not equal to ("UINavigationItemLargeTitleDisplayMode(rawValue: 1)")` (`.inline` is 3, `.always` 1).
 
-- [ ] **Step 2: The table, red.** In `RunnerTests.swift`, insert before `final class ArgbColorTests: XCTestCase {`:
+- [ ] **Step 2: The table, red.** In `RunnerTests.swift`, insert before `final class ArgbColorTests: XCTestCase {` the table of B3's suite (`liquid_shell/test/unit/page_bar_test.dart`, `_titleTable` and `_casesOf`), mirrored record by record: a change to either table must change both.
 
 ```swift
 /// Spec P3b-2 §4.2: the native half of the page title table, row by row
-/// (a plain tab; the search tab keeps `SearchMath.style`). The Flutter
-/// bar's `pageTitleModeFor` carries the same rows.
+/// (a plain tab; the search tab keeps `SearchMath.style`). The rows, and
+/// the cases each covers, are those of the Flutter bar's suite
+/// (`liquid_shell/test/unit/page_bar_test.dart`, group `pageTitleModeFor:
+/// the title table`): 6 rows, 24 cases (page × largeTitle × width ×
+/// actions). The native bar has no page actions yet: its 12 cases without
+/// actions are checked here; branch B4 adds actions to `PageTitleMath` and
+/// checks the other 12 (spec §8.4).
 @available(iOS 26.0, *)
 final class PageTitleMathTests: XCTestCase {
-  private func page(_ largeTitle: Bool?) -> NativePage {
-    NativePage(title: "Page", largeTitle: largeTitle)
+  /// (page, largeTitle, size class, actions, mode), each cell as the
+  /// spec's table writes it; the same records as the Dart suite.
+  private typealias Row = (String, String, String, String, String)
+
+  private static let table: [Row] = [
+    ("pushed", "any", "any", "any", "inline"),
+    ("root", "true", "any", "any", "largeCollapsing"),
+    ("root", "null", "compact", "any", "largeInRow"),
+    ("root", "null", "regular", "none", "hidden"),
+    ("root", "false", "any", "none", "hidden"),
+    ("root", "null (regular) or false", "as left", "≥ 1", "inline"),
+  ]
+
+  private struct Case: Hashable {
+    let root: Bool
+    let largeTitle: Bool?
+    let compact: Bool
+    let hasActions: Bool
+  }
+
+  private static func largeTitles(_ cell: String) -> [Bool?] {
+    switch cell {
+    case "any": return [true, nil, false]
+    case "true": return [true]
+    case "null": return [nil]
+    case "false": return [false]
+    default: preconditionFailure("largeTitle \(cell)")
+    }
+  }
+
+  /// Compact (true) and regular (false) width.
+  private static func widths(_ cell: String) -> [Bool] {
+    switch cell {
+    case "any": return [true, false]
+    case "compact": return [true]
+    case "regular": return [false]
+    default: preconditionFailure("size class \(cell)")
+    }
+  }
+
+  /// Every concrete case a row covers, as the Dart suite's `_casesOf`.
+  private static func cases(of row: Row) -> [Case] {
+    let (page, largeTitle, size, actions, _) = row
+    let root: Bool
+    switch page {
+    case "pushed": root = false
+    case "root": root = true
+    default: preconditionFailure("page \(page)")
+    }
+    let titlesAndWidths: [(Bool?, Bool)] =
+      (largeTitle, size) == ("null (regular) or false", "as left")
+      ? [(nil, false), (false, true), (false, false)]
+      : largeTitles(largeTitle).flatMap { title in widths(size).map { (title, $0) } }
+    let withActions: [Bool]
+    switch actions {
+    case "any": withActions = [false, true]
+    case "none": withActions = [false]
+    case "≥ 1": withActions = [true]
+    default: preconditionFailure("actions \(actions)")
+    }
+    return titlesAndWidths.flatMap { title, compact in
+      withActions.map {
+        Case(root: root, largeTitle: title, compact: compact, hasActions: $0)
+      }
+    }
+  }
+
+  func testTheRowsCoverEveryCaseExactlyOnce() {
+    let all = Self.table.flatMap { Self.cases(of: $0) }
+    // page × largeTitle × size class × actions
+    XCTAssertEqual(all.count, 2 * 3 * 2 * 2)
+    XCTAssertEqual(Set(all).count, all.count)
   }
 
   func testPageTitleMathFollowsTheTitleTable() {
-    let widths = [true, false]  // compact, regular
-    // Pushed, any largeTitle, any width: inline, the bar shown.
-    XCTAssertEqual(PageTitleMath.pushedMode, .never)
-    for large in [true, false, nil] as [Bool?] {
-      for compact in widths {
-        XCTAssertFalse(
-          PageTitleMath.barHidden(pages: [page(nil), page(large)], compact: compact),
-          "pushed \(String(describing: large)), compact \(compact)")
+    func page(_ largeTitle: Bool?) -> NativePage {
+      NativePage(title: "Page", largeTitle: largeTitle)
+    }
+    var checked = 0
+    for (i, row) in Self.table.enumerated() {
+      for c in Self.cases(of: row) where !c.hasActions {
+        let label = "row \(i + 1) (\(row.4)): \(c)"
+        // A pushed page sits on a root without a large title.
+        let pages = c.root ? [page(c.largeTitle)] : [page(nil), page(c.largeTitle)]
+        let mode =
+          c.root
+          ? PageTitleMath.rootMode(largeTitle: c.largeTitle, compact: c.compact)
+          : PageTitleMath.pushedMode
+        let hidden = PageTitleMath.barHidden(pages: pages, compact: c.compact)
+        switch row.4 {
+        case "inline":
+          XCTAssertEqual(mode, .never, label)
+          XCTAssertFalse(hidden, label)
+        case "largeCollapsing":
+          XCTAssertEqual(mode, .always, label)
+          XCTAssertFalse(hidden, label)
+        case "largeInRow":
+          XCTAssertEqual(mode, .inline, label)
+          XCTAssertFalse(hidden, label)
+        case "hidden":
+          XCTAssertEqual(mode, .never, label)
+          XCTAssertTrue(hidden, label)
+        default:
+          XCTFail("mode \(row.4)")
+        }
+        checked += 1
       }
     }
-    // Root, true, any width: the collapsing row.
-    for compact in widths {
-      XCTAssertEqual(PageTitleMath.rootMode(largeTitle: true, compact: compact), .always)
-      XCTAssertFalse(PageTitleMath.barHidden(pages: [page(true)], compact: compact))
-    }
-    // Root, null, compact: on the bar row (Apple Music).
-    XCTAssertEqual(PageTitleMath.rootMode(largeTitle: nil, compact: true), .inline)
-    XCTAssertFalse(PageTitleMath.barHidden(pages: [page(nil)], compact: true))
-    // Root, null, regular: no bar; the top tab bar names the tab.
-    XCTAssertEqual(PageTitleMath.rootMode(largeTitle: nil, compact: false), .never)
-    XCTAssertTrue(PageTitleMath.barHidden(pages: [page(nil)], compact: false))
-    // Root, false, any width: no bar.
-    for compact in widths {
-      XCTAssertEqual(PageTitleMath.rootMode(largeTitle: false, compact: compact), .never)
-      XCTAssertTrue(PageTitleMath.barHidden(pages: [page(false)], compact: compact))
-    }
-    // No pages: the tab does not use LiquidPage, and looks as before.
-    for compact in widths {
+    // Rows 1–5 without actions: 6 + 2 + 1 + 1 + 2.
+    XCTAssertEqual(checked, 12)
+  }
+
+  /// No pages: the tab does not use LiquidPage, and looks as before.
+  func testATabWithoutPagesHidesItsBar() {
+    for compact in [true, false] {
       XCTAssertTrue(PageTitleMath.barHidden(pages: [], compact: compact))
     }
   }
@@ -1766,7 +1924,7 @@ FLUTTER="fvm flutter" rtk proxy tool/ios_xctest.sh "$IPHONE" "$SCRATCH/t5.xcresu
 rtk proxy xcrun xcresulttool get test-results summary --path "$SCRATCH/t5.xcresult" | grep -E '^  "(result|totalTestCount|passedTests|failedTests)"'
 ```
 
-Expected: `exit 0`, `"passedTests" : 9`, `"failedTests" : 0` (seven `SearchMathTests`, one `PageTitleMathTests`, and the iPhone search root's bar-row title, which `nil` keeps).
+Expected: `exit 0`, `"passedTests" : 11`, `"failedTests" : 0` (seven `SearchMathTests`, three `PageTitleMathTests`, and the iPhone search root's bar-row title, which `nil` keeps). Locker check for the table (paste it): in `PageTitleMath.swift` change `case nil where compact: return .inline` to `return .never`, run `-only-testing:RunnerTests/PageTitleMathTests`, see `testPageTitleMathFollowsTheTitleTable` fail with `row 3 (largeInRow): …`, and put it back.
 
 - [ ] **Step 6: Commit.**
 
@@ -3002,7 +3160,7 @@ Expected: `exit 65` on both. iPhone: `"failedTests" : 2`, `"skippedTests" : 1`; 
 
 Expected: `exit 0` on both; iPhone `"passedTests" : 2`, `"skippedTests" : 1`; iPad `"passedTests" : 3`.
 
-- [ ] **Step 5: The 27.0 pair, the new tests of Tasks 5–8.**
+- [ ] **Step 5: The 27.0 pair, the new tests of Tasks 5–8.** Run Step 6 first, on the 26.5 pair, then the delete block, then create the 27.0 pair for this step (at most two simulators at once).
 
 ```bash
 cd /Users/invoker/Projects/tuvi/liquid_shell-b2
@@ -3044,7 +3202,7 @@ for name in "iPhone 17 Pro 26.5" "iPad Air 11 M4 26.5"; do
 done
 ```
 
-Expected: `exit 0`, `"failedTests" : 0` on both. When this plan was checked (Tasks 4–9 applied) the iPhone 17 Pro 26.5 ran 205 tests (185 passed, 20 skipped) and the iPad Air 11 M4 26.5 ran 205 (199 passed, 6 skipped); here, before Task 9's test, expect one fewer on each (S may add some). A failure in a test no task of this plan touched: run it alone once more; a pass alone is a flake (report it with its failure text, change nothing). A failure caused by `tabBarHidden` (a hit test, a safe area, the sidebar, minimize): **the Q16 fall-back**: `rtk git checkout -- .` (nothing of this task is committed yet), record the failing row in `measure.md` under `## M3`, and follow every "If M3 picked the fall-back" block from here on. Task 16 runs the UI half of the gate (`MinimizeUITests`, the whole `RunnerUITests`).
+Expected: `exit 0`, `"failedTests" : 0` on both. When this plan was checked (Tasks 4–9 applied) the iPhone 17 Pro 26.5 ran 205 tests (185 passed, 20 skipped) and the iPad Air 11 M4 26.5 ran 205 (199 passed, 6 skipped); the addendum's `PageTitleMathTests` add two (207 each); here, before Task 9's test, expect one fewer on each (206; S may add some). A failure in a test no task of this plan touched: run it alone once more; a pass alone is a flake (report it with its failure text, change nothing). A failure caused by `tabBarHidden` (a hit test, a safe area, the sidebar, minimize): **the Q16 fall-back**: `rtk git checkout -- .` (nothing of this task is committed yet), record the failing row in `measure.md` under `## M3`, and follow every "If M3 picked the fall-back" block from here on. Task 16 runs the UI half of the gate (`MinimizeUITests`, the whole `RunnerUITests`).
 
 - [ ] **Step 7: Commit.**
 
@@ -3201,10 +3359,12 @@ Spec §4.5, §6.1 ("Window controls"), §8.2 Dart, decision 7. `_nativePageBar` 
 - Modify: `liquid_shell/lib/src/native/native_layout.dart` (`nativePageBarFor` deleted), `liquid_shell/lib/src/shell/liquid_shell.dart` (`_resolveNative`), `liquid_shell/lib/src/shell/shell_scope.dart` (dartdoc of `windowControls` and `nativePageBar`)
 - Create: `liquid_shell/test/widget/native_pages_test.dart`
 - Modify: `liquid_shell/test/widget/native_search_test.dart` (three tests), `liquid_shell/test/unit/native_layout_test.dart` (the `nativePageBarFor` test deleted)
+- Modify (Steps 7–9, the addendum's amendment 1, spec §8.0's exception): `liquid_shell/lib/src/pages/liquid_page.dart` (`_onScroll`, `_followScroll`), `liquid_shell/test/widget/liquid_page_test.dart` (`_pumpNative` and one group)
 
 **Interfaces:**
 - Consumes: `installFakeNative`, `FakeNativePlatform` (`configs`, `last`, `emitNative`, `pageScrolls`, `attachGate`), `pumpShell`, `TestShell`, `TestPage`, `scopeOf`, `kPhone`, `kTabletLandscape`, `kInstalled` (test helpers).
-- Produces: in `native_pages_test.dart` the helpers `_destinations` (Home, Library, Settings), `_compact`, `_compactPadding`, `_navigators`, `_page`, `_pump(tester, {initialIndex, state, size, padding})`, `_push(tester, tab, page)`, `_liquid(title)`, `_titles(fake, tab)`, and the group `VK-442: window controls (spec §4.5)`, before which Tasks 11–13 insert their groups.
+- Produces: in `native_pages_test.dart` the helpers `_destinations` (Home, Library, Settings), `_compact`, `_compactPadding`, `_navigators`, `_page`, `_pump(tester, {initialIndex, state, size, padding})`, `_push(tester, tab, page)`, `_liquid(title)`, `_titles(fake, tab)`, and the group `VK-442: window controls (spec §4.5)`, before which Tasks 11–13 insert their groups. In `liquid_page.dart`, `_followScroll` gates both the Flutter bar's offset and `PageHandle.scrolled` with one `_drivesLargeTitle` result (Steps 7–9).
+- Consumes (Steps 7–9, from B3 as merged): `_LiquidPageState._drivesLargeTitle`, `_followScroll`, `_decideReportsInFrame`; in `liquid_page_test.dart` `_Registry.offsets` (records `scrolled`), `_pump(tester, {data, home})`, `_scope(nativePageBar:)`, `_scroll()`, `_rows(scroll)`, `_jump(tester, scroll, offset)`.
 
 - [ ] **Step 1: Baseline.**
 
@@ -3213,7 +3373,7 @@ cd /Users/invoker/Projects/tuvi/liquid_shell-b2/liquid_shell
 rtk proxy fvm flutter test test/widget/native_search_test.dart test/unit/native_layout_test.dart 2>&1 | tail -1
 ```
 
-Expected: `+142: All tests passed!` at `a9a3a97` (121 + 21; S may add some: note your number, it is the baseline below).
+Expected: `+142: All tests passed!` (121 + 21; the same at `a9a3a97` and at `443e385`, after the merge: it is the baseline below).
 
 - [ ] **Step 2: The tests.** Create `liquid_shell/test/widget/native_pages_test.dart`:
 
@@ -3504,7 +3664,7 @@ Expected: six failures:
 - `every tab's top page sends its offset; …` — `Actual: []`.
 The window-controls locker `a tab without pages under the compact native bar keeps native's window controls` passes, and so does `a pending native shell gives a Flutter page bar the strings`.
 
-- [ ] **Step 4: The gate.**
+- [ ] **Step 4: The gate.** "→ deleted" removes the block and the empty line before it (else Step 5's format reports `(2 changed)`).
 
 In `liquid_shell/lib/src/native/native_layout.dart`:
 
@@ -3660,7 +3820,7 @@ rtk proxy fvm flutter test --exclude-tags golden,impeller,liquid_golden 2>&1 | t
 cd .. && rtk make analyze 2>&1 | tail -1 && rtk make public-docs 2>&1 | tail -1
 ```
 
-Expected: `(0 changed)`; `+146: All tests passed!` (the baseline 142, less the deleted unit test, plus 5); the whole package passes (`+1294` at `a9a3a97`: 1290 − 1 + 5); `No issues found!`; `✓ public docs clean`.
+Expected: `(0 changed)`; `+146: All tests passed!` (the baseline 142, less the deleted unit test, plus 5); the whole package passes (`+1391` at `443e385`: 1387 − 1 + 5; it was 1290 − 1 + 5 at `a9a3a97`); `No issues found!`; `✓ public docs clean`.
 
 - [ ] **Step 6: Commit.**
 
@@ -3671,6 +3831,291 @@ bash .githooks/pre-commit && rtk git add liquid_shell/lib/src/native/native_layo
 LiquidPage draws only its child on every tab; the selected tab's stack is
 sent whenever native chrome is engaged. Window controls are zero only
 where a native bar always shows; elsewhere native's report.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+rtk git status --short
+```
+
+Expected: `✓ pre-commit passed`, one commit, a clean tree.
+
+- [ ] **Step 7: The native report follows the title rule, red** (spec §6.5, §8.0's exception, §8.2's row "the native report (`PageHandle.scrolled`) follows §6.5's rule"; B3 re-review m-3). B3's `_drivesLargeTitle` decides which scroll view drives the Flutter bar's large title; the native report still takes every depth-0 vertical scroll view, so a multi-line field, a second list and a hidden segment's list move UIKit's large title, and a `PageView`'s or `TabBarView`'s list (depth 1) never does. In `liquid_shell/test/widget/liquid_page_test.dart`, insert before `/// Scrolls [scroll] to [offset] and pumps the frame.`:
+
+```dart
+/// Pumps a root page titled 'Library' with a large title over [child], in
+/// a [Material] for text fields, under a native bar, and returns the
+/// registry: its offsets are the native reports (`PageHandle.scrolled`).
+Future<_Registry> _pumpNative(WidgetTester tester, Widget child) => _pump(
+  tester,
+  data: _scope(nativePageBar: true),
+  home: Material(
+    child: LiquidPage(title: 'Library', largeTitle: true, child: child),
+  ),
+);
+```
+
+and insert before `  testWidgets('the first vertical scroll view reports its offset', (`:
+
+```dart
+  // The native report follows the rule of _drivesLargeTitle, as the
+  // Flutter bar does (spec P3b-2 §6.5, §8.0, §8.2).
+  group('the native large title follows the Flutter bar', () {
+    testWidgets('a multi-line text field never reaches the native bar', (
+      tester,
+    ) async {
+      final list = _scroll();
+      final registry = await _pumpNative(
+        tester,
+        Column(
+          children: [
+            Expanded(child: _rows(list)),
+            const TextField(maxLines: 2),
+          ],
+        ),
+      );
+      final field = find.descendant(
+        of: find.byType(TextField),
+        matching: find.byType(Scrollable),
+      );
+      registry.offsets.clear();
+      await tester.enterText(find.byType(TextField), 'một\nhai\nba');
+      await tester.pumpAndSettle();
+      expect(
+        tester.state<ScrollableState>(field).position.pixels,
+        greaterThan(0),
+        reason: 'the field scrolled',
+      );
+      expect(registry.offsets, everyElement(0), reason: 'typing a third line');
+      await _jump(tester, list, 120);
+      expect(registry.offsets.last, 120, reason: 'the list');
+    });
+
+    testWidgets('of two lists side by side, only the first reaches the '
+        'native bar', (tester) async {
+      final first = _scroll();
+      final second = _scroll();
+      final registry = await _pumpNative(
+        tester,
+        Column(
+          children: [
+            Expanded(child: _rows(first)),
+            Expanded(child: _rows(second)),
+          ],
+        ),
+      );
+      await _jump(tester, first, 120);
+      expect(registry.offsets.last, 120);
+      await _jump(tester, second, 5);
+      expect(registry.offsets, isNot(contains(5)), reason: 'the second list');
+      await _jump(tester, first, 26);
+      expect(registry.offsets.last, 26);
+    });
+
+    testWidgets("in a PageView whose pages stay alive, the first page's "
+        "list drives the native bar, then the shown page's; a page off "
+        'screen never does', (tester) async {
+      final first = _scroll();
+      final second = _scroll();
+      final pages = PageController();
+      addTearDown(pages.dispose);
+      final registry = await _pumpNative(
+        tester,
+        PageView(
+          controller: pages,
+          allowImplicitScrolling: true,
+          children: [_rows(first), _rows(second)],
+        ),
+      );
+      await _jump(tester, first, 120);
+      expect(registry.offsets, contains(120), reason: "the first page's list");
+      await tester.fling(find.byType(PageView), const Offset(-400, 0), 1000);
+      await tester.pumpAndSettle();
+      expect(pages.page, 1);
+      await _jump(tester, second, 30);
+      expect(registry.offsets.last, 30, reason: "the shown page's list");
+      await _jump(tester, first, 10);
+      expect(
+        registry.offsets,
+        isNot(contains(10)),
+        reason: "the first page's list, off screen",
+      );
+    });
+
+    testWidgets("in a TabBarView, the shown tab's list drives the native "
+        'bar', (tester) async {
+      final first = _scroll();
+      final second = _scroll();
+      final registry = await _pumpNative(
+        tester,
+        DefaultTabController(
+          length: 2,
+          child: TabBarView(children: [_rows(first), _rows(second)]),
+        ),
+      );
+      await _jump(tester, first, 120);
+      expect(registry.offsets, contains(120), reason: "the first tab's list");
+      await tester.fling(find.byType(TabBarView), const Offset(-400, 0), 1000);
+      await tester.pumpAndSettle();
+      await _jump(tester, second, 30);
+      expect(registry.offsets.last, 30, reason: "the shown tab's list");
+    });
+
+    testWidgets('in an IndexedStack of lists (a segment switcher), the '
+        'shown list drives the native bar; a hidden one never does', (
+      tester,
+    ) async {
+      final first = _scroll();
+      final second = _scroll();
+      final shown = ValueNotifier(0);
+      addTearDown(shown.dispose);
+      final registry = await _pumpNative(
+        tester,
+        ValueListenableBuilder<int>(
+          valueListenable: shown,
+          builder: (context, index, _) => IndexedStack(
+            index: index,
+            children: [_rows(first), _rows(second)],
+          ),
+        ),
+      );
+      await _jump(tester, first, 120);
+      expect(registry.offsets.last, 120, reason: 'the first list');
+      shown.value = 1;
+      await tester.pump();
+      await _jump(tester, second, 30);
+      expect(registry.offsets.last, 30, reason: 'the shown list');
+      await _jump(tester, first, 10);
+      expect(
+        registry.offsets,
+        isNot(contains(10)),
+        reason: 'the hidden list',
+      );
+    });
+  });
+```
+
+```bash
+cd /Users/invoker/Projects/tuvi/liquid_shell-b2/liquid_shell
+rtk proxy fvm dart format test/widget/liquid_page_test.dart | tail -1
+rtk proxy fvm flutter test test/widget/liquid_page_test.dart --plain-name 'the native large title follows the Flutter bar' 2>&1 | grep -E "^\s+(Actual|Which)|Some tests|All tests"
+```
+
+Expected: `(0 changed)`, then five failures, in order:
+- the multi-line field: `Actual: [0.0, 24.0]`, `Which: has value <24.0> which doesn't match <0> at index 1` (the field's own scroll reaches `scrolled`);
+- two lists: `Actual: [0.0, 0.0, 120.0, 120.0, 5.0, 5.0]` (the second list's 5);
+- the `PageView` and the `TabBarView`: `Actual: []`, `Which: does not contain <120>` (depth 1, never reported);
+- the `IndexedStack`: `Actual: [0.0, 0.0, 120.0, 120.0, 30.0, 30.0, 10.0, 10.0]` (the hidden list's 10);
+- `00:01 +0 -5: Some tests failed.`
+
+- [ ] **Step 8: Gate the native report with `_drivesLargeTitle`.** B2's one edit to `liquid_shell/lib/src/pages/liquid_page.dart` (spec §8.0's exception); nothing else in the file changes.
+
+```dart
+    final (depth, metrics, origin) = switch (notification) {
+      ScrollUpdateNotification(:final depth, :final metrics, :final context) =>
+        (depth, metrics, context),
+      ScrollMetricsNotification(
+        :final depth,
+        :final metrics,
+        :final context,
+      ) =>
+        (depth, metrics, context),
+      _ => (-1, null, null),
+    };
+```
+→
+```dart
+    final (metrics, origin) = switch (notification) {
+      ScrollUpdateNotification(:final metrics, :final context) => (
+        metrics,
+        context,
+      ),
+      ScrollMetricsNotification(:final metrics, :final context) => (
+        metrics,
+        context,
+      ),
+      _ => (null, null),
+    };
+```
+
+```dart
+        _followScroll(origin, metrics.pixels);
+      }
+    }
+    // The native bar still follows every vertical scroll view that no
+    // other scroll view holds (depth 0).
+    if (depth == 0) _handle?.scrolled(metrics.pixels);
+    return false;
+```
+→
+```dart
+        _followScroll(origin, metrics.pixels);
+      }
+    }
+    return false;
+```
+
+```dart
+  /// A vertical scroll view that reports from [origin] is at [pixels]: the
+  /// large title follows it when it drives the title.
+  void _followScroll(BuildContext origin, double pixels) {
+    if (_drivesLargeTitle(origin)) _scrollOffset.value = pixels;
+  }
+```
+→
+```dart
+  /// A vertical scroll view that reports from [origin] is at [pixels]: the
+  /// large title follows it when it drives the title, the Flutter bar's and
+  /// the native bar's alike (one decision for both).
+  void _followScroll(BuildContext origin, double pixels) {
+    if (_drivesLargeTitle(origin)) {
+      _scrollOffset.value = pixels;
+      _handle?.scrolled(pixels);
+    }
+  }
+```
+
+A report made during a build reaches `_followScroll` after the frame (`_decideReportsInFrame`), so the native report is deferred with the Flutter bar's offset. The dartdocs of `LiquidPage.child` ("drives the native large title's collapse … and the Flutter bar's collapse") and `PageHandle.scrolled` ("the page's first vertical scroll view on screen") now hold for the native bar (Task 17 Step 4 checks them).
+
+```bash
+cd /Users/invoker/Projects/tuvi/liquid_shell-b2/liquid_shell
+rtk proxy fvm dart format lib/src/pages/liquid_page.dart | tail -1
+rtk proxy fvm flutter test test/widget/liquid_page_test.dart 2>&1 | tail -1
+SCRATCH=<your scratchpad directory>
+command cp lib/src/pages/liquid_page.dart "$SCRATCH/liquid_page.t10.dart"
+python3 -I - <<'PYEOF'
+import pathlib
+p = pathlib.Path('lib/src/pages/liquid_page.dart')
+s = p.read_text()
+a = """    if (_drivesLargeTitle(origin)) {
+      _scrollOffset.value = pixels;
+      _handle?.scrolled(pixels);
+    }
+"""
+b = """    _handle?.scrolled(pixels); // MUTATION
+    if (_drivesLargeTitle(origin)) {
+      _scrollOffset.value = pixels;
+    }
+"""
+assert s.count(a) == 1
+p.write_text(s.replace(a, b))
+PYEOF
+rtk proxy fvm flutter test test/widget/liquid_page_test.dart --plain-name 'the native large title follows the Flutter bar' 2>&1 | grep -E "^\s+Actual|Some tests|All tests"
+command cp "$SCRATCH/liquid_page.t10.dart" lib/src/pages/liquid_page.dart
+grep -c MUTATION lib/src/pages/liquid_page.dart
+rtk proxy fvm flutter test --exclude-tags golden,impeller,liquid_golden 2>&1 | tail -1
+cd .. && rtk make analyze 2>&1 | tail -1 && rtk make public-docs 2>&1 | tail -1
+```
+
+Expected: `(0 changed)`; `+48: All tests passed!` (43 at `443e385`, plus 5); the mutation "the gate removed" (`scrolled` before the gate; paste the run): four failures, `Actual: [0.0, 24.0]`, `Actual: [0.0, 0.0, 120.0, 120.0, 5.0, 5.0]`, then `Actual: [0.0, 0.0, 120.0, 120.0, 30.0, 30.0, 10.0, 10.0]` twice (the kept-alive `PageView` and the `IndexedStack`), `+1 -4: Some tests failed.` (the `TabBarView` test passes: it asks only that the shown tab's list reaches the bar), then `0` (restored); the whole package `+1396` (1391 + 5); `No issues found!`; `✓ public docs clean`. A shell test that counted the old depth-0 reports (`pageScrolls`) would fail here: none did at `443e385`.
+
+- [ ] **Step 9: Commit.**
+
+```bash
+cd /Users/invoker/Projects/tuvi/liquid_shell-b2
+bash .githooks/pre-commit && rtk git add liquid_shell/lib/src/pages/liquid_page.dart liquid_shell/test/widget/liquid_page_test.dart && rtk git commit -m "feat(shell): the native large title follows the page's first scroll view on screen (VK-442)
+
+The native report uses the Flutter bar's decision: a multi-line field, a
+second list or a hidden list no longer moves UIKit's large title, and the
+list of a PageView or TabBarView now does.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 rtk git status --short
@@ -4136,7 +4581,7 @@ rtk proxy fvm flutter test --exclude-tags golden,impeller,liquid_golden 2>&1 | t
 cd .. && rtk make analyze 2>&1 | tail -1 && rtk make public-docs 2>&1 | tail -1
 ```
 
-Expected: all pass (`+1302` at `a9a3a97`), `No issues found!`, `✓ public docs clean`.
+Expected: all pass (`+1404` at `443e385`, with Task 10's Steps 7–9; `+1302` at `a9a3a97`), `No issues found!`, `✓ public docs clean`.
 
 - [ ] **Step 5: Commit.**
 
@@ -4216,12 +4661,13 @@ bool nativePageBarFor({required bool engaged, required bool chromeHidden}) =>
 
 Spec §6.7 (VK-444's NO-GO guards, decision 13), §5.4 (the IME rule), §6.10 (decision 19). These tests pass on Tasks 10–12's code; each is shown red by the mutation the spec names, then the mutation is reverted.
 - **Swipe:** while a back swipe runs on Home's pushed page, no config with another stack is sent; the commit sends the shorter stack once; a cancelled swipe sends nothing.
-- **IME:** a focused, composing field in a `LiquidPage` keeps its `EditableTextState`, its focus and its composing range, and the IME connection is never torn down, when native chrome engages (the Flutter bar gives way to the native one) and when `LiquidHideChrome` toggles. The page's `GlobalKey` (`liquid_page.dart:66`, B3's file) is what keeps it.
+- **IME:** a focused, composing field in a `LiquidPage` keeps its `EditableTextState`, its focus and its composing range, and the IME connection is never torn down, when native chrome engages (the Flutter bar gives way to the native one) and when `LiquidHideChrome` toggles. The page's `GlobalKey` (`liquid_page.dart:81` at `443e385`, B3's file) is what keeps it.
 - **Nested shell:** a shell with `nativeChrome: off` in Home draws the Flutter bar for its own pages, and Home's native stack stays empty.
+- **Native back and a same-route nested shell** (S's final review, owner note 3): `_onNativeBack` pops the top page's navigator directly (`maybePop`) and skips `handleBack`. A nested shell built straight in a tab (no navigator between) is on the outer shell's route and, since S, steps aside: the outer shell's walk asks it in the outer order. B2 must not open a second way in. The native back never reaches such a shell's pages (they register with it, so the outer tab's stack has none); system back asks its page once; and a native back that lands on the outer shell's own route (a `LiquidPage` around the nested shell) runs the outer shell's order, which asks the nested page once. No back code changes: these are lockers, shown red by the outermost-registry mutation (Step 4) and by a reverted mutation of S's step-aside in `_backScope` (Step 5).
 
 **Files:**
-- Test: `liquid_shell/test/widget/native_pages_test.dart` (`import 'dart:async';`; three groups before the window-controls group)
-- Mutations only (reverted): `liquid_shell/lib/src/shell/liquid_shell.dart`, `liquid_shell/lib/src/pages/liquid_page.dart`
+- Test: `liquid_shell/test/widget/native_pages_test.dart` (`import 'dart:async';`; the helpers `_nestedShell` and `_pushInnerForm` before `void main() {`; three groups, a test and the group `VK-442: native back and a same-route nested shell` before the window-controls group)
+- Mutations only (reverted): `liquid_shell/lib/src/shell/liquid_shell.dart` (Step 2's stack; Step 5's `_backScope`, S's code, for one run), `liquid_shell/lib/src/pages/liquid_page.dart`
 
 **Interfaces:**
 - Consumes: the Task 10 helpers, `FakeNativePlatform.attachGate`, `tester.testTextInput`.
@@ -4398,23 +4844,7 @@ and insert before `  group('VK-442: window controls (spec §4.5)', () {`:
       tester,
       TestShell(
         destinations: _destinations,
-        pageBuilder: (index) => index == 0
-            ? LiquidShell(
-                nativeChrome: LiquidNativeChrome.off,
-                destinations: const [
-                  LiquidDestination(icon: Icon(Icons.inbox), label: 'Inbox'),
-                  LiquidDestination(icon: Icon(Icons.send), label: 'Sent'),
-                ],
-                selectedIndex: 0,
-                onDestinationSelected: (_) {},
-                body: Navigator(
-                  key: inner,
-                  onGenerateRoute: (_) => MaterialPageRoute<void>(
-                    builder: (_) => _liquid('Inner'),
-                  ),
-                ),
-              )
-            : _page(index),
+        pageBuilder: (index) => index == 0 ? _nestedShell(inner) : _page(index),
       ),
       padding: _compactPadding,
     );
@@ -4426,6 +4856,117 @@ and insert before `  group('VK-442: window controls (spec §4.5)', () {`:
     expect(scopeOf(tester, 'Inner 2').nativePageBar, isFalse);
     expect(fake.last.tabs[0].pages, isEmpty);
   });
+
+  // S's rule (VK-776): a shell in another shell's body with no navigator
+  // between is on that shell's route; its own back handler steps aside,
+  // and the outer shell's walk hands back to it. The native back pops a
+  // page directly (no handleBack): it must never reach such a shell's
+  // pages, and when it lands on the outer shell's route the outer order
+  // runs, once.
+  group('VK-442: native back and a same-route nested shell', () {
+    testWidgets('the native back never reaches a same-route nested '
+        "shell's page; system back asks its page once, in the outer "
+        "shell's order", (tester) async {
+      final fake = installFakeNative(state: _compact);
+      final inner = GlobalKey<NavigatorState>();
+      await pumpShell(
+        tester,
+        TestShell(
+          destinations: _destinations,
+          pageBuilder: (index) =>
+              index == 0 ? _nestedShell(inner) : _page(index),
+        ),
+        padding: _compactPadding,
+      );
+      final asks = await _pushInnerForm(tester, inner);
+      expect(fake.last.tabs[0].pages, isEmpty);
+
+      fake.emitNative(const LiquidNativeBackTapped(0));
+      await tester.pumpAndSettle();
+      expect(asks(), 0, reason: 'the native back');
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(asks(), 1, reason: 'one back, one ask');
+      expect(find.text('Form page: 0'), findsOneWidget);
+    });
+
+    testWidgets('a native back on a LiquidPage around a same-route nested '
+        "shell runs the outer shell's order: the nested shell's page is "
+        'asked once', (tester) async {
+      final fake = installFakeNative(state: _compact);
+      final inner = GlobalKey<NavigatorState>();
+      await pumpShell(
+        tester,
+        TestShell(
+          destinations: _destinations,
+          pageBuilder: (index) => index == 0
+              ? LiquidPage(title: 'Mail', child: _nestedShell(inner))
+              : _page(index),
+        ),
+        padding: _compactPadding,
+      );
+      final asks = await _pushInnerForm(tester, inner);
+      expect(_titles(fake, 0), ['Mail']);
+
+      fake.emitNative(const LiquidNativeBackTapped(0));
+      await tester.pumpAndSettle();
+      expect(asks(), 1, reason: 'one back, one ask');
+      expect(find.text('Form page: 0'), findsOneWidget);
+      expect(find.byType(TestShell), findsOneWidget, reason: 'the shell');
+    });
+  });
+```
+
+and insert before `void main() {`:
+
+```dart
+/// A shell with `nativeChrome: off` whose body is the navigator [inner],
+/// with a LiquidPage 'Inner' at its root. Built straight in a tab of the
+/// outer shell (no navigator between), it is on the outer shell's route.
+Widget _nestedShell(GlobalKey<NavigatorState> inner) => LiquidShell(
+  nativeChrome: LiquidNativeChrome.off,
+  destinations: const [
+    LiquidDestination(icon: Icon(Icons.inbox), label: 'Inbox'),
+    LiquidDestination(icon: Icon(Icons.send), label: 'Sent'),
+  ],
+  selectedIndex: 0,
+  onDestinationSelected: (_) {},
+  body: Navigator(
+    key: inner,
+    onGenerateRoute: (_) => MaterialPageRoute<void>(
+      builder: (_) => _liquid('Inner'),
+    ),
+  ),
+);
+
+/// Pushes 'Inner 2' on [inner], then 'Form', a page whose PopScope blocks
+/// every pop and counts the asks, and settles. Returns the count.
+Future<int Function()> _pushInnerForm(
+  WidgetTester tester,
+  GlobalKey<NavigatorState> inner,
+) async {
+  var asks = 0;
+  inner.currentState!
+      .push(MaterialPageRoute<void>(builder: (_) => _liquid('Inner 2')))
+      .ignore();
+  await tester.pumpAndSettle();
+  inner.currentState!
+      .push(
+        MaterialPageRoute<void>(
+          builder: (_) => PopScope<void>(
+            canPop: false,
+            onPopInvokedWithResult: (didPop, _) {
+              if (!didPop) asks++;
+            },
+            child: _liquid('Form'),
+          ),
+        ),
+      )
+      .ignore();
+  await tester.pumpAndSettle();
+  return () => asks;
+}
 ```
 
 ```bash
@@ -4434,7 +4975,7 @@ rtk proxy fvm dart format test | tail -1
 rtk proxy fvm flutter test test/widget/native_pages_test.dart 2>&1 | tail -1
 ```
 
-Expected: `(0 changed)`, `+16: All tests passed!`.
+Expected: `(0 changed)`, `+18: All tests passed!`.
 
 - [ ] **Step 2: The swipe guard's mutation, "stack from `route.isActive` only"** (spec §8.2): the stack becomes every on-screen page whose route is active, so the page below joins it as soon as the swipe shows it.
 
@@ -4509,9 +5050,35 @@ rtk git checkout -- lib/src/pages/liquid_page.dart
 rtk git status --short lib/src/pages
 ```
 
-Expected: `Expected: empty Actual: [LiquidNativePage:LiquidNativePage(title: Inner, largeTitle: null), LiquidNativePage:LiquidNativePage(title: Inner 2, largeTitle: null)]`, then no change under `lib/src/pages`.
+Expected: three failures: `a nested shell's pages draw the Flutter bar …` with `Expected: empty Actual: [LiquidNativePage:LiquidNativePage(title: Inner, largeTitle: null), LiquidNativePage:LiquidNativePage(title: Inner 2, largeTitle: null)]`; `the native back never reaches a same-route nested shell's page …` likewise (`Inner`, `Inner 2`, `Form`); `a native back on a LiquidPage around a same-route nested shell …` with `Actual: ['Inner', 'Inner 2', 'Form']`, `Which: at location [0] is 'Inner' instead of 'Mail'`; then no change under `lib/src/pages`.
 
-- [ ] **Step 5: The whole package.**
+- [ ] **Step 5: The same-route lockers' mutation, "the nested shell answers back beside its host"** (S's step-aside undone in `_backScope` for this one run; B2 never commits a change there, spec decision 22):
+
+```bash
+cd /Users/invoker/Projects/tuvi/liquid_shell-b2/liquid_shell
+SCRATCH=<your scratchpad directory>
+command cp lib/src/shell/liquid_shell.dart "$SCRATCH/liquid_shell.t13b.dart"
+python3 -I - <<'EOF'
+import pathlib
+p = pathlib.Path('lib/src/shell/liquid_shell.dart')
+s = p.read_text()
+for a, b in (
+    ("      canPop: _hosted || !claimsBack,\n", "      canPop: !claimsBack, // MUTATION\n"),
+    ("        if (!didPop && !_hosted) handleBack();\n", "        if (!didPop) handleBack(); // MUTATION\n"),
+):
+    assert s.count(a) == 1
+    s = s.replace(a, b)
+p.write_text(s)
+EOF
+rtk proxy fvm flutter test test/widget/native_pages_test.dart --plain-name "same-route nested shell" 2>&1 | grep -E "^\s+(Expected|Actual)|Some tests|All tests"
+command cp "$SCRATCH/liquid_shell.t13b.dart" lib/src/shell/liquid_shell.dart
+grep -c MUTATION lib/src/shell/liquid_shell.dart
+rtk git status --short lib
+```
+
+Expected: both same-route tests fail with `Actual: <2>` (the reason `one back, one ask`: the nested shell's own `PopScope` asks the form a second time), `+0 -2: Some tests failed.`, then `0` and no change listed under `lib`.
+
+- [ ] **Step 6: The whole package.**
 
 ```bash
 cd /Users/invoker/Projects/tuvi/liquid_shell-b2/liquid_shell
@@ -4519,9 +5086,9 @@ rtk proxy fvm flutter test --exclude-tags golden,impeller,liquid_golden 2>&1 | t
 cd .. && rtk make analyze 2>&1 | tail -1
 ```
 
-Expected: all pass (`+1306` at `a9a3a97`), `No issues found!`.
+Expected: all pass (`+1410` at `443e385`, with Task 10's Steps 7–9 and this task's 18; `+1306` at `a9a3a97`), `No issues found!`.
 
-- [ ] **Step 6: Commit.**
+- [ ] **Step 7: Commit.**
 
 ```bash
 cd /Users/invoker/Projects/tuvi/liquid_shell-b2
@@ -4529,7 +5096,8 @@ bash .githooks/pre-commit && rtk git add liquid_shell/test/widget/native_pages_t
 
 A back swipe in progress sends no stack change and the commit sends the
 shorter stack once; a composing field survives a bar switch; a nested
-shell's pages stay out of the outer tab's native stack.
+shell's pages stay out of the outer tab's native stack, and a native back
+that reaches a same-route nested shell asks its page once.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 rtk git status --short
@@ -5205,19 +5773,20 @@ grep -E "Expected|Actual|Some tests|All tests" "$SCRATCH/t15-red.log" | head -4
 
 Expected: `2`, a non-zero exit, no change listed under `liquid_shell/lib`, and the first failure `Expected: <true> Actual: <false>` (`scope.nativePageBar`).
 
-- [ ] **Step 3: Green on the four simulators.** The script prints `▸ <udid> …` per device and `✓ native shell integration passed` at the end; the first build takes several minutes per device.
+- [ ] **Step 3: Green on the four simulators, as two pairs** (Global Constraints, Simulators). The script prints `▸ <udid> …` per device and `✓ native shell integration passed` at the end; the first build takes several minutes per device. Run the block on the 26.5 pair (created for Step 2), run the delete block, create the 27.0 pair, and run the block again with `OS=27.0`.
 
 ```bash
 cd /Users/invoker/Projects/tuvi/liquid_shell-b2
 SCRATCH=<your scratchpad directory>
+OS=26.5   # the second run: OS=27.0
 udid() { xcrun simctl list devices | grep -F "vk441 $1 (" | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/' | head -n1; }
-NATIVE_DEVICES="$(udid 'iPhone 17 Pro 26.5')=true;$(udid 'iPad Air 11 M4 26.5')=true;$(udid 'iPhone 17 Pro 27.0')=true;$(udid 'iPad Air 11 M4 27.0')=true" \
-  NATIVE_TARGETS=native_pages_test.dart FLUTTER="fvm flutter" rtk make integration-ios-native > "$SCRATCH/t15.log" 2>&1; echo "exit $?"
-grep -E "✓|✗|All tests passed|Some tests failed" "$SCRATCH/t15.log"
+NATIVE_DEVICES="$(udid "iPhone 17 Pro $OS")=true;$(udid "iPad Air 11 M4 $OS")=true" \
+  NATIVE_TARGETS=native_pages_test.dart FLUTTER="fvm flutter" rtk make integration-ios-native > "$SCRATCH/t15-$OS.log" 2>&1; echo "exit $?"
+grep -E "✓|✗|All tests passed|Some tests failed" "$SCRATCH/t15-$OS.log"
 ls liquid_shell/example/build/integration_screenshots/ | grep '^pages_' | wc -l
 ```
 
-Expected: `exit 0`, `All tests passed!` four times, `✓ native shell integration passed`, and `20` screenshots (five per device). Look at them: the bar row title "Home" on the iPhones and no bar on the regular iPads, the back circle on `home_detail` and `settings_about`, the large title on `library`, no tab bar on `photo`. When this plan was checked the iPhone 17 Pro 26.5 and the iPad Air 11 M4 26.5 passed (the 27.0 pair was not run for this test; the XCTests ran there).
+Expected for each run: `exit 0`, `All tests passed!` twice, `✓ native shell integration passed`; `10` screenshots after the first run and `20` after the second (five per device). Look at them: the bar row title "Home" on the iPhones and no bar on the regular iPads, the back circle on `home_detail` and `settings_about`, the large title on `library`, no tab bar on `photo`. When this plan was checked the iPhone 17 Pro 26.5 and the iPad Air 11 M4 26.5 passed (the 27.0 pair was not run for this test; the XCTests ran there).
 
 - [ ] **Step 4: Commit.**
 
@@ -5631,7 +6200,7 @@ pages do not use `LiquidPage` has no navigation bar and looks as before.
   `LiquidPage`: two bars would stack.
 ```
 
-- [ ] **Step 2: The changelogs.** Run this once; it adds spec §8.2's entries under `## 0.1.0-dev.10`, after the entries already there, or creates the heading at the top:
+- [ ] **Step 2: The changelogs.** Run this once; it adds spec §8.2's entries under `## 0.1.0-dev.10`, after the entries already there, or creates the heading at the top. At `443e385` `liquid_shell/CHANGELOG.md` has the heading (S, F, B3) and the other two do not. The last `liquid_shell` entry is the addendum's (amendment 1, Task 10 Steps 7–9), not spec §8.2's text:
 
 ```bash
 cd /Users/invoker/Projects/tuvi/liquid_shell-b2
@@ -5667,6 +6236,11 @@ ENTRIES = {
   clears the cluster (VK-442).
 - The edge swipe on any tab's pushed page stays Flutter's: the page follows
   the finger, and the native bar switches when the gesture ends (VK-444).
+- **Behaviour change (VK-442).** UIKit's large title follows the same
+  scroll view as the Flutter bar: the page's first vertical scroll view on
+  screen. A multi-line text field, a second list beside the first and a
+  hidden segment's list no longer move it; the shown list of a `PageView`
+  or a `TabBarView` now does.
 """,
 'liquid_shell_platform_interface/CHANGELOG.md': """- `LiquidNativeChromeConfig.tabBarHidden` (default `false`): hide the tab
   bar and the sidebar but keep the selected tab's navigation bar. It joins
@@ -5708,7 +6282,7 @@ rtk git diff --stat
 
 Expected: three lines `… ## 0.1.0-dev.10`, `✓ public docs clean`, then the guide and the three CHANGELOGs changed. Read each CHANGELOG's top: one `## 0.1.0-dev.10` heading, the new entries under it, a blank line before the next heading.
 
-- [ ] **Step 3: The new XCTests on the 27.0 pair, the whole suites on 26.5** (spec §8.2 "Targets"; after Tasks 4–16 the whole `RunnerTests` has not run since Task 8):
+- [ ] **Step 3: The new XCTests on the 27.0 pair, the whole suites on 26.5** (spec §8.2 "Targets"; after Tasks 4–16 the whole `RunnerTests` has not run since Task 8). Two pairs (Global Constraints, Simulators): create the 26.5 pair and run the first loop, run the delete block, create the 27.0 pair and run the second loop:
 
 ```bash
 cd /Users/invoker/Projects/tuvi/liquid_shell-b2
@@ -5743,9 +6317,23 @@ for name in "iPhone 17 Pro 27.0" "iPad Air 11 M4 27.0"; do
 done
 ```
 
-Expected: `exit 0` and `"failedTests" : 0` on all four. When this plan was checked the whole `RunnerTests` ran 205 tests on the iPhone 17 Pro 26.5 (185 passed, 20 skipped) and 205 on the iPad Air 11 M4 26.5 (199 passed, 6 skipped). On 27.0 the XCTest selection of Task 8 Step 5 plus the snapshot test passed when this plan was checked (iPhone 21 tests: 19 passed, 2 skipped; iPad 21 passed); `PagesUITests` adds 2. A failure in a test no task touched: run it alone once more; a pass alone is a flake (report it).
+Expected: `exit 0` and `"failedTests" : 0` on all four. When this plan was checked the whole `RunnerTests` ran 205 tests on the iPhone 17 Pro 26.5 (185 passed, 20 skipped) and 205 on the iPad Air 11 M4 26.5 (199 passed, 6 skipped); the addendum's two `PageTitleMathTests` make it 207 (187 and 201 passed). On 27.0 the XCTest selection of Task 8 Step 5 plus the snapshot test passed when this plan was checked (iPhone 21 tests: 19 passed, 2 skipped; iPad 21 passed), now 23 (21 and 23 passed); `PagesUITests` adds 2. A failure in a test no task touched: run it alone once more; a pass alone is a flake (report it).
 
-- [ ] **Step 4: `make verify`.**
+- [ ] **Step 4: The dartdoc checklist** (B3 review m-5; B5's release check repeats it). Read each doc against the code as it is after Task 10 Steps 7–9, tick each line in the task's report, and fix the doc (in this task's commit) only if a line is false:
+
+```bash
+cd /Users/invoker/Projects/tuvi/liquid_shell-b2/liquid_shell
+grep -n -B1 -A12 "The page. Its first vertical scroll view on screen drives the native" lib/src/pages/liquid_page.dart
+grep -n -B1 -A3 "void scrolled(double offset);" lib/src/pages/page_registry.dart
+grep -n "_handle?.scrolled\|depth" lib/src/pages/liquid_page.dart
+```
+
+- [ ] The public dartdoc on `LiquidPage.child` says the rule drives the native title; confirm it does after B2's `_onScroll` edit (the native report goes through `_followScroll`'s `_drivesLargeTitle` gate).
+- [ ] The dartdoc on `PageHandle.scrolled` ("The page's first vertical scroll view on screen is at [offset]") holds for the native bar after the same edit.
+
+Expected: the first `grep` prints the doc (`… drives the native large title's collapse and the scroll-edge effect, and the Flutter bar's collapse …`), the second the `scrolled` doc, the third one line, `_handle?.scrolled(pixels);` inside `_followScroll`, and no `depth`.
+
+- [ ] **Step 5: `make verify`.**
 
 ```bash
 cd /Users/invoker/Projects/tuvi/liquid_shell-b2
@@ -5756,7 +6344,7 @@ tail -3 "$SCRATCH/t17-verify.log"
 
 Expected: `exit 0` and `✓ verify passed` (format, analyze, provenance, public docs, `pigeon-check`, the tests, coverage ≥ 90 % per package, the goldens, the snippets). No golden changes in B2: native bars are not drawn by goldens, and `PagesCase` has none yet (B5 adds `case_pages_*`). Paste the log's summary into the PR.
 
-- [ ] **Step 5: Record and commit.** Append to `docs/qa/p3b2/measure.md`:
+- [ ] **Step 6: Record and commit.** Append to `docs/qa/p3b2/measure.md`:
 
 ```markdown
 
@@ -5781,7 +6369,7 @@ rtk git status --short
 
 Expected: `✓ pre-commit passed`, one commit, a clean tree.
 
-- [ ] **Step 6: Clean up.** Delete this branch's simulators (by UDID) and the build output.
+- [ ] **Step 7: Clean up.** Delete this branch's simulators (by UDID) and the build output.
 
 ```bash
 cd /Users/invoker/Projects/tuvi/liquid_shell-b2
