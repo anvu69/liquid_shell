@@ -138,3 +138,10 @@ excluded: it sets its mode before it first appears and expands by itself.
 Unit tests: `testALargeTitleSetInTheConfigThatSelectsItsTabIsDrawnOut`
 (red on 26.5 without the fix: 54 against 106.7) and
 `testALargeTitleSetOffScreenBeforeItsTabIsSelectedIsNotStretched`.
+
+## Verification (Task 17)
+
+`RunnerTests` on iPhone 17 Pro and iPad Air 11-inch (M4), iOS 26.5:
+219/194/25 and 219/213/6, no failure. The
+new XCTests and `PagesUITests` on the 27.0 pair: no failure. `make verify`
+passed.
