@@ -70,18 +70,22 @@ class LiquidShellScopeData {
   final bool nativeChrome;
 
   /// The iPadOS 26 window controls, zero elsewhere (always zero on an
-  /// iPhone). Zero while [nativeChrome] is true at regular width: the
-  /// native top bar and sidebar make room for them. Under the native
-  /// compact bar, which sits at the bottom, they are the real cluster.
-  /// Rows at the top of a page clear them with
-  /// `LiquidWindowControlsClearance`.
+  /// iPhone). Zero while [nativeChrome] is true at regular width, where
+  /// the native top bar and sidebar make room for them, and while a native
+  /// navigation bar shows (the search tab's, or a page's). Under the native
+  /// compact bar, which sits at the bottom, on a tab whose navigation bar
+  /// is hidden, they are the real cluster; so they are while
+  /// [LiquidHideChrome] hides the native top bar and sidebar. Rows at the
+  /// top of a page clear them with `LiquidWindowControlsClearance`.
   final LiquidWindowControls windowControls;
 
   /// The search tab's phase; null when the shell has no search tab.
   final LiquidSearchPhase? searchPhase;
 
-  /// The selected tab has a native navigation bar (iOS 26 native chrome):
-  /// `LiquidPage` draws no Flutter bar, and [windowControls] is zero.
+  /// The pages of this shell use the platform's navigation bar (iOS 26
+  /// native chrome, on every tab): `LiquidPage` draws only its child. The
+  /// bar is hidden on a tab whose pages do not use `LiquidPage`, and over a
+  /// root page that shows no title row.
   final bool nativePageBar;
 
   /// Native chrome draws the search scopes (iOS 26+):

@@ -193,12 +193,3 @@ LiquidNativeChromeConfig nativeConfigFor({
           ),
   );
 }
-
-/// Whether the selected tab has a native navigation bar.
-/// Today that is the search tab only, while native chrome is engaged; a
-/// later release makes it every engaged tab.
-bool nativePageBarFor({
-  required bool engaged,
-  required int selected,
-  required int? searchIndex,
-}) => engaged && searchIndex != null && selected == searchIndex;

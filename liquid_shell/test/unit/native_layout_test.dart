@@ -436,24 +436,5 @@ void main() {
         expect(nativeSymbolHint(const [home, search], null), isNull);
       });
     });
-
-    test('nativePageBarFor: the search tab only, while engaged (P3b-1)', () {
-      expect(
-        nativePageBarFor(engaged: true, selected: 1, searchIndex: 1),
-        isTrue,
-      );
-      expect(
-        nativePageBarFor(engaged: true, selected: 0, searchIndex: 1),
-        isFalse,
-      );
-      expect(
-        nativePageBarFor(engaged: false, selected: 1, searchIndex: 1),
-        isFalse,
-      );
-      expect(
-        nativePageBarFor(engaged: true, selected: 0, searchIndex: null),
-        isFalse,
-      );
-    });
   });
 }

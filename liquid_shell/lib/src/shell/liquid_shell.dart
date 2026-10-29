@@ -1982,11 +1982,9 @@ class _LiquidShellState extends State<LiquidShell>
     _search
       ..native = engaged
       ..selected = searchIndex != null && selected == searchIndex;
-    _nativePageBar = nativePageBarFor(
-      engaged: engaged,
-      selected: selected,
-      searchIndex: searchIndex,
-    );
+    // Every tab of an engaged shell has a native navigation bar (spec
+    // P3b-2 §4.5): LiquidPage draws only its child.
+    _nativePageBar = engaged;
     if (_nativePageBar || _scrollRecord != null) _scheduleScrollSync();
     final searchActive = _search.controller?.isActive ?? false;
     // A dialog or sheet above an active search: the keyboard and the field
@@ -2015,12 +2013,11 @@ class _LiquidShellState extends State<LiquidShell>
       final interactive = _routeCurrent && !_guardPending;
       final placeholder = widget.search?.placeholder;
       final scopes = widget.search?.scopes;
-      final pageBar = _nativePageBar;
       // `hidden` and `interactive` are taken now; `_stackFor` reads
       // `_routeCurrent` and `_covered` after the frame. Both are set before
       // the frame ends, so they agree: do not "fix" one side.
       _scheduleNativeSend(() {
-        if (pageBar) _updatePageStack(selected);
+        if (engaged) _updatePageStack(selected);
         return nativeConfigFor(
           engaged: engaged,
           destinations: destinations,
@@ -2145,11 +2142,17 @@ class _LiquidShellState extends State<LiquidShell>
           searchScopes: widget.search?.scopes,
           // UIKit's top bar, sidebar and navigation bars make room for the
           // cluster; the body starts below or beside them (spec P2 §8.3,
-          // P3b §7.9). The compact bar is at the bottom: the top is the
-          // body's to clear.
+          // P3b §7.9). Zero at once where one of them always shows: the
+          // regular top bar or sidebar (unless a hide request hides them),
+          // and the search tab's bar. Otherwise native's report, which is
+          // zero while the selected tab's navigation bar shows (spec P3b-2
+          // §4.5): the compact bar is at the bottom, and a tab's bar may
+          // be hidden.
           windowControls:
-              (engaged && sizeClass == LiquidSizeClass.regular) ||
-                  _nativePageBar
+              engaged &&
+                  ((sizeClass == LiquidSizeClass.regular &&
+                          _hideRequests == 0) ||
+                      _search.selected)
               ? LiquidWindowControls.zero
               : _windowControls.value.value,
         ),
