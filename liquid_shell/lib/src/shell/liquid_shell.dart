@@ -494,13 +494,18 @@ class _LiquidShellState extends State<LiquidShell>
         final config = latest();
         _claim?.update(config, force: force);
         _search.afterConfigSent();
-        // New native tab hosts start at offset 0: the offset follows the
-        // config that may have built them, never precedes it.
-        if (nativeTabsMayRebuild(_minimizeConfig, config)) {
+        // New native tab hosts start at offset 0: the offsets follow the
+        // config that may have built them, never precede it. The top
+        // page's offset waits for the config that makes it native's top
+        // (a push, a pop), so it is sent here after every config.
+        final rebuilt = nativeTabsMayRebuild(_minimizeConfig, config);
+        if (rebuilt) {
           _minimizeForce = true;
           _sendMinimize();
+          _scrollRecord = null;
         }
         _minimizeConfig = config;
+        _sendScroll();
       }
     });
   }
@@ -668,18 +673,28 @@ class _LiquidShellState extends State<LiquidShell>
     if (_scrollScheduled) return;
     _scrollScheduled = true;
     SchedulerBinding.instance
-      ..addPostFrameCallback((_) => _syncScroll())
+      ..addPostFrameCallback((_) {
+        _scrollScheduled = false;
+        _sendScroll();
+      })
       ..ensureVisualUpdate();
   }
 
-  void _syncScroll() {
-    _scrollScheduled = false;
+  void _sendScroll() {
     if (!mounted) return;
+    final tab = resolveSelectedIndex(
+      widget.selectedIndex,
+      widget.destinations.length,
+    );
     final top = _nativePageBar ? _topRecord : null;
     if (top == null) {
       _scrollRecord = null;
       return;
     }
+    // Native writes the offset to its own top page: a page it does not
+    // have on top yet (a push or a pop not sent) waits for its config,
+    // whose callback ([_scheduleNativeSend]) sends it.
+    if (!identical(top, _stackRecords[tab]?.lastOrNull)) return;
     // Not laid out yet (a new page, or one moved with a GlobalKey): its
     // scroll position reports its offset after its first layout, in that
     // frame's post-frame callbacks. Still nothing a frame later: the page
@@ -700,13 +715,7 @@ class _LiquidShellState extends State<LiquidShell>
     if (identical(top, _scrollRecord) && offset == _scrollSent) return;
     _scrollRecord = top;
     _scrollSent = offset;
-    _claim?.setPageScroll(
-      tab: resolveSelectedIndex(
-        widget.selectedIndex,
-        widget.destinations.length,
-      ),
-      offset: offset,
-    );
+    _claim?.setPageScroll(tab: tab, offset: offset);
   }
 
   /// Whether the shell drives the native bar's minimize now. On becoming

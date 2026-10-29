@@ -87,6 +87,10 @@
   screen. A multi-line text field, a second list beside the first and a
   hidden segment's list no longer move it; the shown list of a `PageView`
   or a `TabBarView` now does.
+- **Fix (VK-442).** A page's scroll offset now reaches native after the
+  push or pop that puts the page on top, never before. Before, it could
+  land on the page being left: after a push and a back, a scrolled root
+  showed its large title expanded over its list.
 
 ## 0.1.0-dev.9
 
