@@ -118,6 +118,29 @@ class NativeRect {
   double height;
 }
 
+/// Debug builds: one destination's navigation controller.
+class NativeTabSnapshot {
+  NativeTabSnapshot({
+    required this.tab,
+    required this.pageTitles,
+    required this.barHidden,
+    required this.titleModes,
+  });
+
+  /// The destination's index in the config's tabs.
+  int tab;
+
+  /// The navigation titles, root first.
+  List<String> pageTitles;
+
+  /// Whether the navigation bar is hidden.
+  bool barHidden;
+
+  /// Each page's `largeTitleDisplayMode`, root first: "inline", "always",
+  /// "never" or "automatic".
+  List<String> titleModes;
+}
+
 /// Debug builds: the native search and page state, for integration tests.
 class NativeDebugSnapshot {
   NativeDebugSnapshot({
@@ -134,6 +157,7 @@ class NativeDebugSnapshot {
     required this.scopeFrame,
     required this.minimizeBehavior,
     required this.minimizePanAttached,
+    required this.tabs,
   });
 
   /// The selected `UITab`'s identifier ("destination<i>", or "" when none).
@@ -167,6 +191,9 @@ class NativeDebugSnapshot {
 
   /// Whether a tab's minimize proxy pan is on the Flutter view.
   bool minimizePanAttached;
+
+  /// Every destination's navigation controller, in tab order.
+  List<NativeTabSnapshot> tabs;
 }
 
 /// The whole chrome. Applied in order: tabs, selection, footer, tint,
@@ -182,6 +209,7 @@ class NativeChromeConfig {
     required this.hidden,
     required this.interactive,
     required this.minimizeOnScroll,
+    required this.tabBarHidden,
     this.trailing,
     this.footer,
     this.search,
@@ -201,6 +229,10 @@ class NativeChromeConfig {
 
   /// The compact tab bar minimizes while the body scrolls down (VK-600).
   bool minimizeOnScroll;
+
+  /// Hide the tab bar and the sidebar, keep the selected tab's navigation
+  /// bar. Ignored while [hidden].
+  bool tabBarHidden;
 }
 
 class NativeWindowControls {

@@ -620,7 +620,7 @@ final class NativeTabsTests: XCTestCase {
           semanticLabel: "Account, Ann Lee")
         : nil,
       tintArgb: 0xFF00_7AFF, dark: false, rtl: false, hidden: hidden, interactive: interactive,
-      minimizeOnScroll: minimize)
+      minimizeOnScroll: minimize, tabBarHidden: false)
   }
 
   /// Lets UIKit finish layout and any sidebar transition.
@@ -1227,7 +1227,8 @@ final class NativeTabsTests: XCTestCase {
     tabs.apply(
       NativeChromeConfig(
         engaged: false, tabs: [], selectedIndex: 0, tintArgb: 0xFF00_7AFF, dark: false,
-        rtl: false, hidden: false, interactive: true, minimizeOnScroll: false))
+        rtl: false, hidden: false, interactive: true, minimizeOnScroll: false,
+        tabBarHidden: false))
     settle()
     XCTAssertFalse(tabs.chromeVisible)
     XCTAssertEqual(tabs.tabs.map(\.identifier), shown, "dormant leaves the tabs alone")
@@ -1336,7 +1337,8 @@ final class NativeTabsTests: XCTestCase {
     tabs.apply(
       NativeChromeConfig(
         engaged: false, tabs: [], selectedIndex: 0, tintArgb: 0xFF00_7AFF, dark: false,
-        rtl: false, hidden: false, interactive: true, minimizeOnScroll: false))
+        rtl: false, hidden: false, interactive: true, minimizeOnScroll: false,
+        tabBarHidden: false))
     settle()
 
     container.traitOverrides.horizontalSizeClass = .compact
@@ -1933,7 +1935,8 @@ extension NativeTabsTests {
       engaged: true, tabs: tabs, selectedIndex: selected,
       search: NativeSearchConfig(placeholder: placeholder, scopes: scopes), tintArgb: 0xFF00_7AFF,
       dark: false,
-      rtl: false, hidden: hidden, interactive: interactive, minimizeOnScroll: minimize)
+      rtl: false, hidden: hidden, interactive: interactive, minimizeOnScroll: minimize,
+      tabBarHidden: false)
   }
 
   fileprivate func installedSearchShell(
@@ -2337,7 +2340,8 @@ extension NativeTabsTests {
   func testHiddenChromeEndsAnActiveSearchAndKeepsTheText() throws {
     let dormant = NativeChromeConfig(
       engaged: false, tabs: [], selectedIndex: 0, tintArgb: 0xFF00_7AFF, dark: false,
-      rtl: false, hidden: false, interactive: true, minimizeOnScroll: false)
+      rtl: false, hidden: false, interactive: true, minimizeOnScroll: false,
+      tabBarHidden: false)
     for (name, hide) in [("dormant", dormant), ("hidden", searchConfig(selected: 2, hidden: true))] {
       let tabs = try installedSearchShell(selected: 2)
       let bridge = tabs.searchBridge

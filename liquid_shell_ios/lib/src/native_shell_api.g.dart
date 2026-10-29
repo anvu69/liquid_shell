@@ -596,6 +596,76 @@ class NativeRect {
   }
 }
 
+/// Debug builds: one destination's navigation controller.
+class NativeTabSnapshot {
+  NativeTabSnapshot({
+    required this.tab,
+    required this.pageTitles,
+    required this.barHidden,
+    required this.titleModes,
+  });
+
+  /// The destination's index in the config's tabs.
+  int tab;
+
+  /// The navigation titles, root first.
+  List<String> pageTitles;
+
+  /// Whether the navigation bar is hidden.
+  bool barHidden;
+
+  /// Each page's `largeTitleDisplayMode`, root first: "inline", "always",
+  /// "never" or "automatic".
+  List<String> titleModes;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      tab,
+      pageTitles,
+      barHidden,
+      titleModes,
+    ];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static NativeTabSnapshot decode(Object result) {
+    result as List<Object?>;
+    return NativeTabSnapshot(
+      tab: result[0]! as int,
+      pageTitles: (result[1]! as List<Object?>).cast<String>(),
+      barHidden: result[2]! as bool,
+      titleModes: (result[3]! as List<Object?>).cast<String>(),
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! NativeTabSnapshot || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(tab, other.tab) &&
+        _deepEquals(pageTitles, other.pageTitles) &&
+        _deepEquals(barHidden, other.barHidden) &&
+        _deepEquals(titleModes, other.titleModes);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'NativeTabSnapshot(tab: $tab, pageTitles: $pageTitles, barHidden: $barHidden, titleModes: $titleModes)';
+  }
+}
+
 /// Debug builds: the native search and page state, for integration tests.
 class NativeDebugSnapshot {
   NativeDebugSnapshot({
@@ -612,6 +682,7 @@ class NativeDebugSnapshot {
     required this.scopeFrame,
     required this.minimizeBehavior,
     required this.minimizePanAttached,
+    required this.tabs,
   });
 
   /// The selected `UITab`'s identifier ("destination<i>", or "" when none).
@@ -650,6 +721,9 @@ class NativeDebugSnapshot {
   /// Whether a tab's minimize proxy pan is on the Flutter view.
   bool minimizePanAttached;
 
+  /// Every destination's navigation controller, in tab order.
+  List<NativeTabSnapshot> tabs;
+
   List<Object?> _toList() {
     return <Object?>[
       selectedTab,
@@ -665,6 +739,7 @@ class NativeDebugSnapshot {
       scopeFrame,
       minimizeBehavior,
       minimizePanAttached,
+      tabs,
     ];
   }
 
@@ -688,6 +763,7 @@ class NativeDebugSnapshot {
       scopeFrame: result[10]! as NativeRect,
       minimizeBehavior: result[11]! as String,
       minimizePanAttached: result[12]! as bool,
+      tabs: (result[13]! as List<Object?>).cast<NativeTabSnapshot>(),
     );
   }
 
@@ -712,7 +788,8 @@ class NativeDebugSnapshot {
         _deepEquals(selectedScope, other.selectedScope) &&
         _deepEquals(scopeFrame, other.scopeFrame) &&
         _deepEquals(minimizeBehavior, other.minimizeBehavior) &&
-        _deepEquals(minimizePanAttached, other.minimizePanAttached);
+        _deepEquals(minimizePanAttached, other.minimizePanAttached) &&
+        _deepEquals(tabs, other.tabs);
   }
 
   @override
@@ -721,7 +798,7 @@ class NativeDebugSnapshot {
 
   @override
   String toString() {
-    return 'NativeDebugSnapshot(selectedTab: $selectedTab, searchActive: $searchActive, searchText: $searchText, placement: $placement, pageTitles: $pageTitles, fieldFrame: $fieldFrame, firstResponderIsSearch: $firstResponderIsSearch, scopeTitles: $scopeTitles, scopeShown: $scopeShown, selectedScope: $selectedScope, scopeFrame: $scopeFrame, minimizeBehavior: $minimizeBehavior, minimizePanAttached: $minimizePanAttached)';
+    return 'NativeDebugSnapshot(selectedTab: $selectedTab, searchActive: $searchActive, searchText: $searchText, placement: $placement, pageTitles: $pageTitles, fieldFrame: $fieldFrame, firstResponderIsSearch: $firstResponderIsSearch, scopeTitles: $scopeTitles, scopeShown: $scopeShown, selectedScope: $selectedScope, scopeFrame: $scopeFrame, minimizeBehavior: $minimizeBehavior, minimizePanAttached: $minimizePanAttached, tabs: $tabs)';
   }
 }
 
@@ -741,6 +818,7 @@ class NativeChromeConfig {
     required this.hidden,
     required this.interactive,
     required this.minimizeOnScroll,
+    required this.tabBarHidden,
   });
 
   bool engaged;
@@ -768,6 +846,10 @@ class NativeChromeConfig {
   /// The compact tab bar minimizes while the body scrolls down (VK-600).
   bool minimizeOnScroll;
 
+  /// Hide the tab bar and the sidebar, keep the selected tab's navigation
+  /// bar. Ignored while [hidden].
+  bool tabBarHidden;
+
   List<Object?> _toList() {
     return <Object?>[
       engaged,
@@ -782,6 +864,7 @@ class NativeChromeConfig {
       hidden,
       interactive,
       minimizeOnScroll,
+      tabBarHidden,
     ];
   }
 
@@ -804,6 +887,7 @@ class NativeChromeConfig {
       hidden: result[9]! as bool,
       interactive: result[10]! as bool,
       minimizeOnScroll: result[11]! as bool,
+      tabBarHidden: result[12]! as bool,
     );
   }
 
@@ -827,7 +911,8 @@ class NativeChromeConfig {
         _deepEquals(rtl, other.rtl) &&
         _deepEquals(hidden, other.hidden) &&
         _deepEquals(interactive, other.interactive) &&
-        _deepEquals(minimizeOnScroll, other.minimizeOnScroll);
+        _deepEquals(minimizeOnScroll, other.minimizeOnScroll) &&
+        _deepEquals(tabBarHidden, other.tabBarHidden);
   }
 
   @override
@@ -836,7 +921,7 @@ class NativeChromeConfig {
 
   @override
   String toString() {
-    return 'NativeChromeConfig(engaged: $engaged, tabs: $tabs, selectedIndex: $selectedIndex, trailing: $trailing, footer: $footer, search: $search, tintArgb: $tintArgb, dark: $dark, rtl: $rtl, hidden: $hidden, interactive: $interactive, minimizeOnScroll: $minimizeOnScroll)';
+    return 'NativeChromeConfig(engaged: $engaged, tabs: $tabs, selectedIndex: $selectedIndex, trailing: $trailing, footer: $footer, search: $search, tintArgb: $tintArgb, dark: $dark, rtl: $rtl, hidden: $hidden, interactive: $interactive, minimizeOnScroll: $minimizeOnScroll, tabBarHidden: $tabBarHidden)';
   }
 }
 
@@ -1233,26 +1318,29 @@ class _PigeonCodec extends StandardMessageCodec {
     } else if (value is NativeRect) {
       buffer.putUint8(142);
       writeValue(buffer, value.encode());
-    } else if (value is NativeDebugSnapshot) {
+    } else if (value is NativeTabSnapshot) {
       buffer.putUint8(143);
       writeValue(buffer, value.encode());
-    } else if (value is NativeChromeConfig) {
+    } else if (value is NativeDebugSnapshot) {
       buffer.putUint8(144);
       writeValue(buffer, value.encode());
-    } else if (value is NativeWindowControls) {
+    } else if (value is NativeChromeConfig) {
       buffer.putUint8(145);
       writeValue(buffer, value.encode());
-    } else if (value is NativeDialogAction) {
+    } else if (value is NativeWindowControls) {
       buffer.putUint8(146);
       writeValue(buffer, value.encode());
-    } else if (value is NativeDialogRequest) {
+    } else if (value is NativeDialogAction) {
       buffer.putUint8(147);
       writeValue(buffer, value.encode());
-    } else if (value is NativeDialogResult) {
+    } else if (value is NativeDialogRequest) {
       buffer.putUint8(148);
       writeValue(buffer, value.encode());
-    } else if (value is NativeDialogSnapshot) {
+    } else if (value is NativeDialogResult) {
       buffer.putUint8(149);
+      writeValue(buffer, value.encode());
+    } else if (value is NativeDialogSnapshot) {
+      buffer.putUint8(150);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -1300,18 +1388,20 @@ class _PigeonCodec extends StandardMessageCodec {
       case 142:
         return NativeRect.decode(readValue(buffer)!);
       case 143:
-        return NativeDebugSnapshot.decode(readValue(buffer)!);
+        return NativeTabSnapshot.decode(readValue(buffer)!);
       case 144:
-        return NativeChromeConfig.decode(readValue(buffer)!);
+        return NativeDebugSnapshot.decode(readValue(buffer)!);
       case 145:
-        return NativeWindowControls.decode(readValue(buffer)!);
+        return NativeChromeConfig.decode(readValue(buffer)!);
       case 146:
-        return NativeDialogAction.decode(readValue(buffer)!);
+        return NativeWindowControls.decode(readValue(buffer)!);
       case 147:
-        return NativeDialogRequest.decode(readValue(buffer)!);
+        return NativeDialogAction.decode(readValue(buffer)!);
       case 148:
-        return NativeDialogResult.decode(readValue(buffer)!);
+        return NativeDialogRequest.decode(readValue(buffer)!);
       case 149:
+        return NativeDialogResult.decode(readValue(buffer)!);
+      case 150:
         return NativeDialogSnapshot.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);

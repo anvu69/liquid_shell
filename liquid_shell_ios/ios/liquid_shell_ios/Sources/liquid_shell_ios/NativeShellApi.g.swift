@@ -583,6 +583,63 @@ struct NativeRect: Hashable, CustomStringConvertible {
   }
 }
 
+/// Debug builds: one destination's navigation controller.
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct NativeTabSnapshot: Hashable, CustomStringConvertible {
+  /// The destination's index in the config's tabs.
+  var tab: Int64
+  /// The navigation titles, root first.
+  var pageTitles: [String]
+  /// Whether the navigation bar is hidden.
+  var barHidden: Bool
+  /// Each page's `largeTitleDisplayMode`, root first: "inline", "always",
+  /// "never" or "automatic".
+  var titleModes: [String]
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> NativeTabSnapshot? {
+    let tab = pigeonVar_list[0] as! Int64
+    let pageTitles = pigeonVar_list[1] as! [String]
+    let barHidden = pigeonVar_list[2] as! Bool
+    let titleModes = pigeonVar_list[3] as! [String]
+
+    return NativeTabSnapshot(
+      tab: tab,
+      pageTitles: pageTitles,
+      barHidden: barHidden,
+      titleModes: titleModes
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      tab,
+      pageTitles,
+      barHidden,
+      titleModes,
+    ]
+  }
+  static func == (lhs: NativeTabSnapshot, rhs: NativeTabSnapshot) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return NativeShellApiPigeonInternal.deepEquals(lhs.tab, rhs.tab) && NativeShellApiPigeonInternal.deepEquals(lhs.pageTitles, rhs.pageTitles) && NativeShellApiPigeonInternal.deepEquals(lhs.barHidden, rhs.barHidden) && NativeShellApiPigeonInternal.deepEquals(lhs.titleModes, rhs.titleModes)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("NativeTabSnapshot")
+    NativeShellApiPigeonInternal.deepHash(value: tab, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: pageTitles, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: barHidden, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: titleModes, hasher: &hasher)
+  }
+
+  public var description: String {
+    return "NativeTabSnapshot(tab: \(String(describing: tab)), pageTitles: \(String(describing: pageTitles)), barHidden: \(String(describing: barHidden)), titleModes: \(String(describing: titleModes)))"
+  }
+}
+
 /// Debug builds: the native search and page state, for integration tests.
 ///
 /// Generated class from Pigeon that represents data sent in messages.
@@ -610,6 +667,8 @@ struct NativeDebugSnapshot: Hashable, CustomStringConvertible {
   var minimizeBehavior: String
   /// Whether a tab's minimize proxy pan is on the Flutter view.
   var minimizePanAttached: Bool
+  /// Every destination's navigation controller, in tab order.
+  var tabs: [NativeTabSnapshot]
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -627,6 +686,7 @@ struct NativeDebugSnapshot: Hashable, CustomStringConvertible {
     let scopeFrame = pigeonVar_list[10] as! NativeRect
     let minimizeBehavior = pigeonVar_list[11] as! String
     let minimizePanAttached = pigeonVar_list[12] as! Bool
+    let tabs = pigeonVar_list[13] as! [NativeTabSnapshot]
 
     return NativeDebugSnapshot(
       selectedTab: selectedTab,
@@ -641,7 +701,8 @@ struct NativeDebugSnapshot: Hashable, CustomStringConvertible {
       selectedScope: selectedScope,
       scopeFrame: scopeFrame,
       minimizeBehavior: minimizeBehavior,
-      minimizePanAttached: minimizePanAttached
+      minimizePanAttached: minimizePanAttached,
+      tabs: tabs
     )
   }
   func toList() -> [Any?] {
@@ -659,13 +720,14 @@ struct NativeDebugSnapshot: Hashable, CustomStringConvertible {
       scopeFrame,
       minimizeBehavior,
       minimizePanAttached,
+      tabs,
     ]
   }
   static func == (lhs: NativeDebugSnapshot, rhs: NativeDebugSnapshot) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return NativeShellApiPigeonInternal.deepEquals(lhs.selectedTab, rhs.selectedTab) && NativeShellApiPigeonInternal.deepEquals(lhs.searchActive, rhs.searchActive) && NativeShellApiPigeonInternal.deepEquals(lhs.searchText, rhs.searchText) && NativeShellApiPigeonInternal.deepEquals(lhs.placement, rhs.placement) && NativeShellApiPigeonInternal.deepEquals(lhs.pageTitles, rhs.pageTitles) && NativeShellApiPigeonInternal.deepEquals(lhs.fieldFrame, rhs.fieldFrame) && NativeShellApiPigeonInternal.deepEquals(lhs.firstResponderIsSearch, rhs.firstResponderIsSearch) && NativeShellApiPigeonInternal.deepEquals(lhs.scopeTitles, rhs.scopeTitles) && NativeShellApiPigeonInternal.deepEquals(lhs.scopeShown, rhs.scopeShown) && NativeShellApiPigeonInternal.deepEquals(lhs.selectedScope, rhs.selectedScope) && NativeShellApiPigeonInternal.deepEquals(lhs.scopeFrame, rhs.scopeFrame) && NativeShellApiPigeonInternal.deepEquals(lhs.minimizeBehavior, rhs.minimizeBehavior) && NativeShellApiPigeonInternal.deepEquals(lhs.minimizePanAttached, rhs.minimizePanAttached)
+    return NativeShellApiPigeonInternal.deepEquals(lhs.selectedTab, rhs.selectedTab) && NativeShellApiPigeonInternal.deepEquals(lhs.searchActive, rhs.searchActive) && NativeShellApiPigeonInternal.deepEquals(lhs.searchText, rhs.searchText) && NativeShellApiPigeonInternal.deepEquals(lhs.placement, rhs.placement) && NativeShellApiPigeonInternal.deepEquals(lhs.pageTitles, rhs.pageTitles) && NativeShellApiPigeonInternal.deepEquals(lhs.fieldFrame, rhs.fieldFrame) && NativeShellApiPigeonInternal.deepEquals(lhs.firstResponderIsSearch, rhs.firstResponderIsSearch) && NativeShellApiPigeonInternal.deepEquals(lhs.scopeTitles, rhs.scopeTitles) && NativeShellApiPigeonInternal.deepEquals(lhs.scopeShown, rhs.scopeShown) && NativeShellApiPigeonInternal.deepEquals(lhs.selectedScope, rhs.selectedScope) && NativeShellApiPigeonInternal.deepEquals(lhs.scopeFrame, rhs.scopeFrame) && NativeShellApiPigeonInternal.deepEquals(lhs.minimizeBehavior, rhs.minimizeBehavior) && NativeShellApiPigeonInternal.deepEquals(lhs.minimizePanAttached, rhs.minimizePanAttached) && NativeShellApiPigeonInternal.deepEquals(lhs.tabs, rhs.tabs)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -683,10 +745,11 @@ struct NativeDebugSnapshot: Hashable, CustomStringConvertible {
     NativeShellApiPigeonInternal.deepHash(value: scopeFrame, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: minimizeBehavior, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: minimizePanAttached, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: tabs, hasher: &hasher)
   }
 
   public var description: String {
-    return "NativeDebugSnapshot(selectedTab: \(String(describing: selectedTab)), searchActive: \(String(describing: searchActive)), searchText: \(String(describing: searchText)), placement: \(String(describing: placement)), pageTitles: \(String(describing: pageTitles)), fieldFrame: \(String(describing: fieldFrame)), firstResponderIsSearch: \(String(describing: firstResponderIsSearch)), scopeTitles: \(String(describing: scopeTitles)), scopeShown: \(String(describing: scopeShown)), selectedScope: \(String(describing: selectedScope)), scopeFrame: \(String(describing: scopeFrame)), minimizeBehavior: \(String(describing: minimizeBehavior)), minimizePanAttached: \(String(describing: minimizePanAttached)))"
+    return "NativeDebugSnapshot(selectedTab: \(String(describing: selectedTab)), searchActive: \(String(describing: searchActive)), searchText: \(String(describing: searchText)), placement: \(String(describing: placement)), pageTitles: \(String(describing: pageTitles)), fieldFrame: \(String(describing: fieldFrame)), firstResponderIsSearch: \(String(describing: firstResponderIsSearch)), scopeTitles: \(String(describing: scopeTitles)), scopeShown: \(String(describing: scopeShown)), selectedScope: \(String(describing: selectedScope)), scopeFrame: \(String(describing: scopeFrame)), minimizeBehavior: \(String(describing: minimizeBehavior)), minimizePanAttached: \(String(describing: minimizePanAttached)), tabs: \(String(describing: tabs)))"
   }
 }
 
@@ -708,6 +771,9 @@ struct NativeChromeConfig: Hashable, CustomStringConvertible {
   var interactive: Bool
   /// The compact tab bar minimizes while the body scrolls down (VK-600).
   var minimizeOnScroll: Bool
+  /// Hide the tab bar and the sidebar, keep the selected tab's navigation
+  /// bar. Ignored while [hidden].
+  var tabBarHidden: Bool
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -724,6 +790,7 @@ struct NativeChromeConfig: Hashable, CustomStringConvertible {
     let hidden = pigeonVar_list[9] as! Bool
     let interactive = pigeonVar_list[10] as! Bool
     let minimizeOnScroll = pigeonVar_list[11] as! Bool
+    let tabBarHidden = pigeonVar_list[12] as! Bool
 
     return NativeChromeConfig(
       engaged: engaged,
@@ -737,7 +804,8 @@ struct NativeChromeConfig: Hashable, CustomStringConvertible {
       rtl: rtl,
       hidden: hidden,
       interactive: interactive,
-      minimizeOnScroll: minimizeOnScroll
+      minimizeOnScroll: minimizeOnScroll,
+      tabBarHidden: tabBarHidden
     )
   }
   func toList() -> [Any?] {
@@ -754,13 +822,14 @@ struct NativeChromeConfig: Hashable, CustomStringConvertible {
       hidden,
       interactive,
       minimizeOnScroll,
+      tabBarHidden,
     ]
   }
   static func == (lhs: NativeChromeConfig, rhs: NativeChromeConfig) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return NativeShellApiPigeonInternal.deepEquals(lhs.engaged, rhs.engaged) && NativeShellApiPigeonInternal.deepEquals(lhs.tabs, rhs.tabs) && NativeShellApiPigeonInternal.deepEquals(lhs.selectedIndex, rhs.selectedIndex) && NativeShellApiPigeonInternal.deepEquals(lhs.trailing, rhs.trailing) && NativeShellApiPigeonInternal.deepEquals(lhs.footer, rhs.footer) && NativeShellApiPigeonInternal.deepEquals(lhs.search, rhs.search) && NativeShellApiPigeonInternal.deepEquals(lhs.tintArgb, rhs.tintArgb) && NativeShellApiPigeonInternal.deepEquals(lhs.dark, rhs.dark) && NativeShellApiPigeonInternal.deepEquals(lhs.rtl, rhs.rtl) && NativeShellApiPigeonInternal.deepEquals(lhs.hidden, rhs.hidden) && NativeShellApiPigeonInternal.deepEquals(lhs.interactive, rhs.interactive) && NativeShellApiPigeonInternal.deepEquals(lhs.minimizeOnScroll, rhs.minimizeOnScroll)
+    return NativeShellApiPigeonInternal.deepEquals(lhs.engaged, rhs.engaged) && NativeShellApiPigeonInternal.deepEquals(lhs.tabs, rhs.tabs) && NativeShellApiPigeonInternal.deepEquals(lhs.selectedIndex, rhs.selectedIndex) && NativeShellApiPigeonInternal.deepEquals(lhs.trailing, rhs.trailing) && NativeShellApiPigeonInternal.deepEquals(lhs.footer, rhs.footer) && NativeShellApiPigeonInternal.deepEquals(lhs.search, rhs.search) && NativeShellApiPigeonInternal.deepEquals(lhs.tintArgb, rhs.tintArgb) && NativeShellApiPigeonInternal.deepEquals(lhs.dark, rhs.dark) && NativeShellApiPigeonInternal.deepEquals(lhs.rtl, rhs.rtl) && NativeShellApiPigeonInternal.deepEquals(lhs.hidden, rhs.hidden) && NativeShellApiPigeonInternal.deepEquals(lhs.interactive, rhs.interactive) && NativeShellApiPigeonInternal.deepEquals(lhs.minimizeOnScroll, rhs.minimizeOnScroll) && NativeShellApiPigeonInternal.deepEquals(lhs.tabBarHidden, rhs.tabBarHidden)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -777,10 +846,11 @@ struct NativeChromeConfig: Hashable, CustomStringConvertible {
     NativeShellApiPigeonInternal.deepHash(value: hidden, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: interactive, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: minimizeOnScroll, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: tabBarHidden, hasher: &hasher)
   }
 
   public var description: String {
-    return "NativeChromeConfig(engaged: \(String(describing: engaged)), tabs: \(String(describing: tabs)), selectedIndex: \(String(describing: selectedIndex)), trailing: \(String(describing: trailing)), footer: \(String(describing: footer)), search: \(String(describing: search)), tintArgb: \(String(describing: tintArgb)), dark: \(String(describing: dark)), rtl: \(String(describing: rtl)), hidden: \(String(describing: hidden)), interactive: \(String(describing: interactive)), minimizeOnScroll: \(String(describing: minimizeOnScroll)))"
+    return "NativeChromeConfig(engaged: \(String(describing: engaged)), tabs: \(String(describing: tabs)), selectedIndex: \(String(describing: selectedIndex)), trailing: \(String(describing: trailing)), footer: \(String(describing: footer)), search: \(String(describing: search)), tintArgb: \(String(describing: tintArgb)), dark: \(String(describing: dark)), rtl: \(String(describing: rtl)), hidden: \(String(describing: hidden)), interactive: \(String(describing: interactive)), minimizeOnScroll: \(String(describing: minimizeOnScroll)), tabBarHidden: \(String(describing: tabBarHidden)))"
   }
 }
 
@@ -1116,18 +1186,20 @@ private class NativeShellApiPigeonCodecReader: FlutterStandardReader {
     case 142:
       return NativeRect.fromList(self.readValue() as! [Any?])
     case 143:
-      return NativeDebugSnapshot.fromList(self.readValue() as! [Any?])
+      return NativeTabSnapshot.fromList(self.readValue() as! [Any?])
     case 144:
-      return NativeChromeConfig.fromList(self.readValue() as! [Any?])
+      return NativeDebugSnapshot.fromList(self.readValue() as! [Any?])
     case 145:
-      return NativeWindowControls.fromList(self.readValue() as! [Any?])
+      return NativeChromeConfig.fromList(self.readValue() as! [Any?])
     case 146:
-      return NativeDialogAction.fromList(self.readValue() as! [Any?])
+      return NativeWindowControls.fromList(self.readValue() as! [Any?])
     case 147:
-      return NativeDialogRequest.fromList(self.readValue() as! [Any?])
+      return NativeDialogAction.fromList(self.readValue() as! [Any?])
     case 148:
-      return NativeDialogResult.fromList(self.readValue() as! [Any?])
+      return NativeDialogRequest.fromList(self.readValue() as! [Any?])
     case 149:
+      return NativeDialogResult.fromList(self.readValue() as! [Any?])
+    case 150:
       return NativeDialogSnapshot.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
@@ -1179,26 +1251,29 @@ private class NativeShellApiPigeonCodecWriter: FlutterStandardWriter {
     } else if let value = value as? NativeRect {
       super.writeByte(142)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeDebugSnapshot {
+    } else if let value = value as? NativeTabSnapshot {
       super.writeByte(143)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeChromeConfig {
+    } else if let value = value as? NativeDebugSnapshot {
       super.writeByte(144)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeWindowControls {
+    } else if let value = value as? NativeChromeConfig {
       super.writeByte(145)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeDialogAction {
+    } else if let value = value as? NativeWindowControls {
       super.writeByte(146)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeDialogRequest {
+    } else if let value = value as? NativeDialogAction {
       super.writeByte(147)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeDialogResult {
+    } else if let value = value as? NativeDialogRequest {
       super.writeByte(148)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeDialogSnapshot {
+    } else if let value = value as? NativeDialogResult {
       super.writeByte(149)
+      super.writeValue(value.toList())
+    } else if let value = value as? NativeDialogSnapshot {
+      super.writeByte(150)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)

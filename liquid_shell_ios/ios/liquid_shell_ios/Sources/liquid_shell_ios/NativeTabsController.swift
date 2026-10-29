@@ -902,7 +902,8 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
         selectedScope: Int64(searchBridge.controller.searchBar.selectedScopeButtonIndex),
         scopeFrame: currentScopeFrame(),
         minimizeBehavior: minimizeBehavior,
-        minimizePanAttached: attachedMinimizeProxy != nil)
+        minimizePanAttached: attachedMinimizeProxy != nil,
+        tabs: [])
     #else
       return .empty
     #endif
@@ -987,6 +988,6 @@ extension NativeDebugSnapshot {
       fieldFrame: NativeRect(x: 0, y: 0, width: 0, height: 0), firstResponderIsSearch: false,
       scopeTitles: [], scopeShown: false, selectedScope: 0,
       scopeFrame: NativeRect(x: 0, y: 0, width: 0, height: 0), minimizeBehavior: "",
-      minimizePanAttached: false)
+      minimizePanAttached: false, tabs: [])
   }
 }
