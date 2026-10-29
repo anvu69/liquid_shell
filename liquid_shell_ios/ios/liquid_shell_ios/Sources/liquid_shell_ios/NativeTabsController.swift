@@ -151,6 +151,10 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       // alone, as `apply` does.
       if let config = self.config, !config.tabs.isEmpty {
         self.showTabs(config)
+        // Title modes and a plain tab's bar follow UIKit's size class at
+        // once (spec P3b-2 §6.1): Dart's next config may be equal to the
+        // last one, and is then not sent.
+        self.applyPages(config, animated: false)
         self.select(Int(config.selectedIndex))
       }
       // Regular takes the pan back and resets the proxies; compact again
@@ -446,8 +450,15 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
 
   // MARK: - State
 
+  /// Read from the view whose insets reach Flutter (`syncFlutter`): the
+  /// selected tab's top page, else the tab's own view (spec P3b-2 §6.1;
+  /// measured equal to the navigation controller's, mid-push too, M4).
   private var isTiled: Bool {
-    guard let host = selectedViewController?.viewIfLoaded else { return false }
+    let selected = selectedViewController
+    guard
+      let host = (selected as? UINavigationController)?.topViewController?.viewIfLoaded
+        ?? selected?.viewIfLoaded
+    else { return false }
     return ShellMath.isTiled(host: ShellInsets(host.safeAreaInsets), root: ShellInsets(view.safeAreaInsets))
   }
 

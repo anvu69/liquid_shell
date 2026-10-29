@@ -3605,6 +3605,46 @@ extension NativeTabsTests {
   }
 }
 
+// MARK: - P3b-2: size classes and the hidden bar (spec P3b-2 §6.1)
+
+@available(iOS 26.0, *)
+extension NativeTabsTests {
+  /// Spec P3b-2 §6.1: a window crossing compact/regular re-applies the
+  /// title modes and the bar at once, without a config from Dart.
+  func testASizeClassChangeReappliesTheTitleModes() throws {
+    try requireIPad()
+    let tabs = try installedShell(sizeClass: .regular)
+    let container = try XCTUnwrap(tabs.parent)
+    tabs.apply(pagesConfig([NativePage(title: "Home")]))
+    settle()
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    XCTAssertTrue(nav.isNavigationBarHidden, "regular: no title row")
+    container.traitOverrides.horizontalSizeClass = .compact
+    settle()
+    XCTAssertFalse(nav.isNavigationBarHidden, "compact: the large title on the bar row")
+    XCTAssertEqual(nav.rootHost.navigationItem.largeTitleDisplayMode, .inline)
+    container.traitOverrides.horizontalSizeClass = .regular
+    settle()
+    XCTAssertTrue(nav.isNavigationBarHidden, "regular again")
+    XCTAssertEqual(nav.rootHost.navigationItem.largeTitleDisplayMode, .never)
+  }
+
+  /// Spec P3b-2 §6.1: a hidden bar is not hit; its band reaches Flutter.
+  func testTheBodyUnderAHiddenNavigationBarReachesFlutter() throws {
+    let tabs = try installedShell(sizeClass: .compact)
+    let root = try XCTUnwrap(tabs.parent?.view)
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    XCTAssertTrue(nav.isNavigationBarHidden, "precondition: no pages")
+    let top = root.safeAreaInsets.top
+    XCTAssertTrue(
+      try hit(tabs, CGPoint(x: root.bounds.midX, y: top + 22)) === tabs.flutter.view,
+      "where the title would be")
+    XCTAssertTrue(
+      try hit(tabs, CGPoint(x: 30, y: top + 22)) === tabs.flutter.view,
+      "where the back circle would be")
+  }
+}
+
 // MARK: - VK-550: SearchBridge's scope bar (no window)
 
 /// The scope half of `SearchBridge` (spec VK-550 §10): UIKit's own scope
