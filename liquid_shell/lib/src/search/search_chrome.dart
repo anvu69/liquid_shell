@@ -104,48 +104,60 @@ class SearchFieldGlass extends StatelessWidget {
                   excluding: idle,
                   child: Opacity(
                     opacity: idle ? 0 : 1,
-                    child: Row(
-                      children: [
-                        const SizedBox(width: 14),
-                        Icon(
-                          Icons.search,
-                          size: 20,
-                          color: scheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: CallbackShortcuts(
-                            bindings: {
-                              const SingleActivator(LogicalKeyboardKey.escape):
-                                  onDeactivate,
-                            },
-                            child: TextField(
-                              controller: editing,
-                              focusNode: focus,
-                              textInputAction: TextInputAction.search,
-                              onSubmitted: onSubmitted,
-                              decoration: InputDecoration.collapsed(
-                                hintText: placeholder,
+                    // VK-779: never narrower than its fixed parts. The
+                    // compact landscape ⌕ is 44 wide, and the first frame
+                    // out of idle paints the Row there; clipped, it shows
+                    // its leading edge. Layout only, in every phase: the
+                    // field is never rebuilt.
+                    child: ConstraintsTransformBox(
+                      constraintsTransform: _atLeastFixedParts,
+                      alignment: AlignmentDirectional.centerStart,
+                      clipBehavior: Clip.hardEdge,
+                      child: Row(
+                        children: [
+                          const SizedBox(width: _fieldInset),
+                          Icon(
+                            Icons.search,
+                            size: _fieldIcon,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: _fieldIconGap),
+                          Expanded(
+                            child: CallbackShortcuts(
+                              bindings: {
+                                const SingleActivator(
+                                  LogicalKeyboardKey.escape,
+                                ): onDeactivate,
+                              },
+                              child: TextField(
+                                controller: editing,
+                                focusNode: focus,
+                                textInputAction: TextInputAction.search,
+                                onSubmitted: onSubmitted,
+                                decoration: InputDecoration.collapsed(
+                                  hintText: placeholder,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        if (cancel != null && phase == LiquidSearchPhase.active)
-                          Semantics(
-                            container: true,
-                            button: true,
-                            label: cancelLabel,
-                            onTap: cancel,
-                            excludeSemantics: true,
-                            child: IconButton(
-                              icon: const Icon(Icons.close, size: 18),
-                              tooltip: cancelLabel,
-                              onPressed: cancel,
-                            ),
-                          )
-                        else
-                          const SizedBox(width: 14),
-                      ],
+                          if (cancel != null &&
+                              phase == LiquidSearchPhase.active)
+                            Semantics(
+                              container: true,
+                              button: true,
+                              label: cancelLabel,
+                              onTap: cancel,
+                              excludeSemantics: true,
+                              child: IconButton(
+                                icon: const Icon(Icons.close, size: 18),
+                                tooltip: cancelLabel,
+                                onPressed: cancel,
+                              ),
+                            )
+                          else
+                            const SizedBox(width: _fieldInset),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -318,6 +330,22 @@ class CompactSearchChrome extends StatelessWidget {
     );
   }
 }
+
+// The field Row's fixed parts: the leading inset, the search icon, its gap
+// and the trailing inset, 56 in all. With the regular field's inline ×
+// (an IconButton, at least 48) it needs 90; that field spans the body, so
+// it is never that narrow.
+const double _fieldInset = 14;
+const double _fieldIcon = 20;
+const double _fieldIconGap = 8;
+const double _fieldFixedWidth =
+    _fieldInset + _fieldIcon + _fieldIconGap + _fieldInset;
+
+/// The field Row's constraints: at least its fixed parts wide.
+BoxConstraints _atLeastFixedParts(BoxConstraints constraints) =>
+    constraints.maxWidth < _fieldFixedWidth
+    ? constraints.copyWith(maxWidth: _fieldFixedWidth)
+    : constraints;
 
 /// The default [SearchFieldGlass.highlight]: never on.
 class _Off implements ValueListenable<bool> {

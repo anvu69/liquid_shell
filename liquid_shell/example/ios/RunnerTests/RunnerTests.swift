@@ -2985,6 +2985,13 @@ extension NativeTabsTests {
     XCTAssertGreaterThan(scope.height, 20, "\(scope)")
     // UIKit realises a stacked field on an iPad, and on an iPhone from
     // iOS 27.0 (VK-698: the active field rises to the top there).
+    // VK-777: on an iPhone UIKit makes that choice (`SearchMath.style`
+    // asks for `.automatic`), so it is pinned per OS: a change in UIKit
+    // fails here instead of quietly taking the other branch.
+    if UIDevice.current.userInterfaceIdiom == .phone {
+      let major = ProcessInfo.processInfo.operatingSystemVersion.majorVersion
+      XCTAssertEqual(snapshot.placement, major >= 27 ? "stacked" : "inline", "iOS \(major)")
+    }
     if snapshot.placement == "stacked" {
       XCTAssertGreaterThanOrEqual(scope.y, field.y + field.height - 1, "under the field: \(field)")
     } else {
