@@ -217,6 +217,17 @@ Future<double> _pumpLargeTitle(WidgetTester tester, Widget child) async {
   return _largeTop(tester);
 }
 
+/// Pumps a root page titled 'Library' with a large title over [child], in
+/// a [Material] for text fields, under a native bar, and returns the
+/// registry: its offsets are the native reports (`PageHandle.scrolled`).
+Future<_Registry> _pumpNative(WidgetTester tester, Widget child) => _pump(
+  tester,
+  data: _scope(nativePageBar: true),
+  home: Material(
+    child: LiquidPage(title: 'Library', largeTitle: true, child: child),
+  ),
+);
+
 /// Scrolls [scroll] to [offset] and pumps the frame.
 Future<void> _jump(
   WidgetTester tester,
@@ -1227,6 +1238,142 @@ void main() {
       expect(find.text('taps 1'), findsOneWidget);
     },
   );
+
+  // The native report follows the rule of _drivesLargeTitle, as the
+  // Flutter bar does (spec P3b-2 §6.5, §8.0, §8.2).
+  group('the native large title follows the Flutter bar', () {
+    testWidgets('a multi-line text field never reaches the native bar', (
+      tester,
+    ) async {
+      final list = _scroll();
+      final registry = await _pumpNative(
+        tester,
+        Column(
+          children: [
+            Expanded(child: _rows(list)),
+            const TextField(maxLines: 2),
+          ],
+        ),
+      );
+      final field = find.descendant(
+        of: find.byType(TextField),
+        matching: find.byType(Scrollable),
+      );
+      registry.offsets.clear();
+      await tester.enterText(find.byType(TextField), 'một\nhai\nba');
+      await tester.pumpAndSettle();
+      expect(
+        tester.state<ScrollableState>(field).position.pixels,
+        greaterThan(0),
+        reason: 'the field scrolled',
+      );
+      expect(registry.offsets, everyElement(0), reason: 'typing a third line');
+      await _jump(tester, list, 120);
+      expect(registry.offsets.last, 120, reason: 'the list');
+    });
+
+    testWidgets('of two lists side by side, only the first reaches the '
+        'native bar', (tester) async {
+      final first = _scroll();
+      final second = _scroll();
+      final registry = await _pumpNative(
+        tester,
+        Column(
+          children: [
+            Expanded(child: _rows(first)),
+            Expanded(child: _rows(second)),
+          ],
+        ),
+      );
+      await _jump(tester, first, 120);
+      expect(registry.offsets.last, 120);
+      await _jump(tester, second, 5);
+      expect(registry.offsets, isNot(contains(5)), reason: 'the second list');
+      await _jump(tester, first, 26);
+      expect(registry.offsets.last, 26);
+    });
+
+    testWidgets("in a PageView whose pages stay alive, the first page's "
+        "list drives the native bar, then the shown page's; a page off "
+        'screen never does', (tester) async {
+      final first = _scroll();
+      final second = _scroll();
+      final pages = PageController();
+      addTearDown(pages.dispose);
+      final registry = await _pumpNative(
+        tester,
+        PageView(
+          controller: pages,
+          allowImplicitScrolling: true,
+          children: [_rows(first), _rows(second)],
+        ),
+      );
+      await _jump(tester, first, 120);
+      expect(registry.offsets, contains(120), reason: "the first page's list");
+      await tester.fling(find.byType(PageView), const Offset(-400, 0), 1000);
+      await tester.pumpAndSettle();
+      expect(pages.page, 1);
+      await _jump(tester, second, 30);
+      expect(registry.offsets.last, 30, reason: "the shown page's list");
+      await _jump(tester, first, 10);
+      expect(
+        registry.offsets,
+        isNot(contains(10)),
+        reason: "the first page's list, off screen",
+      );
+    });
+
+    testWidgets("in a TabBarView, the shown tab's list drives the native "
+        'bar', (tester) async {
+      final first = _scroll();
+      final second = _scroll();
+      final registry = await _pumpNative(
+        tester,
+        DefaultTabController(
+          length: 2,
+          child: TabBarView(children: [_rows(first), _rows(second)]),
+        ),
+      );
+      await _jump(tester, first, 120);
+      expect(registry.offsets, contains(120), reason: "the first tab's list");
+      await tester.fling(find.byType(TabBarView), const Offset(-400, 0), 1000);
+      await tester.pumpAndSettle();
+      await _jump(tester, second, 30);
+      expect(registry.offsets.last, 30, reason: "the shown tab's list");
+    });
+
+    testWidgets('in an IndexedStack of lists (a segment switcher), the '
+        'shown list drives the native bar; a hidden one never does', (
+      tester,
+    ) async {
+      final first = _scroll();
+      final second = _scroll();
+      final shown = ValueNotifier(0);
+      addTearDown(shown.dispose);
+      final registry = await _pumpNative(
+        tester,
+        ValueListenableBuilder<int>(
+          valueListenable: shown,
+          builder: (context, index, _) => IndexedStack(
+            index: index,
+            children: [_rows(first), _rows(second)],
+          ),
+        ),
+      );
+      await _jump(tester, first, 120);
+      expect(registry.offsets.last, 120, reason: 'the first list');
+      shown.value = 1;
+      await tester.pump();
+      await _jump(tester, second, 30);
+      expect(registry.offsets.last, 30, reason: 'the shown list');
+      await _jump(tester, first, 10);
+      expect(
+        registry.offsets,
+        isNot(contains(10)),
+        reason: 'the hidden list',
+      );
+    });
+  });
 
   testWidgets('the first vertical scroll view reports its offset', (
     tester,
