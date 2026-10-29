@@ -2021,10 +2021,11 @@ class _LiquidShellState extends State<LiquidShell>
     // The compact bar is drawn above the Flutter view: it would cover the
     // bottom of a sheet or dialog drawn there, so it hides while one is
     // above the shell. The top bar and sidebar only turn inert (§7.4).
-    final hidden =
-        _hideRequests > 0 ||
-        _covered ||
-        ((state?.compact ?? false) && !_routeCurrent);
+    final hideRequested = _hideRequests > 0;
+    final coverHidden =
+        _covered || ((state?.compact ?? false) && !_routeCurrent);
+    // The scope's and the minimize's: hidden chrome either way.
+    final hidden = hideRequested || coverHidden;
     if (owner) {
       final theme = Theme.of(context);
       final destinations = widget.destinations;
@@ -2038,7 +2039,13 @@ class _LiquidShellState extends State<LiquidShell>
       // `_routeCurrent` and `_covered` after the frame. Both are set before
       // the frame ends, so they agree: do not "fix" one side.
       _scheduleNativeSend(() {
-        if (engaged) _updatePageStack(selected);
+        final stack = engaged
+            ? _updatePageStack(selected)
+            : const <LiquidNativePage>[];
+        // A hide request over a page with a native bar hides the tab bar
+        // and the sidebar only: the page keeps its bar (spec P3b-2 §4.4).
+        // Without one the whole chrome hides, as before.
+        final keepPageBar = hideRequested && stack.isNotEmpty;
         return nativeConfigFor(
           engaged: engaged,
           destinations: destinations,
@@ -2048,9 +2055,10 @@ class _LiquidShellState extends State<LiquidShell>
           tint: theme.colorScheme.primary,
           dark: theme.brightness == Brightness.dark,
           rtl: rtl,
-          hidden: hidden,
+          hidden: coverHidden || (hideRequested && !keepPageBar),
           interactive: interactive,
           minimizeOnScroll: minimizeOnScroll,
+          tabBarHidden: keepPageBar,
           searchPlaceholder: placeholder,
           searchScopes: scopes,
           pageStacks: _pageStacks,

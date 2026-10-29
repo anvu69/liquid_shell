@@ -215,6 +215,12 @@ abstract final class LiquidShellScope {
 /// pages pushed inside a branch. Requests are reference-counted. Outside a
 /// shell it does nothing.
 ///
+/// A `LiquidPage`'s own bar stays: it belongs to the page, not to the
+/// shell's chrome. With native chrome, hiding the chrome over a
+/// `LiquidPage` hides the tab bar and the sidebar and keeps the page's
+/// navigation bar, as the Flutter bar is kept. For a full-frame page,
+/// leave `LiquidPage` out of it.
+///
 /// "On screen" means no ancestor `Visibility` is hidden and tickers are on
 /// (`TickerMode`). Branches kept alive but hidden therefore do not hide the
 /// chrome: an `IndexedStack` hides the inactive ones with `Visibility`, a

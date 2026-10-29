@@ -174,6 +174,48 @@ void main() {
     });
   });
 
+  group("VK-442: LiquidHideChrome keeps a page's native bar (spec §4.4)", () {
+    const photo = LiquidHideChrome(
+      child: LiquidPage(
+        title: 'Photo',
+        child: TestPage(label: 'Photo'),
+      ),
+    );
+
+    testWidgets('over a LiquidPage: the tab bar hides, the chrome stays', (
+      tester,
+    ) async {
+      final fake = await _pump(tester);
+      await _push(tester, 0, photo);
+      expect(_titles(fake, 0), ['Home', 'Photo']);
+      expect(fake.last.tabBarHidden, isTrue);
+      expect(fake.last.hidden, isFalse);
+      final scope = scopeOf(tester, 'Photo');
+      expect(scope.chromeKind, LiquidChromeKind.hidden);
+      expect(scope.chromeInsets, EdgeInsets.zero);
+      expect(scope.nativePageBar, isTrue, reason: 'the page keeps its bar');
+
+      _navigators[0].currentState!.pop();
+      await tester.pumpAndSettle();
+      expect(fake.last.tabBarHidden, isFalse, reason: 'the request ended');
+      expect(fake.last.hidden, isFalse);
+    });
+
+    testWidgets('over a page without LiquidPage: the whole chrome hides', (
+      tester,
+    ) async {
+      final fake = await _pump(tester, initialIndex: 2);
+      await _push(
+        tester,
+        2,
+        const LiquidHideChrome(child: TestPage(label: 'Plain')),
+      );
+      expect(fake.last.tabs[2].pages, isEmpty);
+      expect(fake.last.hidden, isTrue);
+      expect(fake.last.tabBarHidden, isFalse);
+    });
+  });
+
   group('VK-442: window controls (spec §4.5)', () {
     const controls = LiquidWindowControls(leading: 66, top: 24);
 
