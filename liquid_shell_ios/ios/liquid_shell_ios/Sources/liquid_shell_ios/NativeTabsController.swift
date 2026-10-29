@@ -962,6 +962,19 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     }
   #endif
 
+  #if DEBUG
+    /// A title mode as `NativeTabSnapshot.titleModes` names it.
+    private static func titleModeName(_ mode: UINavigationItem.LargeTitleDisplayMode) -> String {
+      switch mode {
+      case .automatic: return "automatic"
+      case .always: return "always"
+      case .never: return "never"
+      case .inline: return "inline"
+      @unknown default: return ""
+      }
+    }
+  #endif
+
   /// Debug builds: the native search and page state (integration tests).
   func debugSnapshot() -> NativeDebugSnapshot {
     #if DEBUG
@@ -997,7 +1010,17 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
         scopeFrame: currentScopeFrame(),
         minimizeBehavior: minimizeBehavior,
         minimizePanAttached: attachedMinimizeProxy != nil,
-        tabs: [])
+        tabs: navControllers.keys.sorted().compactMap { index in
+          navControllers[index].map { nav in
+            NativeTabSnapshot(
+              tab: Int64(index),
+              pageTitles: nav.viewControllers.map { $0.title ?? "" },
+              barHidden: nav.isNavigationBarHidden,
+              titleModes: nav.viewControllers.map {
+                Self.titleModeName($0.navigationItem.largeTitleDisplayMode)
+              })
+          }
+        })
     #else
       return .empty
     #endif

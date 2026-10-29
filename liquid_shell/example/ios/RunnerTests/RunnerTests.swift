@@ -3793,6 +3793,25 @@ extension NativeTabsTests {
   }
 }
 
+// MARK: - P3b-2: the per-tab debug snapshot (spec P3b-2 §5.2)
+
+@available(iOS 26.0, *)
+extension NativeTabsTests {
+  func testTheDebugSnapshotListsEveryTab() throws {
+    let tabs = try installedShell()
+    tabs.apply(
+      pagesConfig([NativePage(title: "Home", largeTitle: true), NativePage(title: "Detail")]))
+    settle()
+    let snapshot = tabs.debugSnapshot().tabs
+    XCTAssertEqual(snapshot.map(\.tab), [0, 1])
+    XCTAssertEqual(snapshot.first?.pageTitles, ["Home", "Detail"])
+    XCTAssertEqual(snapshot.first?.barHidden, false)
+    XCTAssertEqual(snapshot.first?.titleModes, ["always", "never"])
+    XCTAssertEqual(snapshot.last?.pageTitles, ["Inbox"], "no pages: the destination's label")
+    XCTAssertEqual(snapshot.last?.barHidden, true)
+  }
+}
+
 // MARK: - VK-550: SearchBridge's scope bar (no window)
 
 /// The scope half of `SearchBridge` (spec VK-550 §10): UIKit's own scope
