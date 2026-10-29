@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
@@ -89,6 +91,53 @@ Widget _liquid(String title) => LiquidPage(
 List<String> _titles(FakeNativePlatform fake, int tab) => [
   for (final page in fake.last.tabs[tab].pages) page.title,
 ];
+
+/// A shell with `nativeChrome: off` whose body is the navigator [inner],
+/// with a LiquidPage 'Inner' at its root. Built straight in a tab of the
+/// outer shell (no navigator between), it is on the outer shell's route.
+Widget _nestedShell(GlobalKey<NavigatorState> inner) => LiquidShell(
+  nativeChrome: LiquidNativeChrome.off,
+  destinations: const [
+    LiquidDestination(icon: Icon(Icons.inbox), label: 'Inbox'),
+    LiquidDestination(icon: Icon(Icons.send), label: 'Sent'),
+  ],
+  selectedIndex: 0,
+  onDestinationSelected: (_) {},
+  body: Navigator(
+    key: inner,
+    onGenerateRoute: (_) => MaterialPageRoute<void>(
+      builder: (_) => _liquid('Inner'),
+    ),
+  ),
+);
+
+/// Pushes 'Inner 2' on [inner], then 'Form', a page whose PopScope blocks
+/// every pop and counts the asks, and settles. Returns the count.
+Future<int Function()> _pushInnerForm(
+  WidgetTester tester,
+  GlobalKey<NavigatorState> inner,
+) async {
+  var asks = 0;
+  inner.currentState!
+      .push(MaterialPageRoute<void>(builder: (_) => _liquid('Inner 2')))
+      .ignore();
+  await tester.pumpAndSettle();
+  inner.currentState!
+      .push(
+        MaterialPageRoute<void>(
+          builder: (_) => PopScope<void>(
+            canPop: false,
+            onPopInvokedWithResult: (didPop, _) {
+              if (!didPop) asks++;
+            },
+            child: _liquid('Form'),
+          ),
+        ),
+      )
+      .ignore();
+  await tester.pumpAndSettle();
+  return () => asks;
+}
 
 void main() {
   group('VK-442: every tab of an engaged shell', () {
@@ -213,6 +262,240 @@ void main() {
       expect(fake.last.tabs[2].pages, isEmpty);
       expect(fake.last.hidden, isTrue);
       expect(fake.last.tabBarHidden, isFalse);
+    });
+  });
+
+  // Spec §6.7, Q13: Flutter owns the edge swipe on every tab; the native
+  // bar switches when the gesture ends. Guards kept whatever the spike
+  // decides (VK-444).
+  group("VK-444: the edge swipe stays Flutter's", () {
+    /// Home's native stack in every config sent from [from] on.
+    List<List<LiquidNativePage>> homeStacks(
+      FakeNativePlatform fake,
+      int from,
+    ) => [for (final config in fake.configs.skip(from)) config.tabs[0].pages];
+
+    /// Drags [gesture] [steps] × 20 pt to the right, a frame per step.
+    Future<void> drag(
+      WidgetTester tester,
+      TestGesture gesture,
+      int steps,
+    ) async {
+      for (var i = 0; i < steps; i++) {
+        await gesture.moveBy(const Offset(20, 0));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+    }
+
+    testWidgets('a back swipe in progress sends no stack change; the commit '
+        'sends the shorter stack once', (tester) async {
+      final fake = await _pump(tester);
+      await _push(tester, 0, _liquid('Detail'));
+      final from = fake.configs.length;
+      final before = fake.last.tabs[0].pages;
+      final gesture = await tester.startGesture(const Offset(2, 400));
+      await drag(tester, gesture, 6);
+      expect(
+        find.byKey(const ValueKey('list-Home')),
+        findsOneWidget,
+        reason: 'precondition: the swipe shows the page below',
+      );
+      expect(homeStacks(fake, from), everyElement(before), reason: 'mid-swipe');
+      expect(before, const [
+        LiquidNativePage(title: 'Home'),
+        LiquidNativePage(title: 'Detail'),
+      ]);
+      await drag(tester, gesture, 10);
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('list-Detail')), findsNothing);
+      final stacks = homeStacks(fake, from);
+      expect(stacks.where((stack) => stack.length == 1), hasLength(1));
+      expect(stacks.last, const [LiquidNativePage(title: 'Home')]);
+    });
+
+    testWidgets('a cancelled swipe sends nothing', (tester) async {
+      final fake = await _pump(tester);
+      await _push(tester, 0, _liquid('Detail'));
+      final from = fake.configs.length;
+      final before = fake.last.tabs[0].pages;
+      final gesture = await tester.startGesture(const Offset(2, 400));
+      await drag(tester, gesture, 4);
+      expect(
+        find.byKey(const ValueKey('list-Home')),
+        findsOneWidget,
+        reason: 'precondition: the swipe started',
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('list-Detail')), findsOneWidget);
+      expect(homeStacks(fake, from), everyElement(before));
+      expect(_titles(fake, 0), ['Home', 'Detail']);
+    });
+  });
+
+  // Spec §5.4: the page's child keeps its GlobalKey through every bar
+  // switch, so a focused, composing field keeps its IME connection.
+  group('VK-442: IME safety across a bar switch', () {
+    testWidgets('a composing field keeps its state, focus and composing '
+        'range when native chrome engages and when LiquidHideChrome '
+        'toggles', (tester) async {
+      final fake = installFakeNative(state: _compact)
+        ..attachGate = Completer<LiquidNativeShellState>();
+      final hide = ValueNotifier(false);
+      addTearDown(hide.dispose);
+      await pumpShell(
+        tester,
+        const TestShell(
+          destinations: _destinations,
+          initialIndex: 2,
+          pageBuilder: _page,
+        ),
+        padding: _compactPadding,
+      );
+      await _push(
+        tester,
+        2,
+        ValueListenableBuilder<bool>(
+          valueListenable: hide,
+          builder: (_, hidden, child) =>
+              LiquidHideChrome(enabled: hidden, child: child!),
+          child: const LiquidPage(
+            title: 'Profile',
+            child: Material(child: Center(child: TextField())),
+          ),
+        ),
+      );
+      LiquidShellScopeData scope() =>
+          LiquidShellScope.of(tester.element(find.byType(TextField)));
+      expect(scope().nativePageBar, isFalse, reason: 'pending: Flutter bar');
+      expect(find.byType(LiquidBackButton), findsOneWidget);
+
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: 'hoa',
+          selection: TextSelection.collapsed(offset: 3),
+          composing: TextRange(start: 0, end: 3),
+        ),
+      );
+      await tester.pump();
+      final field = tester.state<EditableTextState>(find.byType(EditableText));
+      tester.testTextInput.log.clear();
+
+      void expectKept(String when) {
+        final now = tester.state<EditableTextState>(find.byType(EditableText));
+        expect(now, same(field), reason: when);
+        expect(now.widget.focusNode.hasFocus, isTrue, reason: when);
+        expect(
+          now.textEditingValue.composing,
+          const TextRange(start: 0, end: 3),
+          reason: when,
+        );
+        final methods = [
+          for (final call in tester.testTextInput.log) call.method,
+        ];
+        expect(methods, isNot(contains('TextInput.clearClient')));
+        expect(methods, isNot(contains('TextInput.setClient')));
+      }
+
+      fake.attachGate!.complete(_compact);
+      await tester.pumpAndSettle();
+      expect(scope().nativePageBar, isTrue, reason: 'precondition: engaged');
+      expect(find.byType(LiquidBackButton), findsNothing);
+      expectKept('native chrome engaged');
+
+      hide.value = true;
+      await tester.pumpAndSettle();
+      expectKept('hide request');
+      hide.value = false;
+      await tester.pumpAndSettle();
+      expectKept('hide request ended');
+    });
+  });
+
+  // Spec §6.10: a nested shell must use nativeChrome: off; its pages
+  // register with it and draw the Flutter bar.
+  testWidgets("a nested shell's pages draw the Flutter bar and stay out of "
+      "the outer tab's stack", (tester) async {
+    final fake = installFakeNative(state: _compact);
+    final inner = GlobalKey<NavigatorState>();
+    await pumpShell(
+      tester,
+      TestShell(
+        destinations: _destinations,
+        pageBuilder: (index) => index == 0 ? _nestedShell(inner) : _page(index),
+      ),
+      padding: _compactPadding,
+    );
+    inner.currentState!
+        .push(MaterialPageRoute<void>(builder: (_) => _liquid('Inner 2')))
+        .ignore();
+    await tester.pumpAndSettle();
+    expect(find.byType(LiquidBackButton), findsOneWidget);
+    expect(scopeOf(tester, 'Inner 2').nativePageBar, isFalse);
+    expect(fake.last.tabs[0].pages, isEmpty);
+  });
+
+  // S's rule (VK-776): a shell in another shell's body with no navigator
+  // between is on that shell's route; its own back handler steps aside,
+  // and the outer shell's walk hands back to it. The native back pops a
+  // page directly (no handleBack): it must never reach such a shell's
+  // pages, and when it lands on the outer shell's route the outer order
+  // runs, once.
+  group('VK-442: native back and a same-route nested shell', () {
+    testWidgets('the native back never reaches a same-route nested '
+        "shell's page; system back asks its page once, in the outer "
+        "shell's order", (tester) async {
+      final fake = installFakeNative(state: _compact);
+      final inner = GlobalKey<NavigatorState>();
+      await pumpShell(
+        tester,
+        TestShell(
+          destinations: _destinations,
+          pageBuilder: (index) =>
+              index == 0 ? _nestedShell(inner) : _page(index),
+        ),
+        padding: _compactPadding,
+      );
+      final asks = await _pushInnerForm(tester, inner);
+      expect(fake.last.tabs[0].pages, isEmpty);
+
+      fake.emitNative(const LiquidNativeBackTapped(0));
+      await tester.pumpAndSettle();
+      expect(asks(), 0, reason: 'the native back');
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(asks(), 1, reason: 'one back, one ask');
+      expect(find.text('Form page: 0'), findsOneWidget);
+    });
+
+    testWidgets('a native back on a LiquidPage around a same-route nested '
+        "shell runs the outer shell's order: the nested shell's page is "
+        'asked once', (tester) async {
+      final fake = installFakeNative(state: _compact);
+      final inner = GlobalKey<NavigatorState>();
+      await pumpShell(
+        tester,
+        TestShell(
+          destinations: _destinations,
+          pageBuilder: (index) => index == 0
+              ? LiquidPage(title: 'Mail', child: _nestedShell(inner))
+              : _page(index),
+        ),
+        padding: _compactPadding,
+      );
+      final asks = await _pushInnerForm(tester, inner);
+      expect(_titles(fake, 0), ['Mail']);
+
+      fake.emitNative(const LiquidNativeBackTapped(0));
+      await tester.pumpAndSettle();
+      expect(asks(), 1, reason: 'one back, one ask');
+      expect(find.text('Form page: 0'), findsOneWidget);
+      expect(find.byType(TestShell), findsOneWidget, reason: 'the shell');
     });
   });
 
