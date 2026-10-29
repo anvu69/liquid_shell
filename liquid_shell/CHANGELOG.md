@@ -1,5 +1,16 @@
 ## 0.1.0-dev.10
 
+- **Flutter page bar, complete (VK-445).** On iOS before 26, on Android and
+  with Flutter chrome, `LiquidPage(largeTitle: true)` on a root page now
+  draws its large title on a row of its own that scrolls away as the page
+  scrolls, while the inline title fades into the bar row, as UIKit's does.
+  The page's top padding stays put while it collapses.
+- **Behaviour change (VK-445).** A pushed page's title is always inline:
+  `largeTitle` applies to root pages only. Before, the Flutter bar drew a
+  pushed page's large title on a row of its own, where UIKit drew it small.
+- **Behaviour change (VK-445).** `largeTitle: true` on a root page now means
+  the collapsing row. Before, the Flutter bar put it on the bar row, which
+  is what `largeTitle: null` gives a root page at compact width.
 - **Fix (VK-776).** A shell nested in another shell's body with no
   navigator between (a tab's page that is itself a `LiquidShell`) no
   longer answers back beside the outer shell. One back asked a page's
