@@ -139,7 +139,117 @@ Future<int Function()> _pushInnerForm(
   return () => asks;
 }
 
+/// A compact native platform that also records, in one ordered log, each
+/// config (the selected tab's page titles), page offset and minimize
+/// offset.
+class _OrderedNative extends FakeNativePlatform {
+  _OrderedNative() : super(state: _compact);
+
+  final calls = <String>[];
+
+  @override
+  Future<void> updateNativeChrome(LiquidNativeChromeConfig config) {
+    final tab = config.tabs.elementAtOrNull(config.selectedIndex);
+    calls.add('config ${tab?.pages.map((p) => p.title).join(',')}');
+    return super.updateNativeChrome(config);
+  }
+
+  @override
+  Future<void> setNativePageScroll({
+    required int tab,
+    required double offset,
+  }) {
+    calls.add('pageScroll $tab $offset');
+    return super.setNativePageScroll(tab: tab, offset: offset);
+  }
+
+  @override
+  Future<void> setNativeMinimizeScroll({
+    required int tab,
+    required double offset,
+  }) {
+    calls.add('minimize $tab $offset');
+    return super.setNativeMinimizeScroll(tab: tab, offset: offset);
+  }
+}
+
+/// Library selected on an [_OrderedNative], scrolled to 200, the log
+/// cleared.
+Future<_OrderedNative> _pumpLibraryAt200(WidgetTester tester) async {
+  final native = _OrderedNative();
+  final original = LiquidShellPlatform.instance;
+  LiquidShellPlatform.instance = native;
+  addTearDown(() => LiquidShellPlatform.instance = original);
+  await pumpShell(
+    tester,
+    const TestShell(
+      destinations: _destinations,
+      initialIndex: 1,
+      pageBuilder: _page,
+    ),
+    padding: _compactPadding,
+  );
+  tester
+      .state<ScrollableState>(
+        find.descendant(
+          of: find.byKey(const ValueKey('list-Library')),
+          matching: find.byType(Scrollable),
+        ),
+      )
+      .position
+      .jumpTo(200);
+  await tester.pumpAndSettle();
+  expect(native.calls, containsAll(['pageScroll 1 200.0', 'minimize 1 200.0']));
+  native.calls.clear();
+  return native;
+}
+
+/// The offsets in [calls] before the first [config], and those after it.
+/// Fails if [config] was never sent.
+(List<String>, List<String>) _aroundConfig(List<String> calls, String config) {
+  final at = calls.indexOf(config);
+  expect(at, isNonNegative, reason: '$config sent: $calls');
+  return (calls.sublist(0, at), calls.sublist(at + 1));
+}
+
 void main() {
+  group('VK-442: offsets follow the config that changes the stack', () {
+    testWidgets("a push: the pushed page's offset after its config", (
+      tester,
+    ) async {
+      final native = await _pumpLibraryAt200(tester);
+      await _push(tester, 1, _liquid('Detail'));
+      final (before, after) = _aroundConfig(
+        native.calls,
+        'config Library,Detail',
+      );
+      expect(
+        before.where((c) => c.startsWith('pageScroll')),
+        isEmpty,
+        reason: "native's top is still Library: ${native.calls}",
+      );
+      expect(after, contains('pageScroll 1 0.0'), reason: '${native.calls}');
+      expect(after, contains('minimize 1 200.0'), reason: '${native.calls}');
+    });
+
+    testWidgets("a pop: the root's kept offset after the config that pops "
+        'to it', (tester) async {
+      final native = await _pumpLibraryAt200(tester);
+      await _push(tester, 1, _liquid('Detail'));
+      native.calls.clear();
+      _navigators[1].currentState!.pop();
+      await tester.pumpAndSettle();
+      final (before, after) = _aroundConfig(native.calls, 'config Library');
+      expect(
+        before.where((c) => c.startsWith('pageScroll')),
+        isEmpty,
+        reason: "native's top is still Detail: ${native.calls}",
+      );
+      expect(after, contains('pageScroll 1 200.0'), reason: '${native.calls}');
+      expect(after, contains('minimize 1 200.0'), reason: '${native.calls}');
+    });
+  });
+
   group('VK-442: every tab of an engaged shell', () {
     testWidgets('has a native page bar: LiquidPage draws only its child', (
       tester,
