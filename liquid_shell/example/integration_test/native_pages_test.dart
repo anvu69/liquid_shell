@@ -77,7 +77,9 @@ void main() {
     expect((await _tab(0)).pageTitles, ['Home']);
     expect(find.text('Detail 1 item 1'), findsNothing);
 
-    // Library: the large title on its own row.
+    // Library: the large title on its own row, drawn out at rest although
+    // its mode reaches UIKit once the tab shows; a scroll collapses it and
+    // the top brings it back.
     await _ios.debugTap(NativeTapTarget.destination, 1);
     await _settle(tester);
     final library = await _tab(1);
@@ -85,6 +87,22 @@ void main() {
     expect(library.barHidden, isFalse);
     expect(library.titleModes, ['always']);
     await shot('library');
+    final middle = tester.getCenter(find.byType(PagesCase));
+    await tester.dragFrom(middle, const Offset(0, -400));
+    await _settle(tester);
+    final collapsed = (await _tab(1)).barHeight;
+    expect(
+      library.barHeight,
+      greaterThan(collapsed + 20),
+      reason: 'the large title is out at rest',
+    );
+    await tester.dragFrom(middle, const Offset(0, 600));
+    await _settle(tester);
+    expect(
+      (await _tab(1)).barHeight,
+      closeTo(library.barHeight, 0.5),
+      reason: 'back at the top, the large title returns',
+    );
 
     // Settings: no LiquidPage at its root, no bar; About above it gets a
     // stand-in root titled with the tab's label.
