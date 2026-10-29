@@ -106,6 +106,9 @@ final class ShellNavController: UINavigationController {
         #endif
       }
     }
+    // Read before this config: whether the root's large title showed.
+    let hadLargeTitle =
+      !isNavigationBarHidden && rootHost.navigationItem.largeTitleDisplayMode == .always
     rootHost.title = wanted[0].title
     if !isSearch {
       rootHost.navigationItem.largeTitleDisplayMode = PageTitleMath.rootMode(
@@ -137,6 +140,15 @@ final class ShellNavController: UINavigationController {
       shown && viewIfLoaded?.window != nil && !UIAccessibility.isReduceMotionEnabled
     let hideBar = !isSearch && PageTitleMath.barHidden(pages: pages, compact: compact)
     if isNavigationBarHidden != hideBar { setNavigationBarHidden(hideBar, animated: animated) }
+    // UIKit keeps a large title collapsed when it turns on, or its bar
+    // shows, while the root is on screen (VK-441): pull it out once the bar
+    // has finished showing. Only for a root that stays on top.
+    if !isSearch, !hadLargeTitle, wanted.count == 1, !isNavigationBarHidden,
+      rootHost.navigationItem.largeTitleDisplayMode == .always
+    {
+      rootHost.revealLargeTitle(
+        after: animated ? TimeInterval(UINavigationController.hideShowBarDuration) : 0)
+    }
     guard hosts.map(ObjectIdentifier.init) != viewControllers.map(ObjectIdentifier.init) else {
       return
     }
@@ -191,6 +203,9 @@ final class PageHostController: UIViewController {
   /// after it.
   private(set) var expandedTop: CGFloat = 0
   private var offset: Double = 0
+  /// A reveal (`revealLargeTitle`) is under way: Flutter's offset waits for
+  /// its end, and the expanded top is not learned from the collapsed bar.
+  private var revealing = false
   /// The native back button's proposal (set for pushed pages).
   var onBack: (() -> Void)? {
     didSet {
@@ -206,6 +221,8 @@ final class PageHostController: UIViewController {
   func setScrollOffset(_ value: Double) {
     loadViewIfNeeded()
     offset = max(0, value)
+    // A reveal puts the proxy back at this offset when it ends.
+    guard !revealing else { return }
     // From the expanded top, not the current inset: once the title has
     // collapsed the proxy's inset is the small bar's, and offset 0 must pull
     // the large title back out, as a real scroll view does.
@@ -218,9 +235,52 @@ final class PageHostController: UIViewController {
   /// The expanded top only at rest with the search inactive.
   func rereadRestingTop(force: Bool = false) {
     if force || offset <= 0 { restingTop = view.safeAreaInsets.top }
-    if offset <= 0, !(navigationItem.searchController?.isActive ?? false) {
+    if offset <= 0, !revealing, !(navigationItem.searchController?.isActive ?? false) {
       expandedTop = view.safeAreaInsets.top
     }
+  }
+
+  /// How far past rest `revealLargeTitle` pulls the proxy: more than the
+  /// large title's 52 pt row. 100 pt brought the title out on the iPhone 17
+  /// Pro, iOS 26.5 and 27.0 (probe P17a), 60 pt did too (P11); at rest, or
+  /// pre-set to rest, nothing does (P1, P6). docs/qa/p3b2/measure.md, "M5:
+  /// a large title that turns on on screen".
+  static let largeTitlePull: CGFloat = 100
+
+  /// Brings out a large title UIKit keeps collapsed (VK-441). When a page's
+  /// mode becomes `.always`, or its bar shows with it, while the page is on
+  /// top in a window and the proxy rests at the top, UIKit lays the bar out
+  /// collapsed and keeps it so (iOS 26.5 and 27.0 alike); a pull past rest
+  /// brings the title out, as on a real scroll view. So, [delay] seconds
+  /// from now (the bar's show animation): lay out, pull, and on the next
+  /// run-loop turn put the proxy back at Flutter's offset. Off screen UIKit
+  /// lays the title out by itself (P2); scrolled, or under an active
+  /// search, a collapsed title is right.
+  func revealLargeTitle(after delay: TimeInterval = 0) {
+    guard !revealing, isOnTopInAWindow, offset <= 0,
+      !(navigationItem.searchController?.isActive ?? false)
+    else { return }
+    revealing = true
+    DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+      guard let self else { return }
+      if self.offset <= 0, self.isOnTopInAWindow {
+        self.navigationController?.view.layoutIfNeeded()
+        self.proxy.contentOffset.y =
+          -self.proxy.adjustedContentInset.top - PageHostController.largeTitlePull
+      }
+      DispatchQueue.main.async { [weak self] in
+        guard let self else { return }
+        self.revealing = false
+        self.navigationController?.view.layoutIfNeeded()
+        self.rereadRestingTop()
+        self.setScrollOffset(self.offset)
+        self.shell?.syncFlutter()
+      }
+    }
+  }
+
+  private var isOnTopInAWindow: Bool {
+    viewIfLoaded?.window != nil && navigationController?.topViewController === self
   }
 
   override func viewDidLoad() {
@@ -287,8 +347,11 @@ final class PageHostController: UIViewController {
     if let hides = style.hidesWhenScrolling { navigationItem.hidesSearchBarWhenScrolling = hides }
     // `.inline` on an iPhone: the large title on the bar row, right under
     // the status bar, as Apple Music draws it; `.always` adds a 52pt row.
+    let hadLargeTitle = navigationItem.largeTitleDisplayMode == .always
     navigationItem.largeTitleDisplayMode = style.titleMode
     wantsTitleItem = style.titleItem
+    // The search root's mode changes in place too (VK-441, probe P15).
+    if !hadLargeTitle, style.titleMode == .always { revealLargeTitle() }
   }
 
   /// Whether the small title is a leading item (an iPad's search root,

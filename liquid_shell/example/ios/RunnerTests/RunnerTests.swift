@@ -3793,6 +3793,94 @@ extension NativeTabsTests {
   }
 }
 
+// MARK: - VK-441: a large title that turns on on screen (measure.md M5)
+
+@available(iOS 26.0, *)
+extension NativeTabsTests {
+  /// The navigation bar's height once UIKit has settled it.
+  fileprivate func barHeight(of nav: UINavigationController) -> CGFloat {
+    settle()
+    return stable { nav.navigationBar.frame.height }
+  }
+
+  /// Hides and drops a baseline's window before the test installs its own
+  /// shell.
+  fileprivate func takeDownWindow() {
+    window?.isHidden = true
+    window?.rootViewController = nil
+    window = nil
+  }
+
+  /// Inbox's bar with [pages] applied while Home is selected, then Inbox
+  /// selected: its root enters the window for the first time with its mode
+  /// set, and UIKit lays the large title out expanded by itself (M5, P2).
+  /// The baseline of the tests below, in place of a device constant.
+  fileprivate func expandedBarHeight(_ pages: [NativePage]) throws -> CGFloat {
+    let tabs = try installedShell()
+    var inbox = config()
+    inbox.tabs[1].pages = pages
+    tabs.apply(inbox)
+    settle()
+    inbox.selectedIndex = 1
+    tabs.apply(inbox)
+    let height = try barHeight(of: XCTUnwrap(tabs.navControllers[1]))
+    takeDownWindow()
+    return height
+  }
+
+  /// Library's case: a plain tab's pages reach native once the tab shows,
+  /// so its root turns `.always` on screen. UIKit alone keeps that title
+  /// collapsed (M5, P1: 54 pt against 106 on both devices, 26.5 and 27.0).
+  func testALargeTitleThatTurnsOnOnScreenIsDrawnOut() throws {
+    let library = [NativePage(title: "Library", largeTitle: true)]
+    let expanded = try expandedBarHeight(library)
+    let tabs = try installedShell()
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    XCTAssertTrue(nav.isNavigationBarHidden, "precondition: no pages, no bar")
+    XCTAssertNotNil(nav.rootHost.viewIfLoaded?.window, "precondition: the root is on screen")
+    tabs.apply(pagesConfig(library))
+    XCTAssertEqual(barHeight(of: nav), expanded, accuracy: 0.5, "the large title is out at rest")
+  }
+
+  /// The proxy's base is learned with the title out: Flutter's offset 0,
+  /// sent in the same turn as the pages, keeps it out, and after a scroll
+  /// offset 0 brings it back (M5: P1 + offset 0 stays 54; P17a: 400 → 0
+  /// gives 106).
+  func testALargeTitleDrawnOutOnScreenStaysOutAtZeroAndReturns() throws {
+    let library = [NativePage(title: "Library", largeTitle: true)]
+    let expanded = try expandedBarHeight(library)
+    let tabs = try installedShell()
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    tabs.apply(pagesConfig(library))
+    tabs.setPageScroll(tab: 0, offset: 0)
+    XCTAssertEqual(barHeight(of: nav), expanded, accuracy: 0.5, "out at Flutter's offset 0")
+    XCTAssertEqual(
+      nav.rootHost.expandedTop, nav.rootHost.view.safeAreaInsets.top, accuracy: 0.5,
+      "the proxy's base is the expanded top")
+    tabs.setPageScroll(tab: 0, offset: 400)
+    XCTAssertLessThan(barHeight(of: nav), expanded - 20, "a scroll collapses it")
+    tabs.setPageScroll(tab: 0, offset: 0)
+    XCTAssertEqual(barHeight(of: nav), expanded, accuracy: 0.5, "back at 0, the title returns")
+  }
+
+  /// The search root flips its mode in place too: an iPad search root on
+  /// screen asking for a large title (M5, P15: the bar kept its height,
+  /// 114 pt on 26.5, 108 on 27.0).
+  func testASearchRootAskingForALargeTitleOnScreenShowsIt() throws {
+    try requireIPad()
+    let large = [NativePage(title: "Search", largeTitle: true)]
+    let baseline = try installedSearchShell(selected: 2, pages: large)
+    let expanded = try barHeight(of: XCTUnwrap(baseline.navControllers[2]))
+    takeDownWindow()
+    let tabs = try installedSearchShell(
+      selected: 2, pages: [NativePage(title: "Search", largeTitle: false)])
+    let nav = try XCTUnwrap(tabs.navControllers[2])
+    XCTAssertLessThan(barHeight(of: nav), expanded - 20, "precondition: no large title row")
+    tabs.apply(searchConfig(selected: 2, pages: large))
+    XCTAssertEqual(barHeight(of: nav), expanded, accuracy: 0.5, "the large title is out")
+  }
+}
+
 // MARK: - P3b-2: the per-tab debug snapshot (spec P3b-2 §5.2)
 
 @available(iOS 26.0, *)

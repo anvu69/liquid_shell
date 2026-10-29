@@ -81,3 +81,41 @@ finished tree.
 `RunnerUITests` on iPhone 17 Pro and iPad Air 11-inch (M4), iOS 26.5:
 30/30 and 20/20, no failure; `MinimizeUITests`
 on an iPhone 17 (iOS 26.5): 7/7. The main design stands.
+
+## M5: a large title that turns on on screen (VK-441)
+
+Found while Task 15 ran: Library's root (`largeTitle: true`) was drawn
+collapsed at rest on iOS 26.5, a small centred title on the iPhone and
+none on the iPad. Probes at `c46f0e6` in `RunnerTests` on the iPhone 17
+Pro and the iPad Air 11-inch (M4), iOS 26.5 and 27.0, settled 1 s. The
+navigation bar's height in points, iPhone / iPad, the same on both OS
+versions unless the row says otherwise:
+
+| Probe | Sequence | Bar |
+|---|---|---|
+| P1 | `.always` applied to the shown tab's root (Library's pages arrive once its tab shows) | 54 / 54, collapsed |
+| P1 + offset 0 | then Flutter's offset 0 (the proxy's base was learned collapsed) | 54 / 54 |
+| P2 | the same pages applied while another tab is selected, then the tab selected | 106 / 106, expanded |
+| P3–P7, P9, P10, P12, P13 | the minimize proxy out of the way; the proxy pre-set to rest; unhide and mode in either order; the scroll view registered again; a relayout | 54 / 54 |
+| P11 | P1, then the proxy pulled 60 pt past rest and released | 106 / 106 |
+| P14 | P1 with no content scroll view | 106 / 106 |
+| P15 | an iPad search root on screen, `largeTitle` false → true | 114 → 114 (26.5), 108 → 108 (27.0) |
+| P16 (27.0) | pages sent with the selection; or 10, 100, 500 ms after it | 106; 54 |
+| P17a (iPhone) | P1, then lay out, pull 100 pt past rest, back to rest on the next turn; then offsets 400 → 0 | 106; 54; 106 |
+| P18 (iPhone) | a plain `UIScrollView` as the `.top` content scroll view | 54 |
+
+Cause: with a `.top` content scroll view at rest, UIKit keeps a visible
+bar's large title collapsed when the mode becomes `.always` or the bar
+shows with it; only a pull past rest brings it out. The difference between
+26.5 and 27.0 in the integration run is ordering (P16), not UIKit. The
+iPad's missing title is the same collapsed bar: at regular width a
+collapsed root bar draws no inline title.
+
+**Decision: fix A** (owner, 2026-10-29), in this branch before the
+release task. `PageHostController.revealLargeTitle(after:)` pulls the
+proxy `largeTitlePull` (100 pt) past rest and puts it back on the next
+run-loop turn, for a plain root (`ShellNavController.applyPages`) and the
+search root (`applySearchStyle`); the proxy's base is not learned
+meanwhile. Unit tests: `NativeTabsTests.testALargeTitleThatTurnsOnOnScreenIsDrawnOut`
+and the two after it, green on all four simulators. The Library
+screenshots are taken again after the fix (Task 20).
