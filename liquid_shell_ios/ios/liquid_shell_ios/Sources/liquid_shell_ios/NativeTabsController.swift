@@ -155,6 +155,7 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
         // once (spec P3b-2 §6.1): Dart's next config may be equal to the
         // last one, and is then not sent.
         self.applyPages(config, animated: false)
+        self.applyBottomEdgePolicy(config)  // `applyPages` may have built hosts
         self.select(Int(config.selectedIndex))
       }
       // Regular takes the pan back and resets the proxies; compact again
@@ -213,10 +214,7 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     setFooter(new.footer)
     let behavior: UITabBarController.MinimizeBehavior = new.minimizeOnScroll ? .onScrollDown : .never
     if tabBarMinimizeBehavior != behavior { tabBarMinimizeBehavior = behavior }
-    // Q14: the policy is `MinimizeProxy.hidesBottomEdgeEffect`'s, on every
-    // page host's proxy, pushed ones included (after `applyPages`).
-    let hidesEdge = MinimizeProxy.hidesBottomEdgeEffect(minimizeOnScroll: new.minimizeOnScroll)
-    for proxy in allMinimizeProxies { proxy.bottomEdgeEffect.isHidden = hidesEdge }
+    applyBottomEdgePolicy(new)
     view.tintColor = UIColor(argb: new.tintArgb)
     traitOverrides.userInterfaceStyle = new.dark ? .dark : .light
     traitOverrides.layoutDirection = new.rtl ? .rightToLeft : .leftToRight
@@ -335,6 +333,13 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
         shown: animated && selectedViewController === nav && Int(config.selectedIndex) == index,
         compact: compact, events: events)
     }
+  }
+
+  /// Q14: the policy is `MinimizeProxy.hidesBottomEdgeEffect`'s, on every
+  /// page host's proxy, pushed ones included (after `applyPages`).
+  private func applyBottomEdgePolicy(_ config: NativeChromeConfig) {
+    let hidesEdge = MinimizeProxy.hidesBottomEdgeEffect(minimizeOnScroll: config.minimizeOnScroll)
+    for proxy in allMinimizeProxies { proxy.bottomEdgeEffect.isHidden = hidesEdge }
   }
 
   /// Placeholder, scopes and placement of the search tab (spec §7.2,

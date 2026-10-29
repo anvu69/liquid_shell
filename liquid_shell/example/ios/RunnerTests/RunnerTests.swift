@@ -3629,6 +3629,27 @@ extension NativeTabsTests {
     XCTAssertEqual(nav.rootHost.navigationItem.largeTitleDisplayMode, .never)
   }
 
+  /// A native swipe-back shortens the stack before Dart confirms the pop; a
+  /// size-class change then rebuilds the missing host, which must follow the
+  /// edge policy like the others (VK-441).
+  func testASizeClassReapplyHidesTheBottomEdgeEffectOnNewHosts() throws {
+    try requireIPad()
+    let tabs = try installedShell(sizeClass: .regular)
+    let container = try XCTUnwrap(tabs.parent)
+    tabs.apply(
+      pagesConfig([NativePage(title: "Home"), NativePage(title: "Detail")], minimize: false))
+    settle()
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    nav.setViewControllers([nav.rootHost], animated: false)  // the swipe's pop
+    XCTAssertEqual(nav.hosts.count, 1, "precondition: shorter than the config")
+    container.traitOverrides.horizontalSizeClass = .compact
+    settle()
+    XCTAssertEqual(nav.hosts.count, 2, "the trait handler rebuilt the host")
+    for host in nav.hosts {
+      XCTAssertTrue(host.minimizeProxy?.bottomEdgeEffect.isHidden ?? false, "every host's")
+    }
+  }
+
   /// Spec P3b-2 §6.1: a hidden bar is not hit; its band reaches Flutter.
   func testTheBodyUnderAHiddenNavigationBarReachesFlutter() throws {
     let tabs = try installedShell(sizeClass: .compact)
