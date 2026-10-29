@@ -59,6 +59,13 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   /// `safe.top` while the sidebar did not overlay: kept while it does, so
   /// the content under the dimming view does not jump up.
   private var heldTop: CGFloat = 0
+  /// Whether the tab bar (and the sidebar) is hidden for a hide request
+  /// over a page with a native bar (`NativeChromeConfig.tabBarHidden`,
+  /// spec P3b-2 §6.6). The navigation bar stays.
+  private(set) var tabBarHiddenApplied = false
+  /// A tiled sidebar hidden with the tab bar comes back tiled; an overlay,
+  /// which is transient, does not.
+  private var sidebarTiledBeforeTabBarHid = false
   /// Whether Dart attached. Before that, state and window-control sends
   /// have no receiver and only fail; `attach` returns the state, and Dart
   /// reads the window controls itself.
@@ -225,6 +232,7 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     view.isUserInteractionEnabled = new.interactive
     view.accessibilityElementsHidden = !new.interactive
     footer.interactive = new.interactive
+    setTabBarHiddenForPage(new.engaged && new.tabBarHidden, wasVisible: wasVisible)
     // The dialog (or the pending guard's dialog) is drawn in the Flutter
     // view, below an overlay sidebar and its dimming view: close the
     // overlay, which is transient. A tiled sidebar stays.
@@ -240,8 +248,30 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   }
 
   func setSidebarVisible(_ visible: Bool) {
-    guard chromeVisible, !isCompact else { return }
+    guard chromeVisible, !isCompact, !tabBarHiddenApplied else { return }
     sidebar.isHidden = !visible
+  }
+
+  /// Spec P3b-2 §6.6: a hide request over a page with a native bar hides
+  /// the tab bar and, at regular width, the sidebar; the navigation bar
+  /// stays, and Flutter gets the top page's insets (`syncFlutter`). An
+  /// active search is dismissed keeping its text, as hidden chrome does
+  /// (VK-551). The minimize pan goes (`updateMinimizePan`).
+  private func setTabBarHiddenForPage(_ hide: Bool, wasVisible: Bool) {
+    guard hide != tabBarHiddenApplied else { return }
+    tabBarHiddenApplied = hide
+    let animated = wasVisible && chromeVisible && !UIAccessibility.isReduceMotionEnabled
+    if hide {
+      sidebarTiledBeforeTabBarHid = !isCompact && !sidebar.isHidden && isTiled
+      // UIKit leaves a tiled sidebar shown under a hidden tab bar (M3).
+      if !isCompact, !sidebar.isHidden { sidebar.isHidden = true }
+      searchBridge.dismissKeepingText()
+      setTabBarHidden(true, animated: animated)
+    } else {
+      setTabBarHidden(false, animated: animated)
+      if sidebarTiledBeforeTabBarHid, !isCompact { sidebar.isHidden = false }
+      sidebarTiledBeforeTabBarHid = false
+    }
   }
 
   /// Creates the tabs when the structure changes; `showTabs` hands them to
@@ -553,8 +583,9 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   /// alone would read as a cluster (`ShellMath.fallbackClusterTop`). The
   /// compact bar is at the bottom: the top is Flutter's, so it is read,
   /// unless the selected tab's navigation bar shows (spec P3b-2 §6.1).
+  /// With the tab bar hidden for a page (§6.6) only that bar clears it.
   func windowControls() -> NativeWindowControls {
-    if chromeVisible, !isCompact || selectedShowsNavigationBar {
+    if chromeVisible, (!isCompact && !tabBarHiddenApplied) || selectedShowsNavigationBar {
       return NativeWindowControls(leading: 0, top: 0)
     }
     return readWindowControls(flutter.viewIfLoaded)
@@ -781,7 +812,8 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   func updateMinimizePan() {
     var want: MinimizeProxy?
     if !retired, let config, chromeVisible, config.interactive, config.minimizeOnScroll,
-      isCompact, let proxy = selectedMinimizeProxy, let content = flutter.viewIfLoaded
+      !tabBarHiddenApplied, isCompact, let proxy = selectedMinimizeProxy,
+      let content = flutter.viewIfLoaded
     {
       proxy.contentView = content
       want = proxy

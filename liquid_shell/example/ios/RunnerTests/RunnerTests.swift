@@ -3666,6 +3666,81 @@ extension NativeTabsTests {
   }
 }
 
+// MARK: - P3b-2: the tab bar hidden for a page (spec P3b-2 §4.4, §6.6)
+
+@available(iOS 26.0, *)
+extension NativeTabsTests {
+  /// The tab bar hides, the navigation bar stays; Flutter gets the top
+  /// page's insets, the band where the tab bar was, no minimize pan and
+  /// no window controls (the navigation bar clears them).
+  func testTabBarHiddenKeepsTheNavigationBar() throws {
+    let tabs = try installedShell(sizeClass: .compact)
+    let pages = [NativePage(title: "Home"), NativePage(title: "Photo")]
+    tabs.apply(pagesConfig(pages, minimize: true))
+    settle()
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    let root = try XCTUnwrap(tabs.parent?.view)
+    let inbox = try centreOfLabel("Inbox", in: tabs.view, tabs)
+    XCTAssertNotNil(tabs.attachedMinimizeProxy, "precondition: the pan")
+    tabs.readWindowControls = { _ in NativeWindowControls(leading: 66, top: 44) }
+
+    tabs.apply(pagesConfig(pages, minimize: true, tabBarHidden: true))
+    settle()
+    XCTAssertTrue(tabs.isTabBarHidden)
+    XCTAssertTrue(tabs.chromeVisible, "only the tab bar hides")
+    XCTAssertFalse(nav.isNavigationBarHidden, "the page keeps its bar")
+    let page = try XCTUnwrap(nav.topViewController?.view)
+    XCTAssertEqual(
+      tabs.flutter.view.safeAreaInsets.bottom, root.safeAreaInsets.bottom, accuracy: 1,
+      "the home indicator")
+    XCTAssertEqual(tabs.flutter.view.safeAreaInsets.top, page.safeAreaInsets.top, accuracy: 0.5)
+    XCTAssertTrue(try hit(tabs, inbox) === tabs.flutter.view, "where the tab bar was")
+    XCTAssertNil(tabs.attachedMinimizeProxy, "no minimize under a hidden tab bar")
+    XCTAssertEqual(tabs.windowControls(), NativeWindowControls(leading: 0, top: 0))
+
+    tabs.apply(pagesConfig(pages, minimize: true))
+    settle()
+    XCTAssertFalse(tabs.isTabBarHidden, "the request ended")
+    XCTAssertNotNil(tabs.attachedMinimizeProxy)
+  }
+
+  func testTabBarHiddenPutsATiledSidebarBack() throws {
+    try requireIPad()
+    let tabs = try installedShell(landscape: true)
+    openSidebar(tabs)
+    XCTAssertEqual(tabs.currentState().sidebar, .tiled, "precondition: a landscape iPad tiles")
+    let pages = [NativePage(title: "Home"), NativePage(title: "Photo")]
+    tabs.apply(pagesConfig(pages))
+    settle()
+    let tiledLeft = tabs.flutter.view.safeAreaInsets.left
+    XCTAssertGreaterThan(tiledLeft, 200, "precondition: the sidebar's width")
+    tabs.apply(pagesConfig(pages, tabBarHidden: true))
+    settle()
+    XCTAssertTrue(tabs.sidebar.isHidden, "the sidebar hides with the tab bar")
+    XCTAssertEqual(tabs.flutter.view.safeAreaInsets.left, 0, accuracy: 0.5)
+    tabs.setSidebarVisible(true)
+    XCTAssertTrue(tabs.sidebar.isHidden, "Dart cannot open it meanwhile")
+    tabs.apply(pagesConfig(pages))
+    _ = stable({ tabs.flutter.view.safeAreaInsets.left }, until: { $0 > 200 })
+    XCTAssertEqual(tabs.currentState().sidebar, .tiled, "tiled again")
+    XCTAssertEqual(tabs.flutter.view.safeAreaInsets.left, tiledLeft, accuracy: 0.5)
+  }
+
+  func testTabBarHiddenDismissesAnActiveSearchKeepingItsText() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let bridge = tabs.searchBridge
+    tabs.setSearchText("phố")
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    var hiding = searchConfig(selected: 2, pages: [NativePage(title: "Search")])
+    hiding.tabBarHidden = true
+    settle(sending: "searchActive false") { tabs.apply(hiding) }
+    XCTAssertTrue(tabs.isTabBarHidden)
+    XCTAssertTrue(tabs.chromeVisible)
+    XCTAssertFalse(bridge.controller.isActive, "the search ended")
+    XCTAssertEqual(bridge.text, "phố", "kept")
+  }
+}
+
 // MARK: - VK-550: SearchBridge's scope bar (no window)
 
 /// The scope half of `SearchBridge` (spec VK-550 §10): UIKit's own scope
