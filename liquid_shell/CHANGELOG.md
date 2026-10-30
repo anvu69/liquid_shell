@@ -1,3 +1,7 @@
+## 0.1.0-dev.10
+
+Fix: on Android with three-button navigation the bottom tab bar no longer covers the buttons. The bar's own height now tells a button bar (48 dp) from a gesture handle (under 32 dp).
+
 ## 0.1.0-dev.9
 
 First release on pub.dev.
