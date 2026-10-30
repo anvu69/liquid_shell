@@ -231,8 +231,9 @@ class LiquidNativePage {
   /// Navigation bar title.
   final String title;
 
-  /// Large title; null leaves it to the platform (large on a phone's root
-  /// page, inline elsewhere).
+  /// A root page's large title: `true`, its own row that collapses as the
+  /// page scrolls; `null`, on the bar row at compact width; `false`, none.
+  /// A pushed page never has one.
   final bool? largeTitle;
 
   @override
@@ -301,6 +302,7 @@ class LiquidNativeChromeConfig {
     this.hidden = false,
     this.interactive = true,
     this.minimizeOnScroll = false,
+    this.tabBarHidden = false,
   });
 
   /// No shell uses native chrome: hidden, and Flutter gets the whole window.
@@ -346,6 +348,11 @@ class LiquidNativeChromeConfig {
   /// down (`LiquidShell.minimizeOnScroll`).
   final bool minimizeOnScroll;
 
+  /// Hide the tab bar and the sidebar but keep the selected tab's
+  /// navigation bar (a hide request over a page with a native bar).
+  /// Ignored while [hidden].
+  final bool tabBarHidden;
+
   /// Whether the native chrome is on screen.
   bool get visible => engaged && !hidden;
 
@@ -363,7 +370,8 @@ class LiquidNativeChromeConfig {
       other.rtl == rtl &&
       other.hidden == hidden &&
       other.interactive == interactive &&
-      other.minimizeOnScroll == minimizeOnScroll;
+      other.minimizeOnScroll == minimizeOnScroll &&
+      other.tabBarHidden == tabBarHidden;
 
   @override
   int get hashCode => Object.hash(
@@ -379,6 +387,7 @@ class LiquidNativeChromeConfig {
     hidden,
     interactive,
     minimizeOnScroll,
+    tabBarHidden,
   );
 
   @override
@@ -388,7 +397,7 @@ class LiquidNativeChromeConfig {
       'search: $search, '
       'tintArgb: 0x${tintArgb.toRadixString(16).padLeft(8, '0')}, '
       'dark: $dark, rtl: $rtl, hidden: $hidden, interactive: $interactive, '
-      'minimizeOnScroll: $minimizeOnScroll)';
+      'minimizeOnScroll: $minimizeOnScroll, tabBarHidden: $tabBarHidden)';
 }
 
 /// Something the native side reports.

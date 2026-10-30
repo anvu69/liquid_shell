@@ -204,6 +204,11 @@ ios-unit: ## XCTest of liquid_shell_ios (example RunnerTests) on an iPad or iPho
 # CI ran those 26 iPhone tests in 1092-1156 s and the iPad's 18 in 847-849 s
 # (PR #15). The final review's lock test (one more iPhone launch, 35 s
 # locally) makes 27 of 29: well inside the cap.
+# P3b-2 adds PagesUITests (2) and a MinimizeUITests test (iPhone only):
+# 32 in the suite, 30 run on an iPhone, 20 on an iPad. The three new ones
+# took 46 s on an iPhone 17 Pro (iOS 26.5); scaled as above, about 150 s
+# on the slow runner, so CI's iPhone run grows to about 1430 s and 2100 s
+# still keeps ~670 s in hand.
 IOS_UI_TIMEOUT ?= 2100
 IOS_UI_RESULT := $(CURDIR)/$(EXAMPLE)/build/ios-ui.xcresult
 

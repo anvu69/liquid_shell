@@ -1,9 +1,11 @@
 import UIKit
 
-/// The clear navigation controller of a tab with a native navigation bar
-/// (spec P3b §7.1; P3b-1: the search tab). Its pages are clear
-/// `PageHostController`s that mirror the tab's Flutter pages; the Flutter
-/// view stays underneath and never moves.
+/// The clear navigation controller of every destination tab (spec P3b
+/// §7.1; P3b-2 §6.1). Its pages are clear `PageHostController`s that
+/// mirror the tab's Flutter pages; the Flutter view stays underneath and
+/// never moves. A plain tab hides its bar while it has no title to show
+/// (`PageTitleMath.barHidden`); the search tab's holds the field and
+/// always shows.
 @available(iOS 26.0, *)
 final class ShellNavController: UINavigationController {
   /// iPhone, a page pushed inside the search tab: whether it hides the tab
@@ -13,15 +15,25 @@ final class ShellNavController: UINavigationController {
   static var hidesBarWhenPushed = false
 
   let rootHost: PageHostController
+  /// The search tab's: its bar is never hidden, its root's title mode is
+  /// `SearchMath.style`'s, and its pages do not minimize the tab bar.
+  let isSearch: Bool
 
-  init(root: PageHostController) {
+  /// [root] is built with the tabs and kept for their life. A plain tab
+  /// starts with its bar hidden: it has no pages yet.
+  init(root: PageHostController, search: Bool) {
     rootHost = root
+    isSearch = search
     super.init(nibName: nil, bundle: nil)
     setViewControllers([root], animated: false)
+    if !search { setNavigationBarHidden(true, animated: false) }
   }
 
   @available(*, unavailable)
   required init?(coder: NSCoder) { nil }
+
+  /// The page hosts, root first.
+  var hosts: [PageHostController] { viewControllers.compactMap { $0 as? PageHostController } }
 
   /// Dart's answer to every pop UIKit starts by itself (spec P3b §7.6):
   /// the page index that should end on top. Set by `applyPages`.
@@ -78,9 +90,10 @@ final class ShellNavController: UINavigationController {
   /// that selects the tab, or leaves it, is a restore, set without a
   /// transition. The window does not tell: UIKit keeps a tab just left in
   /// it for a while (iOS 26.5), and longer after a transition ran as the
-  /// tab went.
+  /// tab went. Title modes and a plain tab's bar follow the title table
+  /// (`PageTitleMath`, spec P3b-2 §4.2) at UIKit's size class [compact].
   func applyPages(
-    _ pages: [NativePage], rootTitle: String, tabIndex: Int, shown: Bool,
+    _ pages: [NativePage], rootTitle: String, tabIndex: Int, shown: Bool, compact: Bool,
     events: NativeShellFlutterApiProtocol
   ) {
     let wanted = pages.isEmpty ? [NativePage(title: rootTitle, largeTitle: nil)] : pages
@@ -93,11 +106,20 @@ final class ShellNavController: UINavigationController {
         #endif
       }
     }
+    // Read before this config: whether the root's large title showed.
+    let hadLargeTitle =
+      !isNavigationBarHidden && rootHost.navigationItem.largeTitleDisplayMode == .always
     rootHost.title = wanted[0].title
-    var hosts = viewControllers.compactMap { $0 as? PageHostController }
+    if !isSearch {
+      rootHost.navigationItem.largeTitleDisplayMode = PageTitleMath.rootMode(
+        largeTitle: wanted[0].largeTitle, compact: compact)
+    }
+    var hosts = self.hosts
     if hosts.count > wanted.count { hosts = Array(hosts.prefix(wanted.count)) }
     while hosts.count < wanted.count {
-      let host = PageHostController()
+      // A plain tab's pushed pages minimize the tab bar too (spec P3b-2
+      // §6.8); the search tab's never do (VK-600 Q5).
+      let host = PageHostController(minimizes: !isSearch)
       host.hidesBottomBarWhenPushed = Self.hidesBarWhenPushed
       host.onBack = {
         events.onBackTapped(tab: Int64(tabIndex)) { result in
@@ -112,13 +134,24 @@ final class ShellNavController: UINavigationController {
     }
     for (host, page) in zip(hosts, wanted).dropFirst() {
       host.title = page.title
-      host.navigationItem.largeTitleDisplayMode = (page.largeTitle ?? false) ? .always : .never
+      host.navigationItem.largeTitleDisplayMode = PageTitleMath.pushedMode
+    }
+    let animated =
+      shown && viewIfLoaded?.window != nil && !UIAccessibility.isReduceMotionEnabled
+    let hideBar = !isSearch && PageTitleMath.barHidden(pages: pages, compact: compact)
+    if isNavigationBarHidden != hideBar { setNavigationBarHidden(hideBar, animated: animated) }
+    // UIKit keeps a large title collapsed when it turns on, or its bar
+    // shows, while the root is on screen (VK-441): pull it out once the bar
+    // has finished showing. Only for a root that stays on top.
+    if !isSearch, !hadLargeTitle, wanted.count == 1, !isNavigationBarHidden,
+      rootHost.navigationItem.largeTitleDisplayMode == .always
+    {
+      rootHost.revealLargeTitle(
+        after: animated ? TimeInterval(UINavigationController.hideShowBarDuration) : 0)
     }
     guard hosts.map(ObjectIdentifier.init) != viewControllers.map(ObjectIdentifier.init) else {
       return
     }
-    let animated =
-      shown && viewIfLoaded?.window != nil && !UIAccessibility.isReduceMotionEnabled
     setViewControllers(hosts, animated: animated)
     // Spec §7.9: once more when the push or pop ends, so Flutter ends on the
     // new top page's insets. Without an animation the shell syncs at the end
@@ -136,6 +169,27 @@ final class ShellNavController: UINavigationController {
 final class PageHostController: UIViewController {
   private var shell: NativeTabsController? { tabBarController as? NativeTabsController }
 
+  /// The tab bar's minimize proxy (spec VK-600 §8.2, P3b-2 §6.8): this
+  /// page's `.bottom` content scroll view, so UIKit's tab bar follows the
+  /// top page of a plain tab. nil on the search tab, which never
+  /// minimizes (VK-600 Q5).
+  let minimizeProxy: MinimizeProxy?
+
+  init(minimizes: Bool) {
+    minimizeProxy = minimizes ? MinimizeProxy() : nil
+    super.init(nibName: nil, bundle: nil)
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) { nil }
+
+  /// A host goes (a pop, a rebuild, the shell's release) while its pan may
+  /// still be on the Flutter view, which outlives it: take it back first,
+  /// as `TabHostController` does (Swift 5 mode, see its `deinit`).
+  deinit {
+    if let minimizeProxy { minimizeProxy.addGestureRecognizer(minimizeProxy.panGestureRecognizer) }
+  }
+
   /// Invisible scroll view UIKit reads for the large title's collapse and
   /// the scroll-edge effect, moved by code from Flutter's scroll offset
   /// (spec §7.7; research §4.1).
@@ -149,6 +203,13 @@ final class PageHostController: UIViewController {
   /// after it.
   private(set) var expandedTop: CGFloat = 0
   private var offset: Double = 0
+  /// A reveal (`revealLargeTitle`) is under way: Flutter's offset waits for
+  /// its end, and the expanded top is not learned from the collapsed bar.
+  private var revealing = false
+  /// A reveal asked for while scrolled or under an active search: it runs
+  /// once the page is back at offset 0 with the search inactive
+  /// (`revealIfPending`).
+  private var pendingReveal = false
   /// The native back button's proposal (set for pushed pages).
   var onBack: (() -> Void)? {
     didSet {
@@ -164,11 +225,14 @@ final class PageHostController: UIViewController {
   func setScrollOffset(_ value: Double) {
     loadViewIfNeeded()
     offset = max(0, value)
+    // A reveal puts the proxy back at this offset when it ends.
+    guard !revealing else { return }
     // From the expanded top, not the current inset: once the title has
     // collapsed the proxy's inset is the small bar's, and offset 0 must pull
     // the large title back out, as a real scroll view does.
     let top = max(expandedTop, proxy.adjustedContentInset.top)
     proxy.contentOffset.y = -top + CGFloat(offset)
+    revealIfPending()
   }
 
   /// Re-reads the resting top: at rest, or always with [force] (a search
@@ -176,9 +240,92 @@ final class PageHostController: UIViewController {
   /// The expanded top only at rest with the search inactive.
   func rereadRestingTop(force: Bool = false) {
     if force || offset <= 0 { restingTop = view.safeAreaInsets.top }
-    if offset <= 0, !(navigationItem.searchController?.isActive ?? false) {
+    if offset <= 0, !revealing, !searchIsActive {
       expandedTop = view.safeAreaInsets.top
     }
+    revealIfPending()
+  }
+
+  /// How far past rest `revealLargeTitle` pulls the proxy: more than the
+  /// large title's 52 pt row. 100 pt brought the title out on the iPhone 17
+  /// Pro, iOS 26.5 and 27.0 (probe P17a), 60 pt did too (P11); at rest, or
+  /// pre-set to rest, nothing does (P1, P6). docs/qa/p3b2/measure.md, "M5:
+  /// a large title that turns on on screen".
+  static let largeTitlePull: CGFloat = 100
+
+  /// Brings out a large title UIKit keeps collapsed (VK-441). When a page's
+  /// mode becomes `.always`, or its bar shows with it, while the page is on
+  /// top in a window and the proxy rests at the top, UIKit lays the bar out
+  /// collapsed and keeps it so (iOS 26.5 and 27.0 alike); a pull past rest
+  /// brings the title out, as on a real scroll view. So, [delay] seconds
+  /// from now (the bar's show animation): lay out, pull, and on the next
+  /// run-loop turn put the proxy back at Flutter's offset. Off screen UIKit
+  /// lays the title out by itself only when the mode change has settled
+  /// before the tab is selected (M5 P2); in the config that selects the
+  /// tab, iOS 26.5's animated switch lays it out collapsed. So a plain
+  /// root that is on top but not yet in a window waits for the window.
+  /// Scrolled, or under an active search, a collapsed title is right for
+  /// now: the reveal waits until the page is back at offset 0 with the
+  /// search inactive.
+  func revealLargeTitle(after delay: TimeInterval = 0) {
+    guard !revealing else { return }
+    // Library's case: a plain root's mode turns on in the config that
+    // selects its tab, before the root is in the window. iOS 26.5 animates
+    // that tab switch and lays the bar out collapsed: reveal once the root
+    // is in (`rereadRestingTop` on its first safe-area change).
+    if viewIfLoaded?.window == nil, let nav = navigationController as? ShellNavController,
+      !nav.isSearch, nav.topViewController === self
+    {
+      pendingReveal = true
+      return
+    }
+    guard isOnTopInAWindow else { return }
+    guard offset <= 0, !searchIsActive else {
+      pendingReveal = true
+      return
+    }
+    pendingReveal = false
+    revealing = true
+    DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+      guard let self else { return }
+      let pulls = self.offset <= 0 && self.isOnTopInAWindow && !self.searchIsActive
+      if pulls {
+        self.navigationController?.view.layoutIfNeeded()
+        self.proxy.contentOffset.y =
+          -self.proxy.adjustedContentInset.top - PageHostController.largeTitlePull
+      } else if self.isOnTopInAWindow {
+        self.pendingReveal = true
+      }
+      DispatchQueue.main.async { [weak self] in
+        guard let self else { return }
+        self.revealing = false
+        self.navigationController?.view.layoutIfNeeded()
+        // Pulled, the title is out: the proxy's base whatever Flutter's
+        // offset is by now.
+        if pulls, !self.searchIsActive { self.expandedTop = self.view.safeAreaInsets.top }
+        self.rereadRestingTop()
+        self.setScrollOffset(self.offset)
+        self.shell?.syncFlutter()
+      }
+    }
+  }
+
+  /// Runs a reveal that waited (`pendingReveal`) once the page is back at
+  /// offset 0 with the search inactive; dropped if the title was turned off
+  /// meanwhile.
+  private func revealIfPending() {
+    guard pendingReveal, offset <= 0, !searchIsActive else { return }
+    guard navigationItem.largeTitleDisplayMode == .always else {
+      pendingReveal = false
+      return
+    }
+    revealLargeTitle()
+  }
+
+  private var searchIsActive: Bool { navigationItem.searchController?.isActive ?? false }
+
+  private var isOnTopInAWindow: Bool {
+    viewIfLoaded?.window != nil && navigationController?.topViewController === self
   }
 
   override func viewDidLoad() {
@@ -201,6 +348,12 @@ final class PageHostController: UIViewController {
     proxy.accessibilityElementsHidden = true
     view.addSubview(proxy)
     setContentScrollView(proxy, for: .top)
+    if let minimizeProxy {
+      minimizeProxy.frame = view.bounds
+      minimizeProxy.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+      view.addSubview(minimizeProxy)
+      setContentScrollView(minimizeProxy, for: .bottom)
+    }
   }
 
   override func viewIsAppearing(_ animated: Bool) {
@@ -239,8 +392,11 @@ final class PageHostController: UIViewController {
     if let hides = style.hidesWhenScrolling { navigationItem.hidesSearchBarWhenScrolling = hides }
     // `.inline` on an iPhone: the large title on the bar row, right under
     // the status bar, as Apple Music draws it; `.always` adds a 52pt row.
+    let hadLargeTitle = navigationItem.largeTitleDisplayMode == .always
     navigationItem.largeTitleDisplayMode = style.titleMode
     wantsTitleItem = style.titleItem
+    // The search root's mode changes in place too (VK-441, probe P15).
+    if !hadLargeTitle, style.titleMode == .always { revealLargeTitle() }
   }
 
   /// Whether the small title is a leading item (an iPad's search root,

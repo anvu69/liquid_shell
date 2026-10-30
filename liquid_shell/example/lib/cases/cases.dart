@@ -10,6 +10,7 @@ import 'package:liquid_shell_example/cases/hide_chrome.dart';
 import 'package:liquid_shell_example/cases/narrow_width.dart';
 import 'package:liquid_shell_example/cases/native_alerts.dart';
 import 'package:liquid_shell_example/cases/native_chrome.dart';
+import 'package:liquid_shell_example/cases/pages.dart';
 import 'package:liquid_shell_example/cases/search.dart';
 import 'package:liquid_shell_example/cases/segments.dart';
 import 'package:liquid_shell_example/cases/sidebar_only.dart';
@@ -101,6 +102,13 @@ const kCases = <ExampleCase>[
     subtitle: 'LiquidHideChrome on a page inside the branch',
     drawnByFlutter: null,
     page: HideChromeCase(),
+  ),
+  (
+    id: 'pages',
+    title: 'Pages on every tab',
+    subtitle: 'LiquidPage on each tab: native bars, large titles, full frame',
+    drawnByFlutter: null,
+    page: PagesCase(),
   ),
   (
     id: 'custom_chrome',

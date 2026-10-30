@@ -167,16 +167,16 @@ class _LiquidPageState extends State<LiquidPage> {
   // a report is decided after the frame, when a scroll view removed in it
   // is unmounted.
   bool _onScroll(Notification notification) {
-    final (depth, metrics, origin) = switch (notification) {
-      ScrollUpdateNotification(:final depth, :final metrics, :final context) =>
-        (depth, metrics, context),
-      ScrollMetricsNotification(
-        :final depth,
-        :final metrics,
-        :final context,
-      ) =>
-        (depth, metrics, context),
-      _ => (-1, null, null),
+    final (metrics, origin) = switch (notification) {
+      ScrollUpdateNotification(:final metrics, :final context) => (
+        metrics,
+        context,
+      ),
+      ScrollMetricsNotification(:final metrics, :final context) => (
+        metrics,
+        context,
+      ),
+      _ => (null, null),
     };
     if (metrics == null || metrics.axis != Axis.vertical) return false;
     if (origin != null) {
@@ -192,9 +192,6 @@ class _LiquidPageState extends State<LiquidPage> {
         _followScroll(origin, metrics.pixels);
       }
     }
-    // The native bar still follows every vertical scroll view that no
-    // other scroll view holds (depth 0).
-    if (depth == 0) _handle?.scrolled(metrics.pixels);
     return false;
   }
 
@@ -209,9 +206,13 @@ class _LiquidPageState extends State<LiquidPage> {
   }
 
   /// A vertical scroll view that reports from [origin] is at [pixels]: the
-  /// large title follows it when it drives the title.
+  /// large title follows it when it drives the title, the Flutter bar's and
+  /// the native bar's alike (one decision for both).
   void _followScroll(BuildContext origin, double pixels) {
-    if (_drivesLargeTitle(origin)) _scrollOffset.value = pixels;
+    if (_drivesLargeTitle(origin)) {
+      _scrollOffset.value = pixels;
+      _handle?.scrolled(pixels);
+    }
   }
 
   /// Whether a vertical scroll view's report, sent from [origin] (its

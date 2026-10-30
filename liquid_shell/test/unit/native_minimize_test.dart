@@ -416,6 +416,24 @@ void main() {
         isFalse,
       );
     });
+
+    test("a change of a tab's pages only does (a push or a pop)", () {
+      // A push or a pop builds or drops a native host whose proxy starts
+      // at 0: the offset must follow that config (VK-442).
+      const pushed = LiquidNativeChromeConfig(
+        engaged: true,
+        tabs: [
+          home,
+          LiquidNativeTab(
+            title: 'Inbox',
+            sfSymbol: 'tray',
+            pages: [LiquidNativePage(title: 'Inbox', largeTitle: false)],
+          ),
+        ],
+      );
+      expect(nativeTabsMayRebuild(base, pushed), isTrue, reason: 'a push');
+      expect(nativeTabsMayRebuild(pushed, base), isTrue, reason: 'a pop');
+    });
   });
 
   group('nativeMinimizeActive (spec VK-600 §9.2)', () {

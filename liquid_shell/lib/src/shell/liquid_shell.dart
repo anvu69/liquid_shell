@@ -272,6 +272,9 @@ class _LiquidShellState extends State<LiquidShell>
   final Map<int, List<LiquidNativePage>> _pageStacks = {};
   // The records behind each sent stack, kept while no page is on top.
   final Map<int, List<_PageRecord>> _stackRecords = {};
+  // The tabs whose native stack starts with a stand-in root (spec P3b-2
+  // §6.1): native index i is then record i - 1.
+  final Set<int> _standInRoots = {};
   bool _nativePageBar = false;
   bool _searchDeactivatedForRoute = false;
   // The scroll offset native has for the top page (spec P3b §7.7).
@@ -491,13 +494,18 @@ class _LiquidShellState extends State<LiquidShell>
         final config = latest();
         _claim?.update(config, force: force);
         _search.afterConfigSent();
-        // New native tab hosts start at offset 0: the offset follows the
-        // config that may have built them, never precedes it.
-        if (nativeTabsMayRebuild(_minimizeConfig, config)) {
+        // New native tab hosts start at offset 0: the offsets follow the
+        // config that may have built them, never precede it. The top
+        // page's offset waits for the config that makes it native's top
+        // (a push, a pop), so it is sent here after every config.
+        final rebuilt = nativeTabsMayRebuild(_minimizeConfig, config);
+        if (rebuilt) {
           _minimizeForce = true;
           _sendMinimize();
+          _scrollRecord = null;
         }
         _minimizeConfig = config;
+        _sendScroll();
       }
     });
   }
@@ -571,12 +579,28 @@ class _LiquidShellState extends State<LiquidShell>
     ];
   }
 
-  /// Computes [tab]'s stack for the config. After the frame: the pages
-  /// have heard of this frame's changes by then.
-  void _updatePageStack(int tab) {
+  /// Computes [tab]'s stack for the config and returns it. After the
+  /// frame: the pages have heard of this frame's changes by then.
+  ///
+  /// A first LiquidPage above a route without one gets a stand-in root
+  /// titled with the destination's label, so the native bar shows the
+  /// back circle where the Flutter bar shows `LiquidBackButton`.
+  List<LiquidNativePage> _updatePageStack(int tab) {
     final stack = _stackFor(tab);
     _stackRecords[tab] = stack;
-    _pageStacks[tab] = [
+    final standIn =
+        stack.isNotEmpty && !(stack.first.entry.route?.isFirst ?? true);
+    if (standIn) {
+      _standInRoots.add(tab);
+    } else {
+      _standInRoots.remove(tab);
+    }
+    return _pageStacks[tab] = [
+      if (standIn)
+        LiquidNativePage(
+          title: widget.destinations[tab].label,
+          largeTitle: false,
+        ),
       for (final record in stack)
         LiquidNativePage(
           title: record.entry.title,
@@ -615,11 +639,13 @@ class _LiquidShellState extends State<LiquidShell>
   /// menu, an accessibility escape, a pop-to-root. Native did not pop; the
   /// pages above [index] pop here, top first, each through its PopScope.
   /// A refused pop ends it, and the native stack follows what is left.
-  /// One page down is exactly a back tap.
+  /// One page down is exactly a back tap. Under a stand-in root native
+  /// index i is record i - 1, and index 0 pops every page.
   Future<void> _onNativePopTo(int tab, int index) async {
     final stack = _stackRecords[tab];
-    if (stack == null || index < 0 || index >= stack.length - 1) return;
-    if (index == stack.length - 2) return _onNativeBack(tab);
+    final target = index - (_standInRoots.contains(tab) ? 1 : 0);
+    if (stack == null || index < 0 || target >= stack.length - 1) return;
+    if (target == stack.length - 2) return _onNativeBack(tab);
     if (tab !=
             resolveSelectedIndex(
               widget.selectedIndex,
@@ -629,7 +655,7 @@ class _LiquidShellState extends State<LiquidShell>
         _covered) {
       return;
     }
-    for (final record in stack.sublist(index + 1).reversed) {
+    for (final record in stack.sublist(target + 1).reversed) {
       final route = record.entry.route;
       final navigator = record.entry.navigator;
       if (!mounted || route == null || navigator == null) return;
@@ -647,18 +673,28 @@ class _LiquidShellState extends State<LiquidShell>
     if (_scrollScheduled) return;
     _scrollScheduled = true;
     SchedulerBinding.instance
-      ..addPostFrameCallback((_) => _syncScroll())
+      ..addPostFrameCallback((_) {
+        _scrollScheduled = false;
+        _sendScroll();
+      })
       ..ensureVisualUpdate();
   }
 
-  void _syncScroll() {
-    _scrollScheduled = false;
+  void _sendScroll() {
     if (!mounted) return;
+    final tab = resolveSelectedIndex(
+      widget.selectedIndex,
+      widget.destinations.length,
+    );
     final top = _nativePageBar ? _topRecord : null;
     if (top == null) {
       _scrollRecord = null;
       return;
     }
+    // Native writes the offset to its own top page: a page it does not
+    // have on top yet (a push or a pop not sent) waits for its config,
+    // whose callback ([_scheduleNativeSend]) sends it.
+    if (!identical(top, _stackRecords[tab]?.lastOrNull)) return;
     // Not laid out yet (a new page, or one moved with a GlobalKey): its
     // scroll position reports its offset after its first layout, in that
     // frame's post-frame callbacks. Still nothing a frame later: the page
@@ -679,13 +715,7 @@ class _LiquidShellState extends State<LiquidShell>
     if (identical(top, _scrollRecord) && offset == _scrollSent) return;
     _scrollRecord = top;
     _scrollSent = offset;
-    _claim?.setPageScroll(
-      tab: resolveSelectedIndex(
-        widget.selectedIndex,
-        widget.destinations.length,
-      ),
-      offset: offset,
-    );
+    _claim?.setPageScroll(tab: tab, offset: offset);
   }
 
   /// Whether the shell drives the native bar's minimize now. On becoming
@@ -1982,11 +2012,9 @@ class _LiquidShellState extends State<LiquidShell>
     _search
       ..native = engaged
       ..selected = searchIndex != null && selected == searchIndex;
-    _nativePageBar = nativePageBarFor(
-      engaged: engaged,
-      selected: selected,
-      searchIndex: searchIndex,
-    );
+    // Every tab of an engaged shell has a native navigation bar (spec
+    // P3b-2 §4.5): LiquidPage draws only its child.
+    _nativePageBar = engaged;
     if (_nativePageBar || _scrollRecord != null) _scheduleScrollSync();
     final searchActive = _search.controller?.isActive ?? false;
     // A dialog or sheet above an active search: the keyboard and the field
@@ -2002,10 +2030,11 @@ class _LiquidShellState extends State<LiquidShell>
     // The compact bar is drawn above the Flutter view: it would cover the
     // bottom of a sheet or dialog drawn there, so it hides while one is
     // above the shell. The top bar and sidebar only turn inert (§7.4).
-    final hidden =
-        _hideRequests > 0 ||
-        _covered ||
-        ((state?.compact ?? false) && !_routeCurrent);
+    final hideRequested = _hideRequests > 0;
+    final coverHidden =
+        _covered || ((state?.compact ?? false) && !_routeCurrent);
+    // The scope's and the minimize's: hidden chrome either way.
+    final hidden = hideRequested || coverHidden;
     if (owner) {
       final theme = Theme.of(context);
       final destinations = widget.destinations;
@@ -2015,12 +2044,17 @@ class _LiquidShellState extends State<LiquidShell>
       final interactive = _routeCurrent && !_guardPending;
       final placeholder = widget.search?.placeholder;
       final scopes = widget.search?.scopes;
-      final pageBar = _nativePageBar;
       // `hidden` and `interactive` are taken now; `_stackFor` reads
       // `_routeCurrent` and `_covered` after the frame. Both are set before
       // the frame ends, so they agree: do not "fix" one side.
       _scheduleNativeSend(() {
-        if (pageBar) _updatePageStack(selected);
+        final stack = engaged
+            ? _updatePageStack(selected)
+            : const <LiquidNativePage>[];
+        // A hide request over a page with a native bar hides the tab bar
+        // and the sidebar only: the page keeps its bar (spec P3b-2 §4.4).
+        // Without one the whole chrome hides, as before.
+        final keepPageBar = hideRequested && stack.isNotEmpty;
         return nativeConfigFor(
           engaged: engaged,
           destinations: destinations,
@@ -2030,9 +2064,10 @@ class _LiquidShellState extends State<LiquidShell>
           tint: theme.colorScheme.primary,
           dark: theme.brightness == Brightness.dark,
           rtl: rtl,
-          hidden: hidden,
+          hidden: coverHidden || (hideRequested && !keepPageBar),
           interactive: interactive,
           minimizeOnScroll: minimizeOnScroll,
+          tabBarHidden: keepPageBar,
           searchPlaceholder: placeholder,
           searchScopes: scopes,
           pageStacks: _pageStacks,
@@ -2145,11 +2180,17 @@ class _LiquidShellState extends State<LiquidShell>
           searchScopes: widget.search?.scopes,
           // UIKit's top bar, sidebar and navigation bars make room for the
           // cluster; the body starts below or beside them (spec P2 §8.3,
-          // P3b §7.9). The compact bar is at the bottom: the top is the
-          // body's to clear.
+          // P3b §7.9). Zero at once where one of them always shows: the
+          // regular top bar or sidebar (unless a hide request hides them),
+          // and the search tab's bar. Otherwise native's report, which is
+          // zero while the selected tab's navigation bar shows (spec P3b-2
+          // §4.5): the compact bar is at the bottom, and a tab's bar may
+          // be hidden.
           windowControls:
-              (engaged && sizeClass == LiquidSizeClass.regular) ||
-                  _nativePageBar
+              engaged &&
+                  ((sizeClass == LiquidSizeClass.regular &&
+                          _hideRequests == 0) ||
+                      _search.selected)
               ? LiquidWindowControls.zero
               : _windowControls.value.value,
         ),

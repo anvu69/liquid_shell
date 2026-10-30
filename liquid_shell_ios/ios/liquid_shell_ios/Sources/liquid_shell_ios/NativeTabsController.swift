@@ -31,12 +31,10 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   private(set) var searchTab: UISearchTab?
   /// Its index in Dart's destinations.
   private(set) var searchIndex: Int?
-  /// Tabs with a native navigation bar, by destination index (P3b-1: the
-  /// search tab only).
+  /// Every destination's navigation controller, by index (spec P3b-2
+  /// §6.1). Built with the tabs; a plain tab's root host carries its
+  /// minimize proxy (spec VK-600 §8.2), and so does every page pushed there.
   private(set) var navControllers: [Int: ShellNavController] = [:]
-  /// The host of every non-search destination, by index: its proxy takes
-  /// Dart's minimize offset (spec VK-600 §8.2). Built with the tabs.
-  private var minimizeHosts: [Int: TabHostController] = [:]
   /// The search field and its delegates; one per shell, re-hosted when the
   /// tabs are rebuilt.
   let searchBridge = SearchBridge()
@@ -61,6 +59,13 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   /// `safe.top` while the sidebar did not overlay: kept while it does, so
   /// the content under the dimming view does not jump up.
   private var heldTop: CGFloat = 0
+  /// Whether the tab bar (and the sidebar) is hidden for a hide request
+  /// over a page with a native bar (`NativeChromeConfig.tabBarHidden`,
+  /// spec P3b-2 §6.6). The navigation bar stays.
+  private(set) var tabBarHiddenApplied = false
+  /// A tiled sidebar hidden with the tab bar comes back tiled; an overlay,
+  /// which is transient, does not.
+  private var sidebarTiledBeforeTabBarHid = false
   /// Whether Dart attached. Before that, state and window-control sends
   /// have no receiver and only fail; `attach` returns the state, and Dart
   /// reads the window controls itself.
@@ -153,7 +158,18 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       // alone, as `apply` does.
       if let config = self.config, !config.tabs.isEmpty {
         self.showTabs(config)
+        // Title modes and a plain tab's bar follow UIKit's size class at
+        // once (spec P3b-2 §6.1): Dart's next config may be equal to the
+        // last one, and is then not sent.
+        self.applyPages(config, animated: false)
+        self.applyBottomEdgePolicy(config)  // `applyPages` may have built hosts
         self.select(Int(config.selectedIndex))
+      }
+      // A sidebar kept while compact must not show under a hidden tab bar.
+      // `isTiled` reads insets: lay out at the new size class first.
+      if self.tabBarHiddenApplied, !self.isCompact, !self.sidebar.isHidden {
+        self.view.layoutIfNeeded()
+        self.hideSidebarWithTheTabBar()
       }
       // Regular takes the pan back and resets the proxies; compact again
       // puts it back (spec VK-600 §8.3).
@@ -202,13 +218,7 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       }
       showTabs(new)
       applySearch(new)
-      for (index, nav) in navControllers where new.tabs.indices.contains(index) {
-        nav.applyPages(
-          new.tabs[index].pages, rootTitle: new.tabs[index].title, tabIndex: index,
-          // Before `select`: the tab shown now, and still after it.
-          shown: selectedViewController === nav && Int(new.selectedIndex) == index,
-          events: events)
-      }
+      applyPages(new, animated: true)
       // A page pushed over the search root drops a kept activation: the
       // pop back must not bring the search (VK-634, `isSearchRootOnTop`).
       if !isSearchRootOnTop { searchBridge.dropPendingActivation() }
@@ -217,9 +227,7 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     setFooter(new.footer)
     let behavior: UITabBarController.MinimizeBehavior = new.minimizeOnScroll ? .onScrollDown : .never
     if tabBarMinimizeBehavior != behavior { tabBarMinimizeBehavior = behavior }
-    // Q14: the policy is `MinimizeProxy.hidesBottomEdgeEffect`'s.
-    let hidesEdge = MinimizeProxy.hidesBottomEdgeEffect(minimizeOnScroll: new.minimizeOnScroll)
-    for host in minimizeHosts.values { host.minimizeProxy.bottomEdgeEffect.isHidden = hidesEdge }
+    applyBottomEdgePolicy(new)
     view.tintColor = UIColor(argb: new.tintArgb)
     traitOverrides.userInterfaceStyle = new.dark ? .dark : .light
     traitOverrides.layoutDirection = new.rtl ? .rightToLeft : .leftToRight
@@ -230,6 +238,7 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     view.isUserInteractionEnabled = new.interactive
     view.accessibilityElementsHidden = !new.interactive
     footer.interactive = new.interactive
+    setTabBarHiddenForPage(new.engaged && new.tabBarHidden, wasVisible: wasVisible)
     // The dialog (or the pending guard's dialog) is drawn in the Flutter
     // view, below an overlay sidebar and its dimming view: close the
     // overlay, which is transient. A tiled sidebar stays.
@@ -245,8 +254,40 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   }
 
   func setSidebarVisible(_ visible: Bool) {
-    guard chromeVisible, !isCompact else { return }
+    guard chromeVisible, !isCompact, !tabBarHiddenApplied else { return }
     sidebar.isHidden = !visible
+  }
+
+  /// Spec P3b-2 §6.6: a hide request over a page with a native bar hides
+  /// the tab bar and, at regular width, the sidebar; the navigation bar
+  /// stays, and Flutter gets the top page's insets (`syncFlutter`). An
+  /// active search is dismissed keeping its text, as hidden chrome does
+  /// (VK-551). The minimize pan goes (`updateMinimizePan`).
+  private func setTabBarHiddenForPage(_ hide: Bool, wasVisible: Bool) {
+    guard hide != tabBarHiddenApplied else { return }
+    tabBarHiddenApplied = hide
+    let animated = wasVisible && chromeVisible && !UIAccessibility.isReduceMotionEnabled
+    if hide {
+      sidebarTiledBeforeTabBarHid = false
+      hideSidebarWithTheTabBar()
+      searchBridge.dismissKeepingText()
+      setTabBarHidden(true, animated: animated)
+    } else {
+      setTabBarHidden(false, animated: animated)
+      // At compact width too: UIKit shows it as fits the width it gets.
+      if sidebarTiledBeforeTabBarHid { sidebar.isHidden = false }
+      sidebarTiledBeforeTabBarHid = false
+    }
+  }
+
+  /// At regular width, hides the sidebar for the hidden tab bar and
+  /// remembers a tiled one. Also on a size-class change into regular
+  /// width during the request: a compact window keeps the sidebar.
+  private func hideSidebarWithTheTabBar() {
+    guard !isCompact, !sidebar.isHidden else { return }
+    sidebarTiledBeforeTabBarHid = isTiled
+    // UIKit leaves a tiled sidebar shown under a hidden tab bar (M3).
+    sidebar.isHidden = true
   }
 
   /// Creates the tabs when the structure changes; `showTabs` hands them to
@@ -264,13 +305,12 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     searchTab = nil
     searchIndex = nil
     navControllers = [:]
-    minimizeHosts = [:]
     destinationTabs = new.tabs.enumerated().map { index, spec in
       if spec.search {
-        let root = PageHostController()
+        let root = PageHostController(minimizes: false)
         root.installSearch(
           searchBridge, style: searchStyle(rootLargeTitle: spec.pages.first?.largeTitle ?? nil))
-        let nav = ShellNavController(root: root)
+        let nav = ShellNavController(root: root, search: true)
         navControllers[index] = nav
         let tab = UISearchTab { _ in nav }
         // The video's state 2: selecting search does not focus the field (Q13).
@@ -280,10 +320,12 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
         return tab
       }
       // Created now, not in the provider: Dart's minimize offset reaches
-      // a host UIKit has not asked for yet. The provider runs once per tab.
-      let host = TabHostController()
-      minimizeHosts[index] = host
-      let tab = UITab(title: "", image: nil, identifier: "destination\(index)") { _ in host }
+      // a root UIKit has not asked for yet, and the root keeps the tab's
+      // proxy for the tabs' life (spec P3b-2 §6.8). The provider runs once
+      // per tab.
+      let nav = ShellNavController(root: PageHostController(minimizes: true), search: false)
+      navControllers[index] = nav
+      let tab = UITab(title: "", image: nil, identifier: "destination\(index)") { _ in nav }
       // `.fixed`: nothing to add, remove or reorder, so no sidebar "Edit".
       tab.preferredPlacement = spec.sidebarOnly ? .sidebarOnly : .fixed
       return tab
@@ -323,6 +365,27 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       isPad: traitCollection.userInterfaceIdiom == .pad,
       osMajor: ProcessInfo.processInfo.operatingSystemVersion.majorVersion,
       rootLargeTitle: rootLargeTitle)
+  }
+
+  /// Every tab's stack, title modes and bar (spec P3b-2 §6.1), at UIKit's
+  /// size class. [animated]: the tab shown now may animate; never after a
+  /// size-class change.
+  private func applyPages(_ config: NativeChromeConfig, animated: Bool) {
+    let compact = isCompact
+    for (index, nav) in navControllers where config.tabs.indices.contains(index) {
+      nav.applyPages(
+        config.tabs[index].pages, rootTitle: config.tabs[index].title, tabIndex: index,
+        // Before `select`: the tab shown now, and still after it.
+        shown: animated && selectedViewController === nav && Int(config.selectedIndex) == index,
+        compact: compact, events: events)
+    }
+  }
+
+  /// Q14: the policy is `MinimizeProxy.hidesBottomEdgeEffect`'s, on every
+  /// page host's proxy, pushed ones included (after `applyPages`).
+  private func applyBottomEdgePolicy(_ config: NativeChromeConfig) {
+    let hidesEdge = MinimizeProxy.hidesBottomEdgeEffect(minimizeOnScroll: config.minimizeOnScroll)
+    for proxy in allMinimizeProxies { proxy.bottomEdgeEffect.isHidden = hidesEdge }
   }
 
   /// Placeholder, scopes and placement of the search tab (spec §7.2,
@@ -438,8 +501,15 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
 
   // MARK: - State
 
+  /// Read from the view whose insets reach Flutter (`syncFlutter`): the
+  /// selected tab's top page, else the tab's own view (spec P3b-2 §6.1;
+  /// measured equal to the navigation controller's, mid-push too, M4).
   private var isTiled: Bool {
-    guard let host = selectedViewController?.viewIfLoaded else { return false }
+    let selected = selectedViewController
+    guard
+      let host = (selected as? UINavigationController)?.topViewController?.viewIfLoaded
+        ?? selected?.viewIfLoaded
+    else { return false }
     return ShellMath.isTiled(host: ShellInsets(host.safeAreaInsets), root: ShellInsets(view.safeAreaInsets))
   }
 
@@ -527,9 +597,11 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   /// corner read is meaningless there: Flutter's safe top (the bar row) is
   /// below the cluster, so the vertical delta is 0 and the leading one
   /// alone would read as a cluster (`ShellMath.fallbackClusterTop`). The
-  /// compact bar is at the bottom: the top is Flutter's, so it is read.
+  /// compact bar is at the bottom: the top is Flutter's, so it is read,
+  /// unless the selected tab's navigation bar shows (spec P3b-2 §6.1).
+  /// With the tab bar hidden for a page (§6.6) only that bar clears it.
   func windowControls() -> NativeWindowControls {
-    if chromeVisible, !isCompact || selectedHasNavigationBar {
+    if chromeVisible, (!isCompact && !tabBarHiddenApplied) || selectedShowsNavigationBar {
       return NativeWindowControls(leading: 0, top: 0)
     }
     return readWindowControls(flutter.viewIfLoaded)
@@ -711,7 +783,12 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     navControllers[index]?.topViewController as? PageHostController
   }
 
-  private var selectedHasNavigationBar: Bool { selectedViewController is ShellNavController }
+  /// Whether the selected tab's navigation bar is on screen: the search
+  /// tab's always, a plain tab's while it has a title to show.
+  private var selectedShowsNavigationBar: Bool {
+    guard let nav = selectedViewController as? ShellNavController else { return false }
+    return !nav.isNavigationBarHidden
+  }
 
   /// The selected destination's index in Dart's list, nil when none is. The
   /// search destination is read from the selected controller
@@ -744,19 +821,20 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   /// this shell in it, until UIKit lets it go.
   private(set) var retired = false
 
-  /// Puts the selected tab's proxy pan on the Flutter view when the native
-  /// bar may minimize, and takes it back otherwise. Leaving compact resets
-  /// every proxy, so the top bar's edge effect never sees an old offset.
+  /// Puts the pan of the selected tab's top page's proxy on the Flutter
+  /// view when the native bar may minimize, and takes it back otherwise.
+  /// Leaving compact resets every proxy, so the top bar's edge effect never
+  /// sees an old offset.
   func updateMinimizePan() {
     var want: MinimizeProxy?
     if !retired, let config, chromeVisible, config.interactive, config.minimizeOnScroll,
-      isCompact, let host = selectedViewController as? TabHostController,
+      !tabBarHiddenApplied, isCompact, let proxy = selectedMinimizeProxy,
       let content = flutter.viewIfLoaded
     {
-      host.minimizeProxy.contentView = content
-      want = host.minimizeProxy
+      proxy.contentView = content
+      want = proxy
     }
-    if !isCompact { for host in minimizeHosts.values { host.minimizeProxy.setOffset(0) } }
+    if !isCompact { for proxy in allMinimizeProxies { proxy.setOffset(0) } }
     guard want !== attachedMinimizeProxy else { return }
     detachMinimizePan()
     guard let proxy = want, let content = flutter.viewIfLoaded else { return }
@@ -766,6 +844,13 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     pan.delaysTouchesEnded = false
     content.addGestureRecognizer(pan)
     attachedMinimizeProxy = proxy
+  }
+
+  /// The selected tab's top page's proxy: the one UIKit's tab bar follows
+  /// (spec P3b-2 §6.8). nil on the search tab.
+  private var selectedMinimizeProxy: MinimizeProxy? {
+    ((selectedViewController as? ShellNavController)?.topViewController as? PageHostController)?
+      .minimizeProxy
   }
 
   /// Gives the attached pan back to its proxy.
@@ -784,12 +869,21 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     detachMinimizePan()
   }
 
-  func minimizeHost(_ index: Int) -> TabHostController? { minimizeHosts[index] }
+  /// The minimize proxy of tab [index]'s top page (spec P3b-2 §6.8); nil
+  /// for the search tab.
+  func minimizeProxy(ofTab index: Int) -> MinimizeProxy? { topHost(ofTab: index)?.minimizeProxy }
 
-  /// Dart's body offset for destination [tab] (spec §8.6).
+  /// Every page host's minimize proxy, pushed pages included.
+  private var allMinimizeProxies: [MinimizeProxy] {
+    navControllers.values.flatMap { nav in nav.hosts.compactMap(\.minimizeProxy) }
+  }
+
+  /// Dart's body offset for destination [tab] (spec §8.6): its top page's
+  /// proxy. Dart's offset is the tab's, continuous across pages, and is
+  /// sent again after every config with another stack.
   func setMinimizeScroll(tab: Int, offset: Double) {
-    guard offset.isFinite, let host = minimizeHosts[tab] else { return }
-    host.minimizeProxy.setOffset(offset)
+    guard offset.isFinite, let proxy = minimizeProxy(ofTab: tab) else { return }
+    proxy.setOffset(offset)
   }
 
   /// Expands a minimized bar: `.never` then `.onScrollDown` (spike §3.2;
@@ -868,6 +962,19 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     }
   #endif
 
+  #if DEBUG
+    /// A title mode as `NativeTabSnapshot.titleModes` names it.
+    private static func titleModeName(_ mode: UINavigationItem.LargeTitleDisplayMode) -> String {
+      switch mode {
+      case .automatic: return "automatic"
+      case .always: return "always"
+      case .never: return "never"
+      case .inline: return "inline"
+      @unknown default: return ""
+      }
+    }
+  #endif
+
   /// Debug builds: the native search and page state (integration tests).
   func debugSnapshot() -> NativeDebugSnapshot {
     #if DEBUG
@@ -902,15 +1009,28 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
         selectedScope: Int64(searchBridge.controller.searchBar.selectedScopeButtonIndex),
         scopeFrame: currentScopeFrame(),
         minimizeBehavior: minimizeBehavior,
-        minimizePanAttached: attachedMinimizeProxy != nil)
+        minimizePanAttached: attachedMinimizeProxy != nil,
+        tabs: navControllers.keys.sorted().compactMap { index in
+          navControllers[index].map { nav in
+            NativeTabSnapshot(
+              tab: Int64(index),
+              pageTitles: nav.viewControllers.map { $0.title ?? "" },
+              barHidden: nav.isNavigationBarHidden,
+              titleModes: nav.viewControllers.map {
+                Self.titleModeName($0.navigationItem.largeTitleDisplayMode)
+              },
+              barHeight: nav.isNavigationBarHidden ? 0 : Double(nav.navigationBar.frame.height))
+          }
+        })
     #else
       return .empty
     #endif
   }
 }
 
-/// The empty, transparent controller of every tab. The Flutter view never
-/// moves in here: the host only reports its frame and safe area.
+/// The empty, transparent controller of the trailing action's tab (never
+/// selected). The Flutter view never moves in here: the host only reports
+/// its frame and safe area.
 @available(iOS 26.0, *)
 final class TabHostController: UIViewController {
   private var shell: NativeTabsController? { tabBarController as? NativeTabsController }
@@ -987,6 +1107,6 @@ extension NativeDebugSnapshot {
       fieldFrame: NativeRect(x: 0, y: 0, width: 0, height: 0), firstResponderIsSearch: false,
       scopeTitles: [], scopeShown: false, selectedScope: 0,
       scopeFrame: NativeRect(x: 0, y: 0, width: 0, height: 0), minimizeBehavior: "",
-      minimizePanAttached: false)
+      minimizePanAttached: false, tabs: [])
   }
 }

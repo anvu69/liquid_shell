@@ -185,6 +185,19 @@ void main() {
     expect(find.text('Home item 1'), findsOneWidget);
   });
 
+  testWidgets('pages: a pushed page has a back button that pops it', (
+    tester,
+  ) async {
+    await _openCase(tester, 'pages');
+    await tester.tap(find.text('Detail 1'));
+    await tester.pumpAndSettle();
+    expect(find.text('Detail 1 item 1'), findsOneWidget);
+    await tester.tap(find.byType(LiquidBackButton));
+    await tester.pumpAndSettle();
+    expect(find.text('Detail 1 item 1'), findsNothing);
+    expect(find.text('Detail 1'), findsOneWidget);
+  });
+
   testWidgets('trailing compose opens a page with no chrome', (tester) async {
     await _openCase(tester, 'trailing');
     await tester.tap(find.byTooltip('Compose'));
@@ -305,6 +318,7 @@ void main() {
     'hide_chrome',
     'native_chrome',
     'search',
+    'pages',
   };
   const flutterIds = {
     'custom_chrome',

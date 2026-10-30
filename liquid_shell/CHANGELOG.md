@@ -54,6 +54,43 @@
   breakpoints that give a landscape phone the regular layout, where the
   field ran under the notch. Beside a tiled sidebar only the trailing inset
   is added: the sidebar already clears the leading one.
+- **Native navigation bars on every tab (VK-441, VK-442).** With native
+  chrome on iOS 26+, a `LiquidPage` on any tab now gets UIKit's navigation
+  bar: its title, the glass back circle and its history menu, the large
+  title and the scroll-edge effect. Before, only the search tab had one and
+  the other tabs drew the Flutter bar. A tab whose pages do not use
+  `LiquidPage` looks as before, and so does a root page with an inline
+  title: their bar stays hidden.
+- **Behaviour change (VK-442).** With native chrome, `LiquidHideChrome` over
+  a `LiquidPage` hides only the tab bar and the sidebar; the page's
+  navigation bar stays, as the Flutter bar already did. Over a page without
+  `LiquidPage` it still hides everything.
+- **Behaviour change (VK-441).** The native tab bar's minimize
+  (`minimizeOnScroll`) now follows pushed pages too, as the Flutter bar
+  does. A push or a pop keeps the bar's form.
+- **Behaviour change (VK-442).** Native large titles follow the 0.1.0 title
+  model: `largeTitle: true` on a root page is a large-title row that
+  collapses as the page scrolls (on the iPhone's search tab it sat on the
+  bar row), and a pushed page's title is always inline.
+- A `LiquidPage` pushed above a page without one now gets the native back
+  circle: a root titled with the destination's label stands in for that
+  page (VK-442).
+- `LiquidShellScopeData.nativePageBar` is true on every tab of an engaged
+  shell. Under the compact native bar, `windowControls` is the real cluster
+  while the selected tab's navigation bar is hidden and zero while it shows;
+  with `LiquidHideChrome` at regular width it is no longer zero when nothing
+  clears the cluster (VK-442).
+- The edge swipe on any tab's pushed page stays Flutter's: the page follows
+  the finger, and the native bar switches when the gesture ends (VK-444).
+- **Behaviour change (VK-442).** UIKit's large title follows the same
+  scroll view as the Flutter bar: the page's first vertical scroll view on
+  screen. A multi-line text field, a second list beside the first and a
+  hidden segment's list no longer move it; the shown list of a `PageView`
+  or a `TabBarView` now does.
+- **Fix (VK-442).** A page's scroll offset now reaches native after the
+  push or pop that puts the page on top, never before. Before, it could
+  land on the page being left: after a push and a back, a scrolled root
+  showed its large title expanded over its list.
 
 ## 0.1.0-dev.9
 
