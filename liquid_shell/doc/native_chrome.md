@@ -212,11 +212,23 @@ field is in the top safe area already.
 
 ## Page stacks and the back button
 
-The search tab shows your pages in its native bar: each `LiquidPage` on the
+Every tab shows your pages in its native bar: each `LiquidPage` on the
 tab's navigator is one host, root first. When you push, UIKit pushes; when
 Flutter pops, UIKit pops, with its own animation. UIKit draws the title
-and the glass back circle; `LiquidPage` draws only its child.
+and the glass back circle; `LiquidPage` draws only its child. A tab whose
+pages do not use `LiquidPage` has no navigation bar and looks as before.
 
+- **The title.** A pushed page's title is always inline, next to the back
+  circle. A root page with `largeTitle: true` gets a large title on a row
+  of its own, which collapses as the page scrolls. By default a root
+  page's large title sits on the bar row on an iPhone (and in a compact
+  iPad window); on a regular iPad, where the top tab bar names the tab,
+  the root shows no bar. `largeTitle: false` shows no bar either. The
+  search tab keeps its own root title: its bar holds the field.
+- **A root without `LiquidPage`.** When the first `LiquidPage` of a tab is
+  pushed above a page without one, the native stack starts with a root
+  titled with the tab's label, so the page has a back circle, as the
+  Flutter bar has a back button there.
 - **Every back is a proposal.** The back circle, its long-press history
   menu, an accessibility escape and a keyboard back never pop UIKit
   directly. They ask Dart, which calls `Navigator.maybePop` on the pages
@@ -224,24 +236,28 @@ and the glass back circle; `LiquidPage` draws only its child.
   refused pop stops there, and UIKit follows only what Flutter really
   popped. A back while a sheet is open in the tab closes the sheet.
 - **The back swipe is Flutter's.** UIKit's interactive pop gestures are off
-  in the search tab; the left-edge swipe reaches Flutter, whose page route
+  on every tab; the left-edge swipe reaches Flutter, whose page route
   runs its own back gesture. The native bar switches when the gesture ends:
   it does not follow the finger yet. In a shell that is itself a pushed
   page the swipe pops the tab's top page too, not the shell (see
   [router_integration.md](router_integration.md#back-pops-the-tab-first)).
-- **Large titles.** On iPhone a root page's large title sits on the bar
-  row (`.inline`); on iPad the root's title is small, unless it asks for a
-  large title (`largeTitle: true`), which then gets its own row and
-  collapses as the page scrolls. Under the default root (`.inline` on
-  iPhone, `.never` on iPad), UIKit draws a pushed page's large title small
-  and centred.
 - **Scroll.** The first vertical scroll view of the top page sends its
   offset, once per frame, to its host's proxy, which drives the collapse and
   the scroll-edge effect. A page without a scroll view counts as offset 0.
   While the title collapses, the page's top padding stays put, so content
   does not jump under the finger.
+- **Minimize.** With `minimizeOnScroll`, the compact tab bar follows the
+  scroll of the page on top, pushed pages included; a push or a pop keeps
+  its form.
+- **Hide chrome.** `LiquidHideChrome` over a `LiquidPage` hides the tab
+  bar and the sidebar and keeps the page's bar; a tiled sidebar comes back
+  when the page goes. Over a page without `LiquidPage` the whole chrome
+  hides, as before.
 - **Pages above the shell** (on the app's root navigator) hide the native
   chrome as before, and keep the Flutter bar.
+- **A nested shell** (sub-tabs with `nativeChrome: LiquidNativeChrome.off`)
+  draws the Flutter bar for its own pages. Do not wrap it in a
+  `LiquidPage`: two bars would stack.
 
 ## Hit testing
 

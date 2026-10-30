@@ -1,11 +1,16 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/pages/page_bar.dart';
 import 'package:liquid_shell/src/pages/page_registry.dart';
+import 'package:liquid_shell/src/pages/page_title.dart';
 import 'package:liquid_shell/src/shell/shell_scope.dart';
+
+import '../helpers/fake_native_platform.dart';
+import '../helpers/shell_harness.dart';
 
 /// Records registrations like a shell does.
 class _Registry implements PageRegistry {
@@ -123,6 +128,162 @@ Future<_Registry> _pump(
   return registry;
 }
 
+/// The bar's [title] in the large style (bold).
+Finder _largeTitle(String title) => find.descendant(
+  of: find.byType(FlutterPageBar),
+  matching: find.byWidgetPredicate(
+    (w) =>
+        w is Text && w.data == title && w.style?.fontWeight == FontWeight.w700,
+  ),
+);
+
+/// The bar's [title] in the inline style (semibold).
+Finder _inlineTitle(String title) => find.descendant(
+  of: find.byType(FlutterPageBar),
+  matching: find.byWidgetPredicate(
+    (w) =>
+        w is Text && w.data == title && w.style?.fontWeight == FontWeight.w600,
+  ),
+);
+
+/// A page body that records the padding of each of its builds. With a
+/// [controller] it is a list of 40 rows of 40 pt.
+class _Padded extends StatelessWidget {
+  const _Padded(this.paddings, {this.controller});
+
+  final List<EdgeInsets> paddings;
+  final ScrollController? controller;
+
+  @override
+  Widget build(BuildContext context) {
+    paddings.add(MediaQuery.paddingOf(context));
+    if (controller == null) return const SizedBox.expand();
+    return ListView(
+      controller: controller,
+      children: [
+        for (var i = 0; i < 40; i++)
+          SizedBox(height: 40, child: Text('row $i')),
+      ],
+    );
+  }
+}
+
+/// Pumps a root page with a collapsing large title over a [_Padded] list.
+Future<ScrollController> _pumpCollapsing(
+  WidgetTester tester,
+  List<EdgeInsets> paddings,
+) async {
+  final scroll = ScrollController();
+  addTearDown(scroll.dispose);
+  await _pump(
+    tester,
+    home: LiquidPage(
+      title: 'Library',
+      largeTitle: true,
+      child: _Padded(paddings, controller: scroll),
+    ),
+  );
+  return scroll;
+}
+
+/// A scroll controller disposed when the test ends.
+ScrollController _scroll() {
+  final scroll = ScrollController();
+  addTearDown(scroll.dispose);
+  return scroll;
+}
+
+/// A list of 40 rows of 40 pt.
+Widget _rows(ScrollController scroll) {
+  // Its paddings are recorded, and not read.
+  final paddings = <EdgeInsets>[];
+  return _Padded(paddings, controller: scroll);
+}
+
+/// The top of the large title of a page titled 'Library'.
+double _largeTop(WidgetTester tester) =>
+    tester.getRect(_largeTitle('Library')).top;
+
+/// Pumps a root page titled 'Library' with a collapsing large title over
+/// [child], in a [Material] for text fields, and returns the large title's
+/// resting top.
+Future<double> _pumpLargeTitle(WidgetTester tester, Widget child) async {
+  await _pump(
+    tester,
+    home: Material(
+      child: LiquidPage(title: 'Library', largeTitle: true, child: child),
+    ),
+  );
+  return _largeTop(tester);
+}
+
+/// Pumps a root page titled 'Library' with a large title over [child], in
+/// a [Material] for text fields, under a native bar, and returns the
+/// registry: its offsets are the native reports (`PageHandle.scrolled`).
+Future<_Registry> _pumpNative(WidgetTester tester, Widget child) => _pump(
+  tester,
+  data: _scope(nativePageBar: true),
+  home: Material(
+    child: LiquidPage(title: 'Library', largeTitle: true, child: child),
+  ),
+);
+
+/// Scrolls [scroll] to [offset] and pumps the frame.
+Future<void> _jump(
+  WidgetTester tester,
+  ScrollController scroll,
+  double offset,
+) async {
+  scroll.jumpTo(offset);
+  await tester.pump();
+}
+
+/// A list of 40 rows of 40 pt that jumps back to the top when [filter]
+/// changes, from `didUpdateWidget`: a jump made during a build.
+class _ResetList extends StatefulWidget {
+  const _ResetList({required this.controller, required this.filter});
+
+  final ScrollController controller;
+  final int filter;
+
+  @override
+  State<_ResetList> createState() => _ResetListState();
+}
+
+class _ResetListState extends State<_ResetList> {
+  @override
+  void didUpdateWidget(_ResetList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.filter != widget.filter) widget.controller.jumpTo(0);
+  }
+
+  @override
+  Widget build(BuildContext context) => _rows(widget.controller);
+}
+
+class _Trigger extends StatefulWidget {
+  const _Trigger({required this.controller, required this.filter});
+
+  final ScrollController controller;
+  final int filter;
+
+  @override
+  State<_Trigger> createState() => _TriggerState();
+}
+
+/// A zero-size widget that jumps [_Trigger.controller] to the top in the
+/// build when its filter changes.
+class _TriggerState extends State<_Trigger> {
+  @override
+  void didUpdateWidget(_Trigger oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.filter != widget.filter) widget.controller.jumpTo(0);
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
+}
+
 void main() {
   testWidgets('pages register in push order; a pop shortens the stack', (
     tester,
@@ -231,7 +392,7 @@ void main() {
     await _pump(tester);
     expect(find.byType(FlutterPageBar), findsOneWidget);
     final bar = tester.widget<FlutterPageBar>(find.byType(FlutterPageBar));
-    expect(bar.large, isTrue);
+    expect(bar.mode, PageTitleMode.largeInRow);
     expect(bar.canPop, isFalse);
     expect(find.byType(LiquidBackButton), findsNothing);
     expect(find.text('Search'), findsOneWidget);
@@ -266,30 +427,697 @@ void main() {
     expect(padding!.top, kPageBarExtent);
   });
 
-  testWidgets('a pushed page with a large title keeps it under the bar row '
-      '(UIKit: inline turns into always under a back button)', (tester) async {
+  for (final sizeClass in LiquidSizeClass.values) {
+    testWidgets('a root page with largeTitle: true draws its large title on '
+        'a 52 pt row under the bar row, content under that row '
+        '(${sizeClass.name})', (tester) async {
+      final paddings = <EdgeInsets>[];
+      await _pump(
+        tester,
+        data: _scope(sizeClass: sizeClass),
+        home: LiquidPage(
+          title: 'Library',
+          largeTitle: true,
+          child: _Padded(paddings),
+        ),
+      );
+      final large = tester.getRect(_largeTitle('Library'));
+      expect(large.top, greaterThanOrEqualTo(kPageBarExtent));
+      expect(
+        large.bottom,
+        lessThanOrEqualTo(kPageBarExtent + kLargeTitleExtent),
+      );
+      expect(large.left, 16, reason: 'leading, like UIKit');
+      expect(paddings.last.top, kPageBarExtent + kLargeTitleExtent);
+      expect(find.byType(LiquidBackButton), findsNothing);
+    });
+  }
+
+  testWidgets("a pushed page's title is inline whatever its largeTitle", (
+    tester,
+  ) async {
     await _pump(tester);
+    final paddings = <EdgeInsets>[];
     tester
         .state<NavigatorState>(find.byType(Navigator))
         .push(
           MaterialPageRoute<void>(
-            builder: (_) => const LiquidPage(
+            builder: (_) => LiquidPage(
               title: 'Detail',
               largeTitle: true,
-              child: SizedBox.expand(),
+              child: _Padded(paddings),
             ),
           ),
         )
         .ignore();
     await tester.pumpAndSettle();
-    final title = tester.getRect(
-      find.descendant(
-        of: find.byType(FlutterPageBar),
-        matching: find.text('Detail'),
+    expect(_largeTitle('Detail'), findsNothing);
+    expect(
+      tester.getRect(_inlineTitle('Detail')).bottom,
+      lessThanOrEqualTo(kPageBarExtent),
+    );
+    expect(paddings.last.top, kPageBarExtent);
+    expect(find.byType(LiquidBackButton), findsOneWidget);
+  });
+
+  testWidgets('a root page with largeTitle: false draws no bar', (
+    tester,
+  ) async {
+    for (final sizeClass in LiquidSizeClass.values) {
+      await _pump(
+        tester,
+        data: _scope(sizeClass: sizeClass),
+        home: const LiquidPage(
+          title: 'Plain',
+          largeTitle: false,
+          child: SizedBox.expand(),
+        ),
+      );
+      expect(find.byType(FlutterPageBar), findsNothing, reason: '$sizeClass');
+    }
+  });
+
+  testWidgets('scrolling collapses the large row and fades the inline '
+      'title in', (tester) async {
+    final scroll = await _pumpCollapsing(tester, []);
+    final rest = tester.getRect(_largeTitle('Library')).top;
+    const steps = <(double, double, double)>[
+      // (offset, large row shift, inline opacity)
+      (0, 0, 0),
+      (26, 26, 0),
+      (39, 39, 0.5),
+      (52, 52, 1),
+      (120, 52, 1),
+    ];
+    final tops = <double>[];
+    for (final (offset, _, _) in steps) {
+      scroll.jumpTo(offset);
+      await tester.pump();
+      tops.add(tester.getRect(_largeTitle('Library')).top);
+    }
+    expect(tops, [for (final (_, shift, _) in steps) rest - shift]);
+
+    final opacities = <double>[];
+    for (final (offset, _, _) in steps) {
+      scroll.jumpTo(offset);
+      await tester.pump();
+      opacities.add(
+        tester
+            .widget<Opacity>(
+              find
+                  .ancestor(
+                    of: _inlineTitle('Library'),
+                    matching: find.byType(Opacity),
+                  )
+                  .first,
+            )
+            .opacity,
+      );
+    }
+    expect(opacities, [for (final (_, _, opacity) in steps) opacity]);
+
+    // The large row is clipped to its own row, under the bar row.
+    final clip = tester.getRect(
+      find
+          .ancestor(of: _largeTitle('Library'), matching: find.byType(ClipRect))
+          .first,
+    );
+    expect(clip.top, kPageBarExtent);
+    expect(clip.height, kLargeTitleExtent);
+  });
+
+  testWidgets('the scroll-edge fade follows the collapsing row', (
+    tester,
+  ) async {
+    const red = Color(0xFFFF0000);
+    final boundary = GlobalKey();
+    final scroll = ScrollController();
+    addTearDown(scroll.dispose);
+    await _pump(
+      tester,
+      home: RepaintBoundary(
+        key: boundary,
+        child: ColoredBox(
+          color: const Color(0xFFFFFFFF),
+          child: LiquidPage(
+            title: 'Library',
+            largeTitle: true,
+            child: ListView(
+              controller: scroll,
+              children: const [
+                SizedBox(height: 2000, child: ColoredBox(color: red)),
+              ],
+            ),
+          ),
+        ),
       ),
     );
-    expect(title.top, greaterThanOrEqualTo(kPageBarExtent));
-    expect(find.byType(LiquidBackButton), findsOneWidget);
+    scroll.jumpTo(26);
+    await tester.pump();
+    final image = (await tester.runAsync(
+      () => captureImage(boundary.currentContext! as Element),
+    ))!;
+    final bytes = (await tester.runAsync(image.toByteData))!;
+    int green(int x, int y) => bytes.getUint8((y * image.width + x) * 4 + 1);
+
+    final x = image.width - 8;
+    // The bar row (0–54) shows no content.
+    expect(green(x, 20), 255, reason: 'bar row');
+    // The large row moved up by 26: what is left of it ends at 80, and the
+    // content below it is opaque.
+    expect(green(x, 90), 0, reason: 'content right below the large row');
+    expect(green(x, 300), 0, reason: 'content below the large row');
+  });
+
+  testWidgets("the page's top padding stays under the large row while the "
+      'title collapses', (tester) async {
+    final paddings = <EdgeInsets>[];
+    final scroll = await _pumpCollapsing(tester, paddings);
+    for (final offset in const <double>[0, 26, 52, 120]) {
+      scroll.jumpTo(offset);
+      await tester.pump();
+      expect(
+        paddings.last.top,
+        kPageBarExtent + kLargeTitleExtent,
+        reason: 'offset $offset',
+      );
+    }
+  });
+
+  testWidgets('the collapse never rebuilds the page', (tester) async {
+    final paddings = <EdgeInsets>[];
+    final scroll = await _pumpCollapsing(tester, paddings);
+    final rest = tester.getRect(_largeTitle('Library')).top;
+    final builds = paddings.length;
+    for (var frame = 1; frame <= 10; frame++) {
+      scroll.jumpTo(frame * 6);
+      await tester.pump();
+    }
+    expect(
+      tester.getRect(_largeTitle('Library')).top,
+      lessThan(rest),
+      reason: 'the title collapsed',
+    );
+    expect(paddings, hasLength(builds), reason: 'no build of the page');
+  });
+
+  testWidgets('IME: a focused, composing field in a collapsing page keeps '
+      'its state and its composition through a scroll and a bar switch', (
+    tester,
+  ) async {
+    final registry = _Registry();
+    final scroll = ScrollController();
+    addTearDown(scroll.dispose);
+    final field = TextEditingController();
+    addTearDown(field.dispose);
+    final focus = FocusNode();
+    addTearDown(focus.dispose);
+    final page = LiquidPage(
+      title: 'Library',
+      largeTitle: true,
+      child: ListView(
+        controller: scroll,
+        children: [
+          TextField(controller: field, focusNode: focus),
+          for (var i = 0; i < 40; i++)
+            SizedBox(height: 40, child: Text('row $i')),
+        ],
+      ),
+    );
+    Widget app({required bool native}) => ShellScopeMarker(
+      data: _scope(nativePageBar: native),
+      registry: null,
+      pages: registry,
+      child: MaterialApp(home: Material(child: page)),
+    );
+    await tester.pumpWidget(app(native: false));
+    await tester.showKeyboard(find.byType(TextField));
+    // Telex mid-word: "hoa" is marked text, as an IME composes it.
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(
+        text: 'hoa',
+        selection: TextSelection.collapsed(offset: 3),
+        composing: TextRange(start: 0, end: 3),
+      ),
+    );
+    await tester.pump();
+    final editable = tester.state<EditableTextState>(
+      find.byType(EditableText),
+    );
+    tester.testTextInput.log.clear();
+
+    scroll.jumpTo(30);
+    await tester.pump();
+    await tester.pumpWidget(app(native: true));
+    await tester.pumpWidget(app(native: false));
+    scroll.jumpTo(10);
+    await tester.pump();
+
+    expect(
+      tester.state<EditableTextState>(find.byType(EditableText)),
+      same(editable),
+    );
+    expect(focus.hasFocus, isTrue);
+    expect(field.value.composing, const TextRange(start: 0, end: 3));
+    expect(
+      tester.testTextInput.log.map((call) => call.method),
+      everyElement(
+        isNot(
+          anyOf(
+            'TextInput.clearClient',
+            'TextInput.setClient',
+            'TextInput.setEditingState',
+          ),
+        ),
+      ),
+    );
+  });
+
+  testWidgets('a multi-line text field never moves the large title', (
+    tester,
+  ) async {
+    final list = _scroll();
+    // A composer under the list: the field, not flexible, is laid out and
+    // reports first.
+    final rest = await _pumpLargeTitle(
+      tester,
+      Column(
+        children: [
+          Expanded(child: _rows(list)),
+          const TextField(maxLines: 2),
+        ],
+      ),
+    );
+    final field = find.descendant(
+      of: find.byType(TextField),
+      matching: find.byType(Scrollable),
+    );
+    double fieldOffset() =>
+        tester.state<ScrollableState>(field).position.pixels;
+
+    await tester.enterText(find.byType(TextField), 'một\nhai\nba');
+    await tester.pumpAndSettle();
+    expect(fieldOffset(), greaterThan(0), reason: 'the field scrolled');
+    expect(_largeTop(tester), rest, reason: 'typing a third line');
+
+    await _jump(tester, list, 120);
+    expect(_largeTop(tester), rest - kLargeTitleExtent, reason: 'the list');
+
+    await tester.enterText(find.byType(TextField), '');
+    await tester.pumpAndSettle();
+    expect(fieldOffset(), 0, reason: 'the field scrolled back');
+    expect(
+      _largeTop(tester),
+      rest - kLargeTitleExtent,
+      reason: 'clearing the field',
+    );
+  });
+
+  testWidgets('of two lists side by side, only the first drives the large '
+      'title', (tester) async {
+    final first = _scroll();
+    final second = _scroll();
+    final rest = await _pumpLargeTitle(
+      tester,
+      Column(
+        children: [
+          Expanded(child: _rows(first)),
+          Expanded(child: _rows(second)),
+        ],
+      ),
+    );
+    await _jump(tester, first, 120);
+    expect(_largeTop(tester), rest - kLargeTitleExtent);
+    await _jump(tester, second, 5);
+    expect(
+      _largeTop(tester),
+      rest - kLargeTitleExtent,
+      reason: 'the second list',
+    );
+    await _jump(tester, first, 26);
+    expect(_largeTop(tester), rest - 26);
+  });
+
+  testWidgets('when the list that drives the large title is disposed, the '
+      'next list to report drives it', (tester) async {
+    final first = _scroll();
+    final second = _scroll();
+    final showFirst = ValueNotifier(true);
+    addTearDown(showFirst.dispose);
+    final rest = await _pumpLargeTitle(
+      tester,
+      ValueListenableBuilder<bool>(
+        valueListenable: showFirst,
+        builder: (context, show, _) => Column(
+          children: [
+            if (show)
+              Expanded(key: const ValueKey('first'), child: _rows(first)),
+            Expanded(key: const ValueKey('second'), child: _rows(second)),
+          ],
+        ),
+      ),
+    );
+    await _jump(tester, first, 120);
+    await _jump(tester, second, 30);
+    expect(
+      _largeTop(tester),
+      rest - kLargeTitleExtent,
+      reason: 'the first list drives',
+    );
+
+    showFirst.value = false;
+    // The frame lays the second list out taller, which it reports after the
+    // frame; the next frame draws the title.
+    await tester.pump();
+    await tester.pump();
+    expect(_largeTop(tester), rest - 30, reason: 'the second list reported');
+    await _jump(tester, second, 40);
+    expect(_largeTop(tester), rest - 40);
+  });
+
+  testWidgets("a list nested in the page's list never drives the large "
+      'title', (tester) async {
+    final outer = _scroll();
+    final inner = _scroll();
+    // The inner list is laid out, and reports, before the outer one.
+    final rest = await _pumpLargeTitle(
+      tester,
+      ListView(
+        controller: outer,
+        children: [
+          SizedBox(height: 200, child: _rows(inner)),
+          for (var i = 0; i < 40; i++)
+            SizedBox(height: 40, child: Text('row $i')),
+        ],
+      ),
+    );
+    await _jump(tester, inner, 40);
+    expect(_largeTop(tester), rest, reason: 'the nested list');
+    await _jump(tester, outer, 26);
+    expect(_largeTop(tester), rest - 26, reason: "the page's list");
+  });
+
+  testWidgets("in a PageView of lists, the first page's list drives the "
+      'large title; once that page is disposed, the shown list takes over '
+      'at its first scroll', (tester) async {
+    final first = _scroll();
+    final second = _scroll();
+    final pages = PageController();
+    addTearDown(pages.dispose);
+    final rest = await _pumpLargeTitle(
+      tester,
+      PageView(controller: pages, children: [_rows(first), _rows(second)]),
+    );
+    await _jump(tester, first, 120);
+    expect(
+      _largeTop(tester),
+      rest - kLargeTitleExtent,
+      reason: "the first page's list",
+    );
+
+    await tester.fling(find.byType(PageView), const Offset(-400, 0), 1000);
+    await tester.pumpAndSettle();
+    expect(pages.page, 1);
+    expect(first.hasClients, isFalse, reason: 'the first page is disposed');
+    expect(
+      _largeTop(tester),
+      rest - kLargeTitleExtent,
+      reason: 'the title keeps the last offset until a list reports',
+    );
+    await _jump(tester, second, 30);
+    expect(_largeTop(tester), rest - 30, reason: "the shown page's list");
+  });
+
+  testWidgets("in a PageView whose pages stay alive, the shown page's list "
+      'takes over at its first scroll; a page off screen never drives the '
+      'large title', (tester) async {
+    final first = _scroll();
+    final second = _scroll();
+    final pages = PageController();
+    addTearDown(pages.dispose);
+    final rest = await _pumpLargeTitle(
+      tester,
+      PageView(
+        controller: pages,
+        allowImplicitScrolling: true,
+        children: [_rows(first), _rows(second)],
+      ),
+    );
+    await _jump(tester, first, 120);
+    expect(
+      _largeTop(tester),
+      rest - kLargeTitleExtent,
+      reason: "the first page's list",
+    );
+    await tester.fling(find.byType(PageView), const Offset(-400, 0), 1000);
+    await tester.pumpAndSettle();
+    expect(pages.page, 1);
+    expect(first.hasClients, isTrue, reason: 'the first page is kept');
+    expect(
+      _largeTop(tester),
+      rest - kLargeTitleExtent,
+      reason: 'the title keeps the last offset until a list scrolls',
+    );
+    await _jump(tester, second, 30);
+    expect(_largeTop(tester), rest - 30, reason: "the shown page's list");
+    await _jump(tester, first, 10);
+    expect(
+      _largeTop(tester),
+      rest - 30,
+      reason: "the first page's list, off screen",
+    );
+  });
+
+  testWidgets('in an IndexedStack of lists (a segment switcher), the shown '
+      'list takes over at its first scroll; a hidden list never drives the '
+      'large title', (tester) async {
+    final first = _scroll();
+    final second = _scroll();
+    final shown = ValueNotifier(0);
+    addTearDown(shown.dispose);
+    final rest = await _pumpLargeTitle(
+      tester,
+      ValueListenableBuilder<int>(
+        valueListenable: shown,
+        builder: (context, index, _) => IndexedStack(
+          index: index,
+          children: [_rows(first), _rows(second)],
+        ),
+      ),
+    );
+    await _jump(tester, first, 120);
+    expect(
+      _largeTop(tester),
+      rest - kLargeTitleExtent,
+      reason: 'the first list',
+    );
+
+    shown.value = 1;
+    await tester.pump();
+    expect(
+      _largeTop(tester),
+      rest - kLargeTitleExtent,
+      reason: 'nothing reports at a switch',
+    );
+    await _jump(tester, second, 30);
+    expect(_largeTop(tester), rest - 30, reason: 'the shown list');
+    await _jump(tester, first, 10);
+    expect(_largeTop(tester), rest - 30, reason: 'the hidden list');
+
+    shown.value = 0;
+    await tester.pump();
+    await _jump(tester, first, 40);
+    expect(_largeTop(tester), rest - 40, reason: 'the shown list again');
+  });
+
+  testWidgets('of two Offstage lists, the hidden one never drives the large '
+      'title, even the one that drove it', (tester) async {
+    final first = _scroll();
+    final second = _scroll();
+    final showFirst = ValueNotifier(true);
+    addTearDown(showFirst.dispose);
+    final rest = await _pumpLargeTitle(
+      tester,
+      ValueListenableBuilder<bool>(
+        valueListenable: showFirst,
+        builder: (context, show, _) => Stack(
+          children: [
+            Offstage(offstage: !show, child: _rows(first)),
+            Offstage(offstage: show, child: _rows(second)),
+          ],
+        ),
+      ),
+    );
+    await _jump(tester, first, 120);
+    expect(
+      _largeTop(tester),
+      rest - kLargeTitleExtent,
+      reason: 'the first list',
+    );
+
+    showFirst.value = false;
+    await tester.pump();
+    await _jump(tester, first, 20);
+    expect(
+      _largeTop(tester),
+      rest - kLargeTitleExtent,
+      reason: 'the first list, hidden',
+    );
+    await _jump(tester, second, 30);
+    expect(_largeTop(tester), rest - 30, reason: 'the shown list');
+  });
+
+  testWidgets('when lists jump during the build that removes the list that '
+      'drives the large title, the first of them takes over after the '
+      'frame', (tester) async {
+    final header = _scroll();
+    final list = _scroll();
+    final other = _scroll();
+    final state = ValueNotifier((header: true, filter: 0));
+    addTearDown(state.dispose);
+    final rest = await _pumpLargeTitle(
+      tester,
+      ValueListenableBuilder<({bool header, int filter})>(
+        valueListenable: state,
+        // No keys: the header list is then deactivated before the lists
+        // update (a keyed one would leave after them).
+        builder: (context, value, _) => Column(
+          children: [
+            if (value.header) SizedBox(height: 80, child: _rows(header)),
+            Expanded(
+              child: _ResetList(controller: list, filter: value.filter),
+            ),
+            Expanded(
+              child: _ResetList(controller: other, filter: value.filter),
+            ),
+          ],
+        ),
+      ),
+    );
+    // The header list, not flexible, lays out and reports first.
+    await _jump(tester, header, 10);
+    expect(_largeTop(tester), rest - 10, reason: 'the header list drives');
+    await _jump(tester, list, 200);
+    await _jump(tester, other, 40);
+    expect(_largeTop(tester), rest - 10, reason: 'the other lists');
+
+    // One build removes the header list while both lists jump to the top,
+    // the first list first.
+    state.value = (header: false, filter: 1);
+    await tester.pump();
+    expect(tester.takeException(), isNull, reason: 'the jumps in the build');
+    expect(find.byType(ErrorWidget), findsNothing);
+    await tester.pump();
+    expect(_largeTop(tester), rest, reason: 'the first list, at the top');
+    await _jump(tester, other, 30);
+    expect(_largeTop(tester), rest, reason: 'the second list');
+    await _jump(tester, list, 30);
+    expect(_largeTop(tester), rest - 30, reason: 'the first list drives');
+  });
+
+  testWidgets('when lists jump during a build, the first to report takes '
+      'over after the frame, not the first to lay out', (tester) async {
+    final header = _scroll();
+    final list = _scroll();
+    final other = _scroll();
+    final state = ValueNotifier((header: true, filter: 0));
+    addTearDown(state.dispose);
+    final rest = await _pumpLargeTitle(
+      tester,
+      ValueListenableBuilder<({bool header, int filter})>(
+        valueListenable: state,
+        builder: (context, value, _) => Column(
+          children: [
+            if (value.header) SizedBox(height: 80, child: _rows(header)),
+            // Builds before the lists: `other` reports first.
+            _Trigger(controller: other, filter: value.filter),
+            // Lays out before `other`: its metrics are re-reported first.
+            Expanded(
+              child: _ResetList(controller: list, filter: value.filter),
+            ),
+            Expanded(child: _rows(other)),
+          ],
+        ),
+      ),
+    );
+    await _jump(tester, header, 10);
+    expect(_largeTop(tester), rest - 10, reason: 'the header list drives');
+    await _jump(tester, list, 200);
+    await _jump(tester, other, 40);
+
+    // One build removes the header list; `other` then `list` jump to the
+    // top, but `list` lays out first.
+    state.value = (header: false, filter: 1);
+    await tester.pump();
+    expect(tester.takeException(), isNull, reason: 'the jumps in the build');
+    await tester.pump();
+    expect(_largeTop(tester), rest, reason: 'the lists, at the top');
+    await _jump(tester, list, 30);
+    expect(_largeTop(tester), rest, reason: 'list, which reported second');
+    await _jump(tester, other, 20);
+    expect(_largeTop(tester), rest - 20, reason: 'other, which reported first');
+  });
+
+  testWidgets('when the list that drives the large title jumps during a '
+      'build, the title follows it after the frame', (tester) async {
+    final list = _scroll();
+    final filter = ValueNotifier(0);
+    addTearDown(filter.dispose);
+    final rest = await _pumpLargeTitle(
+      tester,
+      ValueListenableBuilder<int>(
+        valueListenable: filter,
+        builder: (context, value, _) =>
+            _ResetList(controller: list, filter: value),
+      ),
+    );
+    await _jump(tester, list, 200);
+    expect(_largeTop(tester), rest - kLargeTitleExtent, reason: 'the list');
+
+    // The list jumps to the top in the build.
+    filter.value = 1;
+    await tester.pump();
+    expect(tester.takeException(), isNull, reason: 'the jump in the build');
+    await tester.pump();
+    expect(_largeTop(tester), rest, reason: 'the list, at the top');
+  });
+
+  testWidgets('a page in a hidden tab still follows its own list: on screen '
+      'is decided up to the page only', (tester) async {
+    final list = _scroll();
+    final tab = ValueNotifier(0);
+    addTearDown(tab.dispose);
+    await _pump(
+      tester,
+      home: Material(
+        child: ValueListenableBuilder<int>(
+          valueListenable: tab,
+          builder: (context, index, _) => IndexedStack(
+            index: index,
+            children: [
+              LiquidPage(
+                title: 'Library',
+                largeTitle: true,
+                child: _rows(list),
+              ),
+              const SizedBox.expand(),
+            ],
+          ),
+        ),
+      ),
+    );
+    final rest = _largeTop(tester);
+
+    tab.value = 1;
+    await tester.pump();
+    await _jump(tester, list, 120);
+    tab.value = 0;
+    await tester.pump();
+    expect(
+      _largeTop(tester),
+      rest - kLargeTitleExtent,
+      reason: 'the list scrolled while its tab was hidden',
+    );
   });
 
   testWidgets('the bar titles carry a text style without a Material above', (
@@ -368,6 +1196,20 @@ void main() {
     final bar = tester.widget<FlutterPageBar>(find.byType(FlutterPageBar));
     expect(bar.hideLargeTitle, isTrue);
     expect(find.text('Search'), findsNothing);
+
+    // A collapsing title too: its row goes, and the padding with it.
+    final paddings = <EdgeInsets>[];
+    await _pump(
+      tester,
+      data: _scope(phase: LiquidSearchPhase.active),
+      home: LiquidPage(
+        title: 'Library',
+        largeTitle: true,
+        child: _Padded(paddings),
+      ),
+    );
+    expect(find.text('Library'), findsNothing);
+    expect(paddings.last.top, kPageBarExtent);
   });
 
   testWidgets(
@@ -396,6 +1238,142 @@ void main() {
       expect(find.text('taps 1'), findsOneWidget);
     },
   );
+
+  // The native report follows the rule of _drivesLargeTitle, as the
+  // Flutter bar does (spec P3b-2 §6.5, §8.0, §8.2).
+  group('the native large title follows the Flutter bar', () {
+    testWidgets('a multi-line text field never reaches the native bar', (
+      tester,
+    ) async {
+      final list = _scroll();
+      final registry = await _pumpNative(
+        tester,
+        Column(
+          children: [
+            Expanded(child: _rows(list)),
+            const TextField(maxLines: 2),
+          ],
+        ),
+      );
+      final field = find.descendant(
+        of: find.byType(TextField),
+        matching: find.byType(Scrollable),
+      );
+      registry.offsets.clear();
+      await tester.enterText(find.byType(TextField), 'một\nhai\nba');
+      await tester.pumpAndSettle();
+      expect(
+        tester.state<ScrollableState>(field).position.pixels,
+        greaterThan(0),
+        reason: 'the field scrolled',
+      );
+      expect(registry.offsets, everyElement(0), reason: 'typing a third line');
+      await _jump(tester, list, 120);
+      expect(registry.offsets.last, 120, reason: 'the list');
+    });
+
+    testWidgets('of two lists side by side, only the first reaches the '
+        'native bar', (tester) async {
+      final first = _scroll();
+      final second = _scroll();
+      final registry = await _pumpNative(
+        tester,
+        Column(
+          children: [
+            Expanded(child: _rows(first)),
+            Expanded(child: _rows(second)),
+          ],
+        ),
+      );
+      await _jump(tester, first, 120);
+      expect(registry.offsets.last, 120);
+      await _jump(tester, second, 5);
+      expect(registry.offsets, isNot(contains(5)), reason: 'the second list');
+      await _jump(tester, first, 26);
+      expect(registry.offsets.last, 26);
+    });
+
+    testWidgets("in a PageView whose pages stay alive, the first page's "
+        "list drives the native bar, then the shown page's; a page off "
+        'screen never does', (tester) async {
+      final first = _scroll();
+      final second = _scroll();
+      final pages = PageController();
+      addTearDown(pages.dispose);
+      final registry = await _pumpNative(
+        tester,
+        PageView(
+          controller: pages,
+          allowImplicitScrolling: true,
+          children: [_rows(first), _rows(second)],
+        ),
+      );
+      await _jump(tester, first, 120);
+      expect(registry.offsets, contains(120), reason: "the first page's list");
+      await tester.fling(find.byType(PageView), const Offset(-400, 0), 1000);
+      await tester.pumpAndSettle();
+      expect(pages.page, 1);
+      await _jump(tester, second, 30);
+      expect(registry.offsets.last, 30, reason: "the shown page's list");
+      await _jump(tester, first, 10);
+      expect(
+        registry.offsets,
+        isNot(contains(10)),
+        reason: "the first page's list, off screen",
+      );
+    });
+
+    testWidgets("in a TabBarView, the shown tab's list drives the native "
+        'bar', (tester) async {
+      final first = _scroll();
+      final second = _scroll();
+      final registry = await _pumpNative(
+        tester,
+        DefaultTabController(
+          length: 2,
+          child: TabBarView(children: [_rows(first), _rows(second)]),
+        ),
+      );
+      await _jump(tester, first, 120);
+      expect(registry.offsets, contains(120), reason: "the first tab's list");
+      await tester.fling(find.byType(TabBarView), const Offset(-400, 0), 1000);
+      await tester.pumpAndSettle();
+      await _jump(tester, second, 30);
+      expect(registry.offsets.last, 30, reason: "the shown tab's list");
+    });
+
+    testWidgets('in an IndexedStack of lists (a segment switcher), the '
+        'shown list drives the native bar; a hidden one never does', (
+      tester,
+    ) async {
+      final first = _scroll();
+      final second = _scroll();
+      final shown = ValueNotifier(0);
+      addTearDown(shown.dispose);
+      final registry = await _pumpNative(
+        tester,
+        ValueListenableBuilder<int>(
+          valueListenable: shown,
+          builder: (context, index, _) => IndexedStack(
+            index: index,
+            children: [_rows(first), _rows(second)],
+          ),
+        ),
+      );
+      await _jump(tester, first, 120);
+      expect(registry.offsets.last, 120, reason: 'the first list');
+      shown.value = 1;
+      await tester.pump();
+      await _jump(tester, second, 30);
+      expect(registry.offsets.last, 30, reason: 'the shown list');
+      await _jump(tester, first, 10);
+      expect(
+        registry.offsets,
+        isNot(contains(10)),
+        reason: 'the hidden list',
+      );
+    });
+  });
 
   testWidgets('the first vertical scroll view reports its offset', (
     tester,
@@ -519,5 +1497,107 @@ void main() {
     // Below the bar the content is opaque.
     expect(green(x, 80), 0, reason: 'content right below the bar');
     expect(green(x, 200), 0, reason: 'content below the bar');
+  });
+
+  // Same API, same bar wherever the shell draws Flutter chrome: iOS before
+  // 26, Android, `nativeChrome: off` and a `chromeBuilder` (the last two
+  // on a platform that offers native chrome).
+  group('the Flutter bar on every Flutter-chrome target', () {
+    /// Pumps a phone shell whose Home tab is a root page with a collapsing
+    /// title over a [_Padded] list, and returns the list's controller.
+    Future<ScrollController> pumpHome(
+      WidgetTester tester,
+      List<EdgeInsets> paddings, {
+      LiquidNativeChrome nativeChrome = LiquidNativeChrome.auto,
+      LiquidChromeBuilder? chromeBuilder,
+    }) async {
+      final scroll = ScrollController();
+      addTearDown(scroll.dispose);
+      await pumpShell(
+        tester,
+        TestShell(
+          destinations: kNative,
+          nativeChrome: nativeChrome,
+          chromeBuilder: chromeBuilder,
+          pageBuilder: (i) => i == 0
+              ? LiquidPage(
+                  title: 'Home',
+                  largeTitle: true,
+                  child: _Padded(paddings, controller: scroll),
+                )
+              : TestPage(label: kNative[i].label),
+        ),
+        platform: defaultTargetPlatform,
+      );
+      return scroll;
+    }
+
+    /// The bar sits under the status bar (59 pt on [kPhone]); its large row
+    /// collapses by 52 and the page's padding stays.
+    Future<void> expectFlutterBar(
+      WidgetTester tester,
+      ScrollController scroll,
+      List<EdgeInsets> paddings,
+    ) async {
+      final scope = LiquidShellScope.of(tester.element(find.byType(ListView)));
+      expect(scope.nativeChrome, isFalse, reason: 'Flutter chrome');
+      expect(scope.nativePageBar, isFalse);
+      const barTop = 59.0;
+      const padding = barTop + kPageBarExtent + kLargeTitleExtent;
+      final rest = tester.getRect(_largeTitle('Home')).top;
+      expect(rest, greaterThanOrEqualTo(barTop + kPageBarExtent));
+      expect(paddings.last.top, padding);
+      scroll.jumpTo(kLargeTitleExtent);
+      await tester.pump();
+      expect(tester.getRect(_largeTitle('Home')).top, rest - kLargeTitleExtent);
+      expect(
+        tester
+            .widget<Opacity>(
+              find
+                  .ancestor(
+                    of: _inlineTitle('Home'),
+                    matching: find.byType(Opacity),
+                  )
+                  .first,
+            )
+            .opacity,
+        1,
+      );
+      expect(paddings.last.top, padding);
+    }
+
+    testWidgets('iOS before 26', (tester) async {
+      final paddings = <EdgeInsets>[];
+      final scroll = await pumpHome(tester, paddings);
+      await expectFlutterBar(tester, scroll, paddings);
+    }, variant: iosDevice);
+
+    testWidgets('Android', (tester) async {
+      final paddings = <EdgeInsets>[];
+      final scroll = await pumpHome(tester, paddings);
+      await expectFlutterBar(tester, scroll, paddings);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
+    testWidgets('iOS 26 with nativeChrome: off', (tester) async {
+      installFakeNative();
+      final paddings = <EdgeInsets>[];
+      final scroll = await pumpHome(
+        tester,
+        paddings,
+        nativeChrome: LiquidNativeChrome.off,
+      );
+      await expectFlutterBar(tester, scroll, paddings);
+    }, variant: iosDevice);
+
+    testWidgets('iOS 26 with a chromeBuilder', (tester) async {
+      installFakeNative();
+      final paddings = <EdgeInsets>[];
+      final scroll = await pumpHome(
+        tester,
+        paddings,
+        chromeBuilder: (context, details, chrome) => chrome,
+      );
+      await expectFlutterBar(tester, scroll, paddings);
+    }, variant: iosDevice);
   });
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Native iOS 26 shell, native dialogs and the search tab on simulators
-# (specs P2 §9.4, P3a §9.4, P3b §12.5).
+# Native iOS 26 shell, native dialogs, the search tab and the page bars of
+# every tab on simulators (specs P2 §9.4, P3a §9.4, P3b §12.5, P3b-2 §8.2).
 #
 #   tool/integration_ios_native.sh
 #
@@ -12,7 +12,7 @@
 #                 A 36-character UDID works in place of a name.
 # NATIVE_TARGETS  space-separated integration tests to drive on each device
 #                 (default "native_shell_test.dart native_dialogs_test.dart
-#                 native_search_test.dart").
+#                 native_search_test.dart native_pages_test.dart").
 # FLUTTER         flutter command (default: flutter).
 # IOS_DRIVE_TIMEOUT  seconds one `flutter drive` may run (default 1200).
 #
@@ -27,9 +27,10 @@
 #
 # Screenshots land in liquid_shell/example/build/integration_screenshots/:
 # native_<run>_*.png (home, sidebar, guard, cases), dialogs_<run>_*.png
-# (alert, sheet, alert_flutter) and search_<run>_*.png (one per phase of the
-# search tab). They are the doc images of the native chrome and dialogs,
-# which goldens cannot draw (spec P2 §9.5).
+# (alert, sheet, alert_flutter), search_<run>_*.png (one per phase of the
+# search tab) and pages_<run>_*.png (home, home_detail, library,
+# settings_about, photo). They are the doc images of the native chrome and
+# dialogs, which goldens cannot draw (spec P2 §9.5).
 set -euo pipefail
 tool_dir=$(cd "$(dirname "$0")" && pwd)
 cd "$tool_dir/../liquid_shell/example"
@@ -37,7 +38,7 @@ export FLUTTER=${FLUTTER:-flutter}
 IOS_DRIVE_TIMEOUT=${IOS_DRIVE_TIMEOUT:-1200}
 IOS_RUNTIME=${IOS_RUNTIME-iOS 26.5}
 NATIVE_DEVICES=${NATIVE_DEVICES:-iPad Air 11-inch (M4)=true;iPhone 17 Pro=true}
-NATIVE_TARGETS=${NATIVE_TARGETS:-native_shell_test.dart native_dialogs_test.dart native_search_test.dart}
+NATIVE_TARGETS=${NATIVE_TARGETS:-native_shell_test.dart native_dialogs_test.dart native_search_test.dart native_pages_test.dart}
 
 udid_of() {
   local name=$1

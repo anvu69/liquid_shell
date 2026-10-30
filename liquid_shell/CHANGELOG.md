@@ -1,3 +1,101 @@
+## 0.1.0-dev.10
+
+- **Flutter page bar, complete (VK-445).** On iOS before 26, on Android and
+  with Flutter chrome, `LiquidPage(largeTitle: true)` on a root page now
+  draws its large title on a row of its own that scrolls away as the page
+  scrolls, while the inline title fades into the bar row, as UIKit's does.
+  The page's top padding stays put while it collapses.
+- **Behaviour change (VK-445).** A pushed page's title is always inline:
+  `largeTitle` applies to root pages only. Before, the Flutter bar drew a
+  pushed page's large title on a row of its own, where UIKit drew it small.
+- **Behaviour change (VK-445).** `largeTitle: true` on a root page now means
+  the collapsing row. Before, the Flutter bar put it on the bar row, which
+  is what `largeTitle: null` gives a root page at compact width.
+- **Fix (VK-776).** A shell nested in another shell's body with no
+  navigator between (a tab's page that is itself a `LiquidShell`) no
+  longer answers back beside the outer shell. One back asked a page's
+  `PopScope` twice (an unsaved form showed two dialogs; with three shells,
+  three). A nested shell in a tab that was not shown still held back: back
+  popped a page the user could not see, and at a root shell on Android the
+  app could not be left. With the outer shell's overlay sidebar open or
+  its search active, one back also popped the nested shell's page. The
+  outer shell now asks the nested one in its own order, and only while it
+  is on screen. With a navigator between (go_router's `StatefulShellRoute`
+  and `ShellRoute` always put one there) nothing changes.
+- **Fix (VK-779).** Compact landscape with the Flutter chrome: selecting
+  the search tab from idle (a tap on the ⌕, a lens drag dropped on it, or
+  the app) no longer reports "A RenderFlex overflowed by 12 pixels" in
+  debug builds for the first frame of the morph. The field's row keeps the
+  width of its fixed parts and is clipped while it grows out of the
+  44-point ⌕. Release builds showed nothing wrong.
+- **Fix (VK-778).** When the Flutter overlay sidebar closes by Escape, a
+  tap on its barrier, its Hide button or system back, keyboard focus goes
+  back to what held it when the sidebar opened (a page's control or text
+  field, the sidebar toggle). Before, it stayed on the route, so a
+  hardware-keyboard user lost their place. Nothing is given back when
+  another destination is selected while the sidebar is open, in the
+  sidebar or by the app (the page changes), and the shell's own search
+  field is never refocused this way: focusing it starts a search.
+  Nothing is given back either when a route opens in the same turn (a
+  dialog or a pushed page, on any navigator; the route keeps focus), or
+  when something else takes focus as the sidebar closes (a field that
+  autofocuses). The exception is a route that takes no focus
+  (`requestFocus: false`) opened on a navigator around the shell's own.
+  An app that moves focus itself when it closes the sidebar should do so
+  after the frame: before it, the page cannot take focus yet, and the
+  give-back wins. Likewise, an app that changes the page as it closes the
+  sidebar should select before or in the same turn: a page change after
+  the closing frame, or one inside the body that the shell's
+  `selectedIndex` does not show (a nested shell's tab, the app's own
+  `Offstage` tabs), can leave a hidden field with focus.
+- **Fix (VK-778).** The regular search field (the search tab selected in
+  the top bar or sidebar layout) keeps inside the horizontal safe area, as
+  the bars do since 0.1.0-dev.8. Side insets reach that layout only through
+  breakpoints that give a landscape phone the regular layout, where the
+  field ran under the notch. Beside a tiled sidebar only the trailing inset
+  is added: the sidebar already clears the leading one.
+- **Native navigation bars on every tab (VK-441, VK-442).** With native
+  chrome on iOS 26+, a `LiquidPage` on any tab now gets UIKit's navigation
+  bar: its title, the glass back circle and its history menu, the large
+  title and the scroll-edge effect. Before, only the search tab had one and
+  the other tabs drew the Flutter bar. A tab whose pages do not use
+  `LiquidPage` looks as before, and so does a root page with an inline
+  title: their bar stays hidden.
+- **Behaviour change (VK-442).** With native chrome, `LiquidHideChrome` over
+  a `LiquidPage` hides only the tab bar and the sidebar; the page's
+  navigation bar stays, as the Flutter bar already did. Over a page without
+  `LiquidPage` it still hides everything.
+- **Behaviour change (VK-441).** The native tab bar's minimize
+  (`minimizeOnScroll`) now follows pushed pages too, as the Flutter bar
+  does. A push or a pop keeps the bar's form.
+- **Behaviour change (VK-442).** Native large titles follow the 0.1.0 title
+  model: `largeTitle: true` on a root page is a large-title row that
+  collapses as the page scrolls (on the iPhone's search tab it sat on the
+  bar row), and a pushed page's title is always inline.
+- A `LiquidPage` pushed above a page without one now gets the native back
+  circle: a root titled with the destination's label stands in for that
+  page (VK-442).
+- `LiquidShellScopeData.nativePageBar` is true on every tab of an engaged
+  shell. Under the compact native bar, `windowControls` is the real cluster
+  while the selected tab's navigation bar is hidden and zero while it shows;
+  with `LiquidHideChrome` at regular width it is no longer zero when nothing
+  clears the cluster (VK-442).
+- The edge swipe on any tab's pushed page stays Flutter's: the page follows
+  the finger, and the native bar switches when the gesture ends (VK-444).
+- **Behaviour change (VK-442).** UIKit's large title follows the same
+  scroll view as the Flutter bar: the page's first vertical scroll view on
+  screen. A multi-line text field, a second list beside the first and a
+  hidden segment's list no longer move it; the shown list of a `PageView`
+  or a `TabBarView` now does.
+- **Fix (VK-442).** A page's scroll offset now reaches native after the
+  push or pop that puts the page on top, never before. Before, it could
+  land on the page being left: after a push and a back, a scrolled root
+  showed its large title expanded over its list.
+
+## 0.1.0-dev.9
+
+First release on pub.dev.
+
 ## 0.1.0-dev.8
 
 - The package archive no longer includes tests (they read files outside

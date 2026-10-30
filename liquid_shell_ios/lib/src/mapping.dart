@@ -88,6 +88,7 @@ NativeChromeConfig configToNative(LiquidNativeChromeConfig config) =>
       hidden: config.hidden,
       interactive: config.interactive,
       minimizeOnScroll: config.minimizeOnScroll,
+      tabBarHidden: config.tabBarHidden,
     );
 
 /// A native rect, checked at the boundary: any non-finite field makes it

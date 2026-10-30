@@ -159,6 +159,18 @@ final class SearchMathTests: XCTestCase {
     XCTAssertFalse(pad.titleItem)
   }
 
+  /// Spec P3b-2 §4.2, decision 12: `largeTitle: true` on the iPhone's
+  /// search root is the collapsing row, as on every tab (it was the bar
+  /// row, `.inline`, which is now `null`'s).
+  func testAnIPhoneSearchRootWithALargeTitleCollapses() {
+    for os in [26, 27] {
+      XCTAssertEqual(
+        SearchMath.style(isPad: false, osMajor: os, rootLargeTitle: true).titleMode, .always)
+      XCTAssertEqual(
+        SearchMath.style(isPad: false, osMajor: os, rootLargeTitle: nil).titleMode, .inline)
+    }
+  }
+
   func testTheTopIsHeldOnlyWhileTheProxyIsScrolled() {
     XCTAssertEqual(SearchMath.heldTop(current: 116, resting: 168.7, scrolled: true), 168.7)
     XCTAssertEqual(SearchMath.heldTop(current: 116, resting: 168.7, scrolled: false), 116)
@@ -170,6 +182,136 @@ final class SearchMathTests: XCTestCase {
     XCTAssertTrue(SearchMath.frameChanged(nil, a))
     XCTAssertFalse(SearchMath.frameChanged(a, NativeRect(x: 8.2, y: 490.4, width: 330, height: 48)))
     XCTAssertTrue(SearchMath.frameChanged(a, NativeRect(x: 8, y: 489, width: 330, height: 48)))
+  }
+}
+
+/// Spec P3b-2 §4.2: the native half of the page title table, row by row
+/// (a plain tab; the search tab keeps `SearchMath.style`). The rows, and
+/// the cases each covers, are those of the Flutter bar's suite
+/// (`liquid_shell/test/unit/page_bar_test.dart`, group `pageTitleModeFor:
+/// the title table`): 6 rows, 24 cases (page × largeTitle × width ×
+/// actions). The native bar has no page actions yet: its 12 cases without
+/// actions are checked here; branch B4 adds actions to `PageTitleMath` and
+/// checks the other 12 (spec §8.4).
+@available(iOS 26.0, *)
+final class PageTitleMathTests: XCTestCase {
+  /// (page, largeTitle, size class, actions, mode), each cell as the
+  /// spec's table writes it; the same records as the Dart suite.
+  private typealias Row = (String, String, String, String, String)
+
+  private static let table: [Row] = [
+    ("pushed", "any", "any", "any", "inline"),
+    ("root", "true", "any", "any", "largeCollapsing"),
+    ("root", "null", "compact", "any", "largeInRow"),
+    ("root", "null", "regular", "none", "hidden"),
+    ("root", "false", "any", "none", "hidden"),
+    ("root", "null (regular) or false", "as left", "≥ 1", "inline"),
+  ]
+
+  private struct Case: Hashable {
+    let root: Bool
+    let largeTitle: Bool?
+    let compact: Bool
+    let hasActions: Bool
+  }
+
+  private static func largeTitles(_ cell: String) -> [Bool?] {
+    switch cell {
+    case "any": return [true, nil, false]
+    case "true": return [true]
+    case "null": return [nil]
+    case "false": return [false]
+    default: preconditionFailure("largeTitle \(cell)")
+    }
+  }
+
+  /// Compact (true) and regular (false) width.
+  private static func widths(_ cell: String) -> [Bool] {
+    switch cell {
+    case "any": return [true, false]
+    case "compact": return [true]
+    case "regular": return [false]
+    default: preconditionFailure("size class \(cell)")
+    }
+  }
+
+  /// Every concrete case a row covers, as the Dart suite's `_casesOf`.
+  private static func cases(of row: Row) -> [Case] {
+    let (page, largeTitle, size, actions, _) = row
+    let root: Bool
+    switch page {
+    case "pushed": root = false
+    case "root": root = true
+    default: preconditionFailure("page \(page)")
+    }
+    let titlesAndWidths: [(Bool?, Bool)] =
+      (largeTitle, size) == ("null (regular) or false", "as left")
+      ? [(nil, false), (false, true), (false, false)]
+      : largeTitles(largeTitle).flatMap { title in widths(size).map { (title, $0) } }
+    let withActions: [Bool]
+    switch actions {
+    case "any": withActions = [false, true]
+    case "none": withActions = [false]
+    case "≥ 1": withActions = [true]
+    default: preconditionFailure("actions \(actions)")
+    }
+    return titlesAndWidths.flatMap { title, compact in
+      withActions.map {
+        Case(root: root, largeTitle: title, compact: compact, hasActions: $0)
+      }
+    }
+  }
+
+  func testTheRowsCoverEveryCaseExactlyOnce() {
+    let all = Self.table.flatMap { Self.cases(of: $0) }
+    // page × largeTitle × size class × actions
+    XCTAssertEqual(all.count, 2 * 3 * 2 * 2)
+    XCTAssertEqual(Set(all).count, all.count)
+  }
+
+  func testPageTitleMathFollowsTheTitleTable() {
+    func page(_ largeTitle: Bool?) -> NativePage {
+      NativePage(title: "Page", largeTitle: largeTitle)
+    }
+    var checked = 0
+    for (i, row) in Self.table.enumerated() {
+      for c in Self.cases(of: row) where !c.hasActions {
+        let label = "row \(i + 1) (\(row.4)): \(c)"
+        // A pushed page sits on a root without a large title.
+        let pages = c.root ? [page(c.largeTitle)] : [page(nil), page(c.largeTitle)]
+        let mode =
+          c.root
+          ? PageTitleMath.rootMode(largeTitle: c.largeTitle, compact: c.compact)
+          : PageTitleMath.pushedMode
+        let hidden = PageTitleMath.barHidden(pages: pages, compact: c.compact)
+        switch row.4 {
+        case "inline":
+          XCTAssertEqual(mode, .never, label)
+          XCTAssertFalse(hidden, label)
+        case "largeCollapsing":
+          XCTAssertEqual(mode, .always, label)
+          XCTAssertFalse(hidden, label)
+        case "largeInRow":
+          XCTAssertEqual(mode, .inline, label)
+          XCTAssertFalse(hidden, label)
+        case "hidden":
+          XCTAssertEqual(mode, .never, label)
+          XCTAssertTrue(hidden, label)
+        default:
+          XCTFail("mode \(row.4)")
+        }
+        checked += 1
+      }
+    }
+    // Rows 1–5 without actions: 6 + 2 + 1 + 1 + 2.
+    XCTAssertEqual(checked, 12)
+  }
+
+  /// No pages: the tab does not use LiquidPage, and looks as before.
+  func testATabWithoutPagesHidesItsBar() {
+    for compact in [true, false] {
+      XCTAssertTrue(PageTitleMath.barHidden(pages: [], compact: compact))
+    }
   }
 }
 
@@ -620,7 +762,7 @@ final class NativeTabsTests: XCTestCase {
           semanticLabel: "Account, Ann Lee")
         : nil,
       tintArgb: 0xFF00_7AFF, dark: false, rtl: false, hidden: hidden, interactive: interactive,
-      minimizeOnScroll: minimize)
+      minimizeOnScroll: minimize, tabBarHidden: false)
   }
 
   /// Lets UIKit finish layout and any sidebar transition.
@@ -1227,7 +1369,8 @@ final class NativeTabsTests: XCTestCase {
     tabs.apply(
       NativeChromeConfig(
         engaged: false, tabs: [], selectedIndex: 0, tintArgb: 0xFF00_7AFF, dark: false,
-        rtl: false, hidden: false, interactive: true, minimizeOnScroll: false))
+        rtl: false, hidden: false, interactive: true, minimizeOnScroll: false,
+        tabBarHidden: false))
     settle()
     XCTAssertFalse(tabs.chromeVisible)
     XCTAssertEqual(tabs.tabs.map(\.identifier), shown, "dormant leaves the tabs alone")
@@ -1336,7 +1479,8 @@ final class NativeTabsTests: XCTestCase {
     tabs.apply(
       NativeChromeConfig(
         engaged: false, tabs: [], selectedIndex: 0, tintArgb: 0xFF00_7AFF, dark: false,
-        rtl: false, hidden: false, interactive: true, minimizeOnScroll: false))
+        rtl: false, hidden: false, interactive: true, minimizeOnScroll: false,
+        tabBarHidden: false))
     settle()
 
     container.traitOverrides.horizontalSizeClass = .compact
@@ -1426,19 +1570,21 @@ final class NativeTabsTests: XCTestCase {
     XCTAssertEqual(tabs.tabBarMinimizeBehavior, .never)
   }
 
-  /// §8.2, §8.6: each destination's host has a proxy for the bottom edge,
-  /// and Dart's offset reaches that tab's proxy only.
+  /// §8.2, §8.6: each destination's root page has a proxy for the bottom
+  /// edge (spec P3b-2 §6.8), and Dart's offset reaches that tab's proxy
+  /// only.
   func testAMinimizeOffsetReachesItsTabsProxy() throws {
     let tabs = try installedShell()
-    let home = try XCTUnwrap(tabs.minimizeHost(0))
-    let inbox = try XCTUnwrap(tabs.minimizeHost(1))
-    home.loadViewIfNeeded()
-    XCTAssertTrue(home.contentScrollView(for: .bottom) === home.minimizeProxy)
+    let host = try XCTUnwrap(tabs.topHost(ofTab: 0))
+    let home = try XCTUnwrap(tabs.minimizeProxy(ofTab: 0))
+    let inbox = try XCTUnwrap(tabs.minimizeProxy(ofTab: 1))
+    host.loadViewIfNeeded()
+    XCTAssertTrue(host.contentScrollView(for: .bottom) === home)
     tabs.setMinimizeScroll(tab: 1, offset: 240)
     tabs.setMinimizeScroll(tab: 0, offset: .nan)
     tabs.setMinimizeScroll(tab: 9, offset: 50)
-    XCTAssertEqual(inbox.minimizeProxy.offset, 240)
-    XCTAssertEqual(home.minimizeProxy.offset, 0)
+    XCTAssertEqual(inbox.offset, 240)
+    XCTAssertEqual(home.offset, 0)
   }
 
   /// §8.5, spike §3.2: the toggle is the public "expand now"; it does
@@ -1466,12 +1612,12 @@ final class NativeTabsTests: XCTestCase {
     let shell = try tabs(in: window)
     try installer.setMinimizeScroll(tab: 0, offset: 77)
     try installer.expandTabBar()
-    XCTAssertEqual(shell.minimizeHost(0)?.minimizeProxy.offset, 77)
+    XCTAssertEqual(shell.minimizeProxy(ofTab: 0)?.offset, 77)
     XCTAssertEqual(shell.minimizeExpands, 1)
   }
 
   private func panIsOnFlutter(_ tabs: NativeTabsController, host index: Int) -> Bool {
-    guard let pan = tabs.minimizeHost(index)?.minimizeProxy.panGestureRecognizer else { return false }
+    guard let pan = tabs.minimizeProxy(ofTab: index)?.panGestureRecognizer else { return false }
     return tabs.flutter.view.gestureRecognizers?.contains(pan) ?? false
   }
 
@@ -1489,11 +1635,11 @@ final class NativeTabsTests: XCTestCase {
     tabs.apply(config(minimize: true))
     settle()
     XCTAssertTrue(panIsOnFlutter(tabs, host: 0))
-    let pan = try XCTUnwrap(tabs.minimizeHost(0)?.minimizeProxy.panGestureRecognizer)
+    let pan = try XCTUnwrap(tabs.minimizeProxy(ofTab: 0)?.panGestureRecognizer)
     XCTAssertFalse(pan.cancelsTouchesInView)
     XCTAssertFalse(pan.delaysTouchesBegan)
     XCTAssertFalse(pan.delaysTouchesEnded)
-    XCTAssertTrue(tabs.minimizeHost(0)?.minimizeProxy.contentView === tabs.flutter.view)
+    XCTAssertTrue(tabs.minimizeProxy(ofTab: 0)?.contentView === tabs.flutter.view)
     XCTAssertTrue(tabs.debugSnapshot().minimizePanAttached)
   }
 
@@ -1509,7 +1655,7 @@ final class NativeTabsTests: XCTestCase {
     XCTAssertTrue(
       try hit(tabs, CGPoint(x: root.bounds.midX, y: root.bounds.midY)) === tabs.flutter.view,
       "PassThroughView guard: the body's point still hit-tests to the Flutter view")
-    let pan = try XCTUnwrap(tabs.minimizeHost(0)?.minimizeProxy.panGestureRecognizer)
+    let pan = try XCTUnwrap(tabs.minimizeProxy(ofTab: 0)?.panGestureRecognizer)
     XCTAssertEqual(pan.allowedScrollTypesMask, [])
     XCTAssertEqual(pans(on: tabs.flutter.view), 1)
     tabs.apply(config(minimize: true))
@@ -1526,7 +1672,7 @@ final class NativeTabsTests: XCTestCase {
     settle()
     XCTAssertFalse(panIsOnFlutter(tabs, host: 0))
     XCTAssertFalse(panIsOnFlutter(tabs, host: 1))
-    XCTAssertEqual(tabs.minimizeHost(0)?.minimizeProxy.offset, 0)
+    XCTAssertEqual(tabs.minimizeProxy(ofTab: 0)?.offset, 0)
   }
 
   /// Spec §10: a window narrowed to compact takes the pan; widened to
@@ -1544,7 +1690,7 @@ final class NativeTabsTests: XCTestCase {
 
     container.traitOverrides.horizontalSizeClass = .regular
     XCTAssertFalse(stable({ panIsOnFlutter(tabs, host: 0) }, until: { !$0 }), "widened")
-    XCTAssertEqual(tabs.minimizeHost(0)?.minimizeProxy.offset, 0)
+    XCTAssertEqual(tabs.minimizeProxy(ofTab: 0)?.offset, 0)
     XCTAssertEqual(pans(on: tabs.flutter.view), 0)
   }
 
@@ -1564,7 +1710,7 @@ final class NativeTabsTests: XCTestCase {
   /// view, back to its proxy: minimize off, hidden, inert, dormant.
   func testEveryEndOfEligibilityGivesThePanBack() throws {
     let tabs = try installedShell(sizeClass: .compact)
-    let home = try XCTUnwrap(tabs.minimizeHost(0)?.minimizeProxy)
+    let home = try XCTUnwrap(tabs.minimizeProxy(ofTab: 0))
     for (label, ineligible) in [
       ("minimize off", config(minimize: false)),
       ("hidden", config(hidden: true, minimize: true)),
@@ -1589,7 +1735,7 @@ final class NativeTabsTests: XCTestCase {
     settle()
     XCTAssertTrue(panIsOnFlutter(tabs, host: 1))
     XCTAssertFalse(panIsOnFlutter(tabs, host: 0))
-    let home = try XCTUnwrap(tabs.minimizeHost(0)?.minimizeProxy)
+    let home = try XCTUnwrap(tabs.minimizeProxy(ofTab: 0))
     XCTAssertTrue(home.gestureRecognizers?.contains(home.panGestureRecognizer) ?? false)
   }
 
@@ -1619,12 +1765,12 @@ final class NativeTabsTests: XCTestCase {
     weak var old: MinimizeProxy?
     autoreleasepool {
       tabs.apply(config(minimize: true))
-      old = tabs.minimizeHost(0)?.minimizeProxy
+      old = tabs.minimizeProxy(ofTab: 0)
       XCTAssertTrue(panIsOnFlutter(tabs, host: 0), "precondition")
       tabs.apply(config(trailing: true, minimize: true))
     }
     settle()
-    XCTAssertFalse(tabs.minimizeHost(0)?.minimizeProxy === old, "precondition: a new host")
+    XCTAssertFalse(tabs.minimizeProxy(ofTab: 0) === old, "precondition: a new host")
     XCTAssertTrue(panIsOnFlutter(tabs, host: 0))
     XCTAssertEqual(pans(on: tabs.flutter.view), 1)
   }
@@ -1745,7 +1891,7 @@ final class NativeTabsTests: XCTestCase {
 
   /// Q10: no proxy competes with Flutter for the status-bar tap.
   func testThePageProxyLeavesTheStatusBarTapToFlutter() {
-    let page = PageHostController()
+    let page = PageHostController(minimizes: true)
     page.loadViewIfNeeded()
     XCTAssertFalse(page.proxy.scrollsToTop)
     XCTAssertTrue(page.proxy.accessibilityElementsHidden)
@@ -1761,7 +1907,7 @@ final class NativeTabsTests: XCTestCase {
     for (minimize, trailing) in [(true, false), (false, false), (false, true), (true, true)] {
       tabs.apply(config(trailing: trailing, minimize: minimize))
       for index in [0, 1] {
-        let proxy = try XCTUnwrap(tabs.minimizeHost(index)?.minimizeProxy)
+        let proxy = try XCTUnwrap(tabs.minimizeProxy(ofTab: index))
         XCTAssertEqual(
           proxy.bottomEdgeEffect.isHidden, !minimize,
           "tab \(index), minimize \(minimize), trailing \(trailing)")
@@ -1933,7 +2079,8 @@ extension NativeTabsTests {
       engaged: true, tabs: tabs, selectedIndex: selected,
       search: NativeSearchConfig(placeholder: placeholder, scopes: scopes), tintArgb: 0xFF00_7AFF,
       dark: false,
-      rtl: false, hidden: hidden, interactive: interactive, minimizeOnScroll: minimize)
+      rtl: false, hidden: hidden, interactive: interactive, minimizeOnScroll: minimize,
+      tabBarHidden: false)
   }
 
   fileprivate func installedSearchShell(
@@ -2337,7 +2484,8 @@ extension NativeTabsTests {
   func testHiddenChromeEndsAnActiveSearchAndKeepsTheText() throws {
     let dormant = NativeChromeConfig(
       engaged: false, tabs: [], selectedIndex: 0, tintArgb: 0xFF00_7AFF, dark: false,
-      rtl: false, hidden: false, interactive: true, minimizeOnScroll: false)
+      rtl: false, hidden: false, interactive: true, minimizeOnScroll: false,
+      tabBarHidden: false)
     for (name, hide) in [("dormant", dormant), ("hidden", searchConfig(selected: 2, hidden: true))] {
       let tabs = try installedSearchShell(selected: 2)
       let bridge = tabs.searchBridge
@@ -2985,6 +3133,13 @@ extension NativeTabsTests {
     XCTAssertGreaterThan(scope.height, 20, "\(scope)")
     // UIKit realises a stacked field on an iPad, and on an iPhone from
     // iOS 27.0 (VK-698: the active field rises to the top there).
+    // VK-777: on an iPhone UIKit makes that choice (`SearchMath.style`
+    // asks for `.automatic`), so it is pinned per OS: a change in UIKit
+    // fails here instead of quietly taking the other branch.
+    if UIDevice.current.userInterfaceIdiom == .phone {
+      let major = ProcessInfo.processInfo.operatingSystemVersion.majorVersion
+      XCTAssertEqual(snapshot.placement, major >= 27 ? "stacked" : "inline", "iOS \(major)")
+    }
     if snapshot.placement == "stacked" {
       XCTAssertGreaterThanOrEqual(scope.y, field.y + field.height - 1, "under the field: \(field)")
     } else {
@@ -3302,6 +3457,523 @@ extension NativeTabsTests {
     XCTAssertFalse(bar.searchTextField.isFirstResponder, "no keyboard")
     XCTAssertFalse(bar.showsScopeBar, "no scope bar")
     XCTAssertFalse(events.sent.contains("searchActive true"), "\(events.sent)")
+  }
+}
+
+// MARK: - P3b-2: a navigation controller on every tab (spec P3b-2 §6.1, §6.8)
+
+@available(iOS 26.0, *)
+extension NativeTabsTests {
+  /// [config()] with [home] as Home's pages (root first); Inbox has none.
+  fileprivate func pagesConfig(
+    _ home: [NativePage], selected: Int64 = 0, minimize: Bool = false,
+    tabBarHidden: Bool = false
+  ) -> NativeChromeConfig {
+    var result = config(selected: selected, minimize: minimize)
+    result.tabs[0].pages = home
+    result.tabBarHidden = tabBarHidden
+    return result
+  }
+
+  func testEveryDestinationTabIsANavigationController() throws {
+    let tabs = try installedShell()
+    for index in [0, 1] {
+      let nav = try XCTUnwrap(tabs.navControllers[index], "tab \(index)")
+      XCTAssertEqual(nav.viewControllers.count, 1, "its root, built with the tabs")
+    }
+    XCTAssertTrue(tabs.selectedViewController === tabs.navControllers[0])
+  }
+
+  func testATabWithoutPagesHidesItsNavigationBar() throws {
+    let tabs = try installedShell()
+    for index in [0, 1] {
+      let nav = try XCTUnwrap(tabs.navControllers[index], "tab \(index)")
+      XCTAssertTrue(nav.isNavigationBarHidden, "tab \(index): no LiquidPage, no bar")
+    }
+    let page = try XCTUnwrap(tabs.topHost(ofTab: 0)?.view)
+    XCTAssertEqual(
+      tabs.flutter.view.safeAreaInsets.top, page.safeAreaInsets.top, accuracy: 0.5,
+      "Flutter's top has no bar in it")
+  }
+
+  /// The title table's plain-tab rows on the real tree (spec P3b-2 §4.2):
+  /// a root with no title row hides the bar, a push shows it with the back
+  /// circle, the pop hides it again; `null` is on the bar row at compact
+  /// width only; `true` is the collapsing row.
+  func testAnInlineRootHidesTheBarAndAPushShowsIt() throws {
+    let tabs = try installedShell()
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    let compact = tabs.isCompact
+    tabs.apply(pagesConfig([NativePage(title: "Home", largeTitle: false)]))
+    settle()
+    XCTAssertTrue(nav.isNavigationBarHidden, "a root with no title row")
+    tabs.apply(
+      pagesConfig([NativePage(title: "Home", largeTitle: false), NativePage(title: "Detail")]))
+    settle()
+    XCTAssertFalse(nav.isNavigationBarHidden, "a pushed page shows the bar")
+    let top = try XCTUnwrap(nav.topViewController)
+    XCTAssertEqual(top.title, "Detail")
+    XCTAssertEqual(top.navigationItem.largeTitleDisplayMode, .never, "pushed: inline")
+    XCTAssertNotNil(top.navigationItem.backAction, "the back circle proposes")
+    tabs.apply(pagesConfig([NativePage(title: "Home", largeTitle: false)]))
+    settle()
+    XCTAssertTrue(nav.isNavigationBarHidden, "popped back to the root")
+    tabs.apply(pagesConfig([NativePage(title: "Home")]))
+    settle()
+    XCTAssertEqual(nav.isNavigationBarHidden, !compact, "null: the bar row at compact width")
+    XCTAssertEqual(nav.rootHost.navigationItem.largeTitleDisplayMode, compact ? .inline : .never)
+    tabs.apply(pagesConfig([NativePage(title: "Home", largeTitle: true)]))
+    settle()
+    XCTAssertFalse(nav.isNavigationBarHidden)
+    XCTAssertEqual(nav.rootHost.navigationItem.largeTitleDisplayMode, .always)
+  }
+
+  /// Spec P3b-2 §6.8: the pan and Dart's offset follow the selected tab's
+  /// top page, pushed pages included.
+  func testMinimizeFollowsTheTopPageOfAnyTab() throws {
+    let tabs = try installedShell(sizeClass: .compact)
+    tabs.apply(pagesConfig([NativePage(title: "Home")], minimize: true))
+    settle()
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    let root = try XCTUnwrap(nav.rootHost.minimizeProxy)
+    XCTAssertTrue(tabs.attachedMinimizeProxy === root, "the root page's")
+    tabs.apply(
+      pagesConfig([NativePage(title: "Home"), NativePage(title: "Detail")], minimize: true))
+    settle()
+    let pushed = try XCTUnwrap(tabs.minimizeProxy(ofTab: 0))
+    XCTAssertFalse(pushed === root, "a pushed page has its own")
+    XCTAssertTrue(nav.topViewController?.contentScrollView(for: .bottom) === pushed)
+    XCTAssertTrue(tabs.attachedMinimizeProxy === pushed, "the pan moved to the pushed page")
+    XCTAssertEqual(pans(on: tabs.flutter.view), 1)
+    tabs.setMinimizeScroll(tab: 0, offset: 320)
+    XCTAssertEqual(pushed.offset, 320, "Dart's offset reaches the top page")
+    XCTAssertEqual(root.offset, 0)
+    tabs.apply(
+      pagesConfig([NativePage(title: "Home"), NativePage(title: "Detail")], minimize: false))
+    XCTAssertTrue(pushed.bottomEdgeEffect.isHidden, "the edge policy reaches pushed pages")
+    XCTAssertTrue(root.bottomEdgeEffect.isHidden)
+  }
+
+  func testTheRootHostKeepsItsMinimizeProxyThroughAPushAndAPop() throws {
+    let tabs = try installedShell(sizeClass: .compact)
+    tabs.apply(pagesConfig([NativePage(title: "Home")], minimize: true))
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    let host = nav.rootHost
+    let proxy = try XCTUnwrap(host.minimizeProxy)
+    tabs.apply(
+      pagesConfig([NativePage(title: "Home"), NativePage(title: "Detail")], minimize: true))
+    settle()
+    tabs.apply(pagesConfig([NativePage(title: "Home")], minimize: true))
+    settle()
+    XCTAssertTrue(tabs.navControllers[0] === nav, "no rebuild")
+    XCTAssertTrue(nav.rootHost === host)
+    XCTAssertTrue(tabs.minimizeProxy(ofTab: 0) === proxy)
+    XCTAssertTrue(tabs.attachedMinimizeProxy === proxy, "the pan is back on the root's")
+  }
+
+  func testAPoppedHostGivesItsPanBack() throws {
+    let tabs = try installedShell(sizeClass: .compact)
+    weak var popped: MinimizeProxy?
+    autoreleasepool {
+      tabs.apply(
+        pagesConfig([NativePage(title: "Home"), NativePage(title: "Detail")], minimize: true))
+      settle()
+      popped = tabs.minimizeProxy(ofTab: 0)
+      XCTAssertTrue(tabs.attachedMinimizeProxy === popped, "precondition: the pushed page's")
+      tabs.apply(pagesConfig([NativePage(title: "Home")], minimize: true))
+      settle()
+    }
+    settle()
+    XCTAssertEqual(pans(on: tabs.flutter.view), 1, "only the root's")
+    XCTAssertTrue(tabs.attachedMinimizeProxy === tabs.navControllers[0]?.rootHost.minimizeProxy)
+    if let popped {
+      XCTAssertTrue(
+        popped.gestureRecognizers?.contains(popped.panGestureRecognizer) ?? false, "given back")
+    }
+  }
+
+  /// Spec P3b-2 §6.1: under the compact bar the cluster is real while the
+  /// selected tab's navigation bar is hidden, zero while it shows.
+  func testWindowControlsAreRealUnderAHiddenBarAndZeroUnderAShownOne() throws {
+    let tabs = try installedShell(sizeClass: .compact)
+    let windowed = NativeWindowControls(leading: 66, top: 44)
+    tabs.readWindowControls = { _ in windowed }
+    XCTAssertEqual(tabs.windowControls(), windowed, "no pages: the bar is hidden")
+    tabs.apply(pagesConfig([NativePage(title: "Home"), NativePage(title: "Detail")]))
+    settle()
+    XCTAssertEqual(tabs.windowControls(), NativeWindowControls(leading: 0, top: 0), "it shows")
+  }
+}
+
+// MARK: - P3b-2: size classes and the hidden bar (spec P3b-2 §6.1)
+
+@available(iOS 26.0, *)
+extension NativeTabsTests {
+  /// Spec P3b-2 §6.1: a window crossing compact/regular re-applies the
+  /// title modes and the bar at once, without a config from Dart.
+  func testASizeClassChangeReappliesTheTitleModes() throws {
+    try requireIPad()
+    let tabs = try installedShell(sizeClass: .regular)
+    let container = try XCTUnwrap(tabs.parent)
+    tabs.apply(pagesConfig([NativePage(title: "Home")]))
+    settle()
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    XCTAssertTrue(nav.isNavigationBarHidden, "regular: no title row")
+    container.traitOverrides.horizontalSizeClass = .compact
+    settle()
+    XCTAssertFalse(nav.isNavigationBarHidden, "compact: the large title on the bar row")
+    XCTAssertEqual(nav.rootHost.navigationItem.largeTitleDisplayMode, .inline)
+    container.traitOverrides.horizontalSizeClass = .regular
+    settle()
+    XCTAssertTrue(nav.isNavigationBarHidden, "regular again")
+    XCTAssertEqual(nav.rootHost.navigationItem.largeTitleDisplayMode, .never)
+  }
+
+  /// A native swipe-back shortens the stack before Dart confirms the pop; a
+  /// size-class change then rebuilds the missing host, which must follow the
+  /// edge policy like the others (VK-441).
+  func testASizeClassReapplyHidesTheBottomEdgeEffectOnNewHosts() throws {
+    try requireIPad()
+    let tabs = try installedShell(sizeClass: .regular)
+    let container = try XCTUnwrap(tabs.parent)
+    tabs.apply(
+      pagesConfig([NativePage(title: "Home"), NativePage(title: "Detail")], minimize: false))
+    settle()
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    nav.setViewControllers([nav.rootHost], animated: false)  // the swipe's pop
+    XCTAssertEqual(nav.hosts.count, 1, "precondition: shorter than the config")
+    container.traitOverrides.horizontalSizeClass = .compact
+    settle()
+    XCTAssertEqual(nav.hosts.count, 2, "the trait handler rebuilt the host")
+    for host in nav.hosts {
+      XCTAssertTrue(host.minimizeProxy?.bottomEdgeEffect.isHidden ?? false, "every host's")
+    }
+  }
+
+  /// Spec P3b-2 §6.1: a hidden bar is not hit; its band reaches Flutter.
+  func testTheBodyUnderAHiddenNavigationBarReachesFlutter() throws {
+    let tabs = try installedShell(sizeClass: .compact)
+    let root = try XCTUnwrap(tabs.parent?.view)
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    XCTAssertTrue(nav.isNavigationBarHidden, "precondition: no pages")
+    let top = root.safeAreaInsets.top
+    XCTAssertTrue(
+      try hit(tabs, CGPoint(x: root.bounds.midX, y: top + 22)) === tabs.flutter.view,
+      "where the title would be")
+    XCTAssertTrue(
+      try hit(tabs, CGPoint(x: 30, y: top + 22)) === tabs.flutter.view,
+      "where the back circle would be")
+  }
+}
+
+// MARK: - P3b-2: the tab bar hidden for a page (spec P3b-2 §4.4, §6.6)
+
+@available(iOS 26.0, *)
+extension NativeTabsTests {
+  /// The tab bar hides, the navigation bar stays; Flutter gets the top
+  /// page's insets, the band where the tab bar was, no minimize pan and
+  /// no window controls (the navigation bar clears them).
+  func testTabBarHiddenKeepsTheNavigationBar() throws {
+    let tabs = try installedShell(sizeClass: .compact)
+    let pages = [NativePage(title: "Home"), NativePage(title: "Photo")]
+    tabs.apply(pagesConfig(pages, minimize: true))
+    settle()
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    let root = try XCTUnwrap(tabs.parent?.view)
+    let inbox = try centreOfLabel("Inbox", in: tabs.view, tabs)
+    XCTAssertNotNil(tabs.attachedMinimizeProxy, "precondition: the pan")
+    tabs.readWindowControls = { _ in NativeWindowControls(leading: 66, top: 44) }
+
+    tabs.apply(pagesConfig(pages, minimize: true, tabBarHidden: true))
+    settle()
+    XCTAssertTrue(tabs.isTabBarHidden)
+    XCTAssertTrue(tabs.chromeVisible, "only the tab bar hides")
+    XCTAssertFalse(nav.isNavigationBarHidden, "the page keeps its bar")
+    let page = try XCTUnwrap(nav.topViewController?.view)
+    XCTAssertEqual(
+      tabs.flutter.view.safeAreaInsets.bottom, root.safeAreaInsets.bottom, accuracy: 1,
+      "the home indicator")
+    XCTAssertEqual(tabs.flutter.view.safeAreaInsets.top, page.safeAreaInsets.top, accuracy: 0.5)
+    XCTAssertTrue(try hit(tabs, inbox) === tabs.flutter.view, "where the tab bar was")
+    XCTAssertNil(tabs.attachedMinimizeProxy, "no minimize under a hidden tab bar")
+    XCTAssertEqual(tabs.windowControls(), NativeWindowControls(leading: 0, top: 0))
+
+    tabs.apply(pagesConfig(pages, minimize: true))
+    settle()
+    XCTAssertFalse(tabs.isTabBarHidden, "the request ended")
+    XCTAssertNotNil(tabs.attachedMinimizeProxy)
+  }
+
+  func testTabBarHiddenPutsATiledSidebarBack() throws {
+    try requireIPad()
+    let tabs = try installedShell(landscape: true)
+    openSidebar(tabs)
+    XCTAssertEqual(tabs.currentState().sidebar, .tiled, "precondition: a landscape iPad tiles")
+    let pages = [NativePage(title: "Home"), NativePage(title: "Photo")]
+    tabs.apply(pagesConfig(pages))
+    settle()
+    let tiledLeft = tabs.flutter.view.safeAreaInsets.left
+    XCTAssertGreaterThan(tiledLeft, 200, "precondition: the sidebar's width")
+    tabs.apply(pagesConfig(pages, tabBarHidden: true))
+    settle()
+    XCTAssertTrue(tabs.sidebar.isHidden, "the sidebar hides with the tab bar")
+    XCTAssertEqual(tabs.flutter.view.safeAreaInsets.left, 0, accuracy: 0.5)
+    tabs.setSidebarVisible(true)
+    XCTAssertTrue(tabs.sidebar.isHidden, "Dart cannot open it meanwhile")
+    tabs.apply(pagesConfig(pages))
+    _ = stable({ tabs.flutter.view.safeAreaInsets.left }, until: { $0 > 200 })
+    XCTAssertEqual(tabs.currentState().sidebar, .tiled, "tiled again")
+    XCTAssertEqual(tabs.flutter.view.safeAreaInsets.left, tiledLeft, accuracy: 0.5)
+  }
+
+  /// Hidden at regular width, shown while compact (Split View, Stage
+  /// Manager): back at regular width, the tiled sidebar is still there.
+  func testATiledSidebarHiddenWithTheTabBarSurvivesACompactShow() throws {
+    try requireIPad()
+    let tabs = try installedShell(landscape: true)
+    let container = try XCTUnwrap(tabs.parent)
+    openSidebar(tabs)
+    XCTAssertEqual(tabs.currentState().sidebar, .tiled, "precondition: a landscape iPad tiles")
+    let pages = [NativePage(title: "Home"), NativePage(title: "Photo")]
+    tabs.apply(pagesConfig(pages))
+    settle()
+    let tiledLeft = tabs.flutter.view.safeAreaInsets.left
+    tabs.apply(pagesConfig(pages, tabBarHidden: true))
+    settle()
+    XCTAssertTrue(tabs.sidebar.isHidden, "precondition: hidden with the tab bar")
+    container.traitOverrides.horizontalSizeClass = .compact
+    settle()
+    tabs.apply(pagesConfig(pages))
+    settle()
+    container.traitOverrides.horizontalSizeClass = .regular
+    let left = stable({ tabs.flutter.view.safeAreaInsets.left }, until: { $0 > 200 })
+    XCTAssertEqual(tabs.currentState().sidebar, .tiled, "tiled again")
+    XCTAssertEqual(left, tiledLeft, accuracy: 0.5)
+  }
+
+  /// Hidden while compact, back to regular width before the request ends:
+  /// the tiled sidebar does not show under the hidden tab bar, and comes
+  /// back when the request ends.
+  func testATiledSidebarStaysHiddenWhenTheWindowWidensDuringTheRequest() throws {
+    try requireIPad()
+    let tabs = try installedShell(landscape: true)
+    let container = try XCTUnwrap(tabs.parent)
+    openSidebar(tabs)
+    XCTAssertEqual(tabs.currentState().sidebar, .tiled, "precondition: a landscape iPad tiles")
+    let pages = [NativePage(title: "Home"), NativePage(title: "Photo")]
+    tabs.apply(pagesConfig(pages))
+    settle()
+    let tiledLeft = tabs.flutter.view.safeAreaInsets.left
+    container.traitOverrides.horizontalSizeClass = .compact
+    settle()
+    tabs.apply(pagesConfig(pages, tabBarHidden: true))
+    settle()
+    container.traitOverrides.horizontalSizeClass = .regular
+    let hiddenLeft = stable({ tabs.flutter.view.safeAreaInsets.left })
+    XCTAssertTrue(tabs.sidebar.isHidden, "not under the hidden tab bar")
+    XCTAssertEqual(hiddenLeft, 0, accuracy: 0.5)
+    tabs.apply(pagesConfig(pages))
+    let left = stable({ tabs.flutter.view.safeAreaInsets.left }, until: { $0 > 200 })
+    XCTAssertEqual(tabs.currentState().sidebar, .tiled, "tiled again")
+    XCTAssertEqual(left, tiledLeft, accuracy: 0.5)
+  }
+
+  func testTabBarHiddenDismissesAnActiveSearchKeepingItsText() throws {
+    let tabs = try installedSearchShell(selected: 2)
+    let bridge = tabs.searchBridge
+    tabs.setSearchText("phố")
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    var hiding = searchConfig(selected: 2, pages: [NativePage(title: "Search")])
+    hiding.tabBarHidden = true
+    settle(sending: "searchActive false") { tabs.apply(hiding) }
+    XCTAssertTrue(tabs.isTabBarHidden)
+    XCTAssertTrue(tabs.chromeVisible)
+    XCTAssertFalse(bridge.controller.isActive, "the search ended")
+    XCTAssertEqual(bridge.text, "phố", "kept")
+  }
+}
+
+// MARK: - VK-441: a large title that turns on on screen (measure.md M5)
+
+@available(iOS 26.0, *)
+extension NativeTabsTests {
+  /// The navigation bar's height once UIKit has settled it.
+  fileprivate func barHeight(of nav: UINavigationController) -> CGFloat {
+    settle()
+    return stable { nav.navigationBar.frame.height }
+  }
+
+  /// Hides and drops a baseline's window before the test installs its own
+  /// shell.
+  fileprivate func takeDownWindow() {
+    window?.isHidden = true
+    window?.rootViewController = nil
+    window = nil
+  }
+
+  /// Inbox's bar with [pages] applied while Home is selected, then Inbox
+  /// selected: its root enters the window for the first time with its mode
+  /// set, and UIKit lays the large title out expanded by itself (M5, P2).
+  /// The baseline of the tests below, in place of a device constant.
+  fileprivate func expandedBarHeight(_ pages: [NativePage]) throws -> CGFloat {
+    let tabs = try installedShell()
+    var inbox = config()
+    inbox.tabs[1].pages = pages
+    tabs.apply(inbox)
+    settle()
+    inbox.selectedIndex = 1
+    tabs.apply(inbox)
+    let height = try barHeight(of: XCTUnwrap(tabs.navControllers[1]))
+    takeDownWindow()
+    return height
+  }
+
+  /// Library's case: a plain tab's pages reach native once the tab shows,
+  /// so its root turns `.always` on screen. UIKit alone keeps that title
+  /// collapsed (M5, P1: 54 pt against 106 on both devices, 26.5 and 27.0).
+  func testALargeTitleThatTurnsOnOnScreenIsDrawnOut() throws {
+    let library = [NativePage(title: "Library", largeTitle: true)]
+    let expanded = try expandedBarHeight(library)
+    let tabs = try installedShell()
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    XCTAssertTrue(nav.isNavigationBarHidden, "precondition: no pages, no bar")
+    XCTAssertNotNil(nav.rootHost.viewIfLoaded?.window, "precondition: the root is on screen")
+    tabs.apply(pagesConfig(library))
+    XCTAssertEqual(barHeight(of: nav), expanded, accuracy: 0.5, "the large title is out at rest")
+  }
+
+  /// The proxy's base is learned with the title out: Flutter's offset 0,
+  /// sent in the same turn as the pages, keeps it out, and after a scroll
+  /// offset 0 brings it back (M5: P1 + offset 0 stays 54; P17a: 400 → 0
+  /// gives 106).
+  func testALargeTitleDrawnOutOnScreenStaysOutAtZeroAndReturns() throws {
+    let library = [NativePage(title: "Library", largeTitle: true)]
+    let expanded = try expandedBarHeight(library)
+    let tabs = try installedShell()
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    tabs.apply(pagesConfig(library))
+    tabs.setPageScroll(tab: 0, offset: 0)
+    XCTAssertEqual(barHeight(of: nav), expanded, accuracy: 0.5, "out at Flutter's offset 0")
+    XCTAssertEqual(
+      nav.rootHost.expandedTop, nav.rootHost.view.safeAreaInsets.top, accuracy: 0.5,
+      "the proxy's base is the expanded top")
+    tabs.setPageScroll(tab: 0, offset: 400)
+    XCTAssertLessThan(barHeight(of: nav), expanded - 20, "a scroll collapses it")
+    tabs.setPageScroll(tab: 0, offset: 0)
+    XCTAssertEqual(barHeight(of: nav), expanded, accuracy: 0.5, "back at 0, the title returns")
+  }
+
+  /// The search root flips its mode in place too: an iPad search root on
+  /// screen asking for a large title (M5, P15: the bar kept its height,
+  /// 114 pt on 26.5, 108 on 27.0).
+  func testASearchRootAskingForALargeTitleOnScreenShowsIt() throws {
+    try requireIPad()
+    let large = [NativePage(title: "Search", largeTitle: true)]
+    let baseline = try installedSearchShell(selected: 2, pages: large)
+    let expanded = try barHeight(of: XCTUnwrap(baseline.navControllers[2]))
+    takeDownWindow()
+    let tabs = try installedSearchShell(
+      selected: 2, pages: [NativePage(title: "Search", largeTitle: false)])
+    let nav = try XCTUnwrap(tabs.navControllers[2])
+    XCTAssertLessThan(barHeight(of: nav), expanded - 20, "precondition: no large title row")
+    tabs.apply(searchConfig(selected: 2, pages: large))
+    XCTAssertEqual(barHeight(of: nav), expanded, accuracy: 0.5, "the large title is out")
+  }
+
+  /// A large title that turns on on screen while Flutter is scrolled stays
+  /// collapsed while scrolled, and comes out once Flutter is back at 0: the
+  /// reveal waits for the top instead of being dropped.
+  func testALargeTitleTurnedOnWhileScrolledComesOutAtTheTop() throws {
+    let library = [NativePage(title: "Library", largeTitle: true)]
+    let expanded = try expandedBarHeight(library)
+    let tabs = try installedShell()
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    tabs.setPageScroll(tab: 0, offset: 400)
+    tabs.apply(pagesConfig(library))
+    XCTAssertLessThan(barHeight(of: nav), expanded - 20, "scrolled: collapsed")
+    tabs.setPageScroll(tab: 0, offset: 0)
+    XCTAssertEqual(barHeight(of: nav), expanded, accuracy: 0.5, "at the top, the title is out")
+  }
+
+  /// The same with the scroll arriving while the reveal waits for the bar's
+  /// show animation.
+  func testALargeTitleScrolledBeforeItsRevealComesOutAtTheTop() throws {
+    let library = [NativePage(title: "Library", largeTitle: true)]
+    let expanded = try expandedBarHeight(library)
+    let tabs = try installedShell()
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    tabs.apply(pagesConfig(library))
+    tabs.setPageScroll(tab: 0, offset: 400)
+    XCTAssertLessThan(barHeight(of: nav), expanded - 20, "scrolled: collapsed")
+    tabs.setPageScroll(tab: 0, offset: 0)
+    XCTAssertEqual(barHeight(of: nav), expanded, accuracy: 0.5, "at the top, the title is out")
+  }
+
+  /// The same with the scroll arriving right after the pull, before the
+  /// proxy is put back: the base is learned from the pulled, expanded bar.
+  func testALargeTitleScrolledDuringItsRevealComesOutAtTheTop() throws {
+    let library = [NativePage(title: "Library", largeTitle: true)]
+    let expanded = try expandedBarHeight(library)
+    let tabs = try installedShell()
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    let proxy = nav.rootHost.proxy
+    var pulled = false
+    let observation = proxy.observe(\.contentOffset) { proxy, _ in
+      guard !pulled, proxy.contentOffset.y < -proxy.adjustedContentInset.top - 50 else { return }
+      pulled = true
+      tabs.setPageScroll(tab: 0, offset: 400)
+    }
+    tabs.apply(pagesConfig(library))
+    XCTAssertLessThan(barHeight(of: nav), expanded - 20, "scrolled: collapsed")
+    observation.invalidate()
+    XCTAssertTrue(pulled, "precondition: the reveal pulled")
+    tabs.setPageScroll(tab: 0, offset: 0)
+    XCTAssertEqual(barHeight(of: nav), expanded, accuracy: 0.5, "at the top, the title is out")
+  }
+
+  /// An iPad search root asking for a large title while its search is
+  /// active: the search hides the title on purpose; after it, the title is
+  /// out.
+  func testASearchRootAskingForALargeTitleUnderASearchShowsItAfter() throws {
+    try requireIPad()
+    let large = [NativePage(title: "Search", largeTitle: true)]
+    let baseline = try installedSearchShell(selected: 2, pages: large)
+    let expanded = try barHeight(of: XCTUnwrap(baseline.navControllers[2]))
+    takeDownWindow()
+    let tabs = try installedSearchShell(
+      selected: 2, pages: [NativePage(title: "Search", largeTitle: false)])
+    let nav = try XCTUnwrap(tabs.navControllers[2])
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    tabs.apply(searchConfig(selected: 2, pages: large))
+    settle()
+    XCTAssertTrue(tabs.searchBridge.controller.isActive, "precondition: the search stays active")
+    settle(sending: "searchActive false") { tabs.setSearchActive(false) }
+    XCTAssertEqual(barHeight(of: nav), expanded, accuracy: 0.5, "the large title is out after it")
+  }
+}
+
+// MARK: - P3b-2: the per-tab debug snapshot (spec P3b-2 §5.2)
+
+@available(iOS 26.0, *)
+extension NativeTabsTests {
+  func testTheDebugSnapshotListsEveryTab() throws {
+    let tabs = try installedShell()
+    tabs.apply(
+      pagesConfig([NativePage(title: "Home", largeTitle: true), NativePage(title: "Detail")]))
+    settle()
+    let snapshot = tabs.debugSnapshot().tabs
+    XCTAssertEqual(snapshot.map(\.tab), [0, 1])
+    XCTAssertEqual(snapshot.first?.pageTitles, ["Home", "Detail"])
+    XCTAssertEqual(snapshot.first?.barHidden, false)
+    XCTAssertEqual(snapshot.first?.titleModes, ["always", "never"])
+    XCTAssertEqual(snapshot.last?.pageTitles, ["Inbox"], "no pages: the destination's label")
+    XCTAssertEqual(snapshot.last?.barHidden, true)
+    let home = try XCTUnwrap(tabs.navControllers[0])
+    XCTAssertEqual(
+      snapshot.first?.barHeight ?? -1, Double(home.navigationBar.frame.height), accuracy: 0.5,
+      "the bar as UIKit lays it out")
+    XCTAssertGreaterThan(snapshot.first?.barHeight ?? 0, 0)
+    XCTAssertEqual(snapshot.last?.barHeight, 0, "a hidden bar")
   }
 }
 
@@ -3887,5 +4559,77 @@ final class SignalsPayloadTests: XCTestCase {
         "reduceTransparency": true, "powerSave": false, "blurDisabled": false,
         "lowEnd": false, "glesOnly": false,
       ])
+  }
+}
+
+// MARK: - VK-441: a large title set in the config that selects its tab
+
+/// Samples a navigation bar's height on every display frame.
+@available(iOS 26.0, *)
+private final class BarHeightSampler: NSObject {
+  private let nav: UINavigationController
+  private(set) var highest: CGFloat = 0
+  private var link: CADisplayLink?
+  init(_ nav: UINavigationController) { self.nav = nav }
+  func start() {
+    link = CADisplayLink(target: self, selector: #selector(tick))
+    link?.add(to: .main, forMode: .common)
+  }
+  @objc private func tick() {
+    highest = max(highest, nav.isNavigationBarHidden ? 0 : nav.navigationBar.frame.height)
+  }
+  func stop() {
+    link?.invalidate()
+    link = nil
+  }
+}
+
+@available(iOS 26.0, *)
+extension NativeTabsTests {
+  /// Library as the app sends it: its pages come in the config that
+  /// selects the tab, so `applyPages` turns the root `.always` before
+  /// `select` puts it in the window. iOS 26.5 animates the switch and
+  /// lays the bar out collapsed (54 pt against 106; 27.0 switches at once).
+  func testALargeTitleSetInTheConfigThatSelectsItsTabIsDrawnOut() throws {
+    let library = [NativePage(title: "Library", largeTitle: true)]
+    let expanded = try expandedBarHeight(library)
+    let tabs = try installedShell()
+    let nav = try XCTUnwrap(tabs.navControllers[1])
+    XCTAssertNil(nav.rootHost.viewIfLoaded?.window, "precondition: the root is off screen")
+    let sampler = BarHeightSampler(nav)
+    sampler.start()
+    var selecting = config()
+    selecting.tabs[1].pages = library
+    selecting.selectedIndex = 1
+    tabs.apply(selecting)
+    tabs.setPageScroll(tab: 1, offset: 0)
+    let height = barHeight(of: nav)
+    sampler.stop()
+    XCTAssertEqual(height, expanded, accuracy: 0.5, "the large title is out at rest")
+    XCTAssertLessThanOrEqual(sampler.highest, expanded + 0.5, "never pulled past expanded")
+    tabs.setPageScroll(tab: 1, offset: 400)
+    XCTAssertLessThan(barHeight(of: nav), expanded - 20, "a scroll collapses it")
+    tabs.setPageScroll(tab: 1, offset: 0)
+    XCTAssertEqual(barHeight(of: nav), expanded, accuracy: 0.5, "back at 0, the title returns")
+  }
+
+  /// A title UIKit lays out by itself (pages a turn before the selection,
+  /// M5 P2) is revealed too: the pull must not stretch it.
+  func testALargeTitleSetOffScreenBeforeItsTabIsSelectedIsNotStretched() throws {
+    let library = [NativePage(title: "Library", largeTitle: true)]
+    let tabs = try installedShell()
+    let nav = try XCTUnwrap(tabs.navControllers[1])
+    var pages = config()
+    pages.tabs[1].pages = library
+    tabs.apply(pages)
+    settle()
+    let sampler = BarHeightSampler(nav)
+    sampler.start()
+    pages.selectedIndex = 1
+    tabs.apply(pages)
+    let height = barHeight(of: nav)
+    sampler.stop()
+    XCTAssertGreaterThan(height, 80, "the large title is out at rest")
+    XCTAssertLessThanOrEqual(sampler.highest, height + 0.5, "never pulled past expanded")
   }
 }

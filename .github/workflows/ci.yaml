@@ -72,28 +72,36 @@ jobs:
           channel: stable
           cache: true
       - run: make get
+      # pana reads screenshots with webpinfo/cwebp/gif2webp. Without them
+      # liquid_shell loses the 10 "screenshots" points on the runner.
+      - run: sudo apt-get update && sudo apt-get install -y webp
       - run: dart pub global activate pana
-      # pana checks that `repository` on GitHub main contains this pubspec.
-      # On a branch that adds a package, main does not have it yet, so those
-      # 10 points are allowed off main only.
+      # All four packages are on pub.dev (0.1.0-dev.9), so pana resolves the
+      # siblings and every step must reach the max score. pana also checks
+      # that `repository` on GitHub main contains the pubspec; on a branch
+      # that adds a package, main does not have it yet, so those 10 points
+      # are allowed off main only. One step each so a failure in one does not
+      # hide the other scores.
       - name: pana liquid_shell_platform_interface (max score on main)
         run: >
           dart pub global run pana --no-warning
           --exit-code-threshold ${{ github.ref == 'refs/heads/main' && '0' || '10' }}
           liquid_shell_platform_interface
-      # These three depend on liquid_shell_platform_interface, which pana can
-      # only resolve from pub.dev. Informational until P6 publishes it first.
-      # One step each: in a single `bash -e` loop the first failure stopped
-      # the loop, so the other two were never scored.
-      - name: pana liquid_shell (informational until P6)
-        continue-on-error: true
-        run: dart pub global run pana --no-warning --exit-code-threshold 0 liquid_shell
-      - name: pana liquid_shell_ios (informational until P6)
-        continue-on-error: true
-        run: dart pub global run pana --no-warning --exit-code-threshold 0 liquid_shell_ios
-      - name: pana liquid_shell_android (informational until P6)
-        continue-on-error: true
-        run: dart pub global run pana --no-warning --exit-code-threshold 0 liquid_shell_android
+      - name: pana liquid_shell (max score on main)
+        run: >
+          dart pub global run pana --no-warning
+          --exit-code-threshold ${{ github.ref == 'refs/heads/main' && '0' || '10' }}
+          liquid_shell
+      - name: pana liquid_shell_ios (max score on main)
+        run: >
+          dart pub global run pana --no-warning
+          --exit-code-threshold ${{ github.ref == 'refs/heads/main' && '0' || '10' }}
+          liquid_shell_ios
+      - name: pana liquid_shell_android (max score on main)
+        run: >
+          dart pub global run pana --no-warning
+          --exit-code-threshold ${{ github.ref == 'refs/heads/main' && '0' || '10' }}
+          liquid_shell_android
       - run: make publish-check
 
   android-unit:
@@ -448,13 +456,23 @@ jobs:
           flutter-version: ${{ matrix.flutter != 'stable' && matrix.flutter || '' }}
           cache: true
       - run: make get
-      - run: make goldens
+      # `make goldens` in two steps. On 3.44.x (the floor and the golden
+      # reference) both block. On stable the plain goldens and the shader
+      # probes decide the leg's colour, and the liquid goldens only inform:
+      # newer engines draw the dark glass slightly differently (VK-700),
+      # until the reference moves to a newer Flutter at 0.1.0.
+      - run: make goldens-plain
+      - id: liquid
+        run: make goldens-liquid
+        continue-on-error: ${{ matrix.experimental }}
+      - if: ${{ steps.liquid.outcome == 'failure' }}
+        run: echo "::warning title=Liquid goldens differ on Flutter ${{ matrix.flutter }}::Informational on this leg until the golden reference moves (CONTRIBUTING.md, Toolchain)."
       # The shader probes (lens placement and direction) are the early
       # warning for an engine change; on the informational stable leg they
       # must run even when its goldens drift.
       - if: ${{ success() || (always() && matrix.experimental) }}
         run: make test-impeller
-      - if: failure()
+      - if: ${{ failure() || steps.liquid.outcome == 'failure' }}
         uses: actions/upload-artifact@v4
         with:
           name: golden-failures-${{ matrix.flutter }}

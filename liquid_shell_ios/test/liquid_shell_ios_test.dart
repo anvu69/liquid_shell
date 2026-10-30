@@ -113,6 +113,15 @@ class _FakeHost extends NativeShellHostApi {
     scopeFrame: NativeRect(x: 16, y: 64, width: 370, height: 32),
     minimizeBehavior: 'onScrollDown',
     minimizePanAttached: true,
+    tabs: [
+      NativeTabSnapshot(
+        tab: 0,
+        pageTitles: ['Home', 'Detail'],
+        barHidden: false,
+        titleModes: ['inline', 'never'],
+        barHeight: 54,
+      ),
+    ],
   );
 
   @override
@@ -527,6 +536,19 @@ void main() {
     expect(host.lastConfig!.minimizeOnScroll, isTrue);
   });
 
+  test('the config carries tabBarHidden (VK-442)', () async {
+    final host = _FakeHost();
+    final platform = liquidShellIOSWithHost(host);
+    await platform.updateNativeChrome(
+      const LiquidNativeChromeConfig(engaged: true, tabBarHidden: true),
+    );
+    expect(host.lastConfig!.tabBarHidden, isTrue);
+    await platform.updateNativeChrome(
+      const LiquidNativeChromeConfig(engaged: true),
+    );
+    expect(host.lastConfig!.tabBarHidden, isFalse);
+  });
+
   test('failed search commands are swallowed and logged once each', () async {
     final logs = captureLogs();
     final host = _FakeHost()..failure = PlatformException(code: 'gone');
@@ -555,6 +577,10 @@ void main() {
     expect(snapshot.scopeFrame.y, 64);
     expect(snapshot.minimizeBehavior, 'onScrollDown');
     expect(snapshot.minimizePanAttached, isTrue);
+    expect(snapshot.tabs.single.pageTitles, ['Home', 'Detail']);
+    expect(snapshot.tabs.single.barHidden, isFalse);
+    expect(snapshot.tabs.single.titleModes, ['inline', 'never']);
+    expect(snapshot.tabs.single.barHeight, 54);
     expect(host.calls, ['debugSnapshot']);
   });
 

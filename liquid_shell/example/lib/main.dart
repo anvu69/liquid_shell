@@ -4,6 +4,7 @@ import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell_example/cases/basic_tabs.dart';
 import 'package:liquid_shell_example/cases/cases.dart';
 import 'package:liquid_shell_example/cases/native_alerts.dart';
+import 'package:liquid_shell_example/cases/pages.dart';
 import 'package:liquid_shell_example/cases/search.dart';
 import 'package:liquid_shell_example/cases/segments.dart';
 import 'package:liquid_shell_example/support/chrome_mode.dart';
@@ -43,8 +44,9 @@ class ExampleApp extends StatefulWidget {
   /// `segments-liquid` the segments case (the frame strips; the Runner
   /// answers `segments-native` with its own UIKit screen, over the case
   /// list); `minimize` opens the basic tabs with a status-bar scroll to the
-  /// top and an app-driven tab change (VK-600). Every `-liquid` demo starts
-  /// in the Flutter liquid tier.
+  /// top and an app-driven tab change (VK-600); `pages` opens the pages
+  /// case (native bars on every tab). Every `-liquid` demo starts in the
+  /// Flutter liquid tier.
   const ExampleApp({this.demo, super.key});
 
   /// The demo to open at launch, or null for the case list. Any other
@@ -89,11 +91,13 @@ class _ExampleAppState extends State<ExampleApp> {
       'tabs' || 'tabs-liquid' => const CaseFrame(child: BasicTabsCase()),
       'segments' || 'segments-liquid' => const CaseFrame(child: SegmentsCase()),
       'minimize' => const CaseFrame(child: MinimizeDemo()),
+      'pages' => const CaseFrame(child: PagesCase()),
       _ => const CaseList(),
     };
-    // XCUITest reads the search case's and the minimize demo's Flutter
-    // rows through the accessibility tree (the alerts are native).
-    if (search || above || demo == 'minimize') {
+    // XCUITest reads the search case's, the minimize demo's and the pages
+    // case's Flutter rows through the accessibility tree (the alerts are
+    // native).
+    if (search || above || demo == 'minimize' || demo == 'pages') {
       _demoSemantics ??= SemanticsBinding.instance.ensureSemantics();
     }
     return ChromeModeScope(

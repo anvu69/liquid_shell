@@ -8,6 +8,11 @@
 - Without fvm, put a Flutter 3.44.x on `PATH`, or run
   `make verify FLUTTER=/path/to/flutter DART=/path/to/dart`.
 - Goldens are only valid on macOS with Flutter 3.44.x (spec Q11).
+- CI also runs the latest stable Flutter, never blocking. There the plain
+  goldens and the shader probes (`make test-impeller`) must pass; the
+  liquid goldens only inform, because newer engines draw the dark glass
+  slightly differently (VK-700). At 0.1.0 the golden reference moves to a
+  newer Flutter and the images are regenerated once.
 
 ## Commands
 
@@ -16,6 +21,7 @@
 | `make get` | Resolve the pub workspace (all packages and the example) |
 | `make format` | Rewrite formatting in place |
 | `make verify` | format-check, analyze, provenance, tests, coverage ≥ 90 %, goldens, README snippets. **Must be green before a PR.** |
+| `make goldens-plain` / `make goldens-liquid` | The two halves of the goldens in `make verify`: plain, then the liquid tier under Impeller (CI's stable leg treats the liquid half as information only) |
 | `make goldens-update` | Regenerate goldens and `liquid_shell/doc/images`, then recompress them losslessly with `tool/compress_pngs.dart` (macOS + 3.44 only) |
 | `make android-unit` | Kotlin JVM tests of the Android plugin |
 | `make integration-ios` / `make integration-android` | Signal channel tests on a simulator / emulator |
@@ -24,7 +30,7 @@
 | `make ios-ui IOS_UNIT_DEVICE=<udid>` | XCUITest: real taps on native dialogs (example `RunnerUITests`) on one simulator; CI runs it, non-blocking, on the newest iPad and iPhone |
 | `make ios-minimize IOS_UNIT_DEVICE=<udid>` | XCUITest: `MinimizeUITests` only (the native tab bar's minimize) on one simulator; CI runs it, blocking, on an iPhone 17 (iOS 26) |
 | `make pigeon` / `make pigeon-check` | Regenerate the native channel / fail when the generated files drift (part of `verify`) |
-| `make pana` / `make publish-check` | pub.dev scoring and publish dry-run |
+| `make pana` / `make publish-check` | pub.dev scoring and publish dry-run; the four CI pana steps are blocking and need the max score on main (`webp` is installed on the runner for screenshots) |
 | `make test-impeller` | Shader tests under Impeller (macOS) |
 | `make compare-images` | Native vs Flutter liquid screenshots |
 
