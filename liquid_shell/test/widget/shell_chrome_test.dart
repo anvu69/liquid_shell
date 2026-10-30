@@ -813,6 +813,27 @@ void main() {
       expect(scopeOf(tester).chromeInsets.bottom, 62 + 56);
     });
 
+    // VK-897: three-button navigation also reports a bottom gesture inset.
+    testWidgets('Android three-button with a gesture inset: 56', (
+      tester,
+    ) async {
+      await pumpShell(
+        tester,
+        const TestShell(),
+        size: const Size(412, 915),
+        padding: const EdgeInsets.only(top: 24, bottom: 48),
+        gestureInsets: const EdgeInsets.only(bottom: 48),
+        platform: TargetPlatform.android,
+      );
+      final pill = tester.getRect(
+        find.descendant(
+          of: find.byType(LiquidTabBar),
+          matching: find.byType(LiquidGlass),
+        ),
+      );
+      expect(pill.bottom, 915 - 56);
+    });
+
     testWidgets('Android gesture navigation: 21', (tester) async {
       await pumpShell(
         tester,

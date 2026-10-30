@@ -219,12 +219,29 @@ void main() {
   });
 
   group('bottomGapFor (Q9)', () {
+    // VK-897: the bar's height decides, not the gesture inset.
+    test('Android: a bar under 32 dp is a gesture handle', () {
+      expect(
+        bottomGapFor(
+          platform: TargetPlatform.android,
+          viewPaddingBottom: 31.9,
+        ),
+        21,
+      );
+      expect(
+        bottomGapFor(
+          platform: TargetPlatform.android,
+          viewPaddingBottom: 32,
+        ),
+        40,
+      );
+    });
+
     test('21 over a gesture area: always on iOS', () {
       expect(
         bottomGapFor(
           platform: TargetPlatform.iOS,
           viewPaddingBottom: 34,
-          gestureInsetBottom: 0,
         ),
         21,
       );
@@ -235,7 +252,6 @@ void main() {
         bottomGapFor(
           platform: TargetPlatform.android,
           viewPaddingBottom: 24,
-          gestureInsetBottom: 24,
         ),
         21,
       );
@@ -246,7 +262,6 @@ void main() {
         bottomGapFor(
           platform: TargetPlatform.android,
           viewPaddingBottom: 48,
-          gestureInsetBottom: 0,
         ),
         56,
       );
@@ -254,7 +269,6 @@ void main() {
         bottomGapFor(
           platform: TargetPlatform.android,
           viewPaddingBottom: 0,
-          gestureInsetBottom: 0,
         ),
         21,
       );

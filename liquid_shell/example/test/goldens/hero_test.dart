@@ -12,13 +12,15 @@ void main() {
     for (final brightness in Brightness.values) {
       final name = 'hero_${device.name}_${brightness.name}';
       testWidgets(name, (tester) async {
-        await pumpGolden(
-          tester,
-          const SidebarSlotsCase(),
-          device: device,
-          brightness: brightness,
-        );
-        await expectDocImage(tester, name);
+        await onDevice(device, () async {
+          await pumpGolden(
+            tester,
+            const SidebarSlotsCase(),
+            device: device,
+            brightness: brightness,
+          );
+          await expectDocImage(tester, name);
+        });
       });
     }
   }

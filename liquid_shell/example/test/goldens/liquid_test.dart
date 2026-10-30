@@ -359,7 +359,7 @@ void main() {
     GoldenDevice device = iphone,
     Brightness brightness = Brightness.light,
     Future<void> Function()? interact,
-  }) async {
+  }) => onDevice(device, () async {
     await tester.runAsync(LiquidGlass.precache);
     await pumpGolden(tester, child, device: device, brightness: brightness);
     if (interact != null) {
@@ -367,7 +367,7 @@ void main() {
       await tester.pumpAndSettle();
     }
     await expectDocImage(tester, name);
-  }
+  });
 
   for (final device in [iphone, ipadLandscape, android]) {
     for (final brightness in Brightness.values) {
@@ -402,36 +402,38 @@ void main() {
     testWidgets(name, (tester) async {
       debugTabLensPress = shift;
       addTearDown(() => debugTabLensPress = null);
-      await tester.runAsync(LiquidGlass.precache);
-      await pumpGolden(
-        tester,
-        const BasicTabsCase(),
-        device: iphone,
-        brightness: brightness,
-      );
-      await _expectBand(tester, name);
-      if (shift != 0) return;
-      // Native's held lens over the example's page (spec §7.2; Task 16
-      // part B, the idb press strips, the same measure): a milky, flat
-      // core with the page text hidden; a clear ring that shows the page
-      // bent (its luma spread); colour in the ring, p99 chroma 58-76.
-      //
-      // | measure | native light | native dark |
-      // |---|---|---|
-      // | core std / mean | 4.5 / 243 | 9.3 / 61 |
-      // | ring std | 24 | 24 |
-      // | chroma > 60 | 1.3-1.8 % | 0.9 % |
-      // | p99 chroma | 65-76 | 58 |
-      // | colour (> 30) in the ring | 97-98 % | 100 % |
-      final m = await _lensMetrics(tester);
-      final seen = 'measured $m';
-      final dark = brightness == Brightness.dark;
-      expect(m.coreStd, lessThanOrEqualTo(dark ? 12 : 6), reason: seen);
-      expect(m.coreMean, closeTo(dark ? 61 : 243, 10), reason: seen);
-      expect(m.ringStd, greaterThanOrEqualTo(12), reason: seen);
-      expect(m.ringColour, greaterThanOrEqualTo(0.9), reason: seen);
-      expect(m.vivid, lessThanOrEqualTo(0.03), reason: seen);
-      expect(m.p99, inInclusiveRange(45, 90), reason: seen);
+      await onDevice(iphone, () async {
+        await tester.runAsync(LiquidGlass.precache);
+        await pumpGolden(
+          tester,
+          const BasicTabsCase(),
+          device: iphone,
+          brightness: brightness,
+        );
+        await _expectBand(tester, name);
+        if (shift != 0) return;
+        // Native's held lens over the example's page (spec §7.2; Task 16
+        // part B, the idb press strips, the same measure): a milky, flat
+        // core with the page text hidden; a clear ring that shows the page
+        // bent (its luma spread); colour in the ring, p99 chroma 58-76.
+        //
+        // | measure | native light | native dark |
+        // |---|---|---|
+        // | core std / mean | 4.5 / 243 | 9.3 / 61 |
+        // | ring std | 24 | 24 |
+        // | chroma > 60 | 1.3-1.8 % | 0.9 % |
+        // | p99 chroma | 65-76 | 58 |
+        // | colour (> 30) in the ring | 97-98 % | 100 % |
+        final m = await _lensMetrics(tester);
+        final seen = 'measured $m';
+        final dark = brightness == Brightness.dark;
+        expect(m.coreStd, lessThanOrEqualTo(dark ? 12 : 6), reason: seen);
+        expect(m.coreMean, closeTo(dark ? 61 : 243, 10), reason: seen);
+        expect(m.ringStd, greaterThanOrEqualTo(12), reason: seen);
+        expect(m.ringColour, greaterThanOrEqualTo(0.9), reason: seen);
+        expect(m.vivid, lessThanOrEqualTo(0.03), reason: seen);
+        expect(m.p99, inInclusiveRange(45, 90), reason: seen);
+      });
     });
   }
 
@@ -449,23 +451,27 @@ void main() {
     testWidgets(name, (tester) async {
       debugSegmentLensPress = shift;
       addTearDown(() => debugSegmentLensPress = null);
-      await tester.runAsync(LiquidGlass.precache);
-      await pumpGolden(
-        tester,
-        const SegmentsCase(),
-        device: iphone,
-        brightness: brightness,
-      );
-      expect(
-        find.byWidgetPredicate((w) => w.runtimeType.toString() == 'LiquidLens'),
-        findsWidgets,
-        reason: 'the engaged lens',
-      );
-      await _expectBand(
-        tester,
-        name,
-        around: find.byKey(const ValueKey('segments-full3')),
-      );
+      await onDevice(iphone, () async {
+        await tester.runAsync(LiquidGlass.precache);
+        await pumpGolden(
+          tester,
+          const SegmentsCase(),
+          device: iphone,
+          brightness: brightness,
+        );
+        expect(
+          find.byWidgetPredicate(
+            (w) => w.runtimeType.toString() == 'LiquidLens',
+          ),
+          findsWidgets,
+          reason: 'the engaged lens',
+        );
+        await _expectBand(
+          tester,
+          name,
+          around: find.byKey(const ValueKey('segments-full3')),
+        );
+      });
     });
   }
 
@@ -482,84 +488,86 @@ void main() {
         '${brightness.name}', (
       tester,
     ) async {
-      final reference =
-          jsonDecode(
-                File(
-                  '../../docs/qa/vk550/native_reference.json',
-                ).readAsStringSync(),
-              )
-              as Map<String, dynamic>;
-      final native =
-          ((reference['lens'] as Map)['look'] as Map)[brightness.name] as Map;
-      addTearDown(() => debugSegmentLensPress = null);
-      await tester.runAsync(LiquidGlass.precache);
-      final full3 = find.byKey(const ValueKey('segments-full3'));
-      final lensFinder = find.descendant(
-        of: full3,
-        matching: find.byWidgetPredicate(
-          (w) => w.runtimeType.toString() == 'LiquidLens',
-        ),
-      );
-      Future<ByteData> shot(double shift) async {
-        debugSegmentLensPress = shift;
-        await tester.pumpWidget(const SizedBox());
-        await pumpGolden(
-          tester,
-          const SegmentsCase(),
-          device: iphone,
-          brightness: brightness,
+      await onDevice(iphone, () async {
+        final reference =
+            jsonDecode(
+                  File(
+                    '../../docs/qa/vk550/native_reference.json',
+                  ).readAsStringSync(),
+                )
+                as Map<String, dynamic>;
+        final native =
+            ((reference['lens'] as Map)['look'] as Map)[brightness.name] as Map;
+        addTearDown(() => debugSegmentLensPress = null);
+        await tester.runAsync(LiquidGlass.precache);
+        final full3 = find.byKey(const ValueKey('segments-full3'));
+        final lensFinder = find.descendant(
+          of: full3,
+          matching: find.byWidgetPredicate(
+            (w) => w.runtimeType.toString() == 'LiquidLens',
+          ),
         );
-        return (await tester.runAsync(() async {
-          final screen = await captureImage(
-            tester.element(find.byType(MaterialApp)),
+        Future<ByteData> shot(double shift) async {
+          debugSegmentLensPress = shift;
+          await tester.pumpWidget(const SizedBox());
+          await pumpGolden(
+            tester,
+            const SegmentsCase(),
+            device: iphone,
+            brightness: brightness,
           );
-          final bytes = await screen.toByteData();
-          screen.dispose();
-          return bytes;
-        }))!;
-      }
+          return (await tester.runAsync(() async {
+            final screen = await captureImage(
+              tester.element(find.byType(MaterialApp)),
+            );
+            final bytes = await screen.toByteData();
+            screen.dispose();
+            return bytes;
+          }))!;
+        }
 
-      final pressed = await shot(0);
-      final lens = tester.getRect(lensFinder);
-      final page = await shot(2 * segment);
-      final m = _segmentLook(
-        pressed,
-        page,
-        lens,
-        width: tester.view.physicalSize.width.round(),
-      );
-      final seen = 'measured $m, native $native';
-      for (final key in ['coreChromaRatio', 'ringChromaRatio']) {
-        expect(
-          m[key],
-          closeTo((native[key] as num).toDouble(), 0.08),
-          reason: '$key: $seen',
+        final pressed = await shot(0);
+        final lens = tester.getRect(lensFinder);
+        final page = await shot(2 * segment);
+        final m = _segmentLook(
+          pressed,
+          page,
+          lens,
+          width: tester.view.physicalSize.width.round(),
         );
-      }
-      for (final key in [
-        'coreLuma5',
-        'coreLuma95',
-        'ringLuma5',
-        'ringLuma95',
-      ]) {
+        final seen = 'measured $m, native $native';
+        for (final key in ['coreChromaRatio', 'ringChromaRatio']) {
+          expect(
+            m[key],
+            closeTo((native[key] as num).toDouble(), 0.08),
+            reason: '$key: $seen',
+          );
+        }
+        for (final key in [
+          'coreLuma5',
+          'coreLuma95',
+          'ringLuma5',
+          'ringLuma95',
+        ]) {
+          expect(
+            m[key],
+            closeTo((native[key] as num).toDouble(), 12),
+            reason: '$key: $seen',
+          );
+        }
+        // Where it reads the page (Task 15 review): squeezed about 0.8 across
+        // the height, bent a few points at the ring.
         expect(
-          m[key],
-          closeTo((native[key] as num).toDouble(), 12),
-          reason: '$key: $seen',
+          m['coreSqueeze'],
+          closeTo((native['coreSqueeze'] as num).toDouble(), 0.05),
+          reason: 'coreSqueeze: $seen',
         );
-      }
-      // Where it reads the page (Task 15 review): squeezed about 0.8 across
-      // the height, bent a few points at the ring.
-      expect(
-        m['coreSqueeze'],
-        closeTo((native['coreSqueeze'] as num).toDouble(), 0.05),
-        reason: 'coreSqueeze: $seen',
-      );
-      expect(
-        m['ringBend'],
-        closeTo((native['ringBend'] as num).toDouble(), 1),
-        reason: 'ringBend: $seen',
-      );
+        expect(
+          m['ringBend'],
+          closeTo((native['ringBend'] as num).toDouble(), 1),
+          reason: 'ringBend: $seen',
+        );
+      });
     });
   }
 
@@ -567,24 +575,26 @@ void main() {
   // fading (research §4.1); 128 ms after the release it spills past the
   // lens onto the pill. Dark, where a white glow reads.
   testWidgets('tab_glow_release_dark', (tester) async {
-    await tester.runAsync(LiquidGlass.precache);
-    await pumpGolden(
-      tester,
-      const BasicTabsCase(),
-      device: iphone,
-      brightness: Brightness.dark,
-    );
-    // The bar draws the filled selectedIcon in every slot (spec §6.1).
-    final home = tester.getCenter(find.byIcon(Icons.home).first);
-    final finger = await tester.startGesture(home);
-    for (var i = 0; i < 20; i++) {
-      await tester.pump(const Duration(milliseconds: 16));
-    }
-    await finger.up();
-    for (var i = 0; i < 8; i++) {
-      await tester.pump(const Duration(milliseconds: 16));
-    }
-    await _expectBand(tester, 'tab_glow_release_dark');
+    await onDevice(iphone, () async {
+      await tester.runAsync(LiquidGlass.precache);
+      await pumpGolden(
+        tester,
+        const BasicTabsCase(),
+        device: iphone,
+        brightness: Brightness.dark,
+      );
+      // The bar draws the filled selectedIcon in every slot (spec §6.1).
+      final home = tester.getCenter(find.byIcon(Icons.home).first);
+      final finger = await tester.startGesture(home);
+      for (var i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await finger.up();
+      for (var i = 0; i < 8; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await _expectBand(tester, 'tab_glow_release_dark');
+    });
   });
 
   // The Flutter glass dialogs are LiquidGlass (owner decision L3): on the
