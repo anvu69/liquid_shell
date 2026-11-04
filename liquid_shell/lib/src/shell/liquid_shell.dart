@@ -475,6 +475,9 @@ class _LiquidShellState extends State<LiquidShell>
         _rebuild();
       case LiquidWindowControlsChanged():
         break;
+      // Pages carry no actions to the native bar yet: nothing to run.
+      case LiquidNativePageActionTapped():
+        break;
     }
   }
 
