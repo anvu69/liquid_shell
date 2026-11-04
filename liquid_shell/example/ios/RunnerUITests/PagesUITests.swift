@@ -78,4 +78,26 @@ final class PagesUITests: XCTestCase {
     XCTAssertTrue(bar.waitForNonExistence(timeout: 10), "popped")
     XCTAssertTrue(tabButton(app, "Library").waitForExistence(timeout: 10), "the tab bar is back")
   }
+
+  /// Spec P3b-2 §8.4: a page action is a UIKit bar button; a real tap runs
+  /// the app's callback, whose new symbol comes back as a new button.
+  /// Delete has `onPressed: null`: disabled.
+  func testAPageActionTapRunsTheAppsCallback() {
+    let app = launch()
+    row(app, "Detail 1").tap()
+    let bar = app.navigationBars["Detail 1"]
+    XCTAssertTrue(bar.waitForExistence(timeout: 10), "UIKit's bar on the detail")
+    let favourite = bar.buttons["Favourite"]
+    XCTAssertTrue(favourite.waitForExistence(timeout: 10), "the action is a bar button")
+    XCTAssertEqual(favourite.identifier, "heart")
+    XCTAssertFalse(bar.buttons["Delete"].isEnabled, "onPressed: null")
+    favourite.tap()
+    let filled = bar.buttons.matching(identifier: "heart.fill").firstMatch
+    XCTAssertTrue(filled.waitForExistence(timeout: 10), "the callback ran: a new symbol")
+    // The row's label is its title and subtitle: "Shared 0 times, A favourite".
+    let note = app.descendants(matching: .any)
+      .matching(NSPredicate(format: "label CONTAINS %@", "A favourite")).firstMatch
+    XCTAssertTrue(note.waitForExistence(timeout: 10), "the Flutter page too")
+    XCTAssertTrue(bar.exists, "a tap pops nothing")
+  }
 }

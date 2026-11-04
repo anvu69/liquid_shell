@@ -53,11 +53,13 @@ void main() {
     if (!_expectNative) return;
     final compact = scope.sizeClass == LiquidSizeClass.compact;
 
-    // Home: the default title, on the bar row at compact width only.
+    // Home: the default title, on the bar row at compact width; at regular
+    // width its Add action keeps an inline bar (VK-443).
     var home = await _tab(0);
     expect(home.pageTitles, ['Home']);
-    expect(home.barHidden, !compact);
+    expect(home.barHidden, isFalse);
     expect(home.titleModes, [if (compact) 'inline' else 'never']);
+    expect(home.actionSymbols, ['plus']);
 
     // A pushed page: the bar, inline, with the back circle.
     await tester.tap(find.text('Detail 1'));
@@ -66,6 +68,17 @@ void main() {
     expect(home.pageTitles, ['Home', 'Detail 1']);
     expect(home.barHidden, isFalse);
     expect(home.titleModes.last, 'never');
+    // The detail's actions as UIKit bar buttons; a tap runs the app's
+    // callback, whose new symbol comes back in the next config (VK-443).
+    expect(home.actionSymbols, ['square.and.arrow.up', 'heart', 'trash']);
+    expect(home.actionsEnabled, [true, true, false]);
+    await _ios.debugTap(NativeTapTarget.pageAction, 1); // Favourite
+    await _settle(tester);
+    expect((await _tab(0)).actionSymbols[1], 'heart.fill');
+    expect(find.text('A favourite'), findsOneWidget);
+    await _ios.debugTap(NativeTapTarget.pageAction, 2); // Delete: disabled
+    await _settle(tester);
+    expect((await _tab(0)).pageTitles, ['Home', 'Detail 1'], reason: 'no pop');
     expect(
       find.byType(LiquidBackButton),
       findsNothing,
