@@ -639,4 +639,173 @@ void main() {
       expect(scopeOf(tester, 'Plain').windowControls, controls);
     });
   });
+  group('VK-443: page actions on the native bar (spec §8.4)', () {
+    /// Share, Favourite and Delete (disabled); a tap records its label.
+    List<LiquidPageAction> actions(List<String> taps) => [
+      LiquidPageAction(
+        sfSymbol: 'square.and.arrow.up',
+        icon: const Icon(Icons.ios_share),
+        label: 'Share',
+        onPressed: () => taps.add('Share'),
+      ),
+      LiquidPageAction(
+        sfSymbol: 'heart',
+        icon: const Icon(Icons.favorite_border),
+        label: 'Favourite',
+        onPressed: () => taps.add('Favourite'),
+      ),
+      const LiquidPageAction(
+        sfSymbol: 'trash',
+        icon: Icon(Icons.delete_outline),
+        label: 'Delete',
+        onPressed: null,
+      ),
+    ];
+
+    /// A LiquidPage titled [title] with [actions(taps)].
+    Widget withActions(String title, List<String> taps) => LiquidPage(
+      title: title,
+      actions: actions(taps),
+      child: TestPage(label: title),
+    );
+
+    LiquidNativePageActionTapped tap(
+      int page,
+      int index,
+      String sfSymbol, {
+      int tab = 0,
+    }) => LiquidNativePageActionTapped(
+      tab,
+      page: page,
+      index: index,
+      sfSymbol: sfSymbol,
+    );
+
+    testWidgets('the actions reach the native page, in reading order', (
+      tester,
+    ) async {
+      final fake = await _pump(tester);
+      await _push(tester, 0, withActions('Detail', []));
+      expect(fake.last.tabs[0].pages.first.actions, isEmpty, reason: 'Home');
+      expect(fake.last.tabs[0].pages.last.actions, const [
+        LiquidNativePageAction(sfSymbol: 'square.and.arrow.up', label: 'Share'),
+        LiquidNativePageAction(sfSymbol: 'heart', label: 'Favourite'),
+        LiquidNativePageAction(
+          sfSymbol: 'trash',
+          label: 'Delete',
+          enabled: false,
+        ),
+      ]);
+    });
+
+    testWidgets('a native tap runs onPressed, and nothing pops', (
+      tester,
+    ) async {
+      final taps = <String>[];
+      final fake = await _pump(tester);
+      await _push(tester, 0, withActions('Detail', taps));
+      fake.emitNative(tap(1, 1, 'heart'));
+      await tester.pumpAndSettle();
+      expect(taps, ['Favourite']);
+      expect(_titles(fake, 0), ['Home', 'Detail']);
+    });
+
+    testWidgets('a tap for a page no longer on top, a symbol that no longer '
+        'matches, a disabled action, another tab or an index out of range '
+        'is dropped', (tester) async {
+      final taps = <String>[];
+      final fake = await _pump(tester);
+      await _push(tester, 0, withActions('Detail', taps));
+      await _push(tester, 0, withActions('Deeper', taps));
+      for (final event in [
+        tap(1, 1, 'heart'), // Detail is no longer on top
+        tap(2, 1, 'heart.fill'), // Favourite shows another symbol
+        tap(2, 2, 'trash'), // Delete is disabled
+        tap(2, 1, 'heart', tab: 1), // not the selected tab
+        tap(2, 3, 'heart'), // past the last action
+        tap(-1, 1, 'heart'),
+        tap(2, -1, 'heart'),
+      ]) {
+        fake.emitNative(event);
+        await tester.pumpAndSettle();
+        expect(taps, isEmpty, reason: '$event');
+      }
+      expect(_titles(fake, 0), ['Home', 'Detail', 'Deeper']);
+      fake.emitNative(tap(2, 0, 'square.and.arrow.up'));
+      await tester.pumpAndSettle();
+      expect(taps, ['Share'], reason: 'the top page still answers');
+    });
+
+    testWidgets('under a stand-in root, native page i is record i - 1', (
+      tester,
+    ) async {
+      final taps = <String>[];
+      final fake = await _pump(tester, initialIndex: 2);
+      await _push(tester, 2, withActions('About', taps));
+      expect(
+        fake.last.tabs[2].pages.first.actions,
+        isEmpty,
+        reason: 'stand-in',
+      );
+      fake.emitNative(tap(0, 0, 'square.and.arrow.up', tab: 2));
+      await tester.pumpAndSettle();
+      expect(taps, isEmpty, reason: 'the stand-in has no actions');
+      fake.emitNative(tap(1, 0, 'square.and.arrow.up', tab: 2));
+      await tester.pumpAndSettle();
+      expect(taps, ['Share']);
+    });
+
+    testWidgets('the newest onPressed runs after a rebuild with a new '
+        'closure', (tester) async {
+      final taps = <String>[];
+      final fake = await _pump(tester);
+      final key = GlobalKey<_VersionedState>();
+      await _push(tester, 0, _Versioned(key: key, taps: taps));
+      final sent = fake.configs.length;
+      key.currentState!.bump();
+      await tester.pumpAndSettle();
+      expect(
+        fake.configs.length,
+        sent,
+        reason: 'a new closure alone changes nothing on the bar',
+      );
+      fake.emitNative(tap(1, 0, 'heart'));
+      await tester.pumpAndSettle();
+      expect(taps, ['version 2']);
+    });
+  });
+}
+
+/// A pushed page whose one action records the version it was built with;
+/// [_VersionedState.bump] rebuilds it with a new closure and nothing else.
+class _Versioned extends StatefulWidget {
+  const _Versioned({required this.taps, super.key});
+
+  final List<String> taps;
+
+  @override
+  State<_Versioned> createState() => _VersionedState();
+}
+
+class _VersionedState extends State<_Versioned> {
+  int _version = 1;
+
+  void bump() => setState(() => _version++);
+
+  @override
+  Widget build(BuildContext context) {
+    final version = _version;
+    return LiquidPage(
+      title: 'Versioned',
+      actions: [
+        LiquidPageAction(
+          sfSymbol: 'heart',
+          icon: const Icon(Icons.favorite_border),
+          label: 'Favourite',
+          onPressed: () => widget.taps.add('version $version'),
+        ),
+      ],
+      child: const TestPage(label: 'Versioned'),
+    );
+  }
 }

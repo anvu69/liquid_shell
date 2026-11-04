@@ -91,6 +91,13 @@
   push or pop that puts the page on top, never before. Before, it could
   land on the page being left: after a push and a back, a scrolled root
   showed its large title expanded over its list.
+- **Page actions (VK-443).** `LiquidPage(actions: [...])` takes up to three
+  `LiquidPageAction`s (`sfSymbol`, `icon`, `label`, `onPressed`; a null
+  `onPressed` disables the action). With native chrome on iOS 26+ they are
+  UIKit bar buttons in the navigation bar's glass group; elsewhere 44 pt
+  glass circles at the trailing end of the Flutter bar. A root page with an
+  inline title shows its bar when it has actions. More than three is a
+  debug assertion; release builds show the first three.
 
 ## 0.1.0-dev.9
 

@@ -121,6 +121,7 @@ class _LiquidPageState extends State<LiquidPage> {
       onScreen: Visibility.of(context) && TickerMode.valuesOf(context).enabled,
       current: route?.isCurrent ?? false,
       active: route?.isActive ?? false,
+      actions: widget.actions,
     );
   }
 
@@ -155,8 +156,11 @@ class _LiquidPageState extends State<LiquidPage> {
   void didUpdateWidget(LiquidPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     _checkActions();
+    // A new actions list may carry new callbacks only: the record keeps
+    // the newest and rebuilds the shell only when the bars would change.
     if (oldWidget.title != widget.title ||
-        oldWidget.largeTitle != widget.largeTitle) {
+        oldWidget.largeTitle != widget.largeTitle ||
+        !identical(oldWidget.actions, widget.actions)) {
       _handle?.update(_entry());
     }
   }
