@@ -136,6 +136,9 @@ enum NativeTapTarget {
   searchField,
   searchCancel,
   back,
+
+  /// `index`: an action of the selected tab's top page, reading order.
+  pageAction,
 }
 
 /// What a native dialog is.
@@ -670,6 +673,8 @@ class NativeTabSnapshot {
     required this.barHidden,
     required this.titleModes,
     required this.barHeight,
+    required this.actionSymbols,
+    required this.actionsEnabled,
   });
 
   /// The destination's index in the config's tabs.
@@ -690,6 +695,13 @@ class NativeTabSnapshot {
   /// the title collapses.
   double barHeight;
 
+  /// The top page's bar buttons, reading order: each one's SF Symbol (its
+  /// accessibility identifier).
+  List<String> actionSymbols;
+
+  /// The top page's bar buttons, reading order: whether each is enabled.
+  List<bool> actionsEnabled;
+
   List<Object?> _toList() {
     return <Object?>[
       tab,
@@ -697,6 +709,8 @@ class NativeTabSnapshot {
       barHidden,
       titleModes,
       barHeight,
+      actionSymbols,
+      actionsEnabled,
     ];
   }
 
@@ -712,6 +726,8 @@ class NativeTabSnapshot {
       barHidden: result[2]! as bool,
       titleModes: (result[3]! as List<Object?>).cast<String>(),
       barHeight: result[4]! as double,
+      actionSymbols: (result[5]! as List<Object?>).cast<String>(),
+      actionsEnabled: (result[6]! as List<Object?>).cast<bool>(),
     );
   }
 
@@ -728,7 +744,9 @@ class NativeTabSnapshot {
         _deepEquals(pageTitles, other.pageTitles) &&
         _deepEquals(barHidden, other.barHidden) &&
         _deepEquals(titleModes, other.titleModes) &&
-        _deepEquals(barHeight, other.barHeight);
+        _deepEquals(barHeight, other.barHeight) &&
+        _deepEquals(actionSymbols, other.actionSymbols) &&
+        _deepEquals(actionsEnabled, other.actionsEnabled);
   }
 
   @override
@@ -737,7 +755,7 @@ class NativeTabSnapshot {
 
   @override
   String toString() {
-    return 'NativeTabSnapshot(tab: $tab, pageTitles: $pageTitles, barHidden: $barHidden, titleModes: $titleModes, barHeight: $barHeight)';
+    return 'NativeTabSnapshot(tab: $tab, pageTitles: $pageTitles, barHidden: $barHidden, titleModes: $titleModes, barHeight: $barHeight, actionSymbols: $actionSymbols, actionsEnabled: $actionsEnabled)';
   }
 }
 

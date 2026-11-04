@@ -213,6 +213,8 @@ enum NativeTapTarget: Int, CaseIterable {
   case searchField = 3
   case searchCancel = 4
   case back = 5
+  /// `index`: an action of the selected tab's top page, reading order.
+  case pageAction = 6
 }
 
 /// What a native dialog is.
@@ -653,6 +655,11 @@ struct NativeTabSnapshot: Hashable, CustomStringConvertible {
   /// hidden. A root's large title row is in it: it drops by that row when
   /// the title collapses.
   var barHeight: Double
+  /// The top page's bar buttons, reading order: each one's SF Symbol (its
+  /// accessibility identifier).
+  var actionSymbols: [String]
+  /// The top page's bar buttons, reading order: whether each is enabled.
+  var actionsEnabled: [Bool]
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -662,13 +669,17 @@ struct NativeTabSnapshot: Hashable, CustomStringConvertible {
     let barHidden = pigeonVar_list[2] as! Bool
     let titleModes = pigeonVar_list[3] as! [String]
     let barHeight = pigeonVar_list[4] as! Double
+    let actionSymbols = pigeonVar_list[5] as! [String]
+    let actionsEnabled = pigeonVar_list[6] as! [Bool]
 
     return NativeTabSnapshot(
       tab: tab,
       pageTitles: pageTitles,
       barHidden: barHidden,
       titleModes: titleModes,
-      barHeight: barHeight
+      barHeight: barHeight,
+      actionSymbols: actionSymbols,
+      actionsEnabled: actionsEnabled
     )
   }
   func toList() -> [Any?] {
@@ -678,13 +689,15 @@ struct NativeTabSnapshot: Hashable, CustomStringConvertible {
       barHidden,
       titleModes,
       barHeight,
+      actionSymbols,
+      actionsEnabled,
     ]
   }
   static func == (lhs: NativeTabSnapshot, rhs: NativeTabSnapshot) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return NativeShellApiPigeonInternal.deepEquals(lhs.tab, rhs.tab) && NativeShellApiPigeonInternal.deepEquals(lhs.pageTitles, rhs.pageTitles) && NativeShellApiPigeonInternal.deepEquals(lhs.barHidden, rhs.barHidden) && NativeShellApiPigeonInternal.deepEquals(lhs.titleModes, rhs.titleModes) && NativeShellApiPigeonInternal.deepEquals(lhs.barHeight, rhs.barHeight)
+    return NativeShellApiPigeonInternal.deepEquals(lhs.tab, rhs.tab) && NativeShellApiPigeonInternal.deepEquals(lhs.pageTitles, rhs.pageTitles) && NativeShellApiPigeonInternal.deepEquals(lhs.barHidden, rhs.barHidden) && NativeShellApiPigeonInternal.deepEquals(lhs.titleModes, rhs.titleModes) && NativeShellApiPigeonInternal.deepEquals(lhs.barHeight, rhs.barHeight) && NativeShellApiPigeonInternal.deepEquals(lhs.actionSymbols, rhs.actionSymbols) && NativeShellApiPigeonInternal.deepEquals(lhs.actionsEnabled, rhs.actionsEnabled)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -694,10 +707,12 @@ struct NativeTabSnapshot: Hashable, CustomStringConvertible {
     NativeShellApiPigeonInternal.deepHash(value: barHidden, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: titleModes, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: barHeight, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: actionSymbols, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: actionsEnabled, hasher: &hasher)
   }
 
   public var description: String {
-    return "NativeTabSnapshot(tab: \(String(describing: tab)), pageTitles: \(String(describing: pageTitles)), barHidden: \(String(describing: barHidden)), titleModes: \(String(describing: titleModes)), barHeight: \(String(describing: barHeight)))"
+    return "NativeTabSnapshot(tab: \(String(describing: tab)), pageTitles: \(String(describing: pageTitles)), barHidden: \(String(describing: barHidden)), titleModes: \(String(describing: titleModes)), barHeight: \(String(describing: barHeight)), actionSymbols: \(String(describing: actionSymbols)), actionsEnabled: \(String(describing: actionsEnabled)))"
   }
 }
 

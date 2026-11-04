@@ -15,6 +15,12 @@
   keeping its text (VK-442).
 - Window controls are zero while the selected tab's navigation bar shows,
   also at compact width; real under a hidden one (VK-442).
+- Page actions (VK-443): `NativePage.actions` become the page host's
+  `rightBarButtonItems` (the SF Symbol image, the accessibility label, the
+  enabled state; an unknown symbol shows the label as text). A tap sends
+  `onPageActionTapped(tab, page, index, sfSymbol)` and changes nothing
+  natively. Tests get `debugTap(.pageAction, index)` and the top page's
+  `actionSymbols` and `actionsEnabled` in `NativeDebugSnapshot.tabs`.
 
 ## 0.1.0-dev.9
 

@@ -3613,6 +3613,128 @@ extension NativeTabsTests {
   }
 }
 
+// MARK: - P3b-2: page actions (spec P3b-2 §4.3, §8.4, VK-443)
+
+@available(iOS 26.0, *)
+extension NativeTabsTests {
+  private static let share = NativePageAction(
+    sfSymbol: "square.and.arrow.up", label: "Share", enabled: true)
+  private static let heart = NativePageAction(sfSymbol: "heart", label: "Favourite", enabled: true)
+  private static let trash = NativePageAction(sfSymbol: "trash", label: "Delete", enabled: false)
+
+  /// Home's root, then Detail with [actions] on top.
+  fileprivate func detailConfig(_ actions: [NativePageAction]) -> NativeChromeConfig {
+    pagesConfig([NativePage(title: "Home"), NativePage(title: "Detail", actions: actions)])
+  }
+
+  /// The top page's bar buttons of tab [tab], reading order.
+  fileprivate func actionItems(ofTab tab: Int, _ tabs: NativeTabsController) -> [UIBarButtonItem] {
+    Array((tabs.topHost(ofTab: tab)?.navigationItem.rightBarButtonItems ?? []).reversed())
+  }
+
+  func testPageActionsBecomeBarButtonItems() throws {
+    let tabs = try installedShell()
+    tabs.apply(detailConfig([Self.share, Self.heart, Self.trash]))
+    settle()
+    let raw = try XCTUnwrap(tabs.topHost(ofTab: 0)?.navigationItem.rightBarButtonItems)
+    XCTAssertEqual(
+      raw.map(\.accessibilityIdentifier), ["trash", "heart", "square.and.arrow.up"],
+      "UIKit counts from the trailing edge: the reading order reversed")
+    let items = actionItems(ofTab: 0, tabs)
+    XCTAssertEqual(items.map(\.accessibilityLabel), ["Share", "Favourite", "Delete"])
+    XCTAssertEqual(items.map(\.isEnabled), [true, true, false])
+    XCTAssertTrue(items.allSatisfy { $0.image != nil }, "SF Symbol images")
+    XCTAssertTrue(
+      tabs.navControllers[0]?.rootHost.navigationItem.rightBarButtonItems?.isEmpty ?? true,
+      "the root has none")
+    let snapshot = try XCTUnwrap(tabs.debugSnapshot().tabs.first { $0.tab == 0 })
+    XCTAssertEqual(snapshot.actionSymbols, ["square.and.arrow.up", "heart", "trash"])
+    XCTAssertEqual(snapshot.actionsEnabled, [true, true, false])
+  }
+
+  func testBarButtonsAreRebuiltOnlyWhenWhatTheyShowChanges() throws {
+    let tabs = try installedShell()
+    tabs.apply(detailConfig([Self.share, Self.heart]))
+    settle()
+    let before = actionItems(ofTab: 0, tabs)
+    tabs.apply(detailConfig([Self.share, Self.heart]))
+    settle()
+    XCTAssertTrue(
+      zip(before, actionItems(ofTab: 0, tabs)).allSatisfy { $0 === $1 }, "the same config: kept")
+    var filled = Self.heart
+    filled.sfSymbol = "heart.fill"
+    tabs.apply(detailConfig([Self.share, filled]))
+    settle()
+    let after = actionItems(ofTab: 0, tabs)
+    XCTAssertEqual(after.map(\.accessibilityIdentifier), ["square.and.arrow.up", "heart.fill"])
+    XCTAssertFalse(after[1] === before[1], "a new symbol: rebuilt")
+  }
+
+  func testAPageActionTapSendsAnEventAndDoesNotPop() throws {
+    let tabs = try installedShell()
+    tabs.apply(detailConfig([Self.share, Self.heart, Self.trash]))
+    settle()
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    func taps() -> [String] { events.sent.filter { $0.hasPrefix("pageAction") } }
+    tabs.debugTap(.pageAction, index: 1)
+    XCTAssertEqual(taps(), ["pageAction 0 1 1 heart"], "tab, page, index, symbol")
+    tabs.debugTap(.pageAction, index: 2)
+    tabs.debugTap(.pageAction, index: 3)
+    XCTAssertEqual(taps().count, 1, "a disabled action and no action send nothing")
+    settle()
+    XCTAssertEqual(nav.viewControllers.count, 2, "native changes nothing")
+    XCTAssertEqual(nav.topViewController?.title, "Detail")
+  }
+
+  func testAnUnknownSymbolShowsItsLabel() throws {
+    let tabs = try installedShell()
+    let unknown = NativePageAction(sfSymbol: "no.such.symbol", label: "Report", enabled: true)
+    tabs.apply(detailConfig([unknown]))
+    settle()
+    let item = try XCTUnwrap(actionItems(ofTab: 0, tabs).first)
+    XCTAssertNil(item.image)
+    XCTAssertEqual(item.title, "Report")
+    XCTAssertEqual(item.accessibilityLabel, "Report")
+  }
+
+  func testActionsOnARootInlinePageShowTheBar() throws {
+    let tabs = try installedShell()
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    let plus = NativePageAction(sfSymbol: "plus", label: "Add", enabled: true)
+    tabs.apply(pagesConfig([NativePage(title: "Home", largeTitle: false, actions: [plus])]))
+    settle()
+    XCTAssertFalse(nav.isNavigationBarHidden, "a root with actions shows its bar")
+    XCTAssertEqual(nav.rootHost.navigationItem.largeTitleDisplayMode, .never, "inline")
+    XCTAssertEqual(actionItems(ofTab: 0, tabs).map(\.accessibilityIdentifier), ["plus"])
+    tabs.apply(pagesConfig([NativePage(title: "Home", largeTitle: false)]))
+    settle()
+    XCTAssertTrue(nav.isNavigationBarHidden, "no actions, no title row: hidden again")
+    XCTAssertTrue(actionItems(ofTab: 0, tabs).isEmpty)
+  }
+
+  /// The B2 lesson: a size-class change re-applies the pages without a
+  /// config from Dart; the buttons stay with the bar.
+  func testASizeClassChangeKeepsARootsBarAndItsButtons() throws {
+    try requireIPad()
+    let tabs = try installedShell(sizeClass: .regular)
+    let container = try XCTUnwrap(tabs.parent)
+    let plus = NativePageAction(sfSymbol: "plus", label: "Add", enabled: true)
+    tabs.apply(pagesConfig([NativePage(title: "Home", actions: [plus])]))
+    settle()
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    XCTAssertFalse(nav.isNavigationBarHidden, "regular: the inline bar for the action")
+    for sizeClass in [UIUserInterfaceSizeClass.compact, .regular] {
+      container.traitOverrides.horizontalSizeClass = sizeClass
+      settle()
+      XCTAssertFalse(nav.isNavigationBarHidden, "\(sizeClass.rawValue)")
+      XCTAssertEqual(
+        actionItems(ofTab: 0, tabs).map(\.accessibilityIdentifier), ["plus"],
+        "\(sizeClass.rawValue)")
+    }
+    XCTAssertEqual(nav.rootHost.navigationItem.largeTitleDisplayMode, .never)
+  }
+}
+
 // MARK: - P3b-2: size classes and the hidden bar (spec P3b-2 §6.1)
 
 @available(iOS 26.0, *)

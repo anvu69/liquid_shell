@@ -142,6 +142,8 @@ class NativeTabSnapshot {
     required this.barHidden,
     required this.titleModes,
     required this.barHeight,
+    required this.actionSymbols,
+    required this.actionsEnabled,
   });
 
   /// The destination's index in the config's tabs.
@@ -161,6 +163,13 @@ class NativeTabSnapshot {
   /// hidden. A root's large title row is in it: it drops by that row when
   /// the title collapses.
   double barHeight;
+
+  /// The top page's bar buttons, reading order: each one's SF Symbol (its
+  /// accessibility identifier).
+  List<String> actionSymbols;
+
+  /// The top page's bar buttons, reading order: whether each is enabled.
+  List<bool> actionsEnabled;
 }
 
 /// Debug builds: the native search and page state, for integration tests.
@@ -272,6 +281,9 @@ enum NativeTapTarget {
   searchField,
   searchCancel,
   back,
+
+  /// `index`: an action of the selected tab's top page, reading order.
+  pageAction,
 }
 
 /// Dart → native.

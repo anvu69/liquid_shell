@@ -120,6 +120,8 @@ class _FakeHost extends NativeShellHostApi {
         barHidden: false,
         titleModes: ['inline', 'never'],
         barHeight: 54,
+        actionSymbols: ['square.and.arrow.up', 'heart'],
+        actionsEnabled: [true, false],
       ),
     ],
   );
@@ -276,7 +278,12 @@ void main() {
     final platform = liquidShellIOSWithHost(host);
     await platform.setNativeSidebarVisible(visible: false);
     await platform.debugTap(NativeTapTarget.footer);
-    expect(host.calls, ['setSidebarVisible(false)', 'debugTap(footer, 0)']);
+    await platform.debugTap(NativeTapTarget.pageAction, 2);
+    expect(host.calls, [
+      'setSidebarVisible(false)',
+      'debugTap(footer, 0)',
+      'debugTap(pageAction, 2)',
+    ]);
   });
 
   test('failed calls are swallowed and logged once per method', () async {
@@ -626,6 +633,11 @@ void main() {
     expect(snapshot.tabs.single.barHidden, isFalse);
     expect(snapshot.tabs.single.titleModes, ['inline', 'never']);
     expect(snapshot.tabs.single.barHeight, 54);
+    expect(snapshot.tabs.single.actionSymbols, [
+      'square.and.arrow.up',
+      'heart',
+    ]);
+    expect(snapshot.tabs.single.actionsEnabled, [true, false]);
     expect(host.calls, ['debugSnapshot']);
   });
 

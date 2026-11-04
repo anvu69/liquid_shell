@@ -701,6 +701,9 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
         searchBridge.debugCancel()
       case .back:
         topHost(ofTab: index)?.onBack?()
+      case .pageAction:
+        guard let tab = selectedDestination else { return }
+        topHost(ofTab: tab)?.tapAction(at: index)
       }
     #endif
   }
@@ -1012,14 +1015,20 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
         minimizePanAttached: attachedMinimizeProxy != nil,
         tabs: navControllers.keys.sorted().compactMap { index in
           navControllers[index].map { nav in
-            NativeTabSnapshot(
+            // The top page's buttons as UIKit holds them, reading order.
+            let items = Array(
+              ((nav.topViewController as? PageHostController)?.navigationItem.rightBarButtonItems
+                ?? []).reversed())
+            return NativeTabSnapshot(
               tab: Int64(index),
               pageTitles: nav.viewControllers.map { $0.title ?? "" },
               barHidden: nav.isNavigationBarHidden,
               titleModes: nav.viewControllers.map {
                 Self.titleModeName($0.navigationItem.largeTitleDisplayMode)
               },
-              barHeight: nav.isNavigationBarHidden ? 0 : Double(nav.navigationBar.frame.height))
+              barHeight: nav.isNavigationBarHidden ? 0 : Double(nav.navigationBar.frame.height),
+              actionSymbols: items.map { $0.accessibilityIdentifier ?? "" },
+              actionsEnabled: items.map(\.isEnabled))
           }
         })
     #else
