@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:liquid_shell/src/glass/liquid_glass.dart';
+import 'package:liquid_shell/src/pages/page_action.dart';
 import 'package:liquid_shell/src/pages/page_bar.dart';
 import 'package:liquid_shell/src/pages/page_registry.dart';
 import 'package:liquid_shell/src/pages/page_title.dart';
@@ -29,14 +30,21 @@ import 'package:liquid_shell/src/shell/strings.dart';
 ///   compact width, as in Apple Music; no bar at regular width, where the
 ///   shell's own chrome is the title row;
 /// * a root page with [largeTitle] false: no bar.
+///
+/// A root page that has [actions] keeps a bar with its title small and
+/// centred where it would have none.
 class LiquidPage extends StatefulWidget {
   /// Creates a page.
   const LiquidPage({
     required this.title,
     required this.child,
     this.largeTitle,
+    this.actions = const <LiquidPageAction>[],
     super.key,
   });
+
+  /// At most this many [actions] are shown.
+  static const int maxActions = 3;
 
   /// The navigation bar title; also the next page's native back label.
   final String title;
@@ -46,6 +54,12 @@ class LiquidPage extends StatefulWidget {
   /// at regular width. false: no title row.
   /// Ignored on a pushed page, whose title is always inline.
   final bool? largeTitle;
+
+  /// Trailing actions, in reading order (leading to trailing): native bar
+  /// buttons with native chrome, glass circles in the Flutter bar. At most
+  /// [maxActions]: more is an assertion in debug builds, and release
+  /// builds show the first [maxActions].
+  final List<LiquidPageAction> actions;
 
   /// The page. Its first vertical scroll view on screen drives the native
   /// large title's collapse and the scroll-edge effect, and the Flutter
@@ -110,9 +124,20 @@ class _LiquidPageState extends State<LiquidPage> {
     );
   }
 
+  // Not in the constructor: `List.length` is not a constant expression, and
+  // `const LiquidPage(...)` must keep compiling.
+  void _checkActions() {
+    assert(
+      widget.actions.length <= LiquidPage.maxActions,
+      'LiquidPage "${widget.title}" has ${widget.actions.length} actions; '
+      'at most ${LiquidPage.maxActions} are shown.',
+    );
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _checkActions();
     final registry = context
         .dependOnInheritedWidgetOfExactType<ShellScopeMarker>()
         ?.pages;
@@ -129,6 +154,7 @@ class _LiquidPageState extends State<LiquidPage> {
   @override
   void didUpdateWidget(LiquidPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _checkActions();
     if (oldWidget.title != widget.title ||
         oldWidget.largeTitle != widget.largeTitle) {
       _handle?.update(_entry());

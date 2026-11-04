@@ -1600,4 +1600,57 @@ void main() {
       await expectFlutterBar(tester, scroll, paddings);
     }, variant: iosDevice);
   });
+
+  group('VK-443: page actions in the Flutter bar', () {
+    /// Share, Favourite (counts its taps) and Delete (disabled).
+    List<LiquidPageAction> actions(List<String> taps) => [
+      LiquidPageAction(
+        sfSymbol: 'square.and.arrow.up',
+        icon: const Icon(Icons.ios_share),
+        label: 'Share',
+        onPressed: () => taps.add('Share'),
+      ),
+      LiquidPageAction(
+        sfSymbol: 'heart',
+        icon: const Icon(Icons.favorite_border),
+        label: 'Favourite',
+        onPressed: () => taps.add('Favourite'),
+      ),
+      const LiquidPageAction(
+        sfSymbol: 'trash',
+        icon: Icon(Icons.delete_outline),
+        label: 'Delete',
+        onPressed: null,
+      ),
+    ];
+
+    /// A root page with an inline title and [actions], in [direction].
+    Widget inlineRoot(
+      List<LiquidPageAction> actions, {
+      TextDirection direction = TextDirection.ltr,
+    }) => Directionality(
+      textDirection: direction,
+      child: LiquidPage(
+        title: 'Detail',
+        largeTitle: false,
+        actions: actions,
+        child: const SizedBox.expand(),
+      ),
+    );
+    testWidgets('more than three on a LiquidPage is a debug assertion', (
+      tester,
+    ) async {
+      final four = [
+        ...actions([]),
+        const LiquidPageAction(
+          sfSymbol: 'flag',
+          icon: Icon(Icons.flag_outlined),
+          label: 'Report',
+          onPressed: null,
+        ),
+      ];
+      await _pump(tester, home: inlineRoot(four));
+      expect(tester.takeException(), isA<AssertionError>());
+    });
+  });
 }

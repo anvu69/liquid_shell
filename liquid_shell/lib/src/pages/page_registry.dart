@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:liquid_shell/src/pages/page_action.dart';
 
 /// One registered `LiquidPage`: what the native bar needs
 /// and where the page is.
@@ -14,6 +15,7 @@ class PageEntry {
     required this.onScreen,
     required this.current,
     required this.active,
+    this.actions = const <LiquidPageAction>[],
   });
 
   /// Navigation bar title.
@@ -44,10 +46,16 @@ class PageEntry {
   /// [route] was active (in the history, not popping) when taken.
   final bool active;
 
+  /// The page's trailing actions, reading order, as the page gave them
+  /// (the bars show at most three).
+  final List<LiquidPageAction> actions;
+
   /// The page the user sees.
   bool get isTop => onScreen && (route?.isCurrent ?? false);
 
-  /// Whether [other] describes the same page in the same state.
+  /// Whether [other] describes the same page in the same state. Actions
+  /// compare by what the bars show (symbol, label, enabled), never by
+  /// their callbacks: a new closure alone changes nothing on screen.
   bool sameAs(PageEntry other) =>
       other.title == title &&
       other.largeTitle == largeTitle &&
@@ -56,7 +64,20 @@ class PageEntry {
       other.sequence == sequence &&
       other.onScreen == onScreen &&
       other.current == current &&
-      other.active == active;
+      other.active == active &&
+      _sameActions(other.actions, actions);
+
+  static bool _sameActions(List<LiquidPageAction> a, List<LiquidPageAction> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].sfSymbol != b[i].sfSymbol ||
+          a[i].label != b[i].label ||
+          (a[i].onPressed == null) != (b[i].onPressed == null)) {
+        return false;
+      }
+    }
+    return true;
+  }
 }
 
 /// A page's registration.
