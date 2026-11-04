@@ -190,9 +190,7 @@ final class SearchMathTests: XCTestCase {
 /// the cases each covers, are those of the Flutter bar's suite
 /// (`liquid_shell/test/unit/page_bar_test.dart`, group `pageTitleModeFor:
 /// the title table`): 6 rows, 24 cases (page × largeTitle × width ×
-/// actions). The native bar has no page actions yet: its 12 cases without
-/// actions are checked here; branch B4 adds actions to `PageTitleMath` and
-/// checks the other 12 (spec §8.4).
+/// actions), all checked here (spec §8.4: the 12 with actions since B4).
 @available(iOS 26.0, *)
 final class PageTitleMathTests: XCTestCase {
   /// (page, largeTitle, size class, actions, mode), each cell as the
@@ -270,15 +268,17 @@ final class PageTitleMathTests: XCTestCase {
   }
 
   func testPageTitleMathFollowsTheTitleTable() {
-    func page(_ largeTitle: Bool?) -> NativePage {
-      NativePage(title: "Page", largeTitle: largeTitle)
+    func page(_ largeTitle: Bool?, actions: Bool) -> NativePage {
+      let heart = NativePageAction(sfSymbol: "heart", label: "Favourite", enabled: true)
+      return NativePage(title: "Page", largeTitle: largeTitle, actions: actions ? [heart] : [])
     }
     var checked = 0
     for (i, row) in Self.table.enumerated() {
-      for c in Self.cases(of: row) where !c.hasActions {
+      for c in Self.cases(of: row) {
         let label = "row \(i + 1) (\(row.4)): \(c)"
-        // A pushed page sits on a root without a large title.
-        let pages = c.root ? [page(c.largeTitle)] : [page(nil), page(c.largeTitle)]
+        // A pushed page sits on a root without a large title or actions.
+        let top = page(c.largeTitle, actions: c.hasActions)
+        let pages = c.root ? [top] : [page(nil, actions: false), top]
         let mode =
           c.root
           ? PageTitleMath.rootMode(largeTitle: c.largeTitle, compact: c.compact)
@@ -303,8 +303,8 @@ final class PageTitleMathTests: XCTestCase {
         checked += 1
       }
     }
-    // Rows 1–5 without actions: 6 + 2 + 1 + 1 + 2.
-    XCTAssertEqual(checked, 12)
+    // Every case of rows 1–6: 12 + 4 + 2 + 1 + 2 + 3.
+    XCTAssertEqual(checked, 24)
   }
 
   /// No pages: the tab does not use LiquidPage, and looks as before.
