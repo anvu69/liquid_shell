@@ -736,6 +736,81 @@ void main() {
       expect(taps, ['Share'], reason: 'the top page still answers');
     });
 
+    testWidgets('a tap under a sheet in the tab is dropped, and answered '
+        'again once the sheet closes', (tester) async {
+      final taps = <String>[];
+      final fake = await _pump(tester);
+      await _push(tester, 0, withActions('Detail', taps));
+      unawaited(
+        showModalBottomSheet<void>(
+          context: tester.element(find.byType(TestPage).last),
+          builder: (_) => const Text('sheet'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(_titles(fake, 0), ['Home', 'Detail'], reason: 'the stack stays');
+      fake.emitNative(tap(1, 1, 'heart'));
+      await tester.pumpAndSettle();
+      expect(taps, isEmpty, reason: 'the top record is not the current route');
+      _navigators[0].currentState!.pop();
+      await tester.pumpAndSettle();
+      fake.emitNative(tap(1, 1, 'heart'));
+      await tester.pumpAndSettle();
+      expect(taps, ['Favourite']);
+    });
+
+    testWidgets('a tap while a page is pushed above the shell is dropped', (
+      tester,
+    ) async {
+      final taps = <String>[];
+      final fake = await _pump(tester);
+      await _push(tester, 0, withActions('Detail', taps));
+      Navigator.of(
+            tester.element(find.byType(TestPage).last),
+            rootNavigator: true,
+          )
+          .push(
+            MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(body: Text('Above')),
+            ),
+          )
+          .ignore();
+      await tester.pumpAndSettle();
+      expect(_titles(fake, 0), ['Home', 'Detail'], reason: 'the stack stays');
+      fake.emitNative(tap(1, 1, 'heart'));
+      await tester.pumpAndSettle();
+      expect(taps, isEmpty);
+    });
+
+    testWidgets("a tap past the page's own actions is dropped", (
+      tester,
+    ) async {
+      final taps = <String>[];
+      final fake = await _pump(tester);
+      await _push(
+        tester,
+        0,
+        LiquidPage(
+          title: 'One',
+          actions: [
+            LiquidPageAction(
+              sfSymbol: 'heart',
+              icon: const Icon(Icons.favorite_border),
+              label: 'Favourite',
+              onPressed: () => taps.add('Favourite'),
+            ),
+          ],
+          child: const TestPage(label: 'One'),
+        ),
+      );
+      fake.emitNative(tap(1, 2, 'heart'));
+      await tester.pumpAndSettle();
+      expect(taps, isEmpty, reason: 'index 2 < maxActions, >= actions.length');
+      fake.emitNative(tap(1, 0, 'heart'));
+      await tester.pumpAndSettle();
+      expect(taps, ['Favourite']);
+    });
+
     testWidgets('under a stand-in root, native page i is record i - 1', (
       tester,
     ) async {
