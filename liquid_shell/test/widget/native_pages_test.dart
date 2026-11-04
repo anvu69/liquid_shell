@@ -782,6 +782,31 @@ void main() {
       expect(taps, isEmpty);
     });
 
+    testWidgets('a tap under a dialog on the root navigator is dropped, and '
+        'answered once it closes', (tester) async {
+      final taps = <String>[];
+      final fake = await _pump(tester);
+      await _push(tester, 0, withActions('Detail', taps));
+      unawaited(
+        showDialog<void>(
+          context: tester.element(find.byType(TestPage).last),
+          builder: (_) => const Text('dialog'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      fake.emitNative(tap(1, 1, 'heart'));
+      await tester.pumpAndSettle();
+      expect(taps, isEmpty, reason: 'a dialog is above the shell');
+      Navigator.of(
+        tester.element(find.text('dialog')),
+        rootNavigator: true,
+      ).pop();
+      await tester.pumpAndSettle();
+      fake.emitNative(tap(1, 1, 'heart'));
+      await tester.pumpAndSettle();
+      expect(taps, ['Favourite']);
+    });
+
     testWidgets("a tap past the page's own actions is dropped", (
       tester,
     ) async {

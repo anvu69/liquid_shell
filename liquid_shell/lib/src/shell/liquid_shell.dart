@@ -653,6 +653,8 @@ class _LiquidShellState extends State<LiquidShell>
     final target = page - (_standInRoots.contains(tab) ? 1 : 0);
     if (stack == null || stack.isEmpty || target != stack.length - 1) return;
     final record = stack.last;
+    // A record unregisters before the post-frame stack refresh: never run a
+    // detached page's action.
     if (!_pageRecords.contains(record)) return;
     if (!(record.entry.route?.isCurrent ?? false)) return;
     final actions = record.entry.actions;

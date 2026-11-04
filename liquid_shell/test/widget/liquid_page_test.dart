@@ -1806,5 +1806,76 @@ void main() {
         expect(find.byTooltip('Share'), findsOneWidget, reason: reason);
       }
     });
+
+    testWidgets('a focused, composing field keeps its state when the first '
+        'action comes and goes', (tester) async {
+      final field = TextEditingController();
+      addTearDown(field.dispose);
+      final focus = FocusNode();
+      addTearDown(focus.dispose);
+      var acts = <LiquidPageAction>[];
+      late StateSetter update;
+      await _pump(
+        tester,
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            update = setState;
+            return LiquidPage(
+              title: 'T',
+              largeTitle: false,
+              actions: acts,
+              child: Material(
+                child: TextField(controller: field, focusNode: focus),
+              ),
+            );
+          },
+        ),
+      );
+      await tester.showKeyboard(find.byType(TextField));
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: 'Việ',
+          selection: TextSelection.collapsed(offset: 3),
+          composing: TextRange(start: 0, end: 3),
+        ),
+      );
+      await tester.pump();
+      final before = tester.state<EditableTextState>(
+        find.byType(EditableText),
+      );
+      expect(find.byType(FlutterPageBar), findsNothing);
+
+      update(
+        () => acts = [
+          LiquidPageAction(
+            sfSymbol: 'plus',
+            icon: const Icon(Icons.add),
+            label: 'Add',
+            onPressed: () {},
+          ),
+        ],
+      );
+      await tester.pump();
+      expect(find.byType(FlutterPageBar), findsOneWidget);
+      expect(focus.hasFocus, isTrue);
+      expect(
+        identical(before, tester.state(find.byType(EditableText))),
+        isTrue,
+        reason: 'the same State after the bar appears',
+      );
+      expect(field.value.composing, const TextRange(start: 0, end: 3));
+      expect(tester.testTextInput.isVisible, isTrue);
+
+      update(() => acts = []);
+      await tester.pump();
+      expect(find.byType(FlutterPageBar), findsNothing);
+      expect(focus.hasFocus, isTrue);
+      expect(
+        identical(before, tester.state(find.byType(EditableText))),
+        isTrue,
+        reason: 'the same State after the bar goes',
+      );
+      expect(field.value.composing, const TextRange(start: 0, end: 3));
+    });
   });
 }
