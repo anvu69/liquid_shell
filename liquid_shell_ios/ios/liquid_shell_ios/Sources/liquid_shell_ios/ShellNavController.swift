@@ -1,5 +1,14 @@
 import UIKit
 
+/// A page without actions, as the root of a tab without pages and as most
+/// tests write it. Pigeon's Swift structs take no default values, so its
+/// memberwise init asks for `actions`.
+extension NativePage {
+  init(title: String, largeTitle: Bool? = nil) {
+    self.init(title: title, largeTitle: largeTitle, actions: [])
+  }
+}
+
 /// The clear navigation controller of every destination tab (spec P3b
 /// §7.1; P3b-2 §6.1). Its pages are clear `PageHostController`s that
 /// mirror the tab's Flutter pages; the Flutter view stays underneath and

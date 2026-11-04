@@ -40,6 +40,10 @@ LiquidWindowControls controlsFromNative(NativeWindowControls controls) =>
       top: controls.top,
     );
 
+/// The most actions a page shows (`LiquidPage.maxActions`, which this
+/// package cannot see). Dart truncates here; Swift clamps again.
+const int maxPageActions = 3;
+
 /// Interface config → native config.
 NativeChromeConfig configToNative(LiquidNativeChromeConfig config) =>
     NativeChromeConfig(
@@ -54,7 +58,18 @@ NativeChromeConfig configToNative(LiquidNativeChromeConfig config) =>
             search: tab.search,
             pages: [
               for (final page in tab.pages)
-                NativePage(title: page.title, largeTitle: page.largeTitle),
+                NativePage(
+                  title: page.title,
+                  largeTitle: page.largeTitle,
+                  actions: [
+                    for (final action in page.actions.take(maxPageActions))
+                      NativePageAction(
+                        sfSymbol: action.sfSymbol,
+                        label: action.label,
+                        enabled: action.enabled,
+                      ),
+                  ],
+                ),
             ],
           ),
       ],

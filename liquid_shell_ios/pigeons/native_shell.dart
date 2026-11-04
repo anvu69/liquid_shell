@@ -84,12 +84,28 @@ class NativeFooter {
   String semanticLabel;
 }
 
+/// A trailing action of a page's navigation bar: a bar button.
+class NativePageAction {
+  NativePageAction({
+    required this.sfSymbol,
+    required this.label,
+    required this.enabled,
+  });
+
+  String sfSymbol;
+  String label;
+  bool enabled;
+}
+
 /// One page of a tab's navigation stack (root first).
 class NativePage {
-  NativePage({required this.title, this.largeTitle});
+  NativePage({required this.title, required this.actions, this.largeTitle});
 
   String title;
   bool? largeTitle;
+
+  /// Trailing actions in reading order; Dart sends at most three.
+  List<NativePageAction> actions;
 }
 
 /// The search tab's field.
@@ -329,6 +345,10 @@ abstract class NativeShellFlutterApi {
   /// UIKit asked to pop tab [tab] to the page at [index] (the back menu, a
   /// pop-to-root); native did not pop.
   void onPopToPage(int tab, int index);
+
+  /// The user tapped action [index] (reading order) of the page at [page]
+  /// (0 is the root) on tab [tab], showing [sfSymbol]; native ran nothing.
+  void onPageActionTapped(int tab, int page, int index, String sfSymbol);
 }
 
 // --- Native dialogs (spec P3a §6) ------------------------------------------

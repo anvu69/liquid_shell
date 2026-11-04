@@ -714,6 +714,14 @@ final class RecordingEvents: NativeShellFlutterApiProtocol {
     sent.append("popTo \(tabArg) \(indexArg)")
     completion(.success(()))
   }
+
+  func onPageActionTapped(
+    tab tabArg: Int64, page pageArg: Int64, index indexArg: Int64, sfSymbol sfSymbolArg: String,
+    completion: @escaping (Result<Void, PigeonError>) -> Void
+  ) {
+    sent.append("pageAction \(tabArg) \(pageArg) \(indexArg) \(sfSymbolArg)")
+    completion(.success(()))
+  }
 }
 
 /// The UIKit half of the shell (`NativeTabsController` inside the container)
