@@ -3657,8 +3657,10 @@ extension NativeTabsTests {
     tabs.apply(detailConfig([Self.share, Self.heart]))
     settle()
     let before = actionItems(ofTab: 0, tabs)
+    XCTAssertEqual(before.count, 2)
     tabs.apply(detailConfig([Self.share, Self.heart]))
     settle()
+    XCTAssertEqual(actionItems(ofTab: 0, tabs).count, 2)
     XCTAssertTrue(
       zip(before, actionItems(ofTab: 0, tabs)).allSatisfy { $0 === $1 }, "the same config: kept")
     var filled = Self.heart
@@ -3667,6 +3669,9 @@ extension NativeTabsTests {
     settle()
     let after = actionItems(ofTab: 0, tabs)
     XCTAssertEqual(after.map(\.accessibilityIdentifier), ["square.and.arrow.up", "heart.fill"])
+    guard after.count == 2, before.count == 2 else {
+      return XCTFail("expected two items, got \(after.count)")
+    }
     XCTAssertFalse(after[1] === before[1], "a new symbol: rebuilt")
   }
 

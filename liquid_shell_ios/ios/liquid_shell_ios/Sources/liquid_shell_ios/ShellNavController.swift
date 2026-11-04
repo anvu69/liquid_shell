@@ -272,7 +272,7 @@ final class PageHostController: UIViewController {
   }
 
   /// One action's bar button: its SF Symbol, or its label as text when the
-  /// symbol does not exist (one debug log line). The accessibility label is
+  /// symbol does not exist (a debug log line each time the item is built). The accessibility label is
   /// the label; the identifier is the symbol, which tests read.
   private func actionItem(_ action: NativePageAction, index: Int) -> UIBarButtonItem {
     let item = UIBarButtonItem(
