@@ -325,6 +325,7 @@ class _LiquidPageState extends State<LiquidPage> {
           const LiquidShellBreakpoints().sizeClassOf(
             MediaQuery.sizeOf(context).width,
           ),
+      hasActions: widget.actions.isNotEmpty,
     );
     if (mode == PageTitleMode.hidden) return child;
     return FlutterPageBar(
@@ -333,6 +334,7 @@ class _LiquidPageState extends State<LiquidPage> {
       canPop: canPop,
       hideLargeTitle: scope?.searchPhase == LiquidSearchPhase.active,
       scrollOffset: _scrollOffset,
+      actions: widget.actions,
       child: child,
     );
   }

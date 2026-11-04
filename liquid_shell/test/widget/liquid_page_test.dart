@@ -1637,6 +1637,79 @@ void main() {
         child: const SizedBox.expand(),
       ),
     );
+
+    /// The 44 pt circle of the action labelled [label].
+    Rect circle(WidgetTester tester, String label) =>
+        tester.getRect(find.byTooltip(label));
+
+    testWidgets('circles at the trailing end, in reading order, 8 pt apart '
+        'and 16 pt from the edge, centred in the bar row', (tester) async {
+      await _pump(tester, home: inlineRoot(actions([])));
+      final width =
+          tester.view.physicalSize.width / tester.view.devicePixelRatio;
+      final share = circle(tester, 'Share');
+      final favourite = circle(tester, 'Favourite');
+      final delete = circle(tester, 'Delete');
+      for (final rect in [share, favourite, delete]) {
+        expect(rect.size, const Size.square(LiquidBackButton.size));
+        expect(rect.center.dy, kPageBarExtent / 2);
+      }
+      expect(delete.right, width - 16);
+      expect(favourite.right + 8, delete.left);
+      expect(share.right + 8, favourite.left);
+    });
+
+    testWidgets('right to left: the circles mirror', (tester) async {
+      await _pump(
+        tester,
+        home: inlineRoot(actions([]), direction: TextDirection.rtl),
+      );
+      // The reading order runs right to left: the last action sits at the
+      // trailing (left) edge.
+      final share = circle(tester, 'Share');
+      final favourite = circle(tester, 'Favourite');
+      final delete = circle(tester, 'Delete');
+      expect(delete.left, 16);
+      expect(delete.right + 8, favourite.left);
+      expect(favourite.right + 8, share.left);
+      expect(
+        tester.getRect(_inlineTitle('Detail')).left,
+        share.right,
+        reason: 'the title on the leading (right) side',
+      );
+    });
+
+    testWidgets('a tap runs onPressed; a disabled action is not tappable '
+        'and reports enabled: false', (tester) async {
+      final semantics = tester.ensureSemantics();
+      final taps = <String>[];
+      await _pump(tester, home: inlineRoot(actions(taps)));
+      await tester.tap(find.byTooltip('Favourite'));
+      await tester.tap(find.byTooltip('Delete'));
+      await tester.pumpAndSettle();
+      expect(taps, ['Favourite']);
+      expect(
+        tester.getSemantics(find.bySemanticsLabel('Delete')),
+        isSemantics(
+          label: 'Delete',
+          isButton: true,
+          hasEnabledState: true,
+          isEnabled: false,
+        ),
+      );
+      expect(
+        tester.getSemantics(find.bySemanticsLabel('Favourite')),
+        isSemantics(
+          label: 'Favourite',
+          isButton: true,
+          hasEnabledState: true,
+          isEnabled: true,
+          hasTapAction: true,
+        ),
+      );
+      semantics.dispose();
+    });
+
     testWidgets('more than three on a LiquidPage is a debug assertion', (
       tester,
     ) async {
@@ -1651,6 +1724,87 @@ void main() {
       ];
       await _pump(tester, home: inlineRoot(four));
       expect(tester.takeException(), isA<AssertionError>());
+    });
+
+    testWidgets('FlutterPageBar given four actions draws the first three', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: FlutterPageBar(
+            title: 'Detail',
+            mode: PageTitleMode.inline,
+            canPop: false,
+            hideLargeTitle: false,
+            actions: [
+              ...actions([]),
+              const LiquidPageAction(
+                sfSymbol: 'flag',
+                icon: Icon(Icons.flag_outlined),
+                label: 'Report',
+                onPressed: null,
+              ),
+            ],
+            child: const SizedBox.expand(),
+          ),
+        ),
+      );
+      for (final label in ['Share', 'Favourite', 'Delete']) {
+        expect(find.byTooltip(label), findsOneWidget, reason: label);
+      }
+      expect(find.byTooltip('Report'), findsNothing);
+    });
+
+    testWidgets('the inline title stays centred between the back button and '
+        'the actions', (tester) async {
+      await _pump(tester);
+      tester
+          .state<NavigatorState>(find.byType(Navigator))
+          .push(
+            MaterialPageRoute<void>(
+              builder: (_) => LiquidPage(
+                title: 'Detail',
+                actions: actions([]).sublist(0, 2),
+                child: const SizedBox.expand(),
+              ),
+            ),
+          )
+          .ignore();
+      await tester.pumpAndSettle();
+      final back = tester.getRect(find.byType(LiquidBackButton));
+      final share = circle(tester, 'Share');
+      final title = tester.getRect(_inlineTitle('Detail'));
+      expect(title.left, back.right);
+      expect(title.right, share.left);
+      expect(title.center.dx, (back.right + share.left) / 2);
+    });
+
+    testWidgets('a root page with an inline title shows its bar when it has '
+        'actions', (tester) async {
+      for (final (largeTitle, sizeClass) in [
+        (false, LiquidSizeClass.compact),
+        (false, LiquidSizeClass.regular),
+        (null, LiquidSizeClass.regular),
+      ]) {
+        await _pump(
+          tester,
+          data: _scope(sizeClass: sizeClass),
+          home: LiquidPage(
+            title: 'Detail',
+            largeTitle: largeTitle,
+            actions: actions([]),
+            child: const SizedBox.expand(),
+          ),
+        );
+        final reason = '$largeTitle, $sizeClass';
+        expect(find.byType(FlutterPageBar), findsOneWidget, reason: reason);
+        expect(
+          tester.widget<FlutterPageBar>(find.byType(FlutterPageBar)).mode,
+          PageTitleMode.inline,
+          reason: reason,
+        );
+        expect(find.byTooltip('Share'), findsOneWidget, reason: reason);
+      }
     });
   });
 }
