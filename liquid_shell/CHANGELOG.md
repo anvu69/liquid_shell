@@ -30,6 +30,10 @@
    are new fields with defaults.
 6. **Native minimize follows pushed pages**: a behaviour change, no code
    change needed.
+7. **UIKit's large title follows the page's first vertical scroll view on
+   screen**, as the Flutter bar does: the shown list of a `PageView` or a
+   `TabBarView` now moves it; a multi-line text field, a second list beside
+   the first and a hidden segment's list no longer do.
 
 After 0.1.0, versions follow semver strictly.
 
