@@ -14,6 +14,11 @@ import 'package:liquid_shell_example/support/wallpaper.dart';
 /// page's own bar. Library has a large title that collapses as the page
 /// scrolls. Settings has a root without `LiquidPage`: the pages it pushes
 /// get a back circle to it all the same, and Profile has a text field.
+///
+/// Page actions: Home's root has Add, which opens a detail; each detail
+/// has Share (counts), Favourite (its symbol toggles) and Delete
+/// (disabled). Natively they are UIKit bar buttons; elsewhere glass
+/// circles in the Flutter bar.
 class PagesCase extends StatefulWidget {
   /// Creates the case.
   const PagesCase({super.key});
@@ -82,10 +87,16 @@ Future<void> _push(BuildContext context, Widget page) =>
 /// A `LiquidPage` over the wallpaper, so the bar's glass has something to
 /// show; its list is padded clear of every chrome.
 class _Page extends StatelessWidget {
-  const _Page({required this.title, required this.children, this.largeTitle});
+  const _Page({
+    required this.title,
+    required this.children,
+    this.largeTitle,
+    this.actions = const [],
+  });
 
   final String title;
   final bool? largeTitle;
+  final List<LiquidPageAction> actions;
   final List<Widget> children;
 
   @override
@@ -95,6 +106,7 @@ class _Page extends StatelessWidget {
       LiquidPage(
         title: title,
         largeTitle: largeTitle,
+        actions: actions,
         child: Material(
           type: MaterialType.transparency,
           child: Builder(
@@ -151,6 +163,14 @@ class _HomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => _Page(
     title: 'Home',
+    actions: [
+      LiquidPageAction(
+        sfSymbol: 'plus',
+        icon: const Icon(Icons.add),
+        label: 'Add',
+        onPressed: () => _push(context, const _DetailPage(number: 1)),
+      ),
+    ],
     children: [
       ..._modeSwitch(context),
       for (var i = 1; i <= 3; i++)
@@ -169,23 +189,60 @@ class _HomePage extends StatelessWidget {
   );
 }
 
-class _DetailPage extends StatelessWidget {
+/// A detail with three actions: Share counts its taps, Favourite toggles
+/// its symbol, and Delete is disabled (`onPressed: null`).
+class _DetailPage extends StatefulWidget {
   const _DetailPage({required this.number});
 
   final int number;
 
   @override
-  Widget build(BuildContext context) => _Page(
-    title: 'Detail $number',
-    children: [
-      _Row(
-        title: 'Detail ${number + 1}',
-        subtitle: 'One page deeper',
-        onTap: () => _push(context, _DetailPage(number: number + 1)),
-      ),
-      for (var i = 1; i <= 30; i++) _Row(title: 'Detail $number item $i'),
-    ],
-  );
+  State<_DetailPage> createState() => _DetailPageState();
+}
+
+class _DetailPageState extends State<_DetailPage> {
+  bool _favourite = false;
+  int _shares = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final number = widget.number;
+    return _Page(
+      title: 'Detail $number',
+      actions: [
+        LiquidPageAction(
+          sfSymbol: 'square.and.arrow.up',
+          icon: const Icon(Icons.ios_share),
+          label: 'Share',
+          onPressed: () => setState(() => _shares++),
+        ),
+        LiquidPageAction(
+          sfSymbol: _favourite ? 'heart.fill' : 'heart',
+          icon: Icon(_favourite ? Icons.favorite : Icons.favorite_border),
+          label: 'Favourite',
+          onPressed: () => setState(() => _favourite = !_favourite),
+        ),
+        const LiquidPageAction(
+          sfSymbol: 'trash',
+          icon: Icon(Icons.delete_outline),
+          label: 'Delete',
+          onPressed: null,
+        ),
+      ],
+      children: [
+        _Row(
+          title: 'Detail ${number + 1}',
+          subtitle: 'One page deeper',
+          onTap: () => _push(context, _DetailPage(number: number + 1)),
+        ),
+        _Row(
+          title: 'Shared $_shares ${_shares == 1 ? 'time' : 'times'}',
+          subtitle: _favourite ? 'A favourite' : 'Not a favourite',
+        ),
+        for (var i = 1; i <= 30; i++) _Row(title: 'Detail $number item $i'),
+      ],
+    );
+  }
 }
 
 class _PhotoPage extends StatelessWidget {

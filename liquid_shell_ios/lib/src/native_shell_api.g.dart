@@ -136,6 +136,9 @@ enum NativeTapTarget {
   searchField,
   searchCancel,
   back,
+
+  /// `index`: an action of the selected tab's top page, reading order.
+  pageAction,
 }
 
 /// What a native dialog is.
@@ -423,21 +426,85 @@ class NativeFooter {
   }
 }
 
+/// A trailing action of a page's navigation bar: a bar button.
+class NativePageAction {
+  NativePageAction({
+    required this.sfSymbol,
+    required this.label,
+    required this.enabled,
+  });
+
+  String sfSymbol;
+
+  String label;
+
+  bool enabled;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      sfSymbol,
+      label,
+      enabled,
+    ];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static NativePageAction decode(Object result) {
+    result as List<Object?>;
+    return NativePageAction(
+      sfSymbol: result[0]! as String,
+      label: result[1]! as String,
+      enabled: result[2]! as bool,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! NativePageAction || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(sfSymbol, other.sfSymbol) &&
+        _deepEquals(label, other.label) &&
+        _deepEquals(enabled, other.enabled);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'NativePageAction(sfSymbol: $sfSymbol, label: $label, enabled: $enabled)';
+  }
+}
+
 /// One page of a tab's navigation stack (root first).
 class NativePage {
   NativePage({
     required this.title,
     this.largeTitle,
+    required this.actions,
   });
 
   String title;
 
   bool? largeTitle;
 
+  /// Trailing actions in reading order; Dart sends at most three.
+  List<NativePageAction> actions;
+
   List<Object?> _toList() {
     return <Object?>[
       title,
       largeTitle,
+      actions,
     ];
   }
 
@@ -450,6 +517,7 @@ class NativePage {
     return NativePage(
       title: result[0]! as String,
       largeTitle: result[1] as bool?,
+      actions: (result[2]! as List<Object?>).cast<NativePageAction>(),
     );
   }
 
@@ -463,7 +531,8 @@ class NativePage {
       return true;
     }
     return _deepEquals(title, other.title) &&
-        _deepEquals(largeTitle, other.largeTitle);
+        _deepEquals(largeTitle, other.largeTitle) &&
+        _deepEquals(actions, other.actions);
   }
 
   @override
@@ -472,7 +541,7 @@ class NativePage {
 
   @override
   String toString() {
-    return 'NativePage(title: $title, largeTitle: $largeTitle)';
+    return 'NativePage(title: $title, largeTitle: $largeTitle, actions: $actions)';
   }
 }
 
@@ -604,6 +673,8 @@ class NativeTabSnapshot {
     required this.barHidden,
     required this.titleModes,
     required this.barHeight,
+    required this.actionSymbols,
+    required this.actionsEnabled,
   });
 
   /// The destination's index in the config's tabs.
@@ -624,6 +695,13 @@ class NativeTabSnapshot {
   /// the title collapses.
   double barHeight;
 
+  /// The top page's bar buttons, reading order: each one's SF Symbol (its
+  /// accessibility identifier).
+  List<String> actionSymbols;
+
+  /// The top page's bar buttons, reading order: whether each is enabled.
+  List<bool> actionsEnabled;
+
   List<Object?> _toList() {
     return <Object?>[
       tab,
@@ -631,6 +709,8 @@ class NativeTabSnapshot {
       barHidden,
       titleModes,
       barHeight,
+      actionSymbols,
+      actionsEnabled,
     ];
   }
 
@@ -646,6 +726,8 @@ class NativeTabSnapshot {
       barHidden: result[2]! as bool,
       titleModes: (result[3]! as List<Object?>).cast<String>(),
       barHeight: result[4]! as double,
+      actionSymbols: (result[5]! as List<Object?>).cast<String>(),
+      actionsEnabled: (result[6]! as List<Object?>).cast<bool>(),
     );
   }
 
@@ -662,7 +744,9 @@ class NativeTabSnapshot {
         _deepEquals(pageTitles, other.pageTitles) &&
         _deepEquals(barHidden, other.barHidden) &&
         _deepEquals(titleModes, other.titleModes) &&
-        _deepEquals(barHeight, other.barHeight);
+        _deepEquals(barHeight, other.barHeight) &&
+        _deepEquals(actionSymbols, other.actionSymbols) &&
+        _deepEquals(actionsEnabled, other.actionsEnabled);
   }
 
   @override
@@ -671,7 +755,7 @@ class NativeTabSnapshot {
 
   @override
   String toString() {
-    return 'NativeTabSnapshot(tab: $tab, pageTitles: $pageTitles, barHidden: $barHidden, titleModes: $titleModes, barHeight: $barHeight)';
+    return 'NativeTabSnapshot(tab: $tab, pageTitles: $pageTitles, barHidden: $barHidden, titleModes: $titleModes, barHeight: $barHeight, actionSymbols: $actionSymbols, actionsEnabled: $actionsEnabled)';
   }
 }
 
@@ -1318,38 +1402,41 @@ class _PigeonCodec extends StandardMessageCodec {
     } else if (value is NativeFooter) {
       buffer.putUint8(139);
       writeValue(buffer, value.encode());
-    } else if (value is NativePage) {
+    } else if (value is NativePageAction) {
       buffer.putUint8(140);
       writeValue(buffer, value.encode());
-    } else if (value is NativeSearchConfig) {
+    } else if (value is NativePage) {
       buffer.putUint8(141);
       writeValue(buffer, value.encode());
-    } else if (value is NativeRect) {
+    } else if (value is NativeSearchConfig) {
       buffer.putUint8(142);
       writeValue(buffer, value.encode());
-    } else if (value is NativeTabSnapshot) {
+    } else if (value is NativeRect) {
       buffer.putUint8(143);
       writeValue(buffer, value.encode());
-    } else if (value is NativeDebugSnapshot) {
+    } else if (value is NativeTabSnapshot) {
       buffer.putUint8(144);
       writeValue(buffer, value.encode());
-    } else if (value is NativeChromeConfig) {
+    } else if (value is NativeDebugSnapshot) {
       buffer.putUint8(145);
       writeValue(buffer, value.encode());
-    } else if (value is NativeWindowControls) {
+    } else if (value is NativeChromeConfig) {
       buffer.putUint8(146);
       writeValue(buffer, value.encode());
-    } else if (value is NativeDialogAction) {
+    } else if (value is NativeWindowControls) {
       buffer.putUint8(147);
       writeValue(buffer, value.encode());
-    } else if (value is NativeDialogRequest) {
+    } else if (value is NativeDialogAction) {
       buffer.putUint8(148);
       writeValue(buffer, value.encode());
-    } else if (value is NativeDialogResult) {
+    } else if (value is NativeDialogRequest) {
       buffer.putUint8(149);
       writeValue(buffer, value.encode());
-    } else if (value is NativeDialogSnapshot) {
+    } else if (value is NativeDialogResult) {
       buffer.putUint8(150);
+      writeValue(buffer, value.encode());
+    } else if (value is NativeDialogSnapshot) {
+      buffer.putUint8(151);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -1391,26 +1478,28 @@ class _PigeonCodec extends StandardMessageCodec {
       case 139:
         return NativeFooter.decode(readValue(buffer)!);
       case 140:
-        return NativePage.decode(readValue(buffer)!);
+        return NativePageAction.decode(readValue(buffer)!);
       case 141:
-        return NativeSearchConfig.decode(readValue(buffer)!);
+        return NativePage.decode(readValue(buffer)!);
       case 142:
-        return NativeRect.decode(readValue(buffer)!);
+        return NativeSearchConfig.decode(readValue(buffer)!);
       case 143:
-        return NativeTabSnapshot.decode(readValue(buffer)!);
+        return NativeRect.decode(readValue(buffer)!);
       case 144:
-        return NativeDebugSnapshot.decode(readValue(buffer)!);
+        return NativeTabSnapshot.decode(readValue(buffer)!);
       case 145:
-        return NativeChromeConfig.decode(readValue(buffer)!);
+        return NativeDebugSnapshot.decode(readValue(buffer)!);
       case 146:
-        return NativeWindowControls.decode(readValue(buffer)!);
+        return NativeChromeConfig.decode(readValue(buffer)!);
       case 147:
-        return NativeDialogAction.decode(readValue(buffer)!);
+        return NativeWindowControls.decode(readValue(buffer)!);
       case 148:
-        return NativeDialogRequest.decode(readValue(buffer)!);
+        return NativeDialogAction.decode(readValue(buffer)!);
       case 149:
-        return NativeDialogResult.decode(readValue(buffer)!);
+        return NativeDialogRequest.decode(readValue(buffer)!);
       case 150:
+        return NativeDialogResult.decode(readValue(buffer)!);
+      case 151:
         return NativeDialogSnapshot.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
@@ -1733,6 +1822,10 @@ abstract class NativeShellFlutterApi {
   /// pop-to-root); native did not pop.
   void onPopToPage(int tab, int index);
 
+  /// The user tapped action [index] (reading order) of the page at [page]
+  /// (0 is the root) on tab [tab], showing [sfSymbol]; native ran nothing.
+  void onPageActionTapped(int tab, int page, int index, String sfSymbol);
+
   static void setUp(
     NativeShellFlutterApi? api, {
     BinaryMessenger? binaryMessenger,
@@ -2029,6 +2122,34 @@ abstract class NativeShellFlutterApi {
           final int arg_index = args[1]! as int;
           try {
             api.onPopToPage(arg_tab, arg_index);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          } catch (e) {
+            return wrapResponse(
+              error: PlatformException(code: 'error', message: e.toString()),
+            );
+          }
+        });
+      }
+    }
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+        'dev.flutter.pigeon.liquid_shell_ios.NativeShellFlutterApi.onPageActionTapped$messageChannelSuffix',
+        pigeonChannelCodec,
+        binaryMessenger: binaryMessenger,
+      );
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          final List<Object?> args = message! as List<Object?>;
+          final int arg_tab = args[0]! as int;
+          final int arg_page = args[1]! as int;
+          final int arg_index = args[2]! as int;
+          final String arg_sfSymbol = args[3]! as String;
+          try {
+            api.onPageActionTapped(arg_tab, arg_page, arg_index, arg_sfSymbol);
             return wrapResponse(empty: true);
           } on PlatformException catch (e) {
             return wrapResponse(error: e);

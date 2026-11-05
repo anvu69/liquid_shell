@@ -105,7 +105,8 @@ final class NativeChromeHost extends ChangeNotifier {
           LiquidNativeSearchScopeChanged() ||
           LiquidNativeSearchFieldChanged() ||
           LiquidNativeBackTapped() ||
-          LiquidNativePopToPage():
+          LiquidNativePopToPage() ||
+          LiquidNativePageActionTapped():
         if (_claims.isNotEmpty) _claims.last._onEvent(event);
       case LiquidNativeDestinationTapped() ||
           LiquidNativeTrailingTapped() ||

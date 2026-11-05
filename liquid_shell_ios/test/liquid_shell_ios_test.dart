@@ -120,6 +120,8 @@ class _FakeHost extends NativeShellHostApi {
         barHidden: false,
         titleModes: ['inline', 'never'],
         barHeight: 54,
+        actionSymbols: ['square.and.arrow.up', 'heart'],
+        actionsEnabled: [true, false],
       ),
     ],
   );
@@ -276,7 +278,12 @@ void main() {
     final platform = liquidShellIOSWithHost(host);
     await platform.setNativeSidebarVisible(visible: false);
     await platform.debugTap(NativeTapTarget.footer);
-    expect(host.calls, ['setSidebarVisible(false)', 'debugTap(footer, 0)']);
+    await platform.debugTap(NativeTapTarget.pageAction, 2);
+    expect(host.calls, [
+      'setSidebarVisible(false)',
+      'debugTap(footer, 0)',
+      'debugTap(pageAction, 2)',
+    ]);
   });
 
   test('failed calls are swallowed and logged once per method', () async {
@@ -418,6 +425,51 @@ void main() {
     expect(sent.tabs.last.pages.map((p) => p.largeTitle), [true, null]);
     expect(sent.search?.placeholder, 'Songs, places');
     expect(sent.search?.scopes, isNull);
+  });
+
+  test('updateNativeChrome sends page actions, at most three, in reading '
+      'order (VK-443)', () async {
+    final host = _FakeHost();
+    await liquidShellIOSWithHost(host).updateNativeChrome(
+      const LiquidNativeChromeConfig(
+        engaged: true,
+        tabs: [
+          LiquidNativeTab(
+            title: 'Home',
+            sfSymbol: 'house',
+            pages: [
+              LiquidNativePage(title: 'Home'),
+              LiquidNativePage(
+                title: 'Detail',
+                actions: [
+                  LiquidNativePageAction(
+                    sfSymbol: 'square.and.arrow.up',
+                    label: 'Share',
+                  ),
+                  LiquidNativePageAction(sfSymbol: 'heart', label: 'Favourite'),
+                  LiquidNativePageAction(
+                    sfSymbol: 'trash',
+                    label: 'Delete',
+                    enabled: false,
+                  ),
+                  LiquidNativePageAction(sfSymbol: 'flag', label: 'Report'),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    final pages = (host.calls.single as NativeChromeConfig).tabs.single.pages;
+    expect(pages.first.actions, isEmpty);
+    final actions = pages.last.actions;
+    expect(actions.map((a) => a.sfSymbol), [
+      'square.and.arrow.up',
+      'heart',
+      'trash',
+    ]);
+    expect(actions.map((a) => a.label), ['Share', 'Favourite', 'Delete']);
+    expect(actions.map((a) => a.enabled), [true, true, false]);
   });
 
   test('updateNativeChrome sends the scope titles', () async {
@@ -581,6 +633,11 @@ void main() {
     expect(snapshot.tabs.single.barHidden, isFalse);
     expect(snapshot.tabs.single.titleModes, ['inline', 'never']);
     expect(snapshot.tabs.single.barHeight, 54);
+    expect(snapshot.tabs.single.actionSymbols, [
+      'square.and.arrow.up',
+      'heart',
+    ]);
+    expect(snapshot.tabs.single.actionsEnabled, [true, false]);
     expect(host.calls, ['debugSnapshot']);
   });
 
@@ -614,6 +671,10 @@ void main() {
       );
       expect(await deliver('onBackTapped', [2]), isTrue);
       expect(await deliver('onPopToPage', [2, 0]), isTrue);
+      expect(
+        await deliver('onPageActionTapped', [2, 1, 0, 'heart']),
+        isTrue,
+      );
 
       expect(events, [
         const LiquidNativeSearchTextChanged('hô', composing: true),
@@ -622,6 +683,12 @@ void main() {
         const LiquidNativeSearchFieldChanged(Rect.fromLTWH(8, 490, 330, 48)),
         const LiquidNativeBackTapped(2),
         const LiquidNativePopToPage(2, index: 0),
+        const LiquidNativePageActionTapped(
+          2,
+          page: 1,
+          index: 0,
+          sfSymbol: 'heart',
+        ),
       ]);
     },
   );

@@ -1,5 +1,14 @@
 import UIKit
 
+/// A page without actions, as the root of a tab without pages and as most
+/// tests write it. Pigeon's Swift structs take no default values, so its
+/// memberwise init asks for `actions`.
+extension NativePage {
+  init(title: String, largeTitle: Bool? = nil) {
+    self.init(title: title, largeTitle: largeTitle, actions: [])
+  }
+}
+
 /// The clear navigation controller of every destination tab (spec P3b
 /// §7.1; P3b-2 §6.1). Its pages are clear `PageHostController`s that
 /// mirror the tab's Flutter pages; the Flutter view stays underneath and
@@ -136,6 +145,27 @@ final class ShellNavController: UINavigationController {
       host.title = page.title
       host.navigationItem.largeTitleDisplayMode = PageTitleMath.pushedMode
     }
+    // Every page's actions, the root's included (spec P3b-2 §8.4). A
+    // size-class change re-applies the pages, so the buttons follow with
+    // the titles. A tap is a proposal: Dart runs the action if that page
+    // still shows it on top (spec §5.3 rule 4); native changes nothing.
+    for (index, (host, page)) in zip(hosts, wanted).enumerated() {
+      host.setActions(page.actions) { [weak host] action in
+        guard let host, host.actions.indices.contains(action) else { return }
+        events.onPageActionTapped(
+          tab: Int64(tabIndex), page: Int64(index), index: Int64(action),
+          sfSymbol: host.actions[action].sfSymbol
+        ) { result in
+          #if DEBUG
+            if case .failure(let error) = result {
+              NSLog(
+                "[liquid_shell] sending onPageActionTapped to Dart failed: %@",
+                String(describing: error))
+            }
+          #endif
+        }
+      }
+    }
     let animated =
       shown && viewIfLoaded?.window != nil && !UIAccessibility.isReduceMotionEnabled
     let hideBar = !isSearch && PageTitleMath.barHidden(pages: pages, compact: compact)
@@ -210,6 +240,59 @@ final class PageHostController: UIViewController {
   /// once the page is back at offset 0 with the search inactive
   /// (`revealIfPending`).
   private var pendingReveal = false
+  /// The most actions a page shows (spec P3b-2 §4.3); Dart sends no more.
+  static let maxActions = 3
+
+  /// The page's actions as its bar shows them, reading order (spec P3b-2
+  /// §8.4).
+  private(set) var actions: [NativePageAction] = []
+  /// Proposes a tap on action i (reading order) to Dart. Replaced by every
+  /// `setActions`, so a tap always reaches the newest.
+  private var onActionTap: ((Int) -> Void)?
+
+  /// Shows [actions] (at most `maxActions`) as the bar's trailing buttons,
+  /// grouped by UIKit in one glass capsule. UIKit counts
+  /// `rightBarButtonItems` from the trailing edge: the reading-order list
+  /// goes in reversed, and RTL mirrors it. The items are rebuilt only when
+  /// a symbol, a label or an enabled state changes.
+  func setActions(_ actions: [NativePageAction], onTap: @escaping (Int) -> Void) {
+    onActionTap = onTap
+    let shown = Array(actions.prefix(Self.maxActions))
+    guard shown != self.actions else { return }
+    self.actions = shown
+    let items = shown.enumerated().map { index, action in actionItem(action, index: index) }
+    navigationItem.rightBarButtonItems = items.isEmpty ? nil : items.reversed()
+  }
+
+  /// A tap on action [index] (reading order), from its button or from
+  /// `debugTap`: an enabled action is proposed to Dart; nothing changes here.
+  func tapAction(at index: Int) {
+    guard actions.indices.contains(index), actions[index].enabled else { return }
+    onActionTap?(index)
+  }
+
+  /// One action's bar button: its SF Symbol, or its label as text when the
+  /// symbol does not exist (a debug log line each time the item is built). The accessibility label is
+  /// the label; the identifier is the symbol, which tests read.
+  private func actionItem(_ action: NativePageAction, index: Int) -> UIBarButtonItem {
+    let item = UIBarButtonItem(
+      primaryAction: UIAction { [weak self] _ in self?.tapAction(at: index) })
+    if let image = UIImage(systemName: action.sfSymbol) {
+      item.image = image
+    } else {
+      #if DEBUG
+        NSLog(
+          "[liquid_shell] no SF Symbol named \"%@\": the page action shows its label",
+          action.sfSymbol)
+      #endif
+      item.title = action.label
+    }
+    item.accessibilityLabel = action.label
+    item.accessibilityIdentifier = action.sfSymbol
+    item.isEnabled = action.enabled
+    return item
+  }
+
   /// The native back button's proposal (set for pushed pages).
   var onBack: (() -> Void)? {
     didSet {

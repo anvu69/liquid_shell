@@ -48,6 +48,13 @@ void main() {
     );
   });
 
+  test('page_action.dart is exported whole: LiquidPageAction (VK-443)', () {
+    expect(
+      _exports().where((e) => e.contains('page_action.dart')),
+      ["export 'src/pages/page_action.dart'"],
+    );
+  });
+
   test('the lens engine stays internal', () {
     for (final f in [
       'lens_track.dart',

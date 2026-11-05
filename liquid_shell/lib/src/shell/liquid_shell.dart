@@ -20,6 +20,7 @@ import 'package:liquid_shell/src/native/native_host.dart';
 import 'package:liquid_shell/src/native/native_layout.dart';
 import 'package:liquid_shell/src/native/native_minimize.dart';
 import 'package:liquid_shell/src/native/window_controls.dart';
+import 'package:liquid_shell/src/pages/liquid_page.dart';
 import 'package:liquid_shell/src/pages/page_registry.dart';
 import 'package:liquid_shell/src/search/search.dart';
 import 'package:liquid_shell/src/search/search_chrome.dart';
@@ -475,6 +476,13 @@ class _LiquidShellState extends State<LiquidShell>
         _rebuild();
       case LiquidWindowControlsChanged():
         break;
+      case LiquidNativePageActionTapped(
+        :final tab,
+        :final page,
+        :final index,
+        :final sfSymbol,
+      ):
+        _onNativePageAction(tab, page, index, sfSymbol);
     }
   }
 
@@ -605,8 +613,55 @@ class _LiquidShellState extends State<LiquidShell>
         LiquidNativePage(
           title: record.entry.title,
           largeTitle: record.entry.largeTitle,
+          // Truncated here: native never receives more than it shows.
+          actions: [
+            for (final action in record.entry.actions.take(
+              LiquidPage.maxActions,
+            ))
+              LiquidNativePageAction(
+                sfSymbol: action.sfSymbol,
+                label: action.label,
+                enabled: action.onPressed != null,
+              ),
+          ],
         ),
     ];
+  }
+
+  /// A native action tap: a proposal from native, with the action's
+  /// identity. It runs the action only while that page is still the
+  /// selected tab's top page, on screen above nothing, and its action
+  /// [index] still shows [sfSymbol] and is enabled; anything else (a tap
+  /// in flight across a push, a pop, a tab switch or a change of the
+  /// actions) is dropped, never mapped to another action. Under a stand-in
+  /// root native page i is record i - 1, and the stand-in has none. Native
+  /// changed nothing.
+  void _onNativePageAction(int tab, int page, int index, String sfSymbol) {
+    // Spec P3b-2 §8.4 and §5.3 rule 4. Checked at the boundary: indices
+    // from the platform.
+    if (page < 0 || index < 0 || index >= LiquidPage.maxActions) return;
+    if (tab !=
+            resolveSelectedIndex(
+              widget.selectedIndex,
+              widget.destinations.length,
+            ) ||
+        !_routeCurrent ||
+        _covered) {
+      return;
+    }
+    final stack = _stackRecords[tab];
+    final target = page - (_standInRoots.contains(tab) ? 1 : 0);
+    if (stack == null || stack.isEmpty || target != stack.length - 1) return;
+    final record = stack.last;
+    // A record unregisters before the post-frame stack refresh: never run a
+    // detached page's action.
+    if (!_pageRecords.contains(record)) return;
+    if (!(record.entry.route?.isCurrent ?? false)) return;
+    final actions = record.entry.actions;
+    if (index >= actions.length) return;
+    final action = actions[index];
+    if (action.sfSymbol != sfSymbol) return;
+    action.onPressed?.call();
   }
 
   /// The native back button: a proposal for the selected
@@ -2243,11 +2298,13 @@ final class _PageRecord implements PageHandle {
   /// view reports one.
   double? offset;
 
+  /// Always keeps [next], whose action callbacks are the newest; rebuilds
+  /// the shell only when the bars would change.
   @override
   void update(PageEntry next) {
-    if (next.sameAs(entry)) return;
+    final same = next.sameAs(entry);
     entry = next;
-    _shell._rebuild();
+    if (!same) _shell._rebuild();
   }
 
   @override

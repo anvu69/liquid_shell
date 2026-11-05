@@ -23,12 +23,22 @@ enum PageTitleMath {
     }
   }
 
+  /// Whether a plain tab's root page hides the bar: no title row, and no
+  /// actions. With actions ([hasActions]) a root without a title row shows
+  /// an inline bar (`.never`, the title small and centred) for them, as
+  /// the Flutter bar does (`pageTitleModeFor(hasActions:)`).
+  static func rootHidesBar(largeTitle: Bool?, compact: Bool, hasActions: Bool) -> Bool {
+    !hasActions && rootMode(largeTitle: largeTitle, compact: compact) == .never
+  }
+
   /// Whether a plain tab hides its navigation bar: without pages (the
   /// tab's pages do not use `LiquidPage`), and for a single root page with
-  /// no title row. A pushed page always shows it, with the back circle.
+  /// no title row and no actions. A pushed page always shows it, with the
+  /// back circle.
   static func barHidden(pages: [NativePage], compact: Bool) -> Bool {
     guard pages.count <= 1 else { return false }
     guard let root = pages.first else { return true }
-    return rootMode(largeTitle: root.largeTitle, compact: compact) == .never
+    return rootHidesBar(
+      largeTitle: root.largeTitle, compact: compact, hasActions: !root.actions.isEmpty)
   }
 }

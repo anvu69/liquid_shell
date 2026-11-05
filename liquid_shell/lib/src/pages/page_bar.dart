@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:liquid_shell/src/glass/liquid_glass.dart';
 import 'package:liquid_shell/src/native/window_controls.dart';
 import 'package:liquid_shell/src/pages/liquid_page.dart';
+import 'package:liquid_shell/src/pages/page_action.dart';
 import 'package:liquid_shell/src/pages/page_title.dart';
 import 'package:liquid_shell/src/shell/shell_scope.dart';
 
@@ -14,6 +16,9 @@ const double kLargeTitleExtent = 52;
 
 /// Fade height of the scroll-edge effect under the bar.
 const double _kEdgeFade = 24;
+
+/// Space between two action circles.
+const double _kActionGap = 8;
 
 /// The collapse of a collapsing large title at scroll [offset] (points
 /// scrolled below the top): the large row moves up by `largeShift`, from 0
@@ -31,8 +36,9 @@ const double _kEdgeFade = 24;
 }
 
 /// A `LiquidPage`'s bar where no native bar draws it: the glass back
-/// circle, the title as its [PageTitleMode] draws it, and a scroll-edge
-/// fade. Its child gets the bar's height added to its top padding, so
+/// circle, the title as its [PageTitleMode] draws it, the actions' glass
+/// circles at the trailing end, and a scroll-edge fade. Its child gets the
+/// bar's height added to its top padding, so
 /// `LiquidShellScope.contentPaddingOf` keeps content below it. A collapsing
 /// large title keeps that padding while it collapses, as UIKit holds the
 /// top inset, so the page is never rebuilt for a scroll frame.
@@ -45,6 +51,7 @@ class FlutterPageBar extends StatelessWidget {
     required this.hideLargeTitle,
     required this.child,
     this.scrollOffset,
+    this.actions = const <LiquidPageAction>[],
     super.key,
   }) : assert(mode != PageTitleMode.hidden, 'a hidden title has no bar');
 
@@ -64,6 +71,10 @@ class FlutterPageBar extends StatelessWidget {
   /// collapses a [PageTitleMode.largeCollapsing] title. Null: the title
   /// stays expanded.
   final ValueListenable<double>? scrollOffset;
+
+  /// Trailing actions, reading order. The bar draws the first
+  /// `LiquidPage.maxActions`; it does not assert (the page does).
+  final List<LiquidPageAction> actions;
 
   /// The page.
   final Widget child;
@@ -128,6 +139,7 @@ class FlutterPageBar extends StatelessWidget {
       // Hidden by an active search.
       _ => const SizedBox.shrink(),
     };
+    final shown = actions.take(LiquidPage.maxActions).toList();
     final padded = media.copyWith(
       padding: media.padding.copyWith(top: bottom),
       viewPadding: media.viewPadding.copyWith(top: bottom),
@@ -173,8 +185,18 @@ class FlutterPageBar extends StatelessWidget {
                   const SizedBox(width: 16),
                   if (canPop) const LiquidBackButton(),
                   Expanded(child: rowTitle),
-                  // Keeps an inline title centred against the back button.
-                  SizedBox(width: canPop ? 16 + LiquidBackButton.size : 16),
+                  if (shown.isEmpty)
+                    // Keeps an inline title centred against the back button.
+                    SizedBox(width: canPop ? 16 + LiquidBackButton.size : 16)
+                  else ...[
+                    // The title is centred between the back button (or the
+                    // leading edge) and the actions.
+                    for (final (i, action) in shown.indexed) ...[
+                      if (i > 0) const SizedBox(width: _kActionGap),
+                      _ActionCircle(action),
+                    ],
+                    const SizedBox(width: 16),
+                  ],
                 ],
               ),
             ),
@@ -208,6 +230,59 @@ class FlutterPageBar extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// One action of the bar: a 44 pt glass circle, as the back button, with
+/// the icon at 20 pt in `onSurface`, or `disabledColor` when the action has
+/// no `onPressed`.
+class _ActionCircle extends StatelessWidget {
+  const _ActionCircle(this.action);
+
+  final LiquidPageAction action;
+
+  @override
+  Widget build(BuildContext context) {
+    final onPressed = action.onPressed;
+    final theme = Theme.of(context);
+    return Semantics(
+      container: true,
+      button: true,
+      enabled: onPressed != null,
+      label: action.label,
+      onTap: onPressed,
+      excludeSemantics: true,
+      child: Tooltip(
+        message: action.label,
+        excludeFromSemantics: true,
+        child: SizedBox.square(
+          dimension: LiquidBackButton.size,
+          child: LiquidGlass(
+            borderRadius: const BorderRadius.all(
+              Radius.circular(LiquidBackButton.size / 2),
+            ),
+            child: Material(
+              type: MaterialType.transparency,
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: onPressed,
+                child: Center(
+                  child: IconTheme.merge(
+                    data: IconThemeData(
+                      size: 20,
+                      color: onPressed == null
+                          ? theme.disabledColor
+                          : theme.colorScheme.onSurface,
+                    ),
+                    child: action.icon,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
