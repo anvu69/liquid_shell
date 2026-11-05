@@ -556,6 +556,10 @@ class _DetailPageState extends State<_DetailPage> {
 
 <img src="doc/images/case_pages_home.png" width="260" alt="A root page: the large title on the bar row and an Add action"> <img src="doc/images/case_pages_detail.png" width="260" alt="A pushed page: the glass back button, a centred title and three actions, the last one disabled"> <img src="doc/images/case_pages_library.png" width="260" alt="A root page with a large-title row that collapses as the page scrolls">
 
+| iPhone, native | iPad, native |
+|---|---|
+| <img src="doc/images/native_iphone_pages.png" width="200" alt="UIKit's navigation bar on a pushed page of an iPhone: the glass back circle, the title and the actions in one glass group"> | <img src="doc/images/native_ipad_pages.png" width="320" alt="UIKit's navigation bar on a pushed page of an iPad, under the top tab bar"> |
+
 `LiquidHideChrome` over a `LiquidPage` hides the tab bar and the sidebar
 and keeps the page's bar, in both chromes; a tiled sidebar comes back when
 the page goes. For a page that fills the screen, leave `LiquidPage` out of
