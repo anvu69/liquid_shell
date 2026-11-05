@@ -552,6 +552,8 @@ class _DetailPageState extends State<_DetailPage> {
 }
 ```
 
+<img src="doc/images/case_pages_home.png" width="260" alt="A root page: the large title on the bar row and an Add action"> <img src="doc/images/case_pages_detail.png" width="260" alt="A pushed page: the glass back button, a centred title and three actions, the last one disabled"> <img src="doc/images/case_pages_library.png" width="260" alt="A root page with a large-title row that collapses as the page scrolls">
+
 `LiquidHideChrome` over a `LiquidPage` hides the tab bar and the sidebar
 and keeps the page's bar, in both chromes; a tiled sidebar comes back when
 the page goes. For a page that fills the screen, leave `LiquidPage` out of
