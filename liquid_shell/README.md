@@ -46,7 +46,9 @@ dependency.
 - **Search tab**: a real search tab, UIKit's own on iOS 26 (iPhone: the ⌕
   becomes the field and the tabs collapse; iPad: the field under the title
   row rises when active), the same states in glass elsewhere.
-- **Pages and the glass back button**: `LiquidPage`.
+- **Pages and the glass back button**: `LiquidPage`, with a collapsing
+  large title and up to three actions; UIKit's own navigation bar on every
+  tab with native chrome.
 - **Native alerts and action sheets** on iOS 26 (`UIAlertController`),
   the same glass drawn by Flutter elsewhere.
 - **Window controls**: on iPadOS 26 windowed apps, the shell's top row and
@@ -1480,12 +1482,18 @@ content viewer (see [Custom chrome](#custom-chrome)).
   shell nested in another shell's body (sub-tabs) takes it from the outer
   one, which then shows no navigation; give a nested shell
   `nativeChrome: LiquidNativeChrome.off`.
-- **Native navigation bars are on the search tab only** (planned for
-  every tab, see [Roadmap](#roadmap)). Under the native search tab, a pushed page's large title
-  is drawn small (`LiquidPage.largeTitle`).
 - **The native back swipe does not follow the finger yet.** Flutter's back
   gesture moves the page, and the native bar switches when it ends.
-- **Pages pushed above the shell keep the Flutter bar.**
+- **Pages pushed above the shell keep the Flutter bar**, and so do the
+  pages of a shell nested in another shell's body.
+- **Page actions are icons.** At most three per page; no avatar images or
+  menus yet. UIKit groups them in one glass capsule, the Flutter bar draws
+  one circle each.
+- **A native action tap is matched by tab and depth.** If the app replaces
+  the top page with another page at the same depth (a pop and a push in
+  one go) while a tap is on its way, the tap runs the new page's action at
+  the same position when that action has the same SF Symbol and is
+  enabled.
 - **Liquid glass inside another BackdropFilter draws frosted.** Flutter
   3.44 gives a nested filter coordinates relative to its parent's region,
   so the lens cannot be placed there.
@@ -1546,8 +1554,6 @@ content viewer (see [Custom chrome](#custom-chrome)).
 - **A tab revealed a few frames after it is selected** (a custom
   `navigatorContainerBuilder` that animates the switch): system back may
   not find that tab's navigator.
-- **Native navigation bars are on the search tab only** (see
-  [Limitations](#limitations)).
 - **iPhone in landscape with the keyboard up and native chrome:** the
   bottom inset is 0, so the search field covers the first result.
 
@@ -1574,12 +1580,14 @@ content viewer (see [Custom chrome](#custom-chrome)).
 ## Roadmap
 
 0.1.0 is the first release on pub.dev: the adaptive shell, the liquid,
-frosted and solid tiers, opt-in native iOS 26 chrome, native alerts and
-action sheets, the search tab with scopes, and `LiquidSegmentedControl`.
+frosted and solid tiers, opt-in native iOS 26 chrome with UIKit's
+navigation bar and page actions on every tab, native alerts and action
+sheets, the search tab with scopes, and `LiquidSegmentedControl`.
 
 Planned:
 
-- Native navigation bars on every tab (today: the search tab only).
+- A native back swipe that follows the finger.
+- Avatar images and menus as page actions.
 - Share sheet, haptics, date picker and text fields in native alerts.
 - A go_router adapter (a `StatefulShellRoute` builder, route-driven hide
   chrome). Until then, see
