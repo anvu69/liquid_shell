@@ -197,7 +197,7 @@ large-title collapse and its scroll-edge effect.
 | Field | Tab-hosted: the ⌕ beside the pill becomes the field at the bottom | `.stacked`: under the title row, rising into it when active |
 | `automaticallyActivatesSearch` | false: selecting the tab never focuses the field | false |
 | Prominent tab | The search tab on iOS 27 (a separate circle); iOS 26 has no such API | None: the system look per iPadOS version |
-| Root title | `.inline`: the large title on the bar row, as in Apple Music; with `largeTitle: true`, a large-title row that collapses, on iPad too | Small; at compact width a leading title item right of the window controls |
+| Root title | `.inline`: the large title on the bar row, as in Apple Music; with `largeTitle: true`, a large-title row that collapses | Small; at compact width a leading title item right of the window controls; with `largeTitle: true`, a large-title row that collapses |
 | `obscuresBackgroundDuringPresentation` | false: your results stay visible | false |
 
 Selecting the search tab is a proposal, as for every tab: the shell runs
