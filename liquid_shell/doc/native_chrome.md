@@ -197,7 +197,7 @@ large-title collapse and its scroll-edge effect.
 | Field | Tab-hosted: the ⌕ beside the pill becomes the field at the bottom | `.stacked`: under the title row, rising into it when active |
 | `automaticallyActivatesSearch` | false: selecting the tab never focuses the field | false |
 | Prominent tab | The search tab on iOS 27 (a separate circle); iOS 26 has no such API | None: the system look per iPadOS version |
-| Root title | `.inline`: the large title on the bar row, as in Apple Music; with `largeTitle: true`, a large-title row that collapses | Small; at compact width a leading title item right of the window controls |
+| Root title | `.inline`: the large title on the bar row, as in Apple Music; with `largeTitle: true`, a large-title row that collapses, on iPad too | Small; at compact width a leading title item right of the window controls |
 | `obscuresBackgroundDuringPresentation` | false: your results stay visible | false |
 
 Selecting the search tab is a proposal, as for every tab: the shell runs
@@ -226,7 +226,8 @@ pages do not use `LiquidPage` has no navigation bar and looks as before.
   page's large title sits on the bar row on an iPhone (and in a compact
   iPad window); on a regular iPad, where the top tab bar names the tab,
   the root shows no bar. `largeTitle: false` shows no bar either. The
-  search tab keeps its own root title: its bar holds the field.
+  search tab keeps its own root title: its bar holds the field. A root
+  page with actions gets an inline bar.
 - **Actions.** A page's `LiquidPageAction`s are its host's bar buttons,
   grouped by UIKit in one glass capsule at the trailing end, in reading
   order. A tap is a proposal: Dart runs the newest `onPressed` only while

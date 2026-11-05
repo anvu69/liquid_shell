@@ -481,8 +481,8 @@ the scroll-edge effect, and the actions as bar buttons. `LiquidPage` then
 draws only its child. Everywhere else (iOS before 26, Android,
 `nativeChrome: LiquidNativeChrome.off`, a `chromeBuilder`) it draws a
 Flutter glass bar laid out the same way. The page's first vertical scroll
-view drives the large title, the scroll-edge effect and the tab bar's
-minimize. A tab whose pages do not use `LiquidPage` has no bar and looks as
+view drives the large title and the scroll-edge effect; the tab bar's
+minimize follows every vertical body scroll on screen that is not nested. A tab whose pages do not use `LiquidPage` has no bar and looks as
 before.
 
 Titles follow one model in both bars:
