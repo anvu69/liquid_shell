@@ -200,6 +200,7 @@ class _DetailPage extends StatefulWidget {
   State<_DetailPage> createState() => _DetailPageState();
 }
 
+// #docregion pages
 class _DetailPageState extends State<_DetailPage> {
   bool _favourite = false;
   int _shares = 0;
@@ -244,6 +245,7 @@ class _DetailPageState extends State<_DetailPage> {
     );
   }
 }
+// #enddocregion pages
 
 class _PhotoPage extends StatelessWidget {
   const _PhotoPage();

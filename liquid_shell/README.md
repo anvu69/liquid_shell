@@ -470,21 +470,100 @@ never marks its text as composing, so `composing` will not warn you. More in
 ### Pages and the back button
 
 Wrap each page of a tab's navigator in a `LiquidPage(title:, child:)`. It
-gives the page its title and, when the navigator can pop, a 44pt glass
-`LiquidBackButton`. In the Flutter bar a root page's large title sits on
-the bar row, as Apple Music's does, and a pushed page's on a row below the
-back button.
+gives the page its title, a 44pt glass `LiquidBackButton` when the
+navigator can pop, and up to three trailing actions.
 
-Where the tab has a native navigation bar (iOS 26 native chrome: the search
-tab in this release) UIKit draws the title and its glass back circle, and
-`LiquidPage` draws only its child. Everywhere else it draws a Flutter glass
-bar. The page's first vertical scroll view drives the native large title
-and the scroll-edge effect.
+With native chrome on iOS 26 every tab's pages get UIKit's navigation bar:
+the title, the glass back circle and its history menu, the large title,
+the scroll-edge effect, and the actions as bar buttons. `LiquidPage` then
+draws only its child. Everywhere else (iOS before 26, Android,
+`nativeChrome: LiquidNativeChrome.off`, a `chromeBuilder`) it draws a
+Flutter glass bar laid out the same way. The page's first vertical scroll
+view drives the large title, the scroll-edge effect and the tab bar's
+minimize. A tab whose pages do not use `LiquidPage` has no bar and looks as
+before.
+
+Titles follow one model in both bars:
+
+| Page | `largeTitle` | Title |
+|---|---|---|
+| Pushed | any | Small and centred, beside the back button |
+| Root | `null` (default) | Large, on the bar row (as in Apple Music) in a compact window; no bar in a regular one, where the tab bar names the tab |
+| Root | `true` | A large-title row under the bar row, which collapses as the page scrolls |
+| Root | `false` | No bar |
+
+A root page with actions and no bar of its own gets a bar row with a small
+title, so its actions have somewhere to go.
+
+`LiquidPageAction(sfSymbol:, icon:, label:, onPressed:)` is one action:
+`sfSymbol` for the native bar button, `icon` for the Flutter bar, `label`
+for assistive technology and the tooltip. `onPressed: null` disables it.
+Actions are listed in reading order. More than three is a debug assertion;
+release builds show the first three. UIKit groups the buttons in one glass
+capsule; the Flutter bar draws a 44pt glass circle per action. This is a
+detail page of the example's Pages case (`_Page` puts a `LiquidPage` over
+the wallpaper):
+
+<?code-excerpt "pages.dart (pages)"?>
+```dart
+class _DetailPageState extends State<_DetailPage> {
+  bool _favourite = false;
+  int _shares = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final number = widget.number;
+    return _Page(
+      title: 'Detail $number',
+      actions: [
+        LiquidPageAction(
+          sfSymbol: 'square.and.arrow.up',
+          icon: const Icon(Icons.ios_share),
+          label: 'Share',
+          onPressed: () => setState(() => _shares++),
+        ),
+        LiquidPageAction(
+          sfSymbol: _favourite ? 'heart.fill' : 'heart',
+          icon: Icon(_favourite ? Icons.favorite : Icons.favorite_border),
+          label: 'Favourite',
+          onPressed: () => setState(() => _favourite = !_favourite),
+        ),
+        const LiquidPageAction(
+          sfSymbol: 'trash',
+          icon: Icon(Icons.delete_outline),
+          label: 'Delete',
+          onPressed: null,
+        ),
+      ],
+      children: [
+        _Row(
+          title: 'Detail ${number + 1}',
+          subtitle: 'One page deeper',
+          onTap: () => _push(context, _DetailPage(number: number + 1)),
+        ),
+        _Row(
+          title: 'Shared $_shares ${_shares == 1 ? 'time' : 'times'}',
+          subtitle: _favourite ? 'A favourite' : 'Not a favourite',
+        ),
+        for (var i = 1; i <= 30; i++) _Row(title: 'Detail $number item $i'),
+      ],
+    );
+  }
+}
+```
+
+`LiquidHideChrome` over a `LiquidPage` hides the tab bar and the sidebar
+and keeps the page's bar, in both chromes; a tiled sidebar comes back when
+the page goes. For a page that fills the screen, leave `LiquidPage` out of
+it. Pages pushed above the shell, and the pages of a shell nested in
+another shell's body, draw the Flutter bar.
 
 Every back respects the page's `PopScope`. The button, the native back
 circle and its long-press history menu (each page in turn, top first) call
 `Navigator.maybePop`, and Flutter's back swipe is off while a page refuses.
-A refused pop leaves the page and the bar where they were. System back and
+A refused pop leaves the page and the bar where they were. The iOS edge
+swipe is Flutter's on every tab: the page follows the finger, and the
+native bar switches when the gesture ends. System back and
 the iOS edge swipe pop the selected tab's top page first, also when the
 shell is itself a pushed page; only a tab at its root lets them pop the
 shell's route ([doc/router_integration.md](doc/router_integration.md#back-pops-the-tab-first)). `LiquidBackButton` also
