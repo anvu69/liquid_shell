@@ -1,4 +1,39 @@
-## 0.1.0-dev.10
+## 0.1.0-dev.11
+
+### Migration from 0.1.0-dev.10
+
+0.1.0-dev.10 has the API of 0.1.0-dev.9; these steps hold from either.
+
+1. **Native bars on every tab.** With native chrome on iOS 26+, a
+   `LiquidPage` on any tab now gets UIKit's navigation bar instead of the
+   Flutter bar. To keep the Flutter bar in a shell, pass
+   `nativeChrome: LiquidNativeChrome.off` (all of its chrome is then
+   Flutter's). Code that read `LiquidShellScopeData.nativePageBar` to decide
+   whether to draw its own title row now sees `true` on every tab of an
+   engaged shell.
+2. **`largeTitle: true` on a root page** is now a large-title row under the
+   bar row that collapses as the page scrolls, in both bars. Before, the
+   Flutter bar (and the iPhone's native search tab) put the large title on
+   the bar row: that look is now `largeTitle: null` in a compact window. In
+   a regular window there is no equivalent (a root page there shows no bar
+   row, or the collapsing row).
+3. **`largeTitle` on a pushed page is ignored**: its title is always
+   inline. Before, the Flutter bar drew a pushed page's large title on a
+   row of its own (UIKit already drew it small).
+4. **`LiquidHideChrome` over a `LiquidPage` keeps the page's bar** under
+   native chrome (the Flutter bar already did). For a page that fills the
+   screen, leave `LiquidPage` out of it.
+5. **Platform interface (implementers and exhaustive switches).**
+   `LiquidNativeEvent` gains `LiquidNativePageActionTapped`. It is sealed,
+   so an exhaustive `switch` over it needs the new case.
+   `LiquidNativeChromeConfig.tabBarHidden` and `LiquidNativePage.actions`
+   are new fields with defaults.
+6. **Native minimize follows pushed pages**: a behaviour change, no code
+   change needed.
+
+After 0.1.0, versions follow semver strictly.
+
+### Changes
 
 - **Flutter page bar, complete (VK-445).** On iOS before 26, on Android and
   with Flutter chrome, `LiquidPage(largeTitle: true)` on a root page now

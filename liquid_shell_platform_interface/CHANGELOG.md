@@ -1,4 +1,4 @@
-## 0.1.0-dev.10
+## 0.1.0-dev.11
 
 - `LiquidNativeChromeConfig.tabBarHidden` (default `false`): hide the tab
   bar and the sidebar but keep the selected tab's navigation bar. It joins

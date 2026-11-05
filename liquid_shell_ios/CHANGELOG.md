@@ -1,4 +1,4 @@
-## 0.1.0-dev.10
+## 0.1.0-dev.11
 
 - Every destination tab is a clear navigation controller (VK-441). Its
   root page host also carries the tab bar's minimize proxy, and so does
