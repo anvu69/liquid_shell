@@ -314,9 +314,9 @@ already includes the keyboard, and a `Scaffold` with
 
 A result usually pushes a detail. Give the search branch its own
 `Navigator` (see [router_integration.md](router_integration.md#a-search-branch))
-and wrap each page in `LiquidPage`. In the native search tab UIKit then
-draws the page's title and its glass back circle; elsewhere `LiquidPage`
-draws the Flutter glass bar. Every back, the native long-press history menu
+and wrap each page in `LiquidPage`. With native chrome UIKit then draws
+the page's title and its glass back circle, as on every tab; elsewhere
+`LiquidPage` draws the Flutter glass bar. Every back, the native long-press history menu
 included, goes through `Navigator.maybePop`, so `PopScope` runs.
 
 ## Troubleshooting

@@ -295,6 +295,32 @@ void main() {
     );
   });
 
+  test('nativeConfigFor carries tabBarHidden (P3b-2)', () {
+    LiquidNativeChromeConfig config({required bool tabBarHidden}) =>
+        nativeConfigFor(
+          engaged: true,
+          destinations: const [
+            LiquidDestination(
+              icon: Icon(Icons.home),
+              label: 'Home',
+              sfSymbol: 'house',
+            ),
+          ],
+          selectedIndex: 0,
+          trailing: null,
+          footer: null,
+          tint: const Color(0xFF3D5AFE),
+          dark: false,
+          rtl: false,
+          hidden: false,
+          interactive: true,
+          minimizeOnScroll: false,
+          tabBarHidden: tabBarHidden,
+        );
+    expect(config(tabBarHidden: true).tabBarHidden, isTrue);
+    expect(config(tabBarHidden: false).tabBarHidden, isFalse);
+  });
+
   group('P3b search', () {
     const search = LiquidDestination(
       icon: Icon(Icons.search),
@@ -435,25 +461,6 @@ void main() {
         );
         expect(nativeSymbolHint(const [home, search], null), isNull);
       });
-    });
-
-    test('nativePageBarFor: the search tab only, while engaged (P3b-1)', () {
-      expect(
-        nativePageBarFor(engaged: true, selected: 1, searchIndex: 1),
-        isTrue,
-      );
-      expect(
-        nativePageBarFor(engaged: true, selected: 0, searchIndex: 1),
-        isFalse,
-      );
-      expect(
-        nativePageBarFor(engaged: false, selected: 1, searchIndex: 1),
-        isFalse,
-      );
-      expect(
-        nativePageBarFor(engaged: true, selected: 0, searchIndex: null),
-        isFalse,
-      );
     });
   });
 }

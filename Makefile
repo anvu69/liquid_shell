@@ -19,7 +19,7 @@ COVERED := liquid_shell liquid_shell_platform_interface liquid_shell_ios liquid_
 COVERAGE_MIN := 90
 
 .PHONY: help get format format-check analyze test coverage goldens \
-        goldens-update provenance public-docs snippets verify pana publish-check \
+        goldens-plain goldens-liquid goldens-update provenance public-docs snippets verify pana publish-check \
         android-unit ios-unit ios-ui ios-minimize integration-ios integration-ios-native integration-android pigeon pigeon-check \
         test-impeller compare-images tab-traces tab-frames segment-traces \
         segment-frames
@@ -64,10 +64,19 @@ coverage: ## Tests with coverage; fails below COVERAGE_MIN, with no tests, with 
 	  $(DART) run tool/check_coverage.dart $$p/coverage/lcov.info $(COVERAGE_MIN); \
 	done
 
-goldens: ## Golden tests (reference toolchain: macOS + Flutter 3.44.x); liquid ones under Impeller
+goldens: goldens-plain goldens-liquid ## Golden tests (reference toolchain: macOS + Flutter 3.44.x); liquid ones under Impeller
+
+# The two halves of `goldens`. CI's latest-stable leg runs them as separate
+# steps: the plain half and the shader probes decide its colour, the liquid
+# half only informs (VK-700: newer engines draw the dark glass differently).
+goldens-plain: ## Plain golden tests (tag golden)
 	@if [ -d $(EXAMPLE)/test/goldens ]; then \
-	  cd $(EXAMPLE) && $(FLUTTER) test --tags golden && \
-	  $(FLUTTER) test --enable-impeller --tags liquid_golden; \
+	  cd $(EXAMPLE) && $(FLUTTER) test --tags golden; \
+	else echo "▸ no goldens yet"; fi
+
+goldens-liquid: ## Liquid-tier golden tests under Impeller (tag liquid_golden)
+	@if [ -d $(EXAMPLE)/test/goldens ]; then \
+	  cd $(EXAMPLE) && $(FLUTTER) test --enable-impeller --tags liquid_golden; \
 	else echo "▸ no goldens yet"; fi
 
 goldens-update: ## Regenerate every golden and doc image, then recompress them losslessly
@@ -195,6 +204,11 @@ ios-unit: ## XCTest of liquid_shell_ios (example RunnerTests) on an iPad or iPho
 # CI ran those 26 iPhone tests in 1092-1156 s and the iPad's 18 in 847-849 s
 # (PR #15). The final review's lock test (one more iPhone launch, 35 s
 # locally) makes 27 of 29: well inside the cap.
+# P3b-2 adds PagesUITests (2) and a MinimizeUITests test (iPhone only):
+# 32 in the suite, 30 run on an iPhone, 20 on an iPad. The three new ones
+# took 46 s on an iPhone 17 Pro (iOS 26.5); scaled as above, about 150 s
+# on the slow runner, so CI's iPhone run grows to about 1430 s and 2100 s
+# still keeps ~670 s in hand.
 IOS_UI_TIMEOUT ?= 2100
 IOS_UI_RESULT := $(CURDIR)/$(EXAMPLE)/build/ios-ui.xcresult
 

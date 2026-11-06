@@ -221,32 +221,79 @@ class LiquidNativeFooter {
       'sfSymbol: $sfSymbol, semanticLabel: $semanticLabel)';
 }
 
-/// One page of a tab's navigation stack (root first): its title for the
-/// native navigation bar.
+/// A trailing action of a page's native navigation bar: a bar button.
+@immutable
+class LiquidNativePageAction {
+  /// Creates an action.
+  const LiquidNativePageAction({
+    required this.sfSymbol,
+    required this.label,
+    this.enabled = true,
+  });
+
+  /// SF Symbol name of the button's image, for example `heart`.
+  final String sfSymbol;
+
+  /// Accessibility label; the button's text when [sfSymbol] names no
+  /// symbol.
+  final String label;
+
+  /// Whether the button can be tapped.
+  final bool enabled;
+
+  @override
+  bool operator ==(Object other) =>
+      other is LiquidNativePageAction &&
+      other.sfSymbol == sfSymbol &&
+      other.label == label &&
+      other.enabled == enabled;
+
+  @override
+  int get hashCode => Object.hash(sfSymbol, label, enabled);
+
+  @override
+  String toString() =>
+      'LiquidNativePageAction(sfSymbol: $sfSymbol, label: $label, '
+      'enabled: $enabled)';
+}
+
+/// One page of a tab's navigation stack (root first): its title and its
+/// actions for the native navigation bar.
 @immutable
 class LiquidNativePage {
   /// Creates a page.
-  const LiquidNativePage({required this.title, this.largeTitle});
+  const LiquidNativePage({
+    required this.title,
+    this.largeTitle,
+    this.actions = const [],
+  });
 
   /// Navigation bar title.
   final String title;
 
-  /// Large title; null leaves it to the platform (large on a phone's root
-  /// page, inline elsewhere).
+  /// A root page's large title: `true`, its own row that collapses as the
+  /// page scrolls; `null`, on the bar row at compact width; `false`, none.
+  /// A pushed page never has one.
   final bool? largeTitle;
+
+  /// Trailing actions, in reading order (leading to trailing). The shell
+  /// sends at most three.
+  final List<LiquidNativePageAction> actions;
 
   @override
   bool operator ==(Object other) =>
       other is LiquidNativePage &&
       other.title == title &&
-      other.largeTitle == largeTitle;
+      other.largeTitle == largeTitle &&
+      listEquals(other.actions, actions);
 
   @override
-  int get hashCode => Object.hash(title, largeTitle);
+  int get hashCode => Object.hash(title, largeTitle, Object.hashAll(actions));
 
   @override
   String toString() =>
-      'LiquidNativePage(title: $title, largeTitle: $largeTitle)';
+      'LiquidNativePage(title: $title, largeTitle: $largeTitle, '
+      'actions: $actions)';
 }
 
 /// The native search field of the search tab.
@@ -301,6 +348,7 @@ class LiquidNativeChromeConfig {
     this.hidden = false,
     this.interactive = true,
     this.minimizeOnScroll = false,
+    this.tabBarHidden = false,
   });
 
   /// No shell uses native chrome: hidden, and Flutter gets the whole window.
@@ -346,6 +394,11 @@ class LiquidNativeChromeConfig {
   /// down (`LiquidShell.minimizeOnScroll`).
   final bool minimizeOnScroll;
 
+  /// Hide the tab bar and the sidebar but keep the selected tab's
+  /// navigation bar (a hide request over a page with a native bar).
+  /// Ignored while [hidden].
+  final bool tabBarHidden;
+
   /// Whether the native chrome is on screen.
   bool get visible => engaged && !hidden;
 
@@ -363,7 +416,8 @@ class LiquidNativeChromeConfig {
       other.rtl == rtl &&
       other.hidden == hidden &&
       other.interactive == interactive &&
-      other.minimizeOnScroll == minimizeOnScroll;
+      other.minimizeOnScroll == minimizeOnScroll &&
+      other.tabBarHidden == tabBarHidden;
 
   @override
   int get hashCode => Object.hash(
@@ -379,6 +433,7 @@ class LiquidNativeChromeConfig {
     hidden,
     interactive,
     minimizeOnScroll,
+    tabBarHidden,
   );
 
   @override
@@ -388,7 +443,7 @@ class LiquidNativeChromeConfig {
       'search: $search, '
       'tintArgb: 0x${tintArgb.toRadixString(16).padLeft(8, '0')}, '
       'dark: $dark, rtl: $rtl, hidden: $hidden, interactive: $interactive, '
-      'minimizeOnScroll: $minimizeOnScroll)';
+      'minimizeOnScroll: $minimizeOnScroll, tabBarHidden: $tabBarHidden)';
 }
 
 /// Something the native side reports.
@@ -640,4 +695,47 @@ final class LiquidNativePopToPage extends LiquidNativeEvent {
 
   @override
   String toString() => 'LiquidNativePopToPage($tab, index: $index)';
+}
+
+/// The user tapped action [index] of the page at [page] (0 is the root of
+/// the tab's native stack) on tab [tab]. A proposal, like a back tap:
+/// native runs nothing. The shell runs the action only if that page is
+/// still on top of the selected tab and its action [index] still shows
+/// [sfSymbol] and is enabled; otherwise the tap is dropped.
+final class LiquidNativePageActionTapped extends LiquidNativeEvent {
+  /// Creates the event.
+  const LiquidNativePageActionTapped(
+    this.tab, {
+    required this.page,
+    required this.index,
+    required this.sfSymbol,
+  });
+
+  /// Index of the destination whose page was tapped.
+  final int tab;
+
+  /// The page, counted from the root of the tab's native stack (0).
+  final int page;
+
+  /// The action, in reading order (0 is the leading one).
+  final int index;
+
+  /// The SF Symbol the tapped button showed.
+  final String sfSymbol;
+
+  @override
+  bool operator ==(Object other) =>
+      other is LiquidNativePageActionTapped &&
+      other.tab == tab &&
+      other.page == page &&
+      other.index == index &&
+      other.sfSymbol == sfSymbol;
+
+  @override
+  int get hashCode => Object.hash(tab, page, index, sfSymbol);
+
+  @override
+  String toString() =>
+      'LiquidNativePageActionTapped($tab, page: $page, index: $index, '
+      'sfSymbol: $sfSymbol)';
 }

@@ -1,3 +1,27 @@
+## 0.1.0-dev.11
+
+- Every destination tab is a clear navigation controller (VK-441). Its
+  root page host also carries the tab bar's minimize proxy, and so does
+  every pushed host. The bar is hidden without pages and for a single root
+  page with an inline title. The channel gains
+  `NativeChromeConfig.tabBarHidden` and a per-tab debug snapshot
+  (`NativeDebugSnapshot.tabs`, with each tab's bar height).
+- A root page's large title that turns on while the page is on screen (a
+  tab's pages arrive once the tab shows) is drawn out at rest; UIKit kept
+  it collapsed. So is an iPad search root's when it asks for a large title
+  while shown (VK-441).
+- `tabBarHidden` hides the tab bar and the sidebar, keeps the navigation
+  bar, puts a tiled sidebar back afterwards and dismisses an active search
+  keeping its text (VK-442).
+- Window controls are zero while the selected tab's navigation bar shows,
+  also at compact width; real under a hidden one (VK-442).
+- Page actions (VK-443): `NativePage.actions` become the page host's
+  `rightBarButtonItems` (the SF Symbol image, the accessibility label, the
+  enabled state; an unknown symbol shows the label as text). A tap sends
+  `onPageActionTapped(tab, page, index, sfSymbol)` and changes nothing
+  natively. Tests get `debugTap(.pageAction, index)` and the top page's
+  `actionSymbols` and `actionsEnabled` in `NativeDebugSnapshot.tabs`.
+
 ## 0.1.0-dev.10
 
 Version bump to match liquid_shell.

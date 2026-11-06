@@ -524,19 +524,21 @@ void main() {
   });
 
   // Replaces the plan's version, whose controls were set after the pump
-  // and never read, so it could not fail (review I-3).
-  testWidgets('the search tab has a native bar: no Flutter bar, no controls', (
+  // and never read, so it could not fail (review I-3). P3b-2: every tab has
+  // a native bar; Home's is hidden (no pages), so native reports the real
+  // cluster, and Dart passes it on.
+  testWidgets('every tab has a native bar; the search tab has no controls', (
     tester,
   ) async {
     const controls = LiquidWindowControls(leading: 66, top: 24);
     final (fake, _, _) = await _pump(tester, initialIndex: 0);
     fake.emitNative(const LiquidWindowControlsChanged(controls));
     await tester.pump();
-    expect(_scope(tester, 'Home').nativePageBar, isFalse);
+    expect(_scope(tester, 'Home').nativePageBar, isTrue);
     expect(
       _scope(tester, 'Home').windowControls,
       controls,
-      reason: "the compact bar is at the bottom: the top is the page's",
+      reason: "Home's bar is hidden: native's report is the page's to clear",
     );
     fake.emitNative(const LiquidNativeDestinationTapped(2));
     await tester.pumpAndSettle();
@@ -793,10 +795,12 @@ void main() {
       expect(find.bySemanticsLabel('Go back'), findsOneWidget);
     });
 
-    testWidgets('native chrome gives a Flutter page bar the strings', (
-      tester,
-    ) async {
-      installFakeNative(state: _compact);
+    // P3b-2: an engaged shell draws no Flutter page bar on any tab; one
+    // still waiting for the platform does, with the shell's strings.
+    testWidgets('a pending native shell gives a Flutter page bar the '
+        'strings', (tester) async {
+      installFakeNative(state: _compact).attachGate =
+          Completer<LiquidNativeShellState>();
       final controller = LiquidSearchController();
       addTearDown(controller.dispose);
       await pumpShell(
@@ -809,7 +813,7 @@ void main() {
         ),
         padding: _compactPadding,
       );
-      expect(scopeOf(tester).nativeChrome, isTrue);
+      expect(scopeOf(tester).nativePageBar, isFalse, reason: 'pending');
       await _pushDetail(tester, navigator: _homeNavigator);
       expect(find.bySemanticsLabel('Go back'), findsOneWidget);
     });
@@ -895,18 +899,19 @@ void main() {
       },
     );
 
-    testWidgets('nothing for a tab without a native bar or a covered page', (
-      tester,
-    ) async {
+    // P3b-2: every tab has a native bar, so Home's top page sends too.
+    testWidgets("every tab's top page sends its offset; a covered page "
+        'sends nothing', (tester) async {
       final (fake, _, _) = await _pump(
         tester,
         initialIndex: 0,
         pageBuilder: _homeLiquidPage,
       );
+      fake.pageScrolls.clear();
       _position(tester, 'Home').jumpTo(200);
       await tester.pump();
       await tester.pump();
-      expect(fake.pageScrolls, isEmpty, reason: 'Home has no native bar');
+      expect(fake.pageScrolls, [(0, 200.0)], reason: 'Home has a native bar');
 
       fake.emitNative(const LiquidNativeDestinationTapped(2));
       await tester.pumpAndSettle();

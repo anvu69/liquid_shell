@@ -1,3 +1,16 @@
+## 0.1.0-dev.11
+
+- `LiquidNativeChromeConfig.tabBarHidden` (default `false`): hide the tab
+  bar and the sidebar but keep the selected tab's navigation bar. It joins
+  `==`, `hashCode` and `toString` (VK-442).
+- `LiquidNativePage.largeTitle` applies to a tab's root page only; pushed
+  pages are inline (VK-442).
+- **Breaking (VK-443).** Page actions: `LiquidNativePageAction` (`sfSymbol`,
+  `label`, `enabled`), `LiquidNativePage.actions` (default empty) and the
+  event `LiquidNativePageActionTapped(tab, page:, index:, sfSymbol:)`.
+  `LiquidNativeEvent` is sealed: an exhaustive `switch` over it needs the
+  new case.
+
 ## 0.1.0-dev.10
 
 Version bump to match liquid_shell.

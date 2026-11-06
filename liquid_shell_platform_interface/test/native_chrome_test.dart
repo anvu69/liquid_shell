@@ -378,7 +378,7 @@ void main() {
       );
       expect(
         const LiquidNativePage(title: 'A', largeTitle: true).toString(),
-        'LiquidNativePage(title: A, largeTitle: true)',
+        'LiquidNativePage(title: A, largeTitle: true, actions: [])',
       );
     });
 
@@ -571,5 +571,137 @@ void main() {
       const LiquidNativeChromeConfig(engaged: true, minimizeOnScroll: true),
     );
     expect(on.toString(), contains('minimizeOnScroll: true'));
+  });
+
+  test('tabBarHidden: off by default, part of equality (VK-442)', () {
+    const shown = LiquidNativeChromeConfig(engaged: true);
+    const hidden = LiquidNativeChromeConfig(engaged: true, tabBarHidden: true);
+    expect(shown.tabBarHidden, isFalse);
+    expect(LiquidNativeChromeConfig.dormant.tabBarHidden, isFalse);
+    expect(hidden, isNot(shown));
+    expect(hidden.hashCode, isNot(shown.hashCode));
+    expect(
+      hidden,
+      const LiquidNativeChromeConfig(engaged: true, tabBarHidden: true),
+    );
+    expect(hidden.toString(), contains('tabBarHidden: true'));
+    expect(hidden.visible, isTrue, reason: 'only the tab bar hides');
+  });
+
+  group('VK-443: page actions', () {
+    const heart = LiquidNativePageAction(sfSymbol: 'heart', label: 'Favourite');
+
+    test('LiquidNativePageAction is enabled by default and compares field '
+        'by field', () {
+      expect(heart.enabled, isTrue);
+      expect(
+        heart,
+        const LiquidNativePageAction(sfSymbol: 'heart', label: 'Favourite'),
+      );
+      for (final other in const [
+        LiquidNativePageAction(sfSymbol: 'heart.fill', label: 'Favourite'),
+        LiquidNativePageAction(sfSymbol: 'heart', label: 'Like'),
+        LiquidNativePageAction(
+          sfSymbol: 'heart',
+          label: 'Favourite',
+          enabled: false,
+        ),
+      ]) {
+        expect(other, isNot(heart), reason: '$other');
+      }
+      expect(
+        heart.hashCode,
+        const LiquidNativePageAction(
+          sfSymbol: 'heart',
+          label: 'Favourite',
+        ).hashCode,
+      );
+      expect(
+        heart.toString(),
+        'LiquidNativePageAction(sfSymbol: heart, label: Favourite, '
+        'enabled: true)',
+      );
+    });
+
+    test('LiquidNativePage has no actions by default; they join ==, '
+        'hashCode and toString', () {
+      const plain = LiquidNativePage(title: 'Detail');
+      const withHeart = LiquidNativePage(title: 'Detail', actions: [heart]);
+      expect(plain.actions, isEmpty);
+      expect(withHeart, isNot(plain));
+      expect(
+        withHeart,
+        const LiquidNativePage(
+          title: 'Detail',
+          actions: [
+            LiquidNativePageAction(sfSymbol: 'heart', label: 'Favourite'),
+          ],
+        ),
+      );
+      expect(
+        withHeart.hashCode,
+        const LiquidNativePage(title: 'Detail', actions: [heart]).hashCode,
+      );
+      expect(
+        const LiquidNativePage(
+          title: 'Detail',
+          actions: [
+            LiquidNativePageAction(
+              sfSymbol: 'heart',
+              label: 'Favourite',
+              enabled: false,
+            ),
+          ],
+        ),
+        isNot(withHeart),
+        reason: 'the enabled state is part of the page',
+      );
+      expect(
+        withHeart.toString(),
+        'LiquidNativePage(title: Detail, largeTitle: null, actions: '
+        '[LiquidNativePageAction(sfSymbol: heart, label: Favourite, '
+        'enabled: true)])',
+      );
+    });
+
+    test('LiquidNativePageActionTapped compares, hashes and names every '
+        'field', () {
+      const tap = LiquidNativePageActionTapped(
+        1,
+        page: 2,
+        index: 0,
+        sfSymbol: 'heart',
+      );
+      expect(
+        tap,
+        const LiquidNativePageActionTapped(
+          1,
+          page: 2,
+          index: 0,
+          sfSymbol: 'heart',
+        ),
+      );
+      for (final other in const [
+        LiquidNativePageActionTapped(0, page: 2, index: 0, sfSymbol: 'heart'),
+        LiquidNativePageActionTapped(1, page: 1, index: 0, sfSymbol: 'heart'),
+        LiquidNativePageActionTapped(1, page: 2, index: 1, sfSymbol: 'heart'),
+        LiquidNativePageActionTapped(1, page: 2, index: 0, sfSymbol: 'trash'),
+      ]) {
+        expect(other, isNot(tap), reason: '$other');
+      }
+      expect(
+        tap.hashCode,
+        const LiquidNativePageActionTapped(
+          1,
+          page: 2,
+          index: 0,
+          sfSymbol: 'heart',
+        ).hashCode,
+      );
+      expect(
+        tap.toString(),
+        'LiquidNativePageActionTapped(1, page: 2, index: 0, sfSymbol: heart)',
+      );
+    });
   });
 }

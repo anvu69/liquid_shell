@@ -84,12 +84,28 @@ class NativeFooter {
   String semanticLabel;
 }
 
+/// A trailing action of a page's navigation bar: a bar button.
+class NativePageAction {
+  NativePageAction({
+    required this.sfSymbol,
+    required this.label,
+    required this.enabled,
+  });
+
+  String sfSymbol;
+  String label;
+  bool enabled;
+}
+
 /// One page of a tab's navigation stack (root first).
 class NativePage {
-  NativePage({required this.title, this.largeTitle});
+  NativePage({required this.title, required this.actions, this.largeTitle});
 
   String title;
   bool? largeTitle;
+
+  /// Trailing actions in reading order; Dart sends at most three.
+  List<NativePageAction> actions;
 }
 
 /// The search tab's field.
@@ -118,6 +134,44 @@ class NativeRect {
   double height;
 }
 
+/// Debug builds: one destination's navigation controller.
+class NativeTabSnapshot {
+  NativeTabSnapshot({
+    required this.tab,
+    required this.pageTitles,
+    required this.barHidden,
+    required this.titleModes,
+    required this.barHeight,
+    required this.actionSymbols,
+    required this.actionsEnabled,
+  });
+
+  /// The destination's index in the config's tabs.
+  int tab;
+
+  /// The navigation titles, root first.
+  List<String> pageTitles;
+
+  /// Whether the navigation bar is hidden.
+  bool barHidden;
+
+  /// Each page's `largeTitleDisplayMode`, root first: "inline", "always",
+  /// "never" or "automatic".
+  List<String> titleModes;
+
+  /// The navigation bar's height in points as UIKit lays it out, 0 while
+  /// hidden. A root's large title row is in it: it drops by that row when
+  /// the title collapses.
+  double barHeight;
+
+  /// The top page's bar buttons, reading order: each one's SF Symbol (its
+  /// accessibility identifier).
+  List<String> actionSymbols;
+
+  /// The top page's bar buttons, reading order: whether each is enabled.
+  List<bool> actionsEnabled;
+}
+
 /// Debug builds: the native search and page state, for integration tests.
 class NativeDebugSnapshot {
   NativeDebugSnapshot({
@@ -134,6 +188,7 @@ class NativeDebugSnapshot {
     required this.scopeFrame,
     required this.minimizeBehavior,
     required this.minimizePanAttached,
+    required this.tabs,
   });
 
   /// The selected `UITab`'s identifier ("destination<i>", or "" when none).
@@ -167,6 +222,9 @@ class NativeDebugSnapshot {
 
   /// Whether a tab's minimize proxy pan is on the Flutter view.
   bool minimizePanAttached;
+
+  /// Every destination's navigation controller, in tab order.
+  List<NativeTabSnapshot> tabs;
 }
 
 /// The whole chrome. Applied in order: tabs, selection, footer, tint,
@@ -182,6 +240,7 @@ class NativeChromeConfig {
     required this.hidden,
     required this.interactive,
     required this.minimizeOnScroll,
+    required this.tabBarHidden,
     this.trailing,
     this.footer,
     this.search,
@@ -201,6 +260,10 @@ class NativeChromeConfig {
 
   /// The compact tab bar minimizes while the body scrolls down (VK-600).
   bool minimizeOnScroll;
+
+  /// Hide the tab bar and the sidebar, keep the selected tab's navigation
+  /// bar. Ignored while [hidden].
+  bool tabBarHidden;
 }
 
 class NativeWindowControls {
@@ -218,6 +281,9 @@ enum NativeTapTarget {
   searchField,
   searchCancel,
   back,
+
+  /// `index`: an action of the selected tab's top page, reading order.
+  pageAction,
 }
 
 /// Dart → native.
@@ -291,6 +357,10 @@ abstract class NativeShellFlutterApi {
   /// UIKit asked to pop tab [tab] to the page at [index] (the back menu, a
   /// pop-to-root); native did not pop.
   void onPopToPage(int tab, int index);
+
+  /// The user tapped action [index] (reading order) of the page at [page]
+  /// (0 is the root) on tab [tab], showing [sfSymbol]; native ran nothing.
+  void onPageActionTapped(int tab, int page, int index, String sfSymbol);
 }
 
 // --- Native dialogs (spec P3a §6) ------------------------------------------

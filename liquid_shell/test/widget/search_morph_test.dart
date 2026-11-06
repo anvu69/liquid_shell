@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
@@ -279,4 +280,136 @@ void main() {
       }
     });
   }
+
+  // VK-779: in compact landscape the idle ⌕ is as wide as the 44 bar is
+  // tall, and the field's Row has 56 of fixed parts (14 + 20 + 8 + 14).
+  // Idle paints the Row at opacity 0; the first frame out of idle painted
+  // it at 44: "A RenderFlex overflowed by 12 pixels on the right".
+  group('VK-779: compact landscape, idle → selected', () {
+    const platforms = TargetPlatformVariant({
+      TargetPlatform.iOS,
+      TargetPlatform.android,
+    });
+
+    /// The shell in compact landscape, Flutter chrome, on Home.
+    Future<GlobalKey<TestShellState>> pumpLandscape(
+      WidgetTester tester, {
+      TextDirection direction = TextDirection.ltr,
+    }) async {
+      final shell = GlobalKey<TestShellState>();
+      final controller = LiquidSearchController();
+      addTearDown(controller.dispose);
+      await pumpShell(
+        tester,
+        TestShell(
+          key: shell,
+          destinations: _destinations,
+          search: LiquidSearch(controller: controller),
+        ),
+        size: kPhoneLandscape,
+        padding: const EdgeInsets.only(bottom: 21),
+        platform: defaultTargetPlatform,
+        direction: direction,
+      );
+      expect(
+        tester.getSize(find.byKey(kSearchFieldKey)).width,
+        44,
+        reason: 'the landscape ⌕',
+      );
+      return shell;
+    }
+
+    /// The morph ran with no error, and the field is selected at its full
+    /// width, the text field taking all but the fixed parts.
+    void expectSelected(WidgetTester tester) {
+      expect(tester.takeException(), isNull, reason: 'no overflow');
+      expect(
+        scopeOf(tester, 'Search').searchPhase,
+        LiquidSearchPhase.selected,
+      );
+      final field = tester.getSize(find.byKey(kSearchFieldKey)).width;
+      expect(tester.getSize(find.byType(TextField)).width, field - 56);
+    }
+
+    testWidgets('a tap on the ⌕', (tester) async {
+      await pumpLandscape(tester);
+      await tester.tap(find.bySemanticsLabel('Search'));
+      await tester.pumpAndSettle();
+      expectSelected(tester);
+    }, variant: platforms);
+
+    testWidgets('a lens drag dropped on the ⌕', (tester) async {
+      await pumpLandscape(tester);
+      final g = await _hoverSearch(tester);
+      await g.up();
+      await tester.pumpAndSettle();
+      expectSelected(tester);
+    }, variant: platforms);
+
+    testWidgets('the app selects the search tab', (tester) async {
+      final shell = await pumpLandscape(tester);
+      shell.currentState!.select(2);
+      await tester.pumpAndSettle();
+      expectSelected(tester);
+    }, variant: platforms);
+
+    for (final direction in TextDirection.values) {
+      testWidgets('the first frame shows the leading edge '
+          '(${direction.name})', (tester) async {
+        await pumpLandscape(tester, direction: direction);
+        await tester.tap(find.bySemanticsLabel('Search'));
+        await tester.pump();
+        final field = tester.getRect(find.byKey(kSearchFieldKey));
+        expect(field.width, 44, reason: "the morph's first frame");
+        final icon = tester.getRect(
+          find.descendant(
+            of: find.byKey(kSearchFieldKey),
+            matching: find.byIcon(Icons.search),
+          ),
+        );
+        if (direction == TextDirection.ltr) {
+          expect(icon.left, field.left + 14);
+        } else {
+          expect(icon.right, field.right - 14);
+        }
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    // The IME rule: the field is never rebuilt, so a composition survives
+    // every phase change.
+    testWidgets('the field is one element from idle to active and back', (
+      tester,
+    ) async {
+      await pumpLandscape(tester);
+      final element = tester.element(find.byType(TextField));
+      await tester.tap(find.bySemanticsLabel('Search'));
+      await tester.pumpAndSettle();
+      expect(
+        identical(tester.element(find.byType(TextField)), element),
+        isTrue,
+        reason: 'selected',
+      );
+      await tester.tap(find.byType(TextField));
+      await tester.pumpAndSettle();
+      expect(
+        scopeOf(tester, 'Search').searchPhase,
+        LiquidSearchPhase.active,
+      );
+      expect(
+        identical(tester.element(find.byType(TextField)), element),
+        isTrue,
+        reason: 'active',
+      );
+      await tester.tap(find.bySemanticsLabel('Cancel search'));
+      await tester.pumpAndSettle();
+      expect(
+        identical(tester.element(find.byType(TextField)), element),
+        isTrue,
+        reason: 'selected again',
+      );
+      expect(tester.takeException(), isNull);
+    });
+  });
 }

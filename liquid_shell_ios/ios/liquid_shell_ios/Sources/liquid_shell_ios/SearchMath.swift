@@ -28,7 +28,9 @@ enum SearchMath {
   /// (`.inline`, Apple Music), and on iOS 27 the prominent search tab
   /// (without it 27 makes Search an inline tab). iPad (any width): the
   /// stacked field, always visible, under a small title; never prominent
-  /// (Q1). The app's `largeTitle` wins when set.
+  /// (Q1). The app's `largeTitle` wins when set: `true` is the collapsing
+  /// row (`.always`) on both, as on every tab (spec P3b-2 §4.2); `false`
+  /// no large title.
   ///
   /// UIKit draws no `.never` or `.inline` title for a `UISearchTab`'s root
   /// on an iPad (measured on 26.5 and 27.0; a plain `UITab`'s root shows
@@ -42,9 +44,14 @@ enum SearchMath {
         placement: .stacked, hidesWhenScrolling: false, titleMode: large ? .always : .never,
         titleItem: !large, prominent: false)
     }
+    let titleMode: UINavigationItem.LargeTitleDisplayMode
+    switch rootLargeTitle {
+    case true?: titleMode = .always
+    case false?: titleMode = .never
+    case nil: titleMode = .inline
+    }
     return SearchTabStyle(
-      placement: .automatic, hidesWhenScrolling: nil,
-      titleMode: (rootLargeTitle ?? true) ? .inline : .never, titleItem: false,
+      placement: .automatic, hidesWhenScrolling: nil, titleMode: titleMode, titleItem: false,
       prominent: osMajor >= 27)
   }
 

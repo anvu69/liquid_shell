@@ -46,7 +46,9 @@ dependency.
 - **Search tab**: a real search tab, UIKit's own on iOS 26 (iPhone: the ⌕
   becomes the field and the tabs collapse; iPad: the field under the title
   row rises when active), the same states in glass elsewhere.
-- **Pages and the glass back button**: `LiquidPage`.
+- **Pages and the glass back button**: `LiquidPage`, with a collapsing
+  large title and up to three actions; UIKit's own navigation bar on every
+  tab with native chrome.
 - **Native alerts and action sheets** on iOS 26 (`UIAlertController`),
   the same glass drawn by Flutter elsewhere.
 - **Window controls**: on iPadOS 26 windowed apps, the shell's top row and
@@ -470,21 +472,106 @@ never marks its text as composing, so `composing` will not warn you. More in
 ### Pages and the back button
 
 Wrap each page of a tab's navigator in a `LiquidPage(title:, child:)`. It
-gives the page its title and, when the navigator can pop, a 44pt glass
-`LiquidBackButton`. In the Flutter bar a root page's large title sits on
-the bar row, as Apple Music's does, and a pushed page's on a row below the
-back button.
+gives the page its title, a 44pt glass `LiquidBackButton` when the
+navigator can pop, and up to three trailing actions.
 
-Where the tab has a native navigation bar (iOS 26 native chrome: the search
-tab in this release) UIKit draws the title and its glass back circle, and
-`LiquidPage` draws only its child. Everywhere else it draws a Flutter glass
-bar. The page's first vertical scroll view drives the native large title
-and the scroll-edge effect.
+With native chrome on iOS 26 every tab's pages get UIKit's navigation bar:
+the title, the glass back circle and its history menu, the large title,
+the scroll-edge effect, and the actions as bar buttons. `LiquidPage` then
+draws only its child. Everywhere else (iOS before 26, Android,
+`nativeChrome: LiquidNativeChrome.off`, a `chromeBuilder`) it draws a
+Flutter glass bar laid out the same way. The page's first vertical scroll
+view drives the large title and the scroll-edge effect; the tab bar's
+minimize follows every vertical body scroll on screen that is not nested. A tab whose pages do not use `LiquidPage` has no bar and looks as
+before.
+
+Titles follow one model in both bars:
+
+| Page | `largeTitle` | Title |
+|---|---|---|
+| Pushed | any | Small and centred, beside the back button |
+| Root | `null` (default) | Large, on the bar row (as in Apple Music) in a compact window; no bar in a regular one, where the tab bar names the tab |
+| Root | `true` | A large-title row under the bar row, which collapses as the page scrolls |
+| Root | `false` | No bar |
+
+A root page with actions and no bar of its own gets a bar row with a small
+title, so its actions have somewhere to go.
+
+`LiquidPageAction(sfSymbol:, icon:, label:, onPressed:)` is one action:
+`sfSymbol` for the native bar button, `icon` for the Flutter bar, `label`
+for assistive technology and the tooltip. `onPressed: null` disables it.
+Actions are listed in reading order. More than three is a debug assertion;
+release builds show the first three. UIKit groups the buttons in one glass
+capsule; the Flutter bar draws a 44pt glass circle per action. This is a
+detail page of the example's Pages case (`_Page` puts a `LiquidPage` over
+the wallpaper):
+
+<?code-excerpt "pages.dart (pages)"?>
+```dart
+class _DetailPageState extends State<_DetailPage> {
+  bool _favourite = false;
+  int _shares = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final number = widget.number;
+    return _Page(
+      title: 'Detail $number',
+      actions: [
+        LiquidPageAction(
+          sfSymbol: 'square.and.arrow.up',
+          icon: const Icon(Icons.ios_share),
+          label: 'Share',
+          onPressed: () => setState(() => _shares++),
+        ),
+        LiquidPageAction(
+          sfSymbol: _favourite ? 'heart.fill' : 'heart',
+          icon: Icon(_favourite ? Icons.favorite : Icons.favorite_border),
+          label: 'Favourite',
+          onPressed: () => setState(() => _favourite = !_favourite),
+        ),
+        const LiquidPageAction(
+          sfSymbol: 'trash',
+          icon: Icon(Icons.delete_outline),
+          label: 'Delete',
+          onPressed: null,
+        ),
+      ],
+      children: [
+        _Row(
+          title: 'Detail ${number + 1}',
+          subtitle: 'One page deeper',
+          onTap: () => _push(context, _DetailPage(number: number + 1)),
+        ),
+        _Row(
+          title: 'Shared $_shares ${_shares == 1 ? 'time' : 'times'}',
+          subtitle: _favourite ? 'A favourite' : 'Not a favourite',
+        ),
+        for (var i = 1; i <= 30; i++) _Row(title: 'Detail $number item $i'),
+      ],
+    );
+  }
+}
+```
+
+<img src="doc/images/case_pages_home.png" width="260" alt="A root page: the large title on the bar row and an Add action"> <img src="doc/images/case_pages_detail.png" width="260" alt="A pushed page: the glass back button, a centred title and three actions, the last one disabled"> <img src="doc/images/case_pages_library.png" width="260" alt="A root page with a large-title row that collapses as the page scrolls">
+
+| iPhone, native | iPad, native |
+|---|---|
+| <img src="doc/images/native_iphone_pages.png" width="200" alt="UIKit's navigation bar on a pushed page of an iPhone: the glass back circle, the title and the actions in one glass group"> | <img src="doc/images/native_ipad_pages.png" width="320" alt="UIKit's navigation bar on a pushed page of an iPad, under the top tab bar"> |
+
+`LiquidHideChrome` over a `LiquidPage` hides the tab bar and the sidebar
+and keeps the page's bar, in both chromes; a tiled sidebar comes back when
+the page goes. For a page that fills the screen, leave `LiquidPage` out of
+it. Pages pushed above the shell, and the pages of a shell nested in
+another shell's body, draw the Flutter bar.
 
 Every back respects the page's `PopScope`. The button, the native back
 circle and its long-press history menu (each page in turn, top first) call
 `Navigator.maybePop`, and Flutter's back swipe is off while a page refuses.
-A refused pop leaves the page and the bar where they were. System back and
+A refused pop leaves the page and the bar where they were. The iOS edge
+swipe is Flutter's on every tab: the page follows the finger, and the
+native bar switches when the gesture ends. System back and
 the iOS edge swipe pop the selected tab's top page first, also when the
 shell is itself a pushed page; only a tab at its root lets them pop the
 shell's route ([doc/router_integration.md](doc/router_integration.md#back-pops-the-tab-first)). `LiquidBackButton` also
@@ -1399,12 +1486,18 @@ content viewer (see [Custom chrome](#custom-chrome)).
   shell nested in another shell's body (sub-tabs) takes it from the outer
   one, which then shows no navigation; give a nested shell
   `nativeChrome: LiquidNativeChrome.off`.
-- **Native navigation bars are on the search tab only** (planned for
-  every tab, see [Roadmap](#roadmap)). Under the native search tab, a pushed page's large title
-  is drawn small (`LiquidPage.largeTitle`).
 - **The native back swipe does not follow the finger yet.** Flutter's back
   gesture moves the page, and the native bar switches when it ends.
-- **Pages pushed above the shell keep the Flutter bar.**
+- **Pages pushed above the shell keep the Flutter bar**, and so do the
+  pages of a shell nested in another shell's body.
+- **Page actions are icons.** At most three per page; no avatar images or
+  menus yet. UIKit groups them in one glass capsule, the Flutter bar draws
+  one circle each.
+- **A native action tap is matched by tab and depth.** If the app replaces
+  the top page with another page at the same depth (a pop and a push in
+  one go) while a tap is on its way, the tap runs the new page's action at
+  the same position when that action has the same SF Symbol and is
+  enabled.
 - **Liquid glass inside another BackdropFilter draws frosted.** Flutter
   3.44 gives a nested filter coordinates relative to its parent's region,
   so the lens cannot be placed there.
@@ -1465,8 +1558,6 @@ content viewer (see [Custom chrome](#custom-chrome)).
 - **A tab revealed a few frames after it is selected** (a custom
   `navigatorContainerBuilder` that animates the switch): system back may
   not find that tab's navigator.
-- **Native navigation bars are on the search tab only** (see
-  [Limitations](#limitations)).
 - **iPhone in landscape with the keyboard up and native chrome:** the
   bottom inset is 0, so the search field covers the first result.
 
@@ -1493,12 +1584,14 @@ content viewer (see [Custom chrome](#custom-chrome)).
 ## Roadmap
 
 0.1.0 is the first release on pub.dev: the adaptive shell, the liquid,
-frosted and solid tiers, opt-in native iOS 26 chrome, native alerts and
-action sheets, the search tab with scopes, and `LiquidSegmentedControl`.
+frosted and solid tiers, opt-in native iOS 26 chrome with UIKit's
+navigation bar and page actions on every tab, native alerts and action
+sheets, the search tab with scopes, and `LiquidSegmentedControl`.
 
 Planned:
 
-- Native navigation bars on every tab (today: the search tab only).
+- A native back swipe that follows the finger.
+- Avatar images and menus as page actions.
 - Share sheet, haptics, date picker and text fields in native alerts.
 - A go_router adapter (a `StatefulShellRoute` builder, route-driven hide
   chrome). Until then, see

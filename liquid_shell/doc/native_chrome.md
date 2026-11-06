@@ -172,14 +172,16 @@ hidden, and the body there stays sharp, as before minimize on scroll.
 A destination with `role: LiquidDestinationRole.search` (see
 [search.md](search.md)) becomes UIKit's `UISearchTab`. It needs no
 `sfSymbol`: without one UIKit draws its own magnifying glass and, natively,
-its localised "Search" placeholder. Its view controller is a clear
-navigation controller, so the tab has a native navigation bar:
+its localised "Search" placeholder. Like every tab, its view controller is
+a clear navigation controller (see
+[Page stacks and the back button](#page-stacks-and-the-back-button)):
 
 ```
 ShellContainerController
 ├─ FlutterViewController                  the body, as before
 └─ NativeTabsController (clear)
-   ├─ UITab per destination → a clear host
+   ├─ UITab per destination → a clear UINavigationController
+   │    └─ one host per LiquidPage, root first: title, back circle, actions
    └─ UISearchTab (the search destination) → a clear UINavigationController
         ├─ the root page host: its navigationItem holds the UISearchController
         └─ one host per pushed LiquidPage: title and the glass back button
@@ -195,7 +197,7 @@ large-title collapse and its scroll-edge effect.
 | Field | Tab-hosted: the ⌕ beside the pill becomes the field at the bottom | `.stacked`: under the title row, rising into it when active |
 | `automaticallyActivatesSearch` | false: selecting the tab never focuses the field | false |
 | Prominent tab | The search tab on iOS 27 (a separate circle); iOS 26 has no such API | None: the system look per iPadOS version |
-| Root title | `.inline`: the large title on the bar row, as in Apple Music | Small; at compact width a leading title item right of the window controls |
+| Root title | `.inline`: the large title on the bar row, as in Apple Music; with `largeTitle: true`, a large-title row that collapses | Small; at compact width a leading title item right of the window controls; with `largeTitle: true`, a large-title row that collapses |
 | `obscuresBackgroundDuringPresentation` | false: your results stay visible | false |
 
 Selecting the search tab is a proposal, as for every tab: the shell runs
@@ -212,11 +214,30 @@ field is in the top safe area already.
 
 ## Page stacks and the back button
 
-The search tab shows your pages in its native bar: each `LiquidPage` on the
+Every tab shows your pages in its native bar: each `LiquidPage` on the
 tab's navigator is one host, root first. When you push, UIKit pushes; when
 Flutter pops, UIKit pops, with its own animation. UIKit draws the title
-and the glass back circle; `LiquidPage` draws only its child.
+and the glass back circle; `LiquidPage` draws only its child. A tab whose
+pages do not use `LiquidPage` has no navigation bar and looks as before.
 
+- **The title.** A pushed page's title is always inline, next to the back
+  circle. A root page with `largeTitle: true` gets a large title on a row
+  of its own, which collapses as the page scrolls. By default a root
+  page's large title sits on the bar row on an iPhone (and in a compact
+  iPad window); on a regular iPad, where the top tab bar names the tab,
+  the root shows no bar. `largeTitle: false` shows no bar either. The
+  search tab keeps its own root title: its bar holds the field. A root
+  page with actions gets an inline bar.
+- **Actions.** A page's `LiquidPageAction`s are its host's bar buttons,
+  grouped by UIKit in one glass capsule at the trailing end, in reading
+  order. A tap is a proposal: Dart runs the newest `onPressed` only while
+  the page is still the selected tab's top page and that button still
+  shows the same SF Symbol, enabled; any other tap is dropped. An SF Symbol
+  UIKit does not know shows the label as text, and debug builds log a line.
+- **A root without `LiquidPage`.** When the first `LiquidPage` of a tab is
+  pushed above a page without one, the native stack starts with a root
+  titled with the tab's label, so the page has a back circle, as the
+  Flutter bar has a back button there.
 - **Every back is a proposal.** The back circle, its long-press history
   menu, an accessibility escape and a keyboard back never pop UIKit
   directly. They ask Dart, which calls `Navigator.maybePop` on the pages
@@ -224,24 +245,28 @@ and the glass back circle; `LiquidPage` draws only its child.
   refused pop stops there, and UIKit follows only what Flutter really
   popped. A back while a sheet is open in the tab closes the sheet.
 - **The back swipe is Flutter's.** UIKit's interactive pop gestures are off
-  in the search tab; the left-edge swipe reaches Flutter, whose page route
+  on every tab; the left-edge swipe reaches Flutter, whose page route
   runs its own back gesture. The native bar switches when the gesture ends:
   it does not follow the finger yet. In a shell that is itself a pushed
   page the swipe pops the tab's top page too, not the shell (see
   [router_integration.md](router_integration.md#back-pops-the-tab-first)).
-- **Large titles.** On iPhone a root page's large title sits on the bar
-  row (`.inline`); on iPad the root's title is small, unless it asks for a
-  large title (`largeTitle: true`), which then gets its own row and
-  collapses as the page scrolls. Under the default root (`.inline` on
-  iPhone, `.never` on iPad), UIKit draws a pushed page's large title small
-  and centred.
 - **Scroll.** The first vertical scroll view of the top page sends its
   offset, once per frame, to its host's proxy, which drives the collapse and
   the scroll-edge effect. A page without a scroll view counts as offset 0.
   While the title collapses, the page's top padding stays put, so content
   does not jump under the finger.
+- **Minimize.** With `minimizeOnScroll`, the compact tab bar follows the
+  scroll of the page on top, pushed pages included; a push or a pop keeps
+  its form.
+- **Hide chrome.** `LiquidHideChrome` over a `LiquidPage` hides the tab
+  bar and the sidebar and keeps the page's bar; a tiled sidebar comes back
+  when the page goes. Over a page without `LiquidPage` the whole chrome
+  hides, as before.
 - **Pages above the shell** (on the app's root navigator) hide the native
   chrome as before, and keep the Flutter bar.
+- **A nested shell** (sub-tabs with `nativeChrome: LiquidNativeChrome.off`)
+  draws the Flutter bar for its own pages. Do not wrap it in a
+  `LiquidPage`: two bars would stack.
 
 ## Hit testing
 
@@ -254,10 +279,11 @@ chain from
   ?? selected?.viewIfLoaded
 ```
 
-up to the tab bar controller's view, wrapper views included. In the search
-tab that is the top page host's view and its navigation containers. The
-navigation bar (title, back circle, stacked field), the tab-hosted field, ×
-and the collapsed circle are not on that chain, so they stay with UIKit;
+up to the tab bar controller's view, wrapper views included. In a tab with
+pages that is the top page host's view and its navigation containers. The
+navigation bar (title, back circle, bar buttons, stacked field), the
+tab-hosted field, × and the collapsed circle are not on that chain, so they
+stay with UIKit;
 your page under them gets every other touch. During a push or pop animation
 the leaving page is not on the chain, so a tap on it in those 0.35 s does
 nothing.
@@ -281,6 +307,10 @@ nothing.
   installed. Leave `LiquidShellNativeChrome` out if you use one.
 - One scene only. With multiple scenes, only the first scene that connects
   gets the native chrome.
+- A tap on a native page action names its page by tab and depth. If the
+  top page is replaced by another at the same depth (a pop and a push in
+  one go) while a tap is on its way, the tap runs the new page's action at
+  that position when it has the same SF Symbol and is enabled.
 
 ## Window controls
 

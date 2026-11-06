@@ -185,6 +185,46 @@ void main() {
     expect(find.text('Home item 1'), findsOneWidget);
   });
 
+  testWidgets('pages: a pushed page has a back button that pops it', (
+    tester,
+  ) async {
+    await _openCase(tester, 'pages');
+    await tester.tap(find.text('Detail 1'));
+    await tester.pumpAndSettle();
+    expect(find.text('Detail 1 item 1'), findsOneWidget);
+    await tester.tap(find.byType(LiquidBackButton));
+    await tester.pumpAndSettle();
+    expect(find.text('Detail 1 item 1'), findsNothing);
+    expect(find.text('Detail 1'), findsOneWidget);
+  });
+
+  testWidgets("pages: a detail's actions run in the Flutter bar; Delete is "
+      'disabled (VK-443)', (tester) async {
+    await _openCase(tester, 'pages');
+    await tester.tap(find.byTooltip('Add'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Detail 1 item 1'),
+      findsOneWidget,
+      reason: 'Add opens one',
+    );
+    expect(find.byIcon(Icons.favorite_border), findsOneWidget);
+    await tester.tap(find.byTooltip('Favourite'));
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.favorite), findsOneWidget);
+    expect(find.text('A favourite'), findsOneWidget);
+    await tester.tap(find.byTooltip('Share'));
+    await tester.pumpAndSettle();
+    expect(find.text('Shared 1 time'), findsOneWidget);
+    final delete = tester.widget<InkWell>(
+      find.descendant(
+        of: find.byTooltip('Delete'),
+        matching: find.byType(InkWell),
+      ),
+    );
+    expect(delete.onTap, isNull);
+  });
+
   testWidgets('trailing compose opens a page with no chrome', (tester) async {
     await _openCase(tester, 'trailing');
     await tester.tap(find.byTooltip('Compose'));
@@ -305,6 +345,7 @@ void main() {
     'hide_chrome',
     'native_chrome',
     'search',
+    'pages',
   };
   const flutterIds = {
     'custom_chrome',

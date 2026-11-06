@@ -20,6 +20,7 @@ import 'package:liquid_shell/src/native/native_host.dart';
 import 'package:liquid_shell/src/native/native_layout.dart';
 import 'package:liquid_shell/src/native/native_minimize.dart';
 import 'package:liquid_shell/src/native/window_controls.dart';
+import 'package:liquid_shell/src/pages/liquid_page.dart';
 import 'package:liquid_shell/src/pages/page_registry.dart';
 import 'package:liquid_shell/src/search/search.dart';
 import 'package:liquid_shell/src/search/search_chrome.dart';
@@ -217,6 +218,14 @@ class _LiquidShellState extends State<LiquidShell>
   Map<(LiquidSizeClass, TabBarForm, double), double> _measured = const {};
   ShellPresentation? _presentation;
   bool _sidebarVisible = false;
+  // What held focus when the overlay sidebar opened; it gets focus back
+  // when the overlay closes (VK-778).
+  FocusNode? _focusBeforeOverlay;
+  // The selected destination when the overlay sidebar opened.
+  int _selectedBeforeOverlay = 0;
+  // The sidebar's own node: the overlay takes focus with it when it opens
+  // and lets go of it when it closes (VK-778).
+  final FocusNode _sidebarFocus = FocusNode(debugLabel: 'LiquidShell sidebar');
   bool _guardPending = false;
   int _hideRequests = 0;
   bool _hiddenSelectionReported = false;
@@ -264,6 +273,9 @@ class _LiquidShellState extends State<LiquidShell>
   final Map<int, List<LiquidNativePage>> _pageStacks = {};
   // The records behind each sent stack, kept while no page is on top.
   final Map<int, List<_PageRecord>> _stackRecords = {};
+  // The tabs whose native stack starts with a stand-in root (spec P3b-2
+  // §6.1): native index i is then record i - 1.
+  final Set<int> _standInRoots = {};
   bool _nativePageBar = false;
   bool _searchDeactivatedForRoute = false;
   // The scroll offset native has for the top page (spec P3b §7.7).
@@ -292,6 +304,9 @@ class _LiquidShellState extends State<LiquidShell>
   // What the last build's [_backScope] blocks for (VK-774).
   bool _backOverlay = false;
   bool _backSearch = false;
+  // In another shell's body on the same route: that shell answers back for
+  // this one (VK-776). Set in [didChangeDependencies].
+  bool _hosted = false;
 
   @override
   void initState() {
@@ -368,6 +383,20 @@ class _LiquidShellState extends State<LiquidShell>
       route?.secondaryAnimation?.addStatusListener(_onCoverChanged);
     }
     _routeCurrent = route?.isCurrent ?? true;
+    // VK-776: with no navigator between, this shell's PopScope would sit on
+    // the host's route, a second voice beside the host's walk. Only the
+    // shell right around this one walks it: in another slot of a nested
+    // shell (its sidebar header), the nearest body is an outer one's.
+    final host = context
+        .dependOnInheritedWidgetOfExactType<_ShellBody>()
+        ?.shell;
+    final hosted =
+        host != null &&
+        identical(host._route, route) &&
+        identical(context.findAncestorStateOfType<_LiquidShellState>(), host);
+    // The host learns of a shell built after its last walk (VK-776).
+    if (hosted && !_hosted) host._scheduleBranchScan();
+    _hosted = hosted;
     _coveredByPush =
         route?.secondaryAnimation?.status.isForwardOrCompleted ?? false;
     // A dependency: the change rebuilds us. The layout builder still runs
@@ -410,6 +439,7 @@ class _LiquidShellState extends State<LiquidShell>
     _minimized.dispose();
     _searchTarget.dispose();
     _search.dispose();
+    _sidebarFocus.dispose();
     super.dispose();
   }
 
@@ -446,6 +476,13 @@ class _LiquidShellState extends State<LiquidShell>
         _rebuild();
       case LiquidWindowControlsChanged():
         break;
+      case LiquidNativePageActionTapped(
+        :final tab,
+        :final page,
+        :final index,
+        :final sfSymbol,
+      ):
+        _onNativePageAction(tab, page, index, sfSymbol);
     }
   }
 
@@ -465,13 +502,18 @@ class _LiquidShellState extends State<LiquidShell>
         final config = latest();
         _claim?.update(config, force: force);
         _search.afterConfigSent();
-        // New native tab hosts start at offset 0: the offset follows the
-        // config that may have built them, never precedes it.
-        if (nativeTabsMayRebuild(_minimizeConfig, config)) {
+        // New native tab hosts start at offset 0: the offsets follow the
+        // config that may have built them, never precede it. The top
+        // page's offset waits for the config that makes it native's top
+        // (a push, a pop), so it is sent here after every config.
+        final rebuilt = nativeTabsMayRebuild(_minimizeConfig, config);
+        if (rebuilt) {
           _minimizeForce = true;
           _sendMinimize();
+          _scrollRecord = null;
         }
         _minimizeConfig = config;
+        _sendScroll();
       }
     });
   }
@@ -545,18 +587,81 @@ class _LiquidShellState extends State<LiquidShell>
     ];
   }
 
-  /// Computes [tab]'s stack for the config. After the frame: the pages
-  /// have heard of this frame's changes by then.
-  void _updatePageStack(int tab) {
+  /// Computes [tab]'s stack for the config and returns it. After the
+  /// frame: the pages have heard of this frame's changes by then.
+  ///
+  /// A first LiquidPage above a route without one gets a stand-in root
+  /// titled with the destination's label, so the native bar shows the
+  /// back circle where the Flutter bar shows `LiquidBackButton`.
+  List<LiquidNativePage> _updatePageStack(int tab) {
     final stack = _stackFor(tab);
     _stackRecords[tab] = stack;
-    _pageStacks[tab] = [
+    final standIn =
+        stack.isNotEmpty && !(stack.first.entry.route?.isFirst ?? true);
+    if (standIn) {
+      _standInRoots.add(tab);
+    } else {
+      _standInRoots.remove(tab);
+    }
+    return _pageStacks[tab] = [
+      if (standIn)
+        LiquidNativePage(
+          title: widget.destinations[tab].label,
+          largeTitle: false,
+        ),
       for (final record in stack)
         LiquidNativePage(
           title: record.entry.title,
           largeTitle: record.entry.largeTitle,
+          // Truncated here: native never receives more than it shows.
+          actions: [
+            for (final action in record.entry.actions.take(
+              LiquidPage.maxActions,
+            ))
+              LiquidNativePageAction(
+                sfSymbol: action.sfSymbol,
+                label: action.label,
+                enabled: action.onPressed != null,
+              ),
+          ],
         ),
     ];
+  }
+
+  /// A native action tap: a proposal from native, with the action's
+  /// identity. It runs the action only while that page is still the
+  /// selected tab's top page, on screen above nothing, and its action
+  /// [index] still shows [sfSymbol] and is enabled; anything else (a tap
+  /// in flight across a push, a pop, a tab switch or a change of the
+  /// actions) is dropped, never mapped to another action. Under a stand-in
+  /// root native page i is record i - 1, and the stand-in has none. Native
+  /// changed nothing.
+  void _onNativePageAction(int tab, int page, int index, String sfSymbol) {
+    // Spec P3b-2 §8.4 and §5.3 rule 4. Checked at the boundary: indices
+    // from the platform.
+    if (page < 0 || index < 0 || index >= LiquidPage.maxActions) return;
+    if (tab !=
+            resolveSelectedIndex(
+              widget.selectedIndex,
+              widget.destinations.length,
+            ) ||
+        !_routeCurrent ||
+        _covered) {
+      return;
+    }
+    final stack = _stackRecords[tab];
+    final target = page - (_standInRoots.contains(tab) ? 1 : 0);
+    if (stack == null || stack.isEmpty || target != stack.length - 1) return;
+    final record = stack.last;
+    // A record unregisters before the post-frame stack refresh: never run a
+    // detached page's action.
+    if (!_pageRecords.contains(record)) return;
+    if (!(record.entry.route?.isCurrent ?? false)) return;
+    final actions = record.entry.actions;
+    if (index >= actions.length) return;
+    final action = actions[index];
+    if (action.sfSymbol != sfSymbol) return;
+    action.onPressed?.call();
   }
 
   /// The native back button: a proposal for the selected
@@ -589,11 +694,13 @@ class _LiquidShellState extends State<LiquidShell>
   /// menu, an accessibility escape, a pop-to-root. Native did not pop; the
   /// pages above [index] pop here, top first, each through its PopScope.
   /// A refused pop ends it, and the native stack follows what is left.
-  /// One page down is exactly a back tap.
+  /// One page down is exactly a back tap. Under a stand-in root native
+  /// index i is record i - 1, and index 0 pops every page.
   Future<void> _onNativePopTo(int tab, int index) async {
     final stack = _stackRecords[tab];
-    if (stack == null || index < 0 || index >= stack.length - 1) return;
-    if (index == stack.length - 2) return _onNativeBack(tab);
+    final target = index - (_standInRoots.contains(tab) ? 1 : 0);
+    if (stack == null || index < 0 || target >= stack.length - 1) return;
+    if (target == stack.length - 2) return _onNativeBack(tab);
     if (tab !=
             resolveSelectedIndex(
               widget.selectedIndex,
@@ -603,7 +710,7 @@ class _LiquidShellState extends State<LiquidShell>
         _covered) {
       return;
     }
-    for (final record in stack.sublist(index + 1).reversed) {
+    for (final record in stack.sublist(target + 1).reversed) {
       final route = record.entry.route;
       final navigator = record.entry.navigator;
       if (!mounted || route == null || navigator == null) return;
@@ -621,18 +728,28 @@ class _LiquidShellState extends State<LiquidShell>
     if (_scrollScheduled) return;
     _scrollScheduled = true;
     SchedulerBinding.instance
-      ..addPostFrameCallback((_) => _syncScroll())
+      ..addPostFrameCallback((_) {
+        _scrollScheduled = false;
+        _sendScroll();
+      })
       ..ensureVisualUpdate();
   }
 
-  void _syncScroll() {
-    _scrollScheduled = false;
+  void _sendScroll() {
     if (!mounted) return;
+    final tab = resolveSelectedIndex(
+      widget.selectedIndex,
+      widget.destinations.length,
+    );
     final top = _nativePageBar ? _topRecord : null;
     if (top == null) {
       _scrollRecord = null;
       return;
     }
+    // Native writes the offset to its own top page: a page it does not
+    // have on top yet (a push or a pop not sent) waits for its config,
+    // whose callback ([_scheduleNativeSend]) sends it.
+    if (!identical(top, _stackRecords[tab]?.lastOrNull)) return;
     // Not laid out yet (a new page, or one moved with a GlobalKey): its
     // scroll position reports its offset after its first layout, in that
     // frame's post-frame callbacks. Still nothing a frame later: the page
@@ -653,13 +770,7 @@ class _LiquidShellState extends State<LiquidShell>
     if (identical(top, _scrollRecord) && offset == _scrollSent) return;
     _scrollRecord = top;
     _scrollSent = offset;
-    _claim?.setPageScroll(
-      tab: resolveSelectedIndex(
-        widget.selectedIndex,
-        widget.destinations.length,
-      ),
-      offset: offset,
-    );
+    _claim?.setPageScroll(tab: tab, offset: offset);
   }
 
   /// Whether the shell drives the native bar's minimize now. On becoming
@@ -865,6 +976,11 @@ class _LiquidShellState extends State<LiquidShell>
   /// (an exit wrapper, an unsaved form) lands here too. A
   /// `NavigatorPopHandler` with a callback around the branch answers back
   /// for its navigator; the shell then only blocks its own route.
+  ///
+  /// A shell in another shell's body with no navigator between is on that
+  /// shell's route. It steps aside (never blocks, never acts): the outer
+  /// shell's walk hands it back in the outer order, and only while it is
+  /// on screen.
   Widget _backScope({
     required bool overlay,
     required bool searchActive,
@@ -873,9 +989,9 @@ class _LiquidShellState extends State<LiquidShell>
     _backOverlay = overlay;
     _backSearch = searchActive;
     return PopScope(
-      canPop: !claimsBack,
+      canPop: _hosted || !claimsBack,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) handleBack();
+        if (!didPop && !_hosted) handleBack();
       },
       child: child,
     );
@@ -906,11 +1022,14 @@ class _LiquidShellState extends State<LiquidShell>
   /// [kind] null: native chrome.
   Widget _bodySubtree(LiquidChromeKind? kind) => KeyedSubtree(
     key: _bodyKey,
-    child: NotificationListener<NavigationNotification>(
-      onNotification: _onBranchNavigation,
-      child: NotificationListener<ScrollNotification>(
-        onNotification: (n) => _onBodyScroll(n, kind),
-        child: widget.body,
+    child: _ShellBody(
+      shell: this,
+      child: NotificationListener<NavigationNotification>(
+        onNotification: _onBranchNavigation,
+        child: NotificationListener<ScrollNotification>(
+          onNotification: (n) => _onBodyScroll(n, kind),
+          child: widget.body,
+        ),
       ),
     ),
   );
@@ -938,8 +1057,72 @@ class _LiquidShellState extends State<LiquidShell>
       return;
     }
     if (_sidebarVisible != visible) {
+      if (_presentation == ShellPresentation.overlay) {
+        if (visible) {
+          _rememberFocus();
+        } else {
+          // Focus leaves the sidebar now, before a route opened in this
+          // turn asks for it. Removed in the closing frame with focus, the
+          // sidebar would give it to the scope around the shell after that
+          // request, taking it from the route. `scope`, not the previous
+          // child: a row focused by Tab would get it again.
+          if (_sidebarFocus.hasFocus) _sidebarFocus.unfocus();
+          _restoreFocus();
+        }
+      }
       setState(() => _sidebarVisible = visible);
     }
+  }
+
+  /// The overlay opens: the body and the top bar stop taking focus, so the
+  /// node that holds it loses it. It is kept to get it back. Not the
+  /// shell's search field: an active one keeps its focus under the overlay,
+  /// and focusing an idle one starts a search. Tab out of an active field
+  /// ends the search; closing does not restart it.
+  void _rememberFocus() {
+    final focus = FocusManager.instance.primaryFocus;
+    _focusBeforeOverlay = identical(focus, _search.focus) ? null : focus;
+    _selectedBeforeOverlay = widget.selectedIndex;
+  }
+
+  /// The overlay closes: the kept node gets focus back after the frame,
+  /// once the rebuild has made the body and the top bar focusable again.
+  /// Only focus moves: the node's widget is neither rebuilt nor written to.
+  /// A node no longer in the tree is skipped: asked now, it would take
+  /// focus whenever it came back.
+  ///
+  /// Nothing is given back when focus is no longer where the close left
+  /// it, or while the shell's route is covered. Under a route opened in the
+  /// same turn (a dialog, a pushed page, on any navigator), the kept node
+  /// would take focus, and a text field its input connection, behind that
+  /// route. A node that took focus since (a field that autofocuses as the
+  /// overlay closes) keeps it. Nor after the app selected another page
+  /// while the overlay was open: a body that keeps hidden pages focusable
+  /// would give focus to the page left behind.
+  void _restoreFocus() {
+    final node = _focusBeforeOverlay;
+    _focusBeforeOverlay = null;
+    if (node == null) return;
+    final selected = _selectedBeforeOverlay;
+    // After the frame's other post-frame callbacks (a text field asks for
+    // its autofocus in one) and after the focus update the frame queued
+    // during the build, which applies what they asked for.
+    SchedulerBinding.instance.addPostFrameCallback(
+      (_) => scheduleMicrotask(() {
+        if (!mounted || !(node.context?.mounted ?? false)) return;
+        // The app selected another page while the overlay was open, or as
+        // it closed.
+        if (widget.selectedIndex != selected) return;
+        // A route above the shell's, also one that takes no focus and so
+        // leaves it on the scope below.
+        if (!(_route?.isCurrent ?? true)) return;
+        // The closing sidebar leaves focus on the scope around the shell;
+        // anywhere else, something took it since.
+        final scope = FocusScope.of(context, createDependency: false);
+        if (!identical(FocusManager.instance.primaryFocus, scope)) return;
+        node.requestFocus();
+      }),
+    );
   }
 
   void _onBarHeight(
@@ -984,6 +1167,9 @@ class _LiquidShellState extends State<LiquidShell>
       if (current == null) return;
       index = current;
     }
+    // Another page: the focus it held is not given back (VK-778), also when
+    // the app's callback closes the overlay itself.
+    _focusBeforeOverlay = null;
     widget.onDestinationSelected(index);
     if (!mounted) return;
     if (_nativeEngaged) {
@@ -1282,8 +1468,8 @@ class _LiquidShellState extends State<LiquidShell>
     if (_search.holdsField && (!fieldShown || sizeClassChanged)) {
       _search.releaseField();
     }
+    // The device decides, not an app's ThemeData.platform (VK-702).
     final bottomGap = bottomGapFor(
-      // The device decides, not an app's ThemeData.platform (VK-702).
       platform: defaultTargetPlatform,
       viewPaddingBottom: media.viewPadding.bottom,
     );
@@ -1703,14 +1889,19 @@ class _LiquidShellState extends State<LiquidShell>
       final indent = _windowControls.value.value.indentFor(
         rowTop: regularFieldTop - media.padding.top,
       );
-      final start = bodyStart + kRegularSearchMargin + indent;
+      // The safe width, as for the bars (VK-778). Tiled, the sidebar
+      // already clears the leading inset: only the trailing one is added.
+      final sideStart = tiled ? 0.0 : (rtl ? sideRight : sideLeft);
+      final sideEnd = rtl ? sideLeft : sideRight;
+      final start = bodyStart + sideStart + kRegularSearchMargin + indent;
+      final end = sideEnd + kRegularSearchMargin;
       children.add(
         AnimatedPositioned(
           key: kSearchFieldKey,
           duration: morph,
           curve: kSearchMorphCurve,
-          left: rtl ? kRegularSearchMargin : start,
-          right: rtl ? start : kRegularSearchMargin,
+          left: rtl ? end : start,
+          right: rtl ? start : end,
           top: regularFieldTop,
           height: kRegularSearchFieldExtent,
           // Behind the overlay an idle field takes no focus (focusing it
@@ -1747,6 +1938,7 @@ class _LiquidShellState extends State<LiquidShell>
           // Overlay: focus starts in the sidebar when nothing holds it, so
           // Escape reaches the shell. An active search keeps its focus.
           child: Focus(
+            focusNode: _sidebarFocus,
             autofocus: modal,
             skipTraversal: true,
             includeSemantics: false,
@@ -1874,11 +2066,9 @@ class _LiquidShellState extends State<LiquidShell>
     _search
       ..native = engaged
       ..selected = searchIndex != null && selected == searchIndex;
-    _nativePageBar = nativePageBarFor(
-      engaged: engaged,
-      selected: selected,
-      searchIndex: searchIndex,
-    );
+    // Every tab of an engaged shell has a native navigation bar (spec
+    // P3b-2 §4.5): LiquidPage draws only its child.
+    _nativePageBar = engaged;
     if (_nativePageBar || _scrollRecord != null) _scheduleScrollSync();
     final searchActive = _search.controller?.isActive ?? false;
     // A dialog or sheet above an active search: the keyboard and the field
@@ -1894,10 +2084,11 @@ class _LiquidShellState extends State<LiquidShell>
     // The compact bar is drawn above the Flutter view: it would cover the
     // bottom of a sheet or dialog drawn there, so it hides while one is
     // above the shell. The top bar and sidebar only turn inert (§7.4).
-    final hidden =
-        _hideRequests > 0 ||
-        _covered ||
-        ((state?.compact ?? false) && !_routeCurrent);
+    final hideRequested = _hideRequests > 0;
+    final coverHidden =
+        _covered || ((state?.compact ?? false) && !_routeCurrent);
+    // The scope's and the minimize's: hidden chrome either way.
+    final hidden = hideRequested || coverHidden;
     if (owner) {
       final theme = Theme.of(context);
       final destinations = widget.destinations;
@@ -1907,12 +2098,17 @@ class _LiquidShellState extends State<LiquidShell>
       final interactive = _routeCurrent && !_guardPending;
       final placeholder = widget.search?.placeholder;
       final scopes = widget.search?.scopes;
-      final pageBar = _nativePageBar;
       // `hidden` and `interactive` are taken now; `_stackFor` reads
       // `_routeCurrent` and `_covered` after the frame. Both are set before
       // the frame ends, so they agree: do not "fix" one side.
       _scheduleNativeSend(() {
-        if (pageBar) _updatePageStack(selected);
+        final stack = engaged
+            ? _updatePageStack(selected)
+            : const <LiquidNativePage>[];
+        // A hide request over a page with a native bar hides the tab bar
+        // and the sidebar only: the page keeps its bar (spec P3b-2 §4.4).
+        // Without one the whole chrome hides, as before.
+        final keepPageBar = hideRequested && stack.isNotEmpty;
         return nativeConfigFor(
           engaged: engaged,
           destinations: destinations,
@@ -1922,9 +2118,10 @@ class _LiquidShellState extends State<LiquidShell>
           tint: theme.colorScheme.primary,
           dark: theme.brightness == Brightness.dark,
           rtl: rtl,
-          hidden: hidden,
+          hidden: coverHidden || (hideRequested && !keepPageBar),
           interactive: interactive,
           minimizeOnScroll: minimizeOnScroll,
+          tabBarHidden: keepPageBar,
           searchPlaceholder: placeholder,
           searchScopes: scopes,
           pageStacks: _pageStacks,
@@ -2037,11 +2234,17 @@ class _LiquidShellState extends State<LiquidShell>
           searchScopes: widget.search?.scopes,
           // UIKit's top bar, sidebar and navigation bars make room for the
           // cluster; the body starts below or beside them (spec P2 §8.3,
-          // P3b §7.9). The compact bar is at the bottom: the top is the
-          // body's to clear.
+          // P3b §7.9). Zero at once where one of them always shows: the
+          // regular top bar or sidebar (unless a hide request hides them),
+          // and the search tab's bar. Otherwise native's report, which is
+          // zero while the selected tab's navigation bar shows (spec P3b-2
+          // §4.5): the compact bar is at the bottom, and a tab's bar may
+          // be hidden.
           windowControls:
-              (engaged && sizeClass == LiquidSizeClass.regular) ||
-                  _nativePageBar
+              engaged &&
+                  ((sizeClass == LiquidSizeClass.regular &&
+                          _hideRequests == 0) ||
+                      _search.selected)
               ? LiquidWindowControls.zero
               : _windowControls.value.value,
         ),
@@ -2072,6 +2275,17 @@ class _LiquidShellState extends State<LiquidShell>
   }
 }
 
+/// Marks a shell's body: a shell nested in it finds its host here.
+class _ShellBody extends InheritedWidget {
+  const _ShellBody({required this.shell, required super.child});
+
+  final _LiquidShellState shell;
+
+  // Built by [shell] itself, so it never changes.
+  @override
+  bool updateShouldNotify(_ShellBody oldWidget) => false;
+}
+
 /// One `LiquidPage` registered with a shell.
 final class _PageRecord implements PageHandle {
   _PageRecord(this._shell, this.entry);
@@ -2083,11 +2297,13 @@ final class _PageRecord implements PageHandle {
   /// view reports one.
   double? offset;
 
+  /// Always keeps [next], whose action callbacks are the newest; rebuilds
+  /// the shell only when the bars would change.
   @override
   void update(PageEntry next) {
-    if (next.sameAs(entry)) return;
+    final same = next.sameAs(entry);
     entry = next;
-    _shell._rebuild();
+    if (!same) _shell._rebuild();
   }
 
   @override

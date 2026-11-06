@@ -65,6 +65,11 @@ class LiquidSignalsController extends ChangeNotifier
           _loggedWatchFailure = true;
           debugPrint('liquid_shell signals: $error; using none');
         }
+        // Safe from initState: this notifies only when an earlier stream
+        // left a value other than none, and then nobody listens. Every
+        // listener is a mounted glass, which would already count as a user,
+        // and _users is 1. That user stays counted with no stream; once the
+        // last user releases, the next first acquire() tries again.
         _set(LiquidPlatformSignals.none);
         return;
       }

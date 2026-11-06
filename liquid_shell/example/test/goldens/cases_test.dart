@@ -12,6 +12,7 @@ import 'package:liquid_shell_example/cases/discard_guard.dart';
 import 'package:liquid_shell_example/cases/forced_tier.dart';
 import 'package:liquid_shell_example/cases/hide_chrome.dart';
 import 'package:liquid_shell_example/cases/narrow_width.dart';
+import 'package:liquid_shell_example/cases/pages.dart';
 import 'package:liquid_shell_example/cases/segments.dart';
 import 'package:liquid_shell_example/cases/sidebar_only.dart';
 import 'package:liquid_shell_example/cases/sidebar_slots.dart';
@@ -85,6 +86,31 @@ void main() {
       'case_hide_chrome',
       const HideChromeCase(),
       interact: () => tester.tap(find.text('Open a full-frame detail page')),
+    );
+  });
+
+  // Pages: Home's root (default title on the bar row, the Add action), a
+  // pushed detail (back button, three actions, Delete disabled) and
+  // Library's collapsing large title.
+  testWidgets('case_pages_home', (tester) async {
+    await golden(tester, 'case_pages_home', const PagesCase());
+  });
+
+  testWidgets('case_pages_detail', (tester) async {
+    await golden(
+      tester,
+      'case_pages_detail',
+      const PagesCase(),
+      interact: () => tester.tap(find.text('Detail 1')),
+    );
+  });
+
+  testWidgets('case_pages_library', (tester) async {
+    await golden(
+      tester,
+      'case_pages_library',
+      const PagesCase(),
+      interact: () => tester.tap(find.bySemanticsLabel('Library')),
     );
   });
 
