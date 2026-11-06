@@ -11,6 +11,10 @@
   `LiquidNativeEvent` is sealed: an exhaustive `switch` over it needs the
   new case.
 
+## 0.1.0-dev.10
+
+Version bump to match liquid_shell.
+
 ## 0.1.0-dev.9
 
 First release on pub.dev.
