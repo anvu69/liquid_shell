@@ -646,6 +646,8 @@ The row clears the window controls with `LiquidWindowControlsClearance`. In P3b-
 
 ## 10. P3b-2: the native navigation bar on every tab
 
+> **Superseded (2026-10-28).** This section is replaced by `docs/specs/2026-10-28-p3b2-page-bars-design.md`; §1–§9 still hold where that spec does not change them.
+
 ### 10.1 Why after P3b-1
 
 P3b-1 builds every native piece once, for the search tab: `ShellNavController`, `PageHostController` with its proxy, the page-stack diff, the back proposal, the hit-test and safe-area rules for navigation controllers, and `LiquidPage`. P3b-2 turns them on for every destination and adds the one unproven piece, the finger-tracked swipe-back.

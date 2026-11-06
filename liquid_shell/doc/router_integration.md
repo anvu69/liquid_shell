@@ -150,9 +150,10 @@ LiquidShell(
 
 - **Reselect pops to the root**, in the search tab too: tapping Search
   while a detail is open goes back to the results. The query is kept.
-- **Wrap each page in `LiquidPage`** (title, back button). In the native
-  search tab UIKit draws them; the page's `PopScope` runs for the native
-  back circle and its long-press menu, which go through `maybePop`.
+- **Wrap each page in `LiquidPage`** (title, back button). With native
+  chrome UIKit draws them, as on every tab; the page's `PopScope` runs for
+  the native back circle and its long-press menu, which go through
+  `maybePop`.
 - **Never push the search page above the shell** (on the root navigator).
   It would cover the tab bar and lose the native field. A trailing action
   (`tabBarTrailing`) is for something else, such as compose; a shell with
@@ -253,7 +254,7 @@ with route-driven hide chrome is planned.
 | Page | Wrap it in | Effect |
 |---|---|---|
 | Inside a branch, normal | nothing; pad with `LiquidShellScope.contentPaddingOf(context)` | content scrolls under the glass |
-| Inside a branch, full frame (reader, detail) | `LiquidHideChrome` | every piece of chrome hides while it is mounted and on screen |
+| Inside a branch, full frame (reader, detail) | `LiquidHideChrome` | the shell's chrome hides while it is mounted and on screen; a `LiquidPage`'s own bar stays |
 | Above the shell (root navigator: compose, sheets) | `LiquidNoChrome` | its insets ignore the chrome underneath |
 | Static content | `LiquidContentInset` | `Padding(contentPaddingOf(context))` |
 
@@ -296,6 +297,23 @@ pass `useRootNavigator: true` to `showModalBottomSheet`), or wrap the page
 in `LiquidHideChrome`. Overlays that are not routes (a `SnackBar`, an
 `OverlayPortal` or `Autocomplete` menu) also stay under the native chrome,
 as they do under the Flutter chrome.
+
+### Page bars in a branch
+
+Each `LiquidPage` on a branch's navigator is one page of that tab's bar,
+root first. Only that navigator counts: a page on the app's navigator is
+above the shell and draws the Flutter bar.
+
+- **A root without `LiquidPage`** (your own header or a
+  `CustomScrollView`): the first `LiquidPage` pushed above it still gets a
+  back button. Under native chrome a root titled with the destination's
+  label stands in for that page, and its back circle pops to it.
+- **A shell nested in a branch** (sub-tabs) takes
+  `nativeChrome: LiquidNativeChrome.off`; its own pages draw the Flutter
+  bar. Do not wrap the nested shell in a `LiquidPage` as well: two bars
+  would stack.
+- **`LiquidHideChrome` on a `LiquidPage`** keeps the page's bar. For a
+  page that fills the screen, leave `LiquidPage` out of it.
 
 ## Leaving a page with unsaved work
 
