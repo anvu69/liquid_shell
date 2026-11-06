@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -49,6 +50,21 @@ const GoldenDevice android = (
   gestureBottom: 24.0,
   platform: TargetPlatform.android,
 );
+
+/// Runs [body] as on [device]: `defaultTargetPlatform` is the device's
+/// platform, as on the real device (the shell reads the device, not the
+/// theme). Reset in the same test body, as `flutter_test` requires.
+Future<void> onDevice(
+  GoldenDevice device,
+  Future<void> Function() body,
+) async {
+  debugDefaultTargetPlatformOverride = device.platform;
+  try {
+    await body();
+  } finally {
+    debugDefaultTargetPlatformOverride = null;
+  }
+}
 
 /// Device pixel ratio of every golden.
 const goldenPixelRatio = 2.0;
@@ -113,6 +129,10 @@ Future<void> pumpGolden(
       EdgeInsets.only(bottom: device.gestureBottom),
     );
   addTearDown(tester.view.reset);
+  assert(
+    defaultTargetPlatform == device.platform,
+    'pump ${device.name} inside onDevice(...)',
+  );
   await tester.pumpWidget(
     MaterialApp(
       debugShowCheckedModeBanner: false,
