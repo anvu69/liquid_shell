@@ -15,54 +15,66 @@ void main() {
   }
 
   testWidgets('case_search_phone_selected', (tester) async {
-    await pumpGolden(tester, const SearchCase(), device: iphone);
-    await openSearch(tester);
-    await expectDocImage(tester, 'case_search_phone_selected');
+    await onDevice(iphone, () async {
+      await pumpGolden(tester, const SearchCase(), device: iphone);
+      await openSearch(tester);
+      await expectDocImage(tester, 'case_search_phone_selected');
+    });
   });
 
   testWidgets('case_search_phone_active', (tester) async {
-    await pumpGolden(tester, const SearchCase(), device: iphone);
-    await openSearch(tester);
-    await tester.tap(find.byType(TextField));
-    tester.view.viewInsets = const FakeViewPadding(
-      bottom: 336 * goldenPixelRatio,
-    );
-    addTearDown(tester.view.resetViewInsets);
-    await tester.pumpAndSettle();
-    await expectDocImage(tester, 'case_search_phone_active');
+    await onDevice(iphone, () async {
+      await pumpGolden(tester, const SearchCase(), device: iphone);
+      await openSearch(tester);
+      await tester.tap(find.byType(TextField));
+      tester.view.viewInsets = const FakeViewPadding(
+        bottom: 336 * goldenPixelRatio,
+      );
+      addTearDown(tester.view.resetViewInsets);
+      await tester.pumpAndSettle();
+      await expectDocImage(tester, 'case_search_phone_active');
+    });
   });
 
   testWidgets('case_search_phone_results', (tester) async {
-    await pumpGolden(tester, const SearchCase(), device: iphone);
-    await openSearch(tester);
-    await tester.tap(find.byType(TextField));
-    await tester.enterText(find.byType(TextField), 'ho');
-    await tester.pumpAndSettle();
-    await expectDocImage(tester, 'case_search_phone_results');
+    await onDevice(iphone, () async {
+      await pumpGolden(tester, const SearchCase(), device: iphone);
+      await openSearch(tester);
+      await tester.tap(find.byType(TextField));
+      await tester.enterText(find.byType(TextField), 'ho');
+      await tester.pumpAndSettle();
+      await expectDocImage(tester, 'case_search_phone_results');
+    });
   });
 
   testWidgets('case_search_tablet_selected', (tester) async {
-    await pumpGolden(tester, const SearchCase(), device: ipadPortrait);
-    await openSearch(tester);
-    await expectDocImage(tester, 'case_search_tablet_selected');
+    await onDevice(ipadPortrait, () async {
+      await pumpGolden(tester, const SearchCase(), device: ipadPortrait);
+      await openSearch(tester);
+      await expectDocImage(tester, 'case_search_tablet_selected');
+    });
   });
 
   testWidgets('case_search_tablet_active', (tester) async {
-    await pumpGolden(tester, const SearchCase(), device: ipadPortrait);
-    await openSearch(tester);
-    await tester.tap(find.byType(TextField));
-    await tester.pumpAndSettle();
-    await expectDocImage(tester, 'case_search_tablet_active');
+    await onDevice(ipadPortrait, () async {
+      await pumpGolden(tester, const SearchCase(), device: ipadPortrait);
+      await openSearch(tester);
+      await tester.tap(find.byType(TextField));
+      await tester.pumpAndSettle();
+      await expectDocImage(tester, 'case_search_tablet_active');
+    });
   });
 
   testWidgets('case_search_detail', (tester) async {
-    await pumpGolden(tester, const SearchCase(), device: iphone);
-    await openSearch(tester);
-    await tester.tap(find.byType(TextField));
-    await tester.enterText(find.byType(TextField), 'ho hoan');
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Hồ Hoàn Kiếm'));
-    await tester.pumpAndSettle();
-    await expectDocImage(tester, 'case_search_detail');
+    await onDevice(iphone, () async {
+      await pumpGolden(tester, const SearchCase(), device: iphone);
+      await openSearch(tester);
+      await tester.tap(find.byType(TextField));
+      await tester.enterText(find.byType(TextField), 'ho hoan');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Hồ Hoàn Kiếm'));
+      await tester.pumpAndSettle();
+      await expectDocImage(tester, 'case_search_detail');
+    });
   });
 }

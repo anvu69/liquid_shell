@@ -1472,7 +1472,6 @@ class _LiquidShellState extends State<LiquidShell>
     final bottomGap = bottomGapFor(
       platform: defaultTargetPlatform,
       viewPaddingBottom: media.viewPadding.bottom,
-      gestureInsetBottom: media.systemGestureInsets.bottom,
     );
     // The body: always the first child, always the same wrappers.
     final tiled = kind == LiquidChromeKind.sidebarTiled;

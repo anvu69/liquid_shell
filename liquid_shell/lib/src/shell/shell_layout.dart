@@ -100,15 +100,24 @@ bool sidebarVisibleFor({
   return visible;
 }
 
-/// Gap below the bottom pill: 21 over a gesture area (always on iOS;
-/// on Android when the bottom gesture inset is non-zero), otherwise
-/// `max(21, viewPadding.bottom + 8)` so a 3-button bar is never covered.
+/// Tallest bottom navigation bar that is still a gesture handle on Android.
+/// A handle is 24 dp on AOSP (16-20 on some OEMs), a button bar 48 dp.
+const double kGestureBarMaxHeight = 32;
+
+/// Gap below the bottom pill: 21 over a gesture area (always on iOS; on
+/// Android when the navigation bar is under [kGestureBarMaxHeight]),
+/// otherwise `max(21, viewPadding.bottom + 8)` so a 3-button bar is never
+/// covered.
+///
+/// The bar's height decides, not `systemGestureInsets`: Android reports a
+/// mandatory bottom gesture inset in three-button mode too.
 double bottomGapFor({
   required TargetPlatform platform,
   required double viewPaddingBottom,
-  required double gestureInsetBottom,
 }) {
-  final gestureArea = platform == TargetPlatform.iOS || gestureInsetBottom > 0;
+  final gestureArea =
+      platform == TargetPlatform.iOS ||
+      viewPaddingBottom < kGestureBarMaxHeight;
   return gestureArea ? 21 : math.max(21, viewPaddingBottom + 8);
 }
 

@@ -30,14 +30,14 @@ void main() {
     GoldenDevice device = iphone,
     Brightness brightness = Brightness.light,
     Future<void> Function()? interact,
-  }) async {
+  }) => onDevice(device, () async {
     await pumpGolden(tester, page, device: device, brightness: brightness);
     if (interact != null) {
       await interact();
       await tester.pumpAndSettle();
     }
     await expectDocImage(tester, name);
-  }
+  });
 
   testWidgets('case_basic', (tester) async {
     await golden(tester, 'case_basic', const BasicTabsCase());

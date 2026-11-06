@@ -11,15 +11,19 @@ void main() {
   for (final device in [iphone, ipadPortrait, ipadLandscape, android]) {
     final name = 'ff_${device.name}';
     testWidgets(name, (tester) async {
-      await pumpGolden(tester, const BasicTabsCase(), device: device);
-      await expectDocImage(tester, name);
+      await onDevice(device, () async {
+        await pumpGolden(tester, const BasicTabsCase(), device: device);
+        await expectDocImage(tester, name);
+      });
     });
   }
 
   testWidgets('ff_ipad_portrait_sidebar_open', (tester) async {
-    await pumpGolden(tester, const BasicTabsCase(), device: ipadPortrait);
-    await tester.tap(find.byTooltip('Show sidebar'));
-    await tester.pumpAndSettle();
-    await expectDocImage(tester, 'ff_ipad_portrait_sidebar_open');
+    await onDevice(ipadPortrait, () async {
+      await pumpGolden(tester, const BasicTabsCase(), device: ipadPortrait);
+      await tester.tap(find.byTooltip('Show sidebar'));
+      await tester.pumpAndSettle();
+      await expectDocImage(tester, 'ff_ipad_portrait_sidebar_open');
+    });
   });
 }
