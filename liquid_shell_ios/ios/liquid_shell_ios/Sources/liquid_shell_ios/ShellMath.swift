@@ -82,6 +82,16 @@ enum ShellMath {
     max(safeTop, clean(barRegionTop ?? 0))
   }
 
+  /// The screen side of a vertical bar from `UIVerticalBarEdge`'s raw
+  /// value (1 leading, 2 trailing) and the layout direction.
+  static func verticalBarSide(edge: Int, rightToLeft: Bool) -> NativeVerticalBarSide {
+    switch edge {
+    case 1: return rightToLeft ? .right : .left
+    case 2: return rightToLeft ? .left : .right
+    default: return .none
+    }
+  }
+
   private static func clean(_ value: Double) -> Double {
     value.isFinite && value > 0 ? value : 0
   }

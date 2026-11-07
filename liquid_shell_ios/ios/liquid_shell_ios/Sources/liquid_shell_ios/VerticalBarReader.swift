@@ -17,4 +17,17 @@ enum VerticalBarReader {
     #endif
     return nil
   }
+
+  /// The vertical bar's screen side; `.none` without one, before iOS 27.1,
+  /// or on an SDK without the API.
+  static func side(_ view: UIView) -> NativeVerticalBarSide {
+    #if canImport(UIKit, _version: 9127.0.85)
+      if #available(iOS 27.1, *) {
+        return ShellMath.verticalBarSide(
+          edge: view.traitCollection.verticalBarEdge.rawValue,
+          rightToLeft: view.effectiveUserInterfaceLayoutDirection == .rightToLeft)
+      }
+    #endif
+    return .none
+  }
 }

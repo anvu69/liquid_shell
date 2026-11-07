@@ -14,6 +14,7 @@ class _FakeHost extends NativeShellHostApi {
     installed: true,
     compact: false,
     sidebar: NativeSidebar.tiled,
+    verticalBarSide: NativeVerticalBarSide.none,
   );
   NativeWindowControls controls = NativeWindowControls(leading: 66, top: 24);
   PlatformException? failure;
@@ -213,6 +214,24 @@ void main() {
     expect(host.calls, ['attach']);
   });
 
+  test('stateFromNative maps the vertical bar side', () {
+    for (final (native, side) in [
+      (NativeVerticalBarSide.none, LiquidNativeVerticalBarSide.none),
+      (NativeVerticalBarSide.left, LiquidNativeVerticalBarSide.left),
+      (NativeVerticalBarSide.right, LiquidNativeVerticalBarSide.right),
+    ]) {
+      final state = stateFromNative(
+        NativeShellState(
+          installed: true,
+          compact: true,
+          sidebar: NativeSidebar.hidden,
+          verticalBarSide: native,
+        ),
+      );
+      expect(state.verticalBarSide, side);
+    }
+  });
+
   test('every native unavailable reason and sidebar maps by name', () {
     for (final reason in NativeUnavailableReason.values) {
       final state = stateFromNative(
@@ -220,6 +239,7 @@ void main() {
           installed: false,
           compact: true,
           sidebar: NativeSidebar.hidden,
+          verticalBarSide: NativeVerticalBarSide.none,
           unavailableReason: reason,
         ),
       );
@@ -228,7 +248,12 @@ void main() {
     }
     for (final sidebar in NativeSidebar.values) {
       final state = stateFromNative(
-        NativeShellState(installed: true, compact: false, sidebar: sidebar),
+        NativeShellState(
+          installed: true,
+          compact: false,
+          sidebar: sidebar,
+          verticalBarSide: NativeVerticalBarSide.none,
+        ),
       );
       expect(state.sidebar.name, sidebar.name);
       expect(state.unavailableReason, isNull);
@@ -374,6 +399,7 @@ void main() {
         installed: true,
         compact: true,
         sidebar: NativeSidebar.hidden,
+        verticalBarSide: NativeVerticalBarSide.none,
       ),
     ]);
     await deliver('onWindowControlsChanged', [
