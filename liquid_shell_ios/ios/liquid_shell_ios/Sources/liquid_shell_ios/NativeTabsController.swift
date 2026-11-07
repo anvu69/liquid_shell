@@ -544,6 +544,8 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       if let page = page as? PageHostController, page.isViewLoaded {
         want.top = Double(page.flutterTop)
       }
+      want.top = ShellMath.verticalBarTop(
+        safeTop: want.top, barRegionTop: VerticalBarReader.topBarRegionTop(host.view))
       // Portrait overlay: the tab bar hides and safe.top drops; keep the
       // closed value so Flutter sees no metrics change.
       if currentSidebar() == .overlay {

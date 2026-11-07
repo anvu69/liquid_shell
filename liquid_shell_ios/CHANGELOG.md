@@ -1,3 +1,11 @@
+## 0.1.0-dev.12
+
+- iPhone Duo (iOS 27.1): while the vertical bar is shown, Flutter's top
+  inset is the system's top bar region (26pt, level with the clock)
+  instead of 0, so a Flutter header is no longer cut by the screen's
+  rounded corner (VK-930). Existing checkouts run `pod install` in the
+  app's `ios/` to pick up the new source file.
+
 ## 0.1.0-dev.11
 
 - Every destination tab is a clear navigation controller (VK-441). Its
