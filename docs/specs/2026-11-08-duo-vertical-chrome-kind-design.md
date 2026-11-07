@@ -57,7 +57,7 @@ Measured on the Duo; see §6. The right column stays in the safe area under `Liq
 - `liquid_shell_ios` unit: `stateFromNative` maps all three sides.
 - XCTest: `ShellMath.verticalBarSide` for edges 0, 1, 2, 7 in both directions.
 - `liquid_shell` unit (`native_layout_test.dart`): `verticalBar` from the side, `hidden` still wins; insets for both sides; every other kind unchanged.
-- Integration: `native_shell_test.dart` handles `verticalBar` (first test: `chromeInsets` equals the column side's padding, which is > 40; the guard test measures the column's side). All of it passes on an iPhone Duo iOS 27.1 simulator and, as regression, on an iPhone 17 Pro iOS 26.5 simulator. `native_duo_test.dart` also asserts `chromeKind == verticalBar`.
+- Integration: `native_shell_test.dart` handles `verticalBar` (first test: `chromeInsets` equals the column side's padding, which is > 40; the guard test measures the top band (26 → 0) and asserts `hidden` + zero `chromeInsets` above, see §6; the sidebar test's assertion is widened to `bottomBar` or `verticalBar`). All of it passes on an iPhone Duo iOS 27.1 simulator and, as regression, on an iPhone 17 Pro iOS 26.5 simulator. `native_duo_test.dart` also asserts `chromeKind == verticalBar`.
 - `make verify` green, `make pigeon-check` included.
 
 ## 5. Not in this change

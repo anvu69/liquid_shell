@@ -64,9 +64,10 @@ class LiquidShellScopeData {
   /// Whether the platform draws the chrome (native chrome on an iOS 26
   /// iPhone or iPad). The insets then come from the platform's safe area:
   /// at regular width [chromeInsets] top is the top padding while the
-  /// native top bar shows; at compact width (every iPhone, and a narrow
-  /// iPad window) [chromeInsets] bottom is the bottom padding while the
-  /// native floating tab bar shows.
+  /// native top bar shows; at compact width (a narrow iPad window, or an
+  /// iPhone) [chromeInsets] bottom is the bottom padding while the native
+  /// floating tab bar shows. On an iPhone Duo the kind is `verticalBar` and
+  /// [chromeInsets] is the vertical bar's side.
   final bool nativeChrome;
 
   /// The iPadOS 26 window controls, zero elsewhere (always zero on an

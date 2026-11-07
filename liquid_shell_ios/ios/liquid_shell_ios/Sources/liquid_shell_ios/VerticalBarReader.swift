@@ -23,8 +23,15 @@ enum VerticalBarReader {
   static func side(_ view: UIView) -> NativeVerticalBarSide {
     #if canImport(UIKit, _version: 9127.0.85)
       if #available(iOS 27.1, *) {
+        // ShellMath takes 1 leading / 2 trailing; map the cases, not raw values.
+        let edge: Int
+        switch view.traitCollection.verticalBarEdge {
+        case .leading: edge = 1
+        case .trailing: edge = 2
+        default: edge = 0
+        }
         return ShellMath.verticalBarSide(
-          edge: view.traitCollection.verticalBarEdge.rawValue,
+          edge: edge,
           rightToLeft: view.effectiveUserInterfaceLayoutDirection == .rightToLeft)
       }
     #endif
