@@ -49,7 +49,7 @@ From VK-930 (iPhone Duo simulator, iOS 27.1, folded outer portrait, `BasicTabsCa
 
 ### 3.4 Chrome hidden
 
-Not measured: whether the column leaves the safe area under `LiquidNoChrome` on the Duo. The plan's first task measures it; the integration test asserts what it finds on the column's side, and this spec's §6 records the answer.
+Measured on the Duo; see §6. The right column stays in the safe area under `LiquidNoChrome`; only the top band leaves.
 
 ## 4. Testing
 
@@ -68,4 +68,10 @@ Not measured: whether the column leaves the safe area under `LiquidNoChrome` on 
 
 ## 6. Measured during the plan
 
-(Filled by Task 1: chrome hidden under the vertical bar; the unfolded wide posture's native `compact`.)
+Measured on the iPhone Duo simulator (iOS 27.1, folded portrait 466x678):
+
+- With the shell chrome showing, padding is L0 T26 R84 B34.
+- Under `LiquidNoChrome` it is L0 T0 R84 B34 (`chromeKind` hidden).
+- Screenshots show the right 84 pt column is the system vertical bar: clock, Wi-Fi, then the tabs. Under `LiquidNoChrome` the tabs leave but the column stays, so the right padding stays 84. Only the top band (26) beside the clock drops.
+- Owner decision: the integration test 'a page above the shell hides the native chrome' compares the top padding (not the vertical bar's side) when the kind below is not `bottomBar`, asserts `chromeKind == hidden` and `chromeInsets == EdgeInsets.zero` on the page above, and asserts nothing about the right padding.
+- The unfolded tall posture was not measured: simctl has no posture control.
