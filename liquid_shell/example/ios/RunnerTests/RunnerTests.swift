@@ -106,6 +106,14 @@ final class ShellMathTests: XCTestCase {
     XCTAssertEqual(again, need)
   }
 
+  func testAVerticalBarRaisesFlutterTopToTheTopBarRegion() {
+    XCTAssertEqual(ShellMath.verticalBarTop(safeTop: 0, barRegionTop: 26), 26)
+    XCTAssertEqual(ShellMath.verticalBarTop(safeTop: 82, barRegionTop: 26), 82, "a native bar already covers it")
+    XCTAssertEqual(ShellMath.verticalBarTop(safeTop: 0, barRegionTop: nil), 0, "no vertical bar")
+    XCTAssertEqual(ShellMath.verticalBarTop(safeTop: 0, barRegionTop: -1), 0)
+    XCTAssertEqual(ShellMath.verticalBarTop(safeTop: 0, barRegionTop: .nan), 0)
+  }
+
   func testTiledMeansTheHostSafeAreaGrewOnOneSide() {
     let root = ShellInsets(top: 24, left: 0, bottom: 20, right: 0)
     XCTAssertTrue(ShellMath.isTiled(host: ShellInsets(top: 24, left: 300, bottom: 20, right: 0), root: root))

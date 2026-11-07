@@ -75,6 +75,13 @@ enum ShellMath {
     return abs(a.leading - b.leading) >= 0.5 || abs(a.top - b.top) >= 0.5
   }
 
+  /// Flutter's top under a vertical bar (iPhone Duo, spec VK-930 §3.1):
+  /// the window's top is 0 there, and UIKit starts its own bars at the top
+  /// bar region. Nil, negative or non-finite region: [safeTop].
+  static func verticalBarTop(safeTop: Double, barRegionTop: Double?) -> Double {
+    max(safeTop, clean(barRegionTop ?? 0))
+  }
+
   private static func clean(_ value: Double) -> Double {
     value.isFinite && value > 0 ? value : 0
   }
