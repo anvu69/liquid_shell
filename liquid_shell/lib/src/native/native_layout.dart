@@ -105,12 +105,16 @@ String? nativeBadgeText(LiquidBadge? badge) {
 }
 
 /// The chrome kind while native chrome is engaged: UIKit's compact bar at
-/// the bottom, else the top bar while the sidebar is hidden.
+/// the bottom, the system's vertical bar beside the body, else the top bar
+/// while the sidebar is hidden.
 LiquidChromeKind nativeChromeKind({
   required LiquidNativeShellState state,
   required bool hidden,
 }) {
   if (hidden) return LiquidChromeKind.hidden;
+  if (state.verticalBarSide != LiquidNativeVerticalBarSide.none) {
+    return LiquidChromeKind.verticalBar;
+  }
   if (state.compact) return LiquidChromeKind.bottomBar;
   return switch (state.sidebar) {
     LiquidNativeSidebar.hidden => LiquidChromeKind.topBar,
@@ -121,15 +125,23 @@ LiquidChromeKind nativeChromeKind({
 
 /// The insets of native chrome. The bar is already in the Flutter view's
 /// safe area [padding]: the top bar (or the overlay's held top) in the
-/// top padding, the compact bar in the bottom padding. Tiled and hidden
+/// top padding, the compact bar in the bottom padding, the vertical bar in
+/// the left or right padding on its [verticalBarSide]. Tiled and hidden
 /// cover nothing.
 EdgeInsets nativeChromeInsets({
   required LiquidChromeKind kind,
   required EdgeInsets padding,
+  LiquidNativeVerticalBarSide verticalBarSide =
+      LiquidNativeVerticalBarSide.none,
 }) => switch (kind) {
   LiquidChromeKind.topBar ||
   LiquidChromeKind.sidebarOverlay => EdgeInsets.only(top: padding.top),
   LiquidChromeKind.bottomBar => EdgeInsets.only(bottom: padding.bottom),
+  LiquidChromeKind.verticalBar => switch (verticalBarSide) {
+    LiquidNativeVerticalBarSide.left => EdgeInsets.only(left: padding.left),
+    LiquidNativeVerticalBarSide.right => EdgeInsets.only(right: padding.right),
+    LiquidNativeVerticalBarSide.none => EdgeInsets.zero,
+  },
   _ => EdgeInsets.zero,
 };
 

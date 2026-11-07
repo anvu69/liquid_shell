@@ -54,7 +54,8 @@ shell forces a glass tier (a forced tier asks for Flutter glass); and
 every destination (and the trailing action) has an SF Symbol. Width does not matter: UIKit picks the
 compact bar or the top bar and sidebar from the window's size class, and
 the shell's `sizeClass` and `chromeKind` follow it (`bottomBar` when
-compact). An iPhone is always compact, also a Plus or Max iPhone in
+compact; `verticalBar` on an iPhone Duo, where the system shows its vertical
+bar beside the body and `chromeInsets` is the bar's side). An iPhone is always compact, also a Plus or Max iPhone in
 landscape, whose size class is regular: UIKit keeps the bottom bar there. Otherwise the container is dormant: it hides, gives Flutter the
 whole window, and lets every touch through.
 

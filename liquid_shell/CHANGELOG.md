@@ -1,3 +1,11 @@
+## 0.1.0-dev.12
+
+- With native chrome on an iPhone Duo, `chromeKind` is the new
+  `LiquidChromeKind.verticalBar` while the system shows its vertical bar,
+  and `chromeInsets` is the bar's side (it was `bottomBar` with the home
+  indicator's inset). The new enum value breaks an exhaustive `switch` over
+  `LiquidChromeKind`: add the case.
+
 ## 0.1.0-dev.11
 
 ### Migration from 0.1.0-dev.10

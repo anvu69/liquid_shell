@@ -140,6 +140,8 @@ void main() {
         expect(padding.bottom, greaterThan(40));
       case LiquidChromeKind.sidebarTiled:
         expect(scope.chromeInsets, EdgeInsets.zero);
+      case LiquidChromeKind.verticalBar:
+        expect(scope.chromeInsets.horizontal, greaterThan(0));
       case LiquidChromeKind.topBar ||
           LiquidChromeKind.sidebarOverlay ||
           LiquidChromeKind.hidden:
