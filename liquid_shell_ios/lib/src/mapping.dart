@@ -16,6 +16,11 @@ LiquidNativeShellState stateFromNative(
     NativeSidebar.overlay => LiquidNativeSidebar.overlay,
     NativeSidebar.tiled => LiquidNativeSidebar.tiled,
   },
+  verticalBarSide: switch (state.verticalBarSide) {
+    NativeVerticalBarSide.none => LiquidNativeVerticalBarSide.none,
+    NativeVerticalBarSide.left => LiquidNativeVerticalBarSide.left,
+    NativeVerticalBarSide.right => LiquidNativeVerticalBarSide.right,
+  },
   unavailableReason: switch (state.unavailableReason) {
     null => null,
     NativeUnavailableReason.osTooOld => LiquidNativeUnavailableReason.osTooOld,

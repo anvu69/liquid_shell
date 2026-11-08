@@ -1881,7 +1881,10 @@ class _LiquidShellState extends State<LiquidShell>
             ),
           ),
         );
-      case LiquidChromeKind.sidebarTiled || LiquidChromeKind.hidden:
+      // Native only: the Flutter chrome draws no vertical bar yet.
+      case LiquidChromeKind.verticalBar ||
+          LiquidChromeKind.sidebarTiled ||
+          LiquidChromeKind.hidden:
         break;
     }
 
@@ -2162,7 +2165,12 @@ class _LiquidShellState extends State<LiquidShell>
         ? nativeChromeKind(state: state!, hidden: _hideRequests > 0)
         : LiquidChromeKind.hidden;
     media = _holdBarInset(media, barShown: kind == LiquidChromeKind.bottomBar);
-    var insets = nativeChromeInsets(kind: kind, padding: media.padding);
+    var insets = nativeChromeInsets(
+      kind: kind,
+      padding: media.padding,
+      verticalBarSide:
+          state?.verticalBarSide ?? LiquidNativeVerticalBarSide.none,
+    );
     if (_search.selected) {
       // The iPhone field above the keyboard is not in the safe area.
       insets = insets.copyWith(

@@ -20,6 +20,9 @@ import 'package:pigeon/pigeon.dart';
 /// Where the native sidebar is.
 enum NativeSidebar { hidden, overlay, tiled }
 
+/// The screen side of the system's vertical bar (iPhone Duo).
+enum NativeVerticalBarSide { none, left, right }
+
 /// Why the native shell is not installed.
 enum NativeUnavailableReason {
   osTooOld,
@@ -36,12 +39,14 @@ class NativeShellState {
     required this.installed,
     required this.compact,
     required this.sidebar,
+    required this.verticalBarSide,
     this.unavailableReason,
   });
 
   bool installed;
   bool compact;
   NativeSidebar sidebar;
+  NativeVerticalBarSide verticalBarSide;
   NativeUnavailableReason? unavailableReason;
 }
 

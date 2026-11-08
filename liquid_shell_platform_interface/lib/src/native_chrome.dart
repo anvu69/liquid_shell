@@ -16,6 +16,19 @@ enum LiquidNativeSidebar {
   tiled,
 }
 
+/// The screen side of the system's vertical bar, already resolved for
+/// right-to-left. Only an iPhone Duo with native chrome reports one.
+enum LiquidNativeVerticalBarSide {
+  /// No vertical bar.
+  none,
+
+  /// Along the left edge.
+  left,
+
+  /// Along the right edge.
+  right,
+}
+
 /// Why native chrome is not installed.
 enum LiquidNativeUnavailableReason {
   /// The platform has no native chrome (Android, web, desktop, tests).
@@ -52,6 +65,7 @@ class LiquidNativeShellState {
     required this.installed,
     this.compact = false,
     this.sidebar = LiquidNativeSidebar.hidden,
+    this.verticalBarSide = LiquidNativeVerticalBarSide.none,
     this.unavailableReason,
   });
 
@@ -74,6 +88,10 @@ class LiquidNativeShellState {
   /// The native sidebar.
   final LiquidNativeSidebar sidebar;
 
+  /// Where the system's vertical bar is; its tab column replaces the
+  /// bottom bar.
+  final LiquidNativeVerticalBarSide verticalBarSide;
+
   /// Set when [installed] is false.
   final LiquidNativeUnavailableReason? unavailableReason;
 
@@ -86,16 +104,23 @@ class LiquidNativeShellState {
       other.installed == installed &&
       other.compact == compact &&
       other.sidebar == sidebar &&
+      other.verticalBarSide == verticalBarSide &&
       other.unavailableReason == unavailableReason;
 
   @override
-  int get hashCode =>
-      Object.hash(installed, compact, sidebar, unavailableReason);
+  int get hashCode => Object.hash(
+    installed,
+    compact,
+    sidebar,
+    verticalBarSide,
+    unavailableReason,
+  );
 
   @override
   String toString() =>
       'LiquidNativeShellState(installed: $installed, compact: $compact, '
       'sidebar: ${sidebar.name}, '
+      'verticalBarSide: ${verticalBarSide.name}, '
       'unavailableReason: ${unavailableReason?.name})';
 }
 

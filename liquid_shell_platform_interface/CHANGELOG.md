@@ -1,3 +1,8 @@
+## 0.1.0-dev.12
+
+- The native state reports the screen side of the iPhone Duo's vertical bar
+  (`LiquidNativeVerticalBarSide`).
+
 ## 0.1.0-dev.11
 
 - `LiquidNativeChromeConfig.tabBarHidden` (default `false`): hide the tab

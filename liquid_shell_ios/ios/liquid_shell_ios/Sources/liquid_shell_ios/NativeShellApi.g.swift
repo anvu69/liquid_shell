@@ -195,6 +195,13 @@ enum NativeSidebar: Int, CaseIterable {
   case tiled = 2
 }
 
+/// The screen side of the system's vertical bar (iPhone Duo).
+enum NativeVerticalBarSide: Int, CaseIterable {
+  case none = 0
+  case left = 1
+  case right = 2
+}
+
 /// Why the native shell is not installed.
 enum NativeUnavailableReason: Int, CaseIterable {
   case osTooOld = 0
@@ -252,6 +259,7 @@ struct NativeShellState: Hashable, CustomStringConvertible {
   var installed: Bool
   var compact: Bool
   var sidebar: NativeSidebar
+  var verticalBarSide: NativeVerticalBarSide
   var unavailableReason: NativeUnavailableReason? = nil
 
 
@@ -260,12 +268,14 @@ struct NativeShellState: Hashable, CustomStringConvertible {
     let installed = pigeonVar_list[0] as! Bool
     let compact = pigeonVar_list[1] as! Bool
     let sidebar = pigeonVar_list[2] as! NativeSidebar
-    let unavailableReason: NativeUnavailableReason? = nilOrValue(pigeonVar_list[3])
+    let verticalBarSide = pigeonVar_list[3] as! NativeVerticalBarSide
+    let unavailableReason: NativeUnavailableReason? = nilOrValue(pigeonVar_list[4])
 
     return NativeShellState(
       installed: installed,
       compact: compact,
       sidebar: sidebar,
+      verticalBarSide: verticalBarSide,
       unavailableReason: unavailableReason
     )
   }
@@ -274,6 +284,7 @@ struct NativeShellState: Hashable, CustomStringConvertible {
       installed,
       compact,
       sidebar,
+      verticalBarSide,
       unavailableReason,
     ]
   }
@@ -281,7 +292,7 @@ struct NativeShellState: Hashable, CustomStringConvertible {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return NativeShellApiPigeonInternal.deepEquals(lhs.installed, rhs.installed) && NativeShellApiPigeonInternal.deepEquals(lhs.compact, rhs.compact) && NativeShellApiPigeonInternal.deepEquals(lhs.sidebar, rhs.sidebar) && NativeShellApiPigeonInternal.deepEquals(lhs.unavailableReason, rhs.unavailableReason)
+    return NativeShellApiPigeonInternal.deepEquals(lhs.installed, rhs.installed) && NativeShellApiPigeonInternal.deepEquals(lhs.compact, rhs.compact) && NativeShellApiPigeonInternal.deepEquals(lhs.sidebar, rhs.sidebar) && NativeShellApiPigeonInternal.deepEquals(lhs.verticalBarSide, rhs.verticalBarSide) && NativeShellApiPigeonInternal.deepEquals(lhs.unavailableReason, rhs.unavailableReason)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -289,11 +300,12 @@ struct NativeShellState: Hashable, CustomStringConvertible {
     NativeShellApiPigeonInternal.deepHash(value: installed, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: compact, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: sidebar, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: verticalBarSide, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: unavailableReason, hasher: &hasher)
   }
 
   public var description: String {
-    return "NativeShellState(installed: \(String(describing: installed)), compact: \(String(describing: compact)), sidebar: \(String(describing: sidebar)), unavailableReason: \(String(describing: unavailableReason)))"
+    return "NativeShellState(installed: \(String(describing: installed)), compact: \(String(describing: compact)), sidebar: \(String(describing: sidebar)), verticalBarSide: \(String(describing: verticalBarSide)), unavailableReason: \(String(describing: unavailableReason)))"
   }
 }
 
@@ -1214,70 +1226,76 @@ private class NativeShellApiPigeonCodecReader: FlutterStandardReader {
     case 130:
       let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
       if let enumResultAsInt = enumResultAsInt {
-        return NativeUnavailableReason(rawValue: enumResultAsInt)
+        return NativeVerticalBarSide(rawValue: enumResultAsInt)
       }
       return nil
     case 131:
       let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
       if let enumResultAsInt = enumResultAsInt {
-        return NativeTapTarget(rawValue: enumResultAsInt)
+        return NativeUnavailableReason(rawValue: enumResultAsInt)
       }
       return nil
     case 132:
       let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
       if let enumResultAsInt = enumResultAsInt {
-        return NativeDialogKind(rawValue: enumResultAsInt)
+        return NativeTapTarget(rawValue: enumResultAsInt)
       }
       return nil
     case 133:
       let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
       if let enumResultAsInt = enumResultAsInt {
-        return NativeDialogActionStyle(rawValue: enumResultAsInt)
+        return NativeDialogKind(rawValue: enumResultAsInt)
       }
       return nil
     case 134:
       let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
       if let enumResultAsInt = enumResultAsInt {
-        return NativeDialogOutcome(rawValue: enumResultAsInt)
+        return NativeDialogActionStyle(rawValue: enumResultAsInt)
       }
       return nil
     case 135:
       let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
       if let enumResultAsInt = enumResultAsInt {
-        return NativeDialogUnavailableReason(rawValue: enumResultAsInt)
+        return NativeDialogOutcome(rawValue: enumResultAsInt)
       }
       return nil
     case 136:
-      return NativeShellState.fromList(self.readValue() as! [Any?])
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return NativeDialogUnavailableReason(rawValue: enumResultAsInt)
+      }
+      return nil
     case 137:
-      return NativeTab.fromList(self.readValue() as! [Any?])
+      return NativeShellState.fromList(self.readValue() as! [Any?])
     case 138:
-      return NativeAction.fromList(self.readValue() as! [Any?])
+      return NativeTab.fromList(self.readValue() as! [Any?])
     case 139:
-      return NativeFooter.fromList(self.readValue() as! [Any?])
+      return NativeAction.fromList(self.readValue() as! [Any?])
     case 140:
-      return NativePageAction.fromList(self.readValue() as! [Any?])
+      return NativeFooter.fromList(self.readValue() as! [Any?])
     case 141:
-      return NativePage.fromList(self.readValue() as! [Any?])
+      return NativePageAction.fromList(self.readValue() as! [Any?])
     case 142:
-      return NativeSearchConfig.fromList(self.readValue() as! [Any?])
+      return NativePage.fromList(self.readValue() as! [Any?])
     case 143:
-      return NativeRect.fromList(self.readValue() as! [Any?])
+      return NativeSearchConfig.fromList(self.readValue() as! [Any?])
     case 144:
-      return NativeTabSnapshot.fromList(self.readValue() as! [Any?])
+      return NativeRect.fromList(self.readValue() as! [Any?])
     case 145:
-      return NativeDebugSnapshot.fromList(self.readValue() as! [Any?])
+      return NativeTabSnapshot.fromList(self.readValue() as! [Any?])
     case 146:
-      return NativeChromeConfig.fromList(self.readValue() as! [Any?])
+      return NativeDebugSnapshot.fromList(self.readValue() as! [Any?])
     case 147:
-      return NativeWindowControls.fromList(self.readValue() as! [Any?])
+      return NativeChromeConfig.fromList(self.readValue() as! [Any?])
     case 148:
-      return NativeDialogAction.fromList(self.readValue() as! [Any?])
+      return NativeWindowControls.fromList(self.readValue() as! [Any?])
     case 149:
-      return NativeDialogRequest.fromList(self.readValue() as! [Any?])
+      return NativeDialogAction.fromList(self.readValue() as! [Any?])
     case 150:
-      return NativeDialogResult.fromList(self.readValue() as! [Any?])
+      return NativeDialogRequest.fromList(self.readValue() as! [Any?])
     case 151:
+      return NativeDialogResult.fromList(self.readValue() as! [Any?])
+    case 152:
       return NativeDialogSnapshot.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
@@ -1290,71 +1308,74 @@ private class NativeShellApiPigeonCodecWriter: FlutterStandardWriter {
     if let value = value as? NativeSidebar {
       super.writeByte(129)
       super.writeValue(value.rawValue)
-    } else if let value = value as? NativeUnavailableReason {
+    } else if let value = value as? NativeVerticalBarSide {
       super.writeByte(130)
       super.writeValue(value.rawValue)
-    } else if let value = value as? NativeTapTarget {
+    } else if let value = value as? NativeUnavailableReason {
       super.writeByte(131)
       super.writeValue(value.rawValue)
-    } else if let value = value as? NativeDialogKind {
+    } else if let value = value as? NativeTapTarget {
       super.writeByte(132)
       super.writeValue(value.rawValue)
-    } else if let value = value as? NativeDialogActionStyle {
+    } else if let value = value as? NativeDialogKind {
       super.writeByte(133)
       super.writeValue(value.rawValue)
-    } else if let value = value as? NativeDialogOutcome {
+    } else if let value = value as? NativeDialogActionStyle {
       super.writeByte(134)
       super.writeValue(value.rawValue)
-    } else if let value = value as? NativeDialogUnavailableReason {
+    } else if let value = value as? NativeDialogOutcome {
       super.writeByte(135)
       super.writeValue(value.rawValue)
-    } else if let value = value as? NativeShellState {
+    } else if let value = value as? NativeDialogUnavailableReason {
       super.writeByte(136)
-      super.writeValue(value.toList())
-    } else if let value = value as? NativeTab {
+      super.writeValue(value.rawValue)
+    } else if let value = value as? NativeShellState {
       super.writeByte(137)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeAction {
+    } else if let value = value as? NativeTab {
       super.writeByte(138)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeFooter {
+    } else if let value = value as? NativeAction {
       super.writeByte(139)
       super.writeValue(value.toList())
-    } else if let value = value as? NativePageAction {
+    } else if let value = value as? NativeFooter {
       super.writeByte(140)
       super.writeValue(value.toList())
-    } else if let value = value as? NativePage {
+    } else if let value = value as? NativePageAction {
       super.writeByte(141)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeSearchConfig {
+    } else if let value = value as? NativePage {
       super.writeByte(142)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeRect {
+    } else if let value = value as? NativeSearchConfig {
       super.writeByte(143)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeTabSnapshot {
+    } else if let value = value as? NativeRect {
       super.writeByte(144)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeDebugSnapshot {
+    } else if let value = value as? NativeTabSnapshot {
       super.writeByte(145)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeChromeConfig {
+    } else if let value = value as? NativeDebugSnapshot {
       super.writeByte(146)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeWindowControls {
+    } else if let value = value as? NativeChromeConfig {
       super.writeByte(147)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeDialogAction {
+    } else if let value = value as? NativeWindowControls {
       super.writeByte(148)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeDialogRequest {
+    } else if let value = value as? NativeDialogAction {
       super.writeByte(149)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeDialogResult {
+    } else if let value = value as? NativeDialogRequest {
       super.writeByte(150)
       super.writeValue(value.toList())
-    } else if let value = value as? NativeDialogSnapshot {
+    } else if let value = value as? NativeDialogResult {
       super.writeByte(151)
+      super.writeValue(value.toList())
+    } else if let value = value as? NativeDialogSnapshot {
+      super.writeByte(152)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)

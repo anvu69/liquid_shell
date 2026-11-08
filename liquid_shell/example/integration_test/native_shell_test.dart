@@ -127,8 +127,9 @@ void main() {
     final platform = LiquidShellPlatform.instance as LiquidShellIOS;
 
     // The native bar is in the Flutter view's safe area: the top bar row
-    // at regular width, UIKit's compact bar at the bottom (owner D1). A
-    // landscape iPad starts with the sidebar tiled: no bar row then.
+    // at regular width, UIKit's compact bar at the bottom (owner D1), or
+    // the vertical bar beside the body on an iPhone Duo. A landscape iPad
+    // starts with the sidebar tiled: no bar row then.
     final scope = _scope(tester);
     final padding = MediaQuery.paddingOf(
       tester.element(find.byType(DemoPage).first),
@@ -140,6 +141,18 @@ void main() {
         expect(padding.bottom, greaterThan(40));
       case LiquidChromeKind.sidebarTiled:
         expect(scope.chromeInsets, EdgeInsets.zero);
+      case LiquidChromeKind.verticalBar:
+        final side = scope.chromeInsets.left > 0
+            ? scope.chromeInsets.left
+            : scope.chromeInsets.right;
+        expect(
+          scope.chromeInsets,
+          anyOf(
+            EdgeInsets.only(left: padding.left),
+            EdgeInsets.only(right: padding.right),
+          ),
+        );
+        expect(side, greaterThan(40));
       case LiquidChromeKind.topBar ||
           LiquidChromeKind.sidebarOverlay ||
           LiquidChromeKind.hidden:
@@ -225,7 +238,10 @@ void main() {
     if (scope.sizeClass == LiquidSizeClass.compact) {
       // UIKit's compact bar has no sidebar: the request is ignored.
       expect(scope.sidebarVisible, isFalse);
-      expect(scope.chromeKind, LiquidChromeKind.bottomBar);
+      expect(
+        scope.chromeKind,
+        anyOf(LiquidChromeKind.bottomBar, LiquidChromeKind.verticalBar),
+      );
       return;
     }
     expect(scope.sidebarVisible, isTrue);
@@ -263,10 +279,14 @@ void main() {
     if (!_expectNative) return;
     await tester.pumpWidget(_app);
     await _settle(tester);
-    // The padding on the bar's side: the top bar row, or the compact bar.
-    final compact = _scope(tester).sizeClass == LiquidSizeClass.compact;
-    double barSide(EdgeInsets padding) =>
-        compact ? padding.bottom : padding.top;
+    final kindBelow = _scope(tester).chromeKind;
+    // The padding on the bar's side: the compact bar at the bottom, else the
+    // top. The Duo's vertical bar stays in the safe area with the chrome
+    // hidden; the top band beside the clock leaves.
+    double barSide(EdgeInsets padding) => switch (kindBelow) {
+      LiquidChromeKind.bottomBar => padding.bottom,
+      _ => padding.top,
+    };
     final below = barSide(
       MediaQuery.paddingOf(tester.element(find.byType(DemoPage).first)),
     );
@@ -279,9 +299,11 @@ void main() {
       ),
     );
     await _settle(tester);
-    final above = barSide(
-      MediaQuery.paddingOf(tester.element(find.byType(DemoPage).last)),
-    );
+    final aboveElement = tester.element(find.byType(DemoPage).last);
+    final above = barSide(MediaQuery.paddingOf(aboveElement));
+    final aboveScope = LiquidShellScope.of(aboveElement);
+    expect(aboveScope.chromeKind, LiquidChromeKind.hidden);
+    expect(aboveScope.chromeInsets, EdgeInsets.zero);
     // The bar left the safe area with the hidden chrome.
     expect(above, lessThan(below));
     navigator.pop();

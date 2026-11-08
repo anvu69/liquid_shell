@@ -6,6 +6,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell_example/cases/basic_tabs.dart';
 import 'package:liquid_shell_example/support/demo_page.dart';
 
@@ -36,6 +37,12 @@ void main() {
       );
       debugPrint('liquid_shell duo: padding $padding');
       await binding.takeScreenshot('duo_${_runName}_tabs');
+      expect(
+        LiquidShellScope.of(
+          tester.element(find.byType(DemoPage).first),
+        ).chromeKind,
+        LiquidChromeKind.verticalBar,
+      );
       expect(padding.right, closeTo(84, 0.5), reason: 'the vertical bar');
       expect(padding.top, greaterThanOrEqualTo(24));
     },

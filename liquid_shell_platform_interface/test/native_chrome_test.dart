@@ -24,6 +24,18 @@ void main() {
       }
     });
 
+    test('verticalBarSide defaults to none and takes part in equality', () {
+      const a = LiquidNativeShellState(installed: true);
+      const b = LiquidNativeShellState(
+        installed: true,
+        verticalBarSide: LiquidNativeVerticalBarSide.right,
+      );
+      expect(a.verticalBarSide, LiquidNativeVerticalBarSide.none);
+      expect(a == b, isFalse);
+      expect(a.hashCode == b.hashCode, isFalse);
+      expect(b.toString(), contains('verticalBarSide: right'));
+    });
+
     test('== compares every field', () {
       const a = LiquidNativeShellState(installed: true);
       expect(a, const LiquidNativeShellState(installed: true));

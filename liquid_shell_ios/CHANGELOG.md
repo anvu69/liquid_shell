@@ -1,5 +1,7 @@
 ## 0.1.0-dev.12
 
+- The native state reports the screen side of the iPhone Duo's vertical bar
+  (`LiquidNativeVerticalBarSide`).
 - iPhone Duo (iOS 27.1): while the vertical bar is shown, Flutter's top
   inset is the system's top bar region (26pt, level with the clock)
   instead of 0, so a Flutter header is no longer cut by the screen's

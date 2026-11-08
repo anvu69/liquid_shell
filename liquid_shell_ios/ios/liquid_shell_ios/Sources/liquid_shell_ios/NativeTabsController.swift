@@ -522,7 +522,8 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     NativeShellState(
       installed: true,
       compact: isCompact,
-      sidebar: currentSidebar())
+      sidebar: currentSidebar(),
+      verticalBarSide: VerticalBarReader.side(view))
   }
 
   // MARK: - Flutter frame and safe area (spec §5.4)

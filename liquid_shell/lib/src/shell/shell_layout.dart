@@ -10,6 +10,10 @@ enum LiquidChromeKind {
   /// Compact: floating pill at the bottom.
   bottomBar,
 
+  /// The system's vertical bar beside the body (iPhone Duo, native
+  /// chrome): `LiquidShellScopeData.chromeInsets` is its side.
+  verticalBar,
+
   /// Regular with the sidebar hidden: pill at the top plus the toggle.
   topBar,
 
@@ -138,7 +142,10 @@ EdgeInsets chromeInsetsFor({
   LiquidChromeKind.topBar || LiquidChromeKind.sidebarOverlay => EdgeInsets.only(
     top: topPadding + kTopBarGap + (measuredBar ?? kTopPillExtent),
   ),
-  LiquidChromeKind.sidebarTiled || LiquidChromeKind.hidden => EdgeInsets.zero,
+  // The Flutter chrome draws no vertical bar yet: native only.
+  LiquidChromeKind.verticalBar ||
+  LiquidChromeKind.sidebarTiled ||
+  LiquidChromeKind.hidden => EdgeInsets.zero,
 };
 
 /// [index] when it is in range, otherwise 0 (the release fallback).

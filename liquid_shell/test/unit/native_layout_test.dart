@@ -183,11 +183,13 @@ void main() {
       LiquidNativeSidebar sidebar, {
       bool compact = false,
       bool hidden = false,
+      LiquidNativeVerticalBarSide side = LiquidNativeVerticalBarSide.none,
     }) => nativeChromeKind(
       state: LiquidNativeShellState(
         installed: true,
         compact: compact,
         sidebar: sidebar,
+        verticalBarSide: side,
       ),
       hidden: hidden,
     );
@@ -205,6 +207,47 @@ void main() {
     expect(
       kind(LiquidNativeSidebar.tiled, hidden: true),
       LiquidChromeKind.hidden,
+    );
+    expect(
+      kind(
+        LiquidNativeSidebar.hidden,
+        compact: true,
+        side: LiquidNativeVerticalBarSide.right,
+      ),
+      LiquidChromeKind.verticalBar,
+    );
+    expect(
+      kind(LiquidNativeSidebar.tiled, side: LiquidNativeVerticalBarSide.left),
+      LiquidChromeKind.verticalBar,
+    );
+    expect(
+      kind(
+        LiquidNativeSidebar.hidden,
+        compact: true,
+        hidden: true,
+        side: LiquidNativeVerticalBarSide.right,
+      ),
+      LiquidChromeKind.hidden,
+    );
+  });
+
+  test('nativeChromeInsets: a vertical bar takes the padding on its side', () {
+    const padding = EdgeInsets.fromLTRB(12, 26, 84, 34);
+    expect(
+      nativeChromeInsets(
+        kind: LiquidChromeKind.verticalBar,
+        padding: padding,
+        verticalBarSide: LiquidNativeVerticalBarSide.right,
+      ),
+      const EdgeInsets.only(right: 84),
+    );
+    expect(
+      nativeChromeInsets(
+        kind: LiquidChromeKind.verticalBar,
+        padding: padding,
+        verticalBarSide: LiquidNativeVerticalBarSide.left,
+      ),
+      const EdgeInsets.only(left: 12),
     );
   });
 

@@ -118,6 +118,13 @@ enum NativeSidebar {
   tiled,
 }
 
+/// The screen side of the system's vertical bar (iPhone Duo).
+enum NativeVerticalBarSide {
+  none,
+  left,
+  right,
+}
+
 /// Why the native shell is not installed.
 enum NativeUnavailableReason {
   osTooOld,
@@ -175,6 +182,7 @@ class NativeShellState {
     required this.installed,
     required this.compact,
     required this.sidebar,
+    required this.verticalBarSide,
     this.unavailableReason,
   });
 
@@ -184,6 +192,8 @@ class NativeShellState {
 
   NativeSidebar sidebar;
 
+  NativeVerticalBarSide verticalBarSide;
+
   NativeUnavailableReason? unavailableReason;
 
   List<Object?> _toList() {
@@ -191,6 +201,7 @@ class NativeShellState {
       installed,
       compact,
       sidebar,
+      verticalBarSide,
       unavailableReason,
     ];
   }
@@ -205,7 +216,8 @@ class NativeShellState {
       installed: result[0]! as bool,
       compact: result[1]! as bool,
       sidebar: result[2]! as NativeSidebar,
-      unavailableReason: result[3] as NativeUnavailableReason?,
+      verticalBarSide: result[3]! as NativeVerticalBarSide,
+      unavailableReason: result[4] as NativeUnavailableReason?,
     );
   }
 
@@ -221,6 +233,7 @@ class NativeShellState {
     return _deepEquals(installed, other.installed) &&
         _deepEquals(compact, other.compact) &&
         _deepEquals(sidebar, other.sidebar) &&
+        _deepEquals(verticalBarSide, other.verticalBarSide) &&
         _deepEquals(unavailableReason, other.unavailableReason);
   }
 
@@ -230,7 +243,7 @@ class NativeShellState {
 
   @override
   String toString() {
-    return 'NativeShellState(installed: $installed, compact: $compact, sidebar: $sidebar, unavailableReason: $unavailableReason)';
+    return 'NativeShellState(installed: $installed, compact: $compact, sidebar: $sidebar, verticalBarSide: $verticalBarSide, unavailableReason: $unavailableReason)';
   }
 }
 
@@ -1372,71 +1385,74 @@ class _PigeonCodec extends StandardMessageCodec {
     } else if (value is NativeSidebar) {
       buffer.putUint8(129);
       writeValue(buffer, value.index);
-    } else if (value is NativeUnavailableReason) {
+    } else if (value is NativeVerticalBarSide) {
       buffer.putUint8(130);
       writeValue(buffer, value.index);
-    } else if (value is NativeTapTarget) {
+    } else if (value is NativeUnavailableReason) {
       buffer.putUint8(131);
       writeValue(buffer, value.index);
-    } else if (value is NativeDialogKind) {
+    } else if (value is NativeTapTarget) {
       buffer.putUint8(132);
       writeValue(buffer, value.index);
-    } else if (value is NativeDialogActionStyle) {
+    } else if (value is NativeDialogKind) {
       buffer.putUint8(133);
       writeValue(buffer, value.index);
-    } else if (value is NativeDialogOutcome) {
+    } else if (value is NativeDialogActionStyle) {
       buffer.putUint8(134);
       writeValue(buffer, value.index);
-    } else if (value is NativeDialogUnavailableReason) {
+    } else if (value is NativeDialogOutcome) {
       buffer.putUint8(135);
       writeValue(buffer, value.index);
-    } else if (value is NativeShellState) {
+    } else if (value is NativeDialogUnavailableReason) {
       buffer.putUint8(136);
-      writeValue(buffer, value.encode());
-    } else if (value is NativeTab) {
+      writeValue(buffer, value.index);
+    } else if (value is NativeShellState) {
       buffer.putUint8(137);
       writeValue(buffer, value.encode());
-    } else if (value is NativeAction) {
+    } else if (value is NativeTab) {
       buffer.putUint8(138);
       writeValue(buffer, value.encode());
-    } else if (value is NativeFooter) {
+    } else if (value is NativeAction) {
       buffer.putUint8(139);
       writeValue(buffer, value.encode());
-    } else if (value is NativePageAction) {
+    } else if (value is NativeFooter) {
       buffer.putUint8(140);
       writeValue(buffer, value.encode());
-    } else if (value is NativePage) {
+    } else if (value is NativePageAction) {
       buffer.putUint8(141);
       writeValue(buffer, value.encode());
-    } else if (value is NativeSearchConfig) {
+    } else if (value is NativePage) {
       buffer.putUint8(142);
       writeValue(buffer, value.encode());
-    } else if (value is NativeRect) {
+    } else if (value is NativeSearchConfig) {
       buffer.putUint8(143);
       writeValue(buffer, value.encode());
-    } else if (value is NativeTabSnapshot) {
+    } else if (value is NativeRect) {
       buffer.putUint8(144);
       writeValue(buffer, value.encode());
-    } else if (value is NativeDebugSnapshot) {
+    } else if (value is NativeTabSnapshot) {
       buffer.putUint8(145);
       writeValue(buffer, value.encode());
-    } else if (value is NativeChromeConfig) {
+    } else if (value is NativeDebugSnapshot) {
       buffer.putUint8(146);
       writeValue(buffer, value.encode());
-    } else if (value is NativeWindowControls) {
+    } else if (value is NativeChromeConfig) {
       buffer.putUint8(147);
       writeValue(buffer, value.encode());
-    } else if (value is NativeDialogAction) {
+    } else if (value is NativeWindowControls) {
       buffer.putUint8(148);
       writeValue(buffer, value.encode());
-    } else if (value is NativeDialogRequest) {
+    } else if (value is NativeDialogAction) {
       buffer.putUint8(149);
       writeValue(buffer, value.encode());
-    } else if (value is NativeDialogResult) {
+    } else if (value is NativeDialogRequest) {
       buffer.putUint8(150);
       writeValue(buffer, value.encode());
-    } else if (value is NativeDialogSnapshot) {
+    } else if (value is NativeDialogResult) {
       buffer.putUint8(151);
+      writeValue(buffer, value.encode());
+    } else if (value is NativeDialogSnapshot) {
+      buffer.putUint8(152);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -1451,55 +1467,58 @@ class _PigeonCodec extends StandardMessageCodec {
         return value == null ? null : NativeSidebar.values[value];
       case 130:
         final value = readValue(buffer) as int?;
-        return value == null ? null : NativeUnavailableReason.values[value];
+        return value == null ? null : NativeVerticalBarSide.values[value];
       case 131:
         final value = readValue(buffer) as int?;
-        return value == null ? null : NativeTapTarget.values[value];
+        return value == null ? null : NativeUnavailableReason.values[value];
       case 132:
         final value = readValue(buffer) as int?;
-        return value == null ? null : NativeDialogKind.values[value];
+        return value == null ? null : NativeTapTarget.values[value];
       case 133:
         final value = readValue(buffer) as int?;
-        return value == null ? null : NativeDialogActionStyle.values[value];
+        return value == null ? null : NativeDialogKind.values[value];
       case 134:
         final value = readValue(buffer) as int?;
-        return value == null ? null : NativeDialogOutcome.values[value];
+        return value == null ? null : NativeDialogActionStyle.values[value];
       case 135:
+        final value = readValue(buffer) as int?;
+        return value == null ? null : NativeDialogOutcome.values[value];
+      case 136:
         final value = readValue(buffer) as int?;
         return value == null
             ? null
             : NativeDialogUnavailableReason.values[value];
-      case 136:
-        return NativeShellState.decode(readValue(buffer)!);
       case 137:
-        return NativeTab.decode(readValue(buffer)!);
+        return NativeShellState.decode(readValue(buffer)!);
       case 138:
-        return NativeAction.decode(readValue(buffer)!);
+        return NativeTab.decode(readValue(buffer)!);
       case 139:
-        return NativeFooter.decode(readValue(buffer)!);
+        return NativeAction.decode(readValue(buffer)!);
       case 140:
-        return NativePageAction.decode(readValue(buffer)!);
+        return NativeFooter.decode(readValue(buffer)!);
       case 141:
-        return NativePage.decode(readValue(buffer)!);
+        return NativePageAction.decode(readValue(buffer)!);
       case 142:
-        return NativeSearchConfig.decode(readValue(buffer)!);
+        return NativePage.decode(readValue(buffer)!);
       case 143:
-        return NativeRect.decode(readValue(buffer)!);
+        return NativeSearchConfig.decode(readValue(buffer)!);
       case 144:
-        return NativeTabSnapshot.decode(readValue(buffer)!);
+        return NativeRect.decode(readValue(buffer)!);
       case 145:
-        return NativeDebugSnapshot.decode(readValue(buffer)!);
+        return NativeTabSnapshot.decode(readValue(buffer)!);
       case 146:
-        return NativeChromeConfig.decode(readValue(buffer)!);
+        return NativeDebugSnapshot.decode(readValue(buffer)!);
       case 147:
-        return NativeWindowControls.decode(readValue(buffer)!);
+        return NativeChromeConfig.decode(readValue(buffer)!);
       case 148:
-        return NativeDialogAction.decode(readValue(buffer)!);
+        return NativeWindowControls.decode(readValue(buffer)!);
       case 149:
-        return NativeDialogRequest.decode(readValue(buffer)!);
+        return NativeDialogAction.decode(readValue(buffer)!);
       case 150:
-        return NativeDialogResult.decode(readValue(buffer)!);
+        return NativeDialogRequest.decode(readValue(buffer)!);
       case 151:
+        return NativeDialogResult.decode(readValue(buffer)!);
+      case 152:
         return NativeDialogSnapshot.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);

@@ -221,7 +221,8 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
       return tabs.currentState()
     }
     return NativeShellState(
-      installed: false, compact: false, sidebar: .hidden, unavailableReason: reason)
+      installed: false, compact: false, sidebar: .hidden, verticalBarSide: .none,
+      unavailableReason: reason)
   }
 
   func update(config: NativeChromeConfig) throws {

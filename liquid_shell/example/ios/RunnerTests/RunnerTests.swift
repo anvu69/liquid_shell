@@ -114,6 +114,15 @@ final class ShellMathTests: XCTestCase {
     XCTAssertEqual(ShellMath.verticalBarTop(safeTop: 0, barRegionTop: .nan), 0)
   }
 
+  func testTheVerticalBarSideIsTheScreenSide() {
+    XCTAssertEqual(ShellMath.verticalBarSide(edge: 2, rightToLeft: false), .right)
+    XCTAssertEqual(ShellMath.verticalBarSide(edge: 1, rightToLeft: false), .left)
+    XCTAssertEqual(ShellMath.verticalBarSide(edge: 2, rightToLeft: true), .left)
+    XCTAssertEqual(ShellMath.verticalBarSide(edge: 1, rightToLeft: true), .right)
+    XCTAssertEqual(ShellMath.verticalBarSide(edge: 0, rightToLeft: false), .none)
+    XCTAssertEqual(ShellMath.verticalBarSide(edge: 7, rightToLeft: true), .none)
+  }
+
   func testTiledMeansTheHostSafeAreaGrewOnOneSide() {
     let root = ShellInsets(top: 24, left: 0, bottom: 20, right: 0)
     XCTAssertTrue(ShellMath.isTiled(host: ShellInsets(top: 24, left: 300, bottom: 20, right: 0), root: root))
