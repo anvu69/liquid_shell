@@ -33,7 +33,7 @@ the spec in `docs/specs/`, and the plan in `docs/plans/`.
   run `make pigeon`, commit the source and both generated files.
 - **Never loosen `analysis_options.yaml`** to get code through. Fix the code.
 - **Goldens** are regenerated only with `make goldens-update` on macOS +
-  Flutter 3.44.6. Never edit images by hand.
+  Flutter 3.44.9 (`.fvmrc`). Never edit images by hand.
 - **Clean-room shader.** Never open or copy another glass package's shader or glass code (liquid_glass_renderer, liquid_glass_widgets, liquid_glass_easy, …). Derive from spec 2026-10-10 §4.
 
 ## Commands

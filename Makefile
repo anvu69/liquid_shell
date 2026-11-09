@@ -1,7 +1,7 @@
 # liquid_shell: one entry point per check. CI, the pre-commit hook and
 # contributors all call these targets, so "green" has exactly one definition.
 #
-# The SDK comes from fvm when it is installed (.fvmrc pins the floor, 3.44.6),
+# The SDK comes from fvm when it is installed (.fvmrc pins the local toolchain, 3.44.9),
 # otherwise from the flutter on PATH (CI). Override with FLUTTER=... DART=...
 
 FVM := $(shell command -v fvm 2>/dev/null)
