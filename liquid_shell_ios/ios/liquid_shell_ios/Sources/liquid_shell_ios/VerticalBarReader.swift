@@ -37,4 +37,21 @@ enum VerticalBarReader {
     #endif
     return .none
   }
+
+  /// Calls [handler] with [owner] when the traits that place the vertical
+  /// bar change (a fold or unfold). The edge may be the same afterwards
+  /// (UIKit's header says so): compare. Nothing before iOS 27.1 or on an
+  /// SDK without the API.
+  @MainActor
+  static func observeChanges<Owner: UIViewController>(
+    _ owner: Owner, _ handler: @escaping (Owner) -> Void
+  ) {
+    #if canImport(UIKit, _version: 9127.0.85)
+      if #available(iOS 27.1, *) {
+        owner.registerForTraitChanges(UITraitCollection.systemTraitsAffectingVerticalBarEdge) {
+          (owner: Owner, _: UITraitCollection) in handler(owner)
+        }
+      }
+    #endif
+  }
 }

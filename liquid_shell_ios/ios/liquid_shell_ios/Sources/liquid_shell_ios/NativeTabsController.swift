@@ -74,6 +74,13 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   private var lastControls: (leading: Double, top: Double)?
   /// Reads the window controls from the Flutter view. Injectable for tests.
   var readWindowControls: (UIView?) -> NativeWindowControls = { WindowControlsReader.read($0) }
+  /// Whether UIKit shows its vertical bar (iPhone Duo). Injectable for tests.
+  var readVerticalBar: (UIView) -> Bool = { VerticalBarReader.side($0) != .none }
+  /// The vertical bar's presence the search root's field was styled for
+  /// (VK-979): set when the tabs are built, before the first layout, and
+  /// changed only by `verticalBarChanged`, so a config never re-realizes
+  /// the field.
+  private var styledVerticalBar = false
   private var rereadScheduled = false
 
   init(flutter: UIViewController, events: NativeShellFlutterApiProtocol) {
@@ -104,6 +111,8 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       }
       if let self, let index = self.searchIndex { self.topHost(ofTab: index)?.rereadRestingTop(force: true) }
       self?.syncFlutter()
+      // A fold during the search waited for its end (VK-979).
+      if !active { self?.verticalBarChanged() }
     }
     searchBridge.onSubmit = { [weak self] text in
       self?.send("onSearchSubmitted") { self?.events.onSearchSubmitted(text: text, completion: $0) }
@@ -152,6 +161,9 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
           [weak self] _ in self?.publishSearchField()
         })
     }
+    // A fold or unfold (iPhone Duo): the search field's hiding follows the
+    // vertical bar only when the bar comes or goes.
+    VerticalBarReader.observeChanges(self) { tabs in tabs.verticalBarChanged() }
     registerForTraitChanges([UITraitHorizontalSizeClass.self]) {
       (self: NativeTabsController, _: UITraitCollection) in
       // Dormant (no tabs in the config): leave UIKit's tabs and selection
@@ -305,6 +317,8 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     searchTab = nil
     searchIndex = nil
     navControllers = [:]
+    // The new search root is styled for the bar shown now (VK-979).
+    styledVerticalBar = readVerticalBar(view)
     destinationTabs = new.tabs.enumerated().map { index, spec in
       if spec.search {
         let root = PageHostController(minimizes: false)
@@ -364,7 +378,25 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     SearchMath.style(
       isPad: traitCollection.userInterfaceIdiom == .pad,
       osMajor: ProcessInfo.processInfo.operatingSystemVersion.majorVersion,
-      rootLargeTitle: rootLargeTitle)
+      rootLargeTitle: rootLargeTitle, verticalBar: styledVerticalBar)
+  }
+
+  /// Re-styles the search root's field after the vertical bar came or went
+  /// (a fold or unfold, VK-979; `SearchMath.hidesAfterBarChange`). While
+  /// the search is active nothing is written and the stored presence
+  /// stays, so the call from `onActive(false)` writes it.
+  func verticalBarChanged() {
+    guard isViewLoaded else { return }
+    let has = readVerticalBar(view)
+    let active = searchBridge.controller.isActive
+    if let hides = SearchMath.hidesAfterBarChange(
+      isPad: traitCollection.userInterfaceIdiom == .pad, searchActive: active,
+      had: styledVerticalBar, has: has),
+      let searchIndex, let nav = navControllers[searchIndex]
+    {
+      nav.rootHost.navigationItem.hidesSearchBarWhenScrolling = hides
+    }
+    if !active { styledVerticalBar = has }
   }
 
   /// Every tab's stack, title modes and bar (spec P3b-2 §6.1), at UIKit's

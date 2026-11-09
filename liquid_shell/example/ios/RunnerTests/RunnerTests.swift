@@ -3173,23 +3173,13 @@ extension NativeTabsTests {
       "re-synced when the push ended")
   }
 
-  /// Beside a vertical bar (iPhone Duo) UIKit keeps the iPhone search
-  /// style's field collapsed (0 pt) and no tap opens it: a known product
-  /// gap. The expected failure is strict, so this test fails once the
-  /// field shows there and must then assert it as everywhere else.
+  /// Beside a vertical bar (iPhone Duo) too: there the first selection's
+  /// field is under the title row and never hides (VK-979).
   func testTheFieldFrameIsPublishedInFlutterCoordinatesWhileSelected() throws {
     let tabs = try installedSearchShell(selected: 2)
     let frame = try XCTUnwrap(events.fieldFrames.last)
     XCTAssertGreaterThan(frame.width, 100, "the field is on screen")
-    if hasVerticalBar(tabs) {
-      XCTExpectFailure(
-        "VK-979: iPhone Duo: search field unreachable under the vertical bar (0 pt at rest)"
-      ) {
-        XCTAssertGreaterThan(frame.height, 30)
-      }
-    } else {
-      XCTAssertGreaterThan(frame.height, 30)
-    }
+    XCTAssertGreaterThan(frame.height, 30)
     tabs.apply(searchConfig(selected: 0))
     settle()
     XCTAssertEqual(events.fieldFrames.last?.width, 0, "not selected: zero")
@@ -3205,10 +3195,8 @@ extension NativeTabsTests {
     XCTAssertEqual(tabs.windowControls(), windowed, "Home has no native bar: the compact read")
   }
 
-  /// Beside a vertical bar (iPhone Duo) the selected search tab shows no
-  /// field (collapsed to 0 pt, no tap opens it): a known product gap,
-  /// expected to fail strictly so the test changes once it is fixed.
-  /// Dart's activation still shows a native field there.
+  /// Beside a vertical bar (iPhone Duo) the selected tab's field at the
+  /// first selection is the one under the title row (VK-979).
   func testInEveryPhaseTheFieldIsNativeAndTheBodyIsFlutters() throws {
     let tabs = try installedSearchShell(selected: 2)
     let root = try XCTUnwrap(tabs.parent?.view)
@@ -3222,17 +3210,7 @@ extension NativeTabsTests {
     // runner is still laying the bar out after the install's settle).
     let field = tabs.searchBridge.controller.searchBar.searchTextField
     _ = stable({ field.convert(field.bounds, to: root) }, until: { _ in field.window != nil })
-    if hasVerticalBar(tabs) {
-      // Computed outside the expectation: only the native hit is the VK-979 gap.
-      let onField = try hit(tabs, try fieldCentre())
-      XCTExpectFailure(
-        "VK-979: iPhone Duo: search field unreachable under the vertical bar (0 pt at rest)"
-      ) {
-        XCTAssertTrue(isNative(onField, tabs), "selected: the field")
-      }
-    } else {
-      XCTAssertTrue(isNative(try hit(tabs, try fieldCentre()), tabs), "selected: the field")
-    }
+    XCTAssertTrue(isNative(try hit(tabs, try fieldCentre()), tabs), "selected: the field")
     XCTAssertTrue(
       try hit(tabs, CGPoint(x: root.bounds.midX, y: root.bounds.midY)) === tabs.flutter.view,
       "selected: the body")
@@ -3245,6 +3223,46 @@ extension NativeTabsTests {
     // Inert under a dialog.
     tabs.apply(searchConfig(selected: 2, interactive: false))
     XCTAssertTrue(try hit(tabs, try fieldCentre()) === tabs.flutter.view, "inert")
+  }
+
+  /// A fold or unfold (iPhone Duo) re-styles the search field only when the
+  /// vertical bar comes or goes (VK-979): any write re-realizes UIKit's
+  /// field. `simctl` cannot change the posture, so the presence is
+  /// injected and the observer's call is made directly.
+  func testAVerticalBarChangeRestylesTheSearchFieldOnlyWhenItComesOrGoes() throws {
+    try requirePhone()
+    let tabs = try installedSearchShell(selected: 0)
+    let item = try XCTUnwrap(tabs.navControllers[2]).rootHost.navigationItem
+    let start = hasVerticalBar(tabs)
+    tabs.readVerticalBar = { _ in !start }
+    tabs.verticalBarChanged()
+    XCTAssertEqual(
+      item.hidesSearchBarWhenScrolling, start, "the bar \(start ? "went" : "came")")
+    // The same presence again (a side swap, a trait change that keeps the
+    // edge): nothing is written, so the sentinel stays.
+    item.hidesSearchBarWhenScrolling = !start
+    tabs.verticalBarChanged()
+    XCTAssertEqual(item.hidesSearchBarWhenScrolling, !start, "unchanged presence: no write")
+    tabs.readVerticalBar = { _ in start }
+    item.hidesSearchBarWhenScrolling = start
+    tabs.verticalBarChanged()
+    XCTAssertEqual(item.hidesSearchBarWhenScrolling, !start, "back to the start's presence")
+  }
+
+  /// A fold while the search is active writes nothing (the IME rule: a
+  /// focused field is never moved); the search's end writes it.
+  func testAVerticalBarChangeWhileSearchingWaitsForTheSearchToEnd() throws {
+    try requirePhone()
+    let tabs = try installedSearchShell(selected: 2)
+    let item = try XCTUnwrap(tabs.navControllers[2]).rootHost.navigationItem
+    let start = hasVerticalBar(tabs)
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    let before = item.hidesSearchBarWhenScrolling
+    tabs.readVerticalBar = { _ in !start }
+    tabs.verticalBarChanged()
+    XCTAssertEqual(item.hidesSearchBarWhenScrolling, before, "active: no write")
+    settle(sending: "searchActive false") { tabs.debugTap(.searchCancel, index: 2) }
+    XCTAssertEqual(item.hidesSearchBarWhenScrolling, start, "after Cancel: the deferred write")
   }
 
   func testAPushedPagesBackButtonIsNative() throws {

@@ -7,6 +7,12 @@
   instead of 0, so a Flutter header is no longer cut by the screen's
   rounded corner (VK-930). Existing checkouts run `pod install` in the
   app's `ios/` to pick up the new source file.
+- iPhone Duo (iOS 27.1): the search tab's field is reachable beside the
+  vertical bar. Selected when the shell first lays out, the field sits
+  under the title row and no longer hides (it was collapsed to 0pt), so
+  that tab's top inset is 54pt taller; selected later, it is UIKit's field
+  at the bottom of the screen. A fold or unfold restyles it only when the
+  vertical bar comes or goes, and never during a search (VK-979).
 
 ## 0.1.0-dev.11
 
