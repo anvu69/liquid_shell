@@ -24,7 +24,7 @@
 **Files:**
 - Modify: `liquid_shell_ios/ios/liquid_shell_ios/Sources/liquid_shell_ios/NativeTabsController.swift` (`func verticalBarChanged()`, ~L388-400)
 - Modify: `liquid_shell_ios/CHANGELOG.md` (`## 0.1.0-dev.12`, the VK-979 bullet)
-- Test: `liquid_shell/example/ios/RunnerTests/RunnerTests.swift` (class `InstallerEngineTests`, after `testAVerticalBarChangeWhileSearchingWaitsForTheSearchToEnd`)
+- Test: `liquid_shell/example/ios/RunnerTests/RunnerTests.swift` (class `NativeTabsTests`, after `testAVerticalBarChangeWhileSearchingWaitsForTheSearchToEnd`)
 
 **Interfaces:**
 - Consumes: `NativeTabsController.readVerticalBar`, `verticalBarChanged()`, `navControllers`, `topHost(ofTab:)`, `setPageScroll(tab:offset:)`, `setSearchActive(_:)`, `debugTap(.searchCancel, index:)`, `syncFlutter()`; `PageHostController.rereadRestingTop(force:)`; test helpers `installedSearchShell(selected:)`, `requirePhone()`, `hasVerticalBar(_:)`, `settle()`, `settle(sending:_:)`.
@@ -87,12 +87,12 @@ If `topHost(ofTab:)` returns a type other than `PageHostController`, use that ty
 Create an iPhone Duo iOS 27.1 simulator and boot it (check the `simctl create` exit status). Run:
 
 ```bash
-FLUTTER="fvm flutter" tool/ios_xctest.sh <udid> liquid_shell/example/build/vk1024.xcresult 900 60 120 \
-  -only-testing:RunnerTests/InstallerEngineTests/testAVerticalBarChangeOnAScrolledSearchRootRereadsFlutterTop \
-  -only-testing:RunnerTests/InstallerEngineTests/testAVerticalBarChangeDuringASearchRereadsFlutterTopAtItsEnd
+FLUTTER="fvm flutter" tool/ios_xctest.sh <udid> "$PWD/liquid_shell/example/build/vk1024.xcresult" 900 60 120 \
+  -only-testing:RunnerTests/NativeTabsTests/testAVerticalBarChangeOnAScrolledSearchRootRereadsFlutterTop \
+  -only-testing:RunnerTests/NativeTabsTests/testAVerticalBarChangeDuringASearchRereadsFlutterTopAtItsEnd
 ```
 
-(Arguments: UDID, RESULT, SUITE_SECONDS, DEFAULT_ALLOWANCE, MAX_ALLOWANCE, then the selection. See the header of `tool/ios_xctest.sh`. Delete the `.xcresult` before each re-run.)
+(RESULT must be an absolute path. Arguments: UDID, RESULT, SUITE_SECONDS, DEFAULT_ALLOWANCE, MAX_ALLOWANCE, then the selection. See the header of `tool/ios_xctest.sh`. Delete the `.xcresult` before each re-run.)
 
 Expected: both FAIL on the assertion, with the Flutter top about 54pt larger than the host's.
 If either test PASSES before the fix, stop and report BLOCKED with the measured insets. Do not change the fix to make a passing test fail.

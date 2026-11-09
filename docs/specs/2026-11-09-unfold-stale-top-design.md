@@ -55,6 +55,8 @@ Rejected:
 - A forced read on a scrolled page moves Flutter's content by the inset change
   (54pt) once. The same thing already happens when a search starts or ends on a
   scrolled page.
+- Off screen (a page over the search root, or another tab selected) the read
+  waits until the root appears.
 
 ## 4. Scope
 
