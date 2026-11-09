@@ -26,7 +26,12 @@ struct SearchTabStyle: Equatable {
 enum SearchMath {
   /// iPhone: UIKit's tab-hosted field, a large title on the bar row
   /// (`.inline`, Apple Music), and on iOS 27 the prominent search tab
-  /// (without it 27 makes Search an inline tab). iPad (any width): the
+  /// (without it 27 makes Search an inline tab). Beside a vertical bar
+  /// ([verticalBar], iPhone Duo) the column holds no field: selected at the
+  /// first layout, UIKit stacks it under the bar, 0 pt at rest in a
+  /// scrolling root unless it never hides, so it never hides there
+  /// (VK-979); a later selection gets UIKit's bottom field whatever this
+  /// says. iPad (any width): the
   /// stacked field, always visible, under a small title; never prominent
   /// (Q1). The app's `largeTitle` wins when set: `true` is the collapsing
   /// row (`.always`) on both, as on every tab (spec P3b-2 §4.2); `false`
@@ -37,7 +42,9 @@ enum SearchMath {
   /// it). The small title is therefore a leading item there, and a large
   /// one is `.always`, the only mode UIKit still draws.
   @available(iOS 17.0, *)
-  static func style(isPad: Bool, osMajor: Int, rootLargeTitle: Bool?) -> SearchTabStyle {
+  static func style(
+    isPad: Bool, osMajor: Int, rootLargeTitle: Bool?, verticalBar: Bool = false
+  ) -> SearchTabStyle {
     if isPad {
       let large = rootLargeTitle ?? false
       return SearchTabStyle(
@@ -51,8 +58,22 @@ enum SearchMath {
     case nil: titleMode = .inline
     }
     return SearchTabStyle(
-      placement: .automatic, hidesWhenScrolling: nil, titleMode: titleMode, titleItem: false,
-      prominent: osMajor >= 27)
+      placement: .automatic, hidesWhenScrolling: verticalBar ? false : nil, titleMode: titleMode,
+      titleItem: false, prominent: osMajor >= 27)
+  }
+
+  /// The `hidesSearchBarWhenScrolling` to write when the vertical bar's
+  /// presence went from [had] to [has] (a fold or unfold); nil: write
+  /// nothing. Any write re-realizes UIKit's field, so only a bar that comes
+  /// or goes writes; never on an iPad (no vertical bar, its own style), and
+  /// never while the search is active: a focused field is not moved under
+  /// an IME composition, and the caller asks again once the search ends.
+  /// `true` is UIKit's default, which the style without a bar leaves alone.
+  static func hidesAfterBarChange(
+    isPad: Bool, searchActive: Bool, had: Bool, has: Bool
+  ) -> Bool? {
+    guard !isPad, !searchActive, had != has else { return nil }
+    return !has
   }
 
   /// Flutter's top inset while a page's proxy scroll view is scrolled: the

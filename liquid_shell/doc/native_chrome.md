@@ -203,6 +203,13 @@ large-title collapse and its scroll-edge effect.
 | Root title | `.inline`: the large title on the bar row, as in Apple Music; with `largeTitle: true`, a large-title row that collapses | Small; at compact width a leading title item right of the window controls; with `largeTitle: true`, a large-title row that collapses |
 | `obscuresBackgroundDuringPresentation` | false: your results stay visible | false |
 
+On an iPhone Duo, beside the system's vertical bar, the tab bar is a
+column and holds no field. If the search tab is selected when the shell
+first lays out, the field sits under the title row and stays visible, so
+that tab's top inset is 54pt taller. Any later selection of the tab,
+including a first tap on it after the app opens on another tab, shows
+UIKit's field at the bottom of the screen.
+
 Selecting the search tab is a proposal, as for every tab: the shell runs
 `beforeDestinationChange`, then selects it natively, and UIKit runs the
 same morph as for its own tap. The iPhone's collapsed circle proposes the
