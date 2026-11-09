@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Test-only: the only file changed is `liquid_shell/example/ios/RunnerTests/RunnerTests.swift`. No production Swift (`liquid_shell_ios/…`), no `SearchMath`, no `ShellContainerController`, no CHANGELOG, no pubspec, no publish.
-- No `XCTSkip` for vertical-bar runs in groups A, B and C. Group D under branch **no** uses strict `XCTExpectFailure` around the failing assertions only.
+- No `XCTSkip` for vertical-bar runs in groups A, B and C. Under branch **no**, strict `XCTExpectFailure` (VK-979) wraps only the failing assertions: group D's two, and (added in review) the ⌕ circle's native hit in group A.
 - The no-vertical-bar branch of every test keeps its existing assertions unchanged (same expressions, same messages). Only the vertical-bar branch is new.
 - Vertical-bar expectations use relationships; the only fixed values are UIKit's measured ones (bar height unchanged within 0.5 pt, the 0-pt collapsed field). Do not invent pixel constants.
 - Every changed test: run on the Duo before the change (red, at the assertion the investigation lists), then after it (green).
@@ -1095,7 +1095,7 @@ Before dispatch, the controller creates the Plane item "iPhone Duo: search field
   }
 ```
 
-Expected Duo count in Task 5 for branch no: 201 passed, 2 expected failures, 0 failed.
+Expected Duo count in Task 5 for branch no: 0 failed, 3 expected failures (2 here + the group A circle hit added in review).
 
 #### Both branches
 
@@ -1168,7 +1168,7 @@ cd /Users/invoker/Projects/tuvi/liquid_shell-vk949 && DUO=<udid>; IOS_UNIT_DEVIC
 
 Then read `liquid_shell/example/build/ios-unit.xcresult` with the summary command from "Running one or a few tests".
 
-Expected: `exit=0`, `totalTestCount` 227, `failedTests` 0, `skippedTests` 24. Branch yes: `passedTests` 203, `expectedFailures` 0. Branch no: `passedTests` 201 and `expectedFailures` 2 (if this Xcode counts a test with an expected failure as passed, `passedTests` 203 and `expectedFailures` 2; either way `failedTests` is 0). Write the exact numbers down.
+Expected: `exit=0`, `totalTestCount` 227, `failedTests` 0, `skippedTests` 24. Branch yes: `passedTests` 203, `expectedFailures` 0. Branch no: `expectedFailures` 3 (2 search-field tests + the group A circle hit added in review), `failedTests` 0; `passedTests` 200 or 203 depending on how this Xcode counts tests with an expected failure. Write the exact numbers down.
 
 - [ ] **Step 3: Delete the verify Duo.**
 

@@ -70,7 +70,7 @@ Branch **yes** counts only a tap driven through UIKit (the control's action or a
 
 Branch **yes** (UIKit offers ⌕ as the Duo's way in): tests 12–13 activate search through that path when there is a vertical bar, then assert today's intent: a published frame with height > 30, and a native hit at the field's centre. The test documents that on the Duo the field is hidden until ⌕ is tapped.
 
-Branch **no** (the field cannot be reached): create a new Plane item, "iPhone Duo: search field unreachable under the vertical bar" (the product gap is in `SearchMath.style`'s iPhone branch, which assumes the field is in the tab bar). Under a vertical bar, tests 12–13 wrap only the failing assertions in `XCTExpectFailure("<new id>: …")` (strict). The suite stays green, and the expectation fails once the product is fixed, which forces the test update. No production change in VK-949.
+Branch **no** (the field cannot be reached): create a new Plane item, "iPhone Duo: search field unreachable under the vertical bar" (the product gap is in `SearchMath.style`'s iPhone branch, which assumes the field is in the tab bar). Under a vertical bar, tests 12–13 wrap only the failing assertions in `XCTExpectFailure("<new id>: …")` (strict). The same gap makes the ⌕ circle take no touch, so the circle's native-hit check in `testTheTrailingActionIsTheSeparateCircleAfterThePill` (group A) is wrapped the same way (as built: VK-979, 3 expectations). The suite stays green, and the expectation fails once the product is fixed, which forces the test update. No production change in VK-949.
 
 The probe's outcome and the chosen branch are written in the ledger and in the PR body. The owner is told which branch was taken. Because both branches are specified here, no extra approval is needed.
 
@@ -83,7 +83,7 @@ The probe's outcome and the chosen branch are written in the ledger and in the P
 
 ## 5. Verification
 
-- `IOS_UNIT_DEVICE=<Duo 27.1 udid> make ios-unit`: 0 failures (203 passed, or 201 plus 2 expected failures on branch no).
+- `IOS_UNIT_DEVICE=<Duo 27.1 udid> make ios-unit`: 0 failures (203 passed on branch yes; on branch no, as built, 0 failed with 3 expected failures: the two search-field tests and the circle hit).
 - `IOS_UNIT_DEVICE=<iPhone 17 Pro 26.5 udid> make ios-unit`: 0 failures, the same count as on main.
 - Each changed test: run on the Duo before the change (red), then after it (green).
 - `.githooks/pre-commit` exit 0 before each commit.
