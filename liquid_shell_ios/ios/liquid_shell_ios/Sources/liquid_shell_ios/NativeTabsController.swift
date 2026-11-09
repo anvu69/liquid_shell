@@ -395,6 +395,17 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       let searchIndex, let nav = navControllers[searchIndex]
     {
       nav.rootHost.navigationItem.hidesSearchBarWhenScrolling = hides
+      // The field moved, which is not a scroll: Flutter's held top follows
+      // it, as a search's start and end do (VK-1024). Only while the root
+      // is on screen: off it (a page over it, another tab) its safe area
+      // is not the one it will have, so the read waits for it to appear.
+      if isSearchSelected, isSearchRootOnTop, nav.rootHost.viewIfLoaded?.window != nil {
+        nav.view.layoutIfNeeded()
+        nav.rootHost.rereadRestingTop(force: true)
+        syncFlutter()
+      } else {
+        nav.rootHost.rereadsRestingTopOnAppear = true
+      }
     }
     if !active { styledVerticalBar = has }
   }

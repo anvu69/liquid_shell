@@ -439,8 +439,19 @@ final class PageHostController: UIViewController {
     }
   }
 
+  /// A fold or unfold moved this page's field while it was off screen (a
+  /// page over it, another tab selected): its safe area was not the one it
+  /// will have, so the forced re-read of the resting top waits until it
+  /// appears (VK-1024).
+  var rereadsRestingTopOnAppear = false
+
   override func viewIsAppearing(_ animated: Bool) {
     super.viewIsAppearing(animated)
+    if rereadsRestingTopOnAppear {
+      rereadsRestingTopOnAppear = false
+      navigationController?.view.layoutIfNeeded()
+      rereadRestingTop(force: true)
+    }
     shell?.syncFlutter()
   }
 

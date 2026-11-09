@@ -3266,6 +3266,82 @@ extension NativeTabsTests {
     XCTAssertEqual(item.hidesSearchBarWhenScrolling, start, "after Cancel: the deferred write")
   }
 
+  /// The search root scrolled to 400 with its field under the title row (the
+  /// vertical bar's style), injected first on an iPhone without the bar.
+  private func scrolledSearchRootWithTheTopField() throws
+    -> (NativeTabsController, PageHostController)
+  {
+    try requirePhone()
+    let tabs = try installedSearchShell(selected: 2)
+    let host = try XCTUnwrap(tabs.topHost(ofTab: 2))
+    if !hasVerticalBar(tabs) {
+      tabs.readVerticalBar = { _ in true }
+      tabs.verticalBarChanged()
+      settle()
+    }
+    tabs.setPageScroll(tab: 2, offset: 400)
+    settle()
+    return (tabs, host)
+  }
+
+  /// The premise of the VK-1024 tests: the re-style moved the field, so the
+  /// page's top inset dropped. Where it did not (the iPhone 17 Pro, iOS 26.5:
+  /// 116 before and after) the equality below would hold with or without
+  /// the fix, so the test is skipped there, not passed.
+  private func requireTheFieldMoved(_ host: PageHostController, from before: CGFloat) throws {
+    try XCTSkipUnless(
+      host.view.safeAreaInsets.top < before - 20,
+      "the field did not move here (inset \(before) -> \(host.view.safeAreaInsets.top))")
+  }
+
+  /// An unfold on a scrolled search root moves the field, which is not a
+  /// scroll: Flutter's held top follows it (VK-1024).
+  func testAVerticalBarChangeOnAScrolledSearchRootRereadsFlutterTop() throws {
+    let (tabs, host) = try scrolledSearchRootWithTheTopField()
+    let before = host.view.safeAreaInsets.top
+    tabs.readVerticalBar = { _ in false }
+    tabs.verticalBarChanged()
+    settle()
+    try requireTheFieldMoved(host, from: before)
+    XCTAssertEqual(
+      tabs.flutter.view.safeAreaInsets.top, host.view.safeAreaInsets.top, accuracy: 0.5,
+      "the field moved: Flutter's top is re-read")
+  }
+
+  /// An unfold while the scrolled search root is off screen (another tab
+  /// selected): the forced read waits until it appears, so Flutter's top
+  /// follows the field when the tab is selected again (VK-1024).
+  func testAVerticalBarChangeWhileTheSearchRootIsOffScreenRereadsAtItsReturn() throws {
+    let (tabs, host) = try scrolledSearchRootWithTheTopField()
+    let before = host.view.safeAreaInsets.top
+    tabs.apply(searchConfig(selected: 0))
+    settle()
+    tabs.readVerticalBar = { _ in false }
+    tabs.verticalBarChanged()
+    tabs.apply(searchConfig(selected: 2))
+    settle()
+    try requireTheFieldMoved(host, from: before)
+    XCTAssertEqual(
+      tabs.flutter.view.safeAreaInsets.top, host.view.safeAreaInsets.top, accuracy: 0.5,
+      "back on the tab: Flutter's top is re-read")
+  }
+
+  /// An unfold during a search on a scrolled root: the deferred write at the
+  /// search's end re-reads Flutter's top too (VK-1024).
+  func testAVerticalBarChangeDuringASearchRereadsFlutterTopAtItsEnd() throws {
+    let (tabs, host) = try scrolledSearchRootWithTheTopField()
+    let before = host.view.safeAreaInsets.top
+    settle(sending: "searchActive true") { tabs.setSearchActive(true) }
+    tabs.readVerticalBar = { _ in false }
+    tabs.verticalBarChanged()
+    settle(sending: "searchActive false") { tabs.debugTap(.searchCancel, index: 2) }
+    settle()
+    try requireTheFieldMoved(host, from: before)
+    XCTAssertEqual(
+      tabs.flutter.view.safeAreaInsets.top, host.view.safeAreaInsets.top, accuracy: 0.5,
+      "the deferred write: Flutter's top is re-read")
+  }
+
   /// Beside a vertical bar (iPhone Duo) a search tab selected after the
   /// first layout gets UIKit's own bottom field, not the top one: measured
   /// (28, 606, 414, 48) inactive and (28, 606, 354, 48) active in the
