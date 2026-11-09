@@ -12,7 +12,9 @@
   under the title row and no longer hides (it was collapsed to 0pt), so
   that tab's top inset is 54pt taller; selected later, it is UIKit's field
   at the bottom of the screen. A fold or unfold restyles it only when the
-  vertical bar comes or goes, and never during a search (VK-979).
+  vertical bar comes or goes, and never during a search (VK-979). A fold
+  or unfold on a scrolled page re-reads Flutter's top inset, which no
+  longer keeps the old one until the page scrolls back (VK-1024).
 
 ## 0.1.0-dev.11
 
