@@ -204,10 +204,11 @@ large-title collapse and its scroll-edge effect.
 | `obscuresBackgroundDuringPresentation` | false: your results stay visible | false |
 
 On an iPhone Duo, beside the system's vertical bar, the tab bar is a
-column and holds no field. The first time the search tab shows, the field
-sits under the title row and stays visible, so that tab's top inset is
-54pt taller; when the tab is selected later, UIKit shows its field at the
-bottom of the screen.
+column and holds no field. If the search tab is selected when the shell
+first lays out, the field sits under the title row and stays visible, so
+that tab's top inset is 54pt taller. Any later selection of the tab,
+including a first tap on it after the app opens on another tab, shows
+UIKit's field at the bottom of the screen.
 
 Selecting the search tab is a proposal, as for every tab: the shell runs
 `beforeDestinationChange`, then selects it natively, and UIKit runs the
