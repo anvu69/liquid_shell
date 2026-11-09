@@ -188,6 +188,49 @@ final class SearchMathTests: XCTestCase {
     }
   }
 
+  /// Beside a vertical bar (iPhone Duo) the iPhone field never hides:
+  /// selected at the first layout, UIKit stacks it under the bar, and a
+  /// field that hides is 0 pt at rest in a scrolling root (VK-979).
+  /// Without a bar, and on an iPad, the style is unchanged.
+  func testBesideAVerticalBarTheIPhoneFieldNeverHides() {
+    for os in [26, 27] {
+      XCTAssertEqual(
+        SearchMath.style(isPad: false, osMajor: os, rootLargeTitle: nil, verticalBar: true),
+        SearchTabStyle(
+          placement: .automatic, hidesWhenScrolling: false, titleMode: .inline,
+          titleItem: false, prominent: os >= 27))
+      XCTAssertNil(
+        SearchMath.style(isPad: false, osMajor: os, rootLargeTitle: nil, verticalBar: false)
+          .hidesWhenScrolling)
+      XCTAssertEqual(
+        SearchMath.style(isPad: true, osMajor: os, rootLargeTitle: nil, verticalBar: true),
+        SearchMath.style(isPad: true, osMajor: os, rootLargeTitle: nil))
+    }
+  }
+
+  /// A fold or unfold rewrites the field's hiding only when the bar comes
+  /// or goes: any write re-realizes UIKit's field. Never on an iPad, never
+  /// while the search is active (the IME rule: a focused field is not
+  /// moved). Going, it writes UIKit's default back.
+  func testOnlyABarThatComesOrGoesRewritesTheFieldsHiding() {
+    // (isPad, searchActive, had, has, the write)
+    let rows: [(Bool, Bool, Bool, Bool, Bool?)] = [
+      (false, false, false, true, false),  // the bar comes: never hide
+      (false, false, true, false, true),  // the bar goes: UIKit's default
+      (false, false, true, true, nil),  // same presence: a side swap, an unrelated trait
+      (false, false, false, false, nil),
+      (false, true, false, true, nil),  // active: wait for the search to end
+      (false, true, true, false, nil),
+      (true, false, false, true, nil),  // iPad: its own style
+      (true, false, true, false, nil),
+    ]
+    for (isPad, active, had, has, want) in rows {
+      XCTAssertEqual(
+        SearchMath.hidesAfterBarChange(isPad: isPad, searchActive: active, had: had, has: has),
+        want, "isPad \(isPad) active \(active) had \(had) has \(has)")
+    }
+  }
+
   func testTheTopIsHeldOnlyWhileTheProxyIsScrolled() {
     XCTAssertEqual(SearchMath.heldTop(current: 116, resting: 168.7, scrolled: true), 168.7)
     XCTAssertEqual(SearchMath.heldTop(current: 116, resting: 168.7, scrolled: false), 116)
