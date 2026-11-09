@@ -418,11 +418,13 @@ void main() {
   });
 
   group('guard', () {
+    // 5 s, not 2: a loaded machine (pre-commit runs every package's tests at
+    // once) can take over 2 s just to start a fake drive (VK-990).
     const drive = [
       'guard',
       udid,
       'a_test.dart on iPhone',
-      '2',
+      '5',
       'flutter',
       'drive',
       '--target=a_test.dart',
