@@ -877,6 +877,13 @@ final class NativeTabsTests: XCTestCase {
     VerticalBarReader.side(tabs.view) != .none
   }
 
+  /// [view]'s safe-area inset on the vertical bar's screen side (iPhone
+  /// Duo): where UIKit's column sits.
+  private func barSideInset(_ view: UIView, _ tabs: NativeTabsController) -> CGFloat {
+    let insets = view.safeAreaInsets
+    return VerticalBarReader.side(tabs.view) == .left ? insets.left : insets.right
+  }
+
   func testHidingTheChromeClosesAnOverlaySidebar() throws {
     try requireIPad()
     let tabs = try installedShell()
@@ -1203,7 +1210,10 @@ final class NativeTabsTests: XCTestCase {
   /// iPhone, or an iPad window too narrow for the top bar: the native bar
   /// is UIKit's compact floating tab bar at the bottom. The Flutter view
   /// keeps the whole window; the bar's height reaches Flutter as its
-  /// bottom safe area, and UIKit reports compact with no sidebar.
+  /// bottom safe area, and UIKit reports compact with no sidebar. Beside a
+  /// vertical bar (iPhone Duo) the bar is a column on one side, in the
+  /// host's and Flutter's inset on that side; the bottom is the home
+  /// indicator's.
   func testACompactShellShowsTheBottomTabBarInFluttersBottomSafeArea() throws {
     let tabs = try installedShell(trailing: true, sizeClass: .compact)
     let root = try XCTUnwrap(tabs.parent?.view)
@@ -1212,13 +1222,30 @@ final class NativeTabsTests: XCTestCase {
     XCTAssertTrue(state.compact)
     XCTAssertEqual(state.sidebar, .hidden)
     XCTAssertEqual(tabs.flutter.view.frame, root.bounds, "Flutter keeps the whole window")
-    XCTAssertGreaterThan(
-      host.safeAreaInsets.bottom, root.safeAreaInsets.bottom + 40, "the bar is in the host's safe area")
-    XCTAssertEqual(
-      tabs.flutter.view.safeAreaInsets.bottom, host.safeAreaInsets.bottom,
-      "and so in Flutter's")
-    let inbox = try centreOfLabel("Inbox", in: tabs.view, tabs)
-    XCTAssertGreaterThan(inbox.y, root.bounds.height - host.safeAreaInsets.bottom, "a bottom bar")
+    if hasVerticalBar(tabs) {
+      let column = tabs.tabBar.convert(tabs.tabBar.bounds, to: root)
+      let inset = barSideInset(host, tabs)
+      XCTAssertGreaterThanOrEqual(
+        inset, column.width, "vertical bar: the column \(column) is in the host's side safe area")
+      XCTAssertEqual(barSideInset(tabs.flutter.view, tabs), inset, "and so in Flutter's")
+      XCTAssertEqual(
+        host.safeAreaInsets.bottom, root.safeAreaInsets.bottom, accuracy: 0.5,
+        "vertical bar: no bottom bar, the home indicator only")
+      let inbox = try centreOfLabel("Inbox", in: tabs.view, tabs)
+      let inColumn =
+        VerticalBarReader.side(tabs.view) == .left
+        ? inbox.x < inset : inbox.x > root.bounds.width - inset
+      XCTAssertTrue(inColumn, "vertical bar: Inbox \(inbox) is in the column \(column)")
+    } else {
+      XCTAssertGreaterThan(
+        host.safeAreaInsets.bottom, root.safeAreaInsets.bottom + 40,
+        "the bar is in the host's safe area")
+      XCTAssertEqual(
+        tabs.flutter.view.safeAreaInsets.bottom, host.safeAreaInsets.bottom,
+        "and so in Flutter's")
+      let inbox = try centreOfLabel("Inbox", in: tabs.view, tabs)
+      XCTAssertGreaterThan(inbox.y, root.bounds.height - host.safeAreaInsets.bottom, "a bottom bar")
+    }
   }
 
   /// A real narrow iPad window, no trait override: a 375pt-wide window is
@@ -1244,6 +1271,8 @@ final class NativeTabsTests: XCTestCase {
   /// just above the bar, reach Flutter. The bar's own top, not the safe
   /// area's: on iPadOS 27 the pill rises 5pt above the 72pt safe area.
   /// The ⌕ circle: `testTheTrailingActionIsTheSeparateCircleAfterThePill`.
+  /// Beside a vertical bar (iPhone Duo) the column runs the full height:
+  /// just beside it, at the Inbox row, is Flutter's.
   func testTouchesAboveTheCompactBarReachFlutter() throws {
     let tabs = try installedShell(trailing: true, sizeClass: .compact)
     let root = try XCTUnwrap(tabs.parent?.view)
@@ -1251,9 +1280,17 @@ final class NativeTabsTests: XCTestCase {
     let inbox = try centreOfLabel("Inbox", in: tabs.view, tabs)
 
     XCTAssertTrue(isNative(try hit(tabs, inbox), tabs), "a tab bar item")
-    XCTAssertTrue(
-      try hit(tabs, CGPoint(x: inbox.x, y: barTop - 4)) === tabs.flutter.view,
-      "just above the bar")
+    if hasVerticalBar(tabs) {
+      let column = tabs.tabBar.convert(tabs.tabBar.bounds, to: root)
+      let beside = VerticalBarReader.side(tabs.view) == .left ? column.maxX + 4 : column.minX - 4
+      XCTAssertTrue(
+        try hit(tabs, CGPoint(x: beside, y: inbox.y)) === tabs.flutter.view,
+        "vertical bar: just beside the column \(column)")
+    } else {
+      XCTAssertTrue(
+        try hit(tabs, CGPoint(x: inbox.x, y: barTop - 4)) === tabs.flutter.view,
+        "just above the bar")
+    }
     XCTAssertTrue(
       try hit(tabs, CGPoint(x: root.bounds.midX, y: root.bounds.midY)) === tabs.flutter.view,
       "the centre")
@@ -1268,6 +1305,8 @@ final class NativeTabsTests: XCTestCase {
   /// the circle only for the prominent tab (`prominentTabIdentifier`),
   /// which a search tab is by default only when it activates the system
   /// search field. The circle is native; the gap before it is Flutter's.
+  /// Beside a vertical bar (iPhone Duo) the circle comes after the items
+  /// along the column, below the Inbox label.
   func testTheTrailingActionIsTheSeparateCircleAfterThePill() throws {
     let tabs = try installedShell(trailing: true, sizeClass: .compact)
     // UIKit lays the bar out on its own passes: wait until it is drawn
@@ -1278,7 +1317,9 @@ final class NativeTabsTests: XCTestCase {
     // Drawn and still is not hit-testable (VK-569): on a slow runner UIKit
     // enables the circle a few passes later, and the hit falls through to
     // Flutter. Wait, capped, until a hit at the circle lands on native chrome.
-    let hitDeadline = Date().addingTimeInterval(10)
+    // Not beside a vertical bar: there UIKit's circle is never hit-testable
+    // (VK-979), so waiting would only add 10 s.
+    let hitDeadline = Date().addingTimeInterval(hasVerticalBar(tabs) ? 0 : 10)
     while Date() < hitDeadline {
       if let ring = bar.circle,
         isNative(try hit(tabs, CGPoint(x: ring.midX, y: ring.midY)), tabs)
@@ -1290,16 +1331,39 @@ final class NativeTabsTests: XCTestCase {
     }
     XCTAssertNil(bar.find, "no Find item inside the pill; \(bar)")
     let inbox = try XCTUnwrap(bar.inbox, "the Inbox label; \(bar)")
-    let pill = try XCTUnwrap(bar.pill, "the pill; \(bar)")
-    let ring = try XCTUnwrap(bar.circle, "the ⌕ circle; \(bar)")
-    let onRing = try hit(tabs, CGPoint(x: ring.midX, y: ring.midY))
-    XCTAssertTrue(isNative(onRing, tabs), "the ⌕ circle; hit \(viewType(onRing)); \(bar)")
-    XCTAssertGreaterThan(
-      ring.minX - pill.maxX, 8, "precondition: a gap between pill and circle; \(bar)")
-    let inGap = try hit(tabs, CGPoint(x: (pill.maxX + ring.minX) / 2, y: inbox.y))
-    XCTAssertTrue(
-      inGap === tabs.flutter.view,
-      "the gap between the pill and the circle; hit \(viewType(inGap)); \(bar)")
+    if hasVerticalBar(tabs) {
+      let root = try XCTUnwrap(tabs.parent?.view)
+      let ring = try XCTUnwrap(bar.circle, "vertical bar: the ⌕ circle; \(bar)")
+      // The circle is drawn but not hit-testable: UIKit's auxiliary view takes no
+      // touch there (no UIControl, not hittable), so a hit falls through to Flutter.
+      // That is the VK-979 search gap; the strict expectation fails once it is fixed.
+      let onRing = try hit(tabs, CGPoint(x: ring.midX, y: ring.midY))
+      XCTExpectFailure("VK-979: the Duo ⌕ circle takes no touch under the vertical bar") {
+        XCTAssertTrue(
+          isNative(onRing, tabs),
+          "vertical bar: the ⌕ circle; hit \(viewType(onRing)); \(bar)")
+      }
+      let label = try XCTUnwrap(shownLabel("Inbox", in: tabs.view), "the Inbox label; \(bar)")
+      let labelFrame = label.convert(label.bounds, to: root)
+      XCTAssertGreaterThanOrEqual(
+        ring.minY, labelFrame.maxY,
+        "vertical bar: the circle comes after the items; Inbox \(labelFrame); \(bar)")
+      XCTAssertFalse(ring.contains(inbox), "vertical bar: a separate circle; \(bar)")
+      if let pill = bar.pill {
+        XCTAssertFalse(ring.intersects(pill), "vertical bar: not inside the platter; \(bar)")
+      }
+    } else {
+      let pill = try XCTUnwrap(bar.pill, "the pill; \(bar)")
+      let ring = try XCTUnwrap(bar.circle, "the ⌕ circle; \(bar)")
+      let onRing = try hit(tabs, CGPoint(x: ring.midX, y: ring.midY))
+      XCTAssertTrue(isNative(onRing, tabs), "the ⌕ circle; hit \(viewType(onRing)); \(bar)")
+      XCTAssertGreaterThan(
+        ring.minX - pill.maxX, 8, "precondition: a gap between pill and circle; \(bar)")
+      let inGap = try hit(tabs, CGPoint(x: (pill.maxX + ring.minX) / 2, y: inbox.y))
+      XCTAssertTrue(
+        inGap === tabs.flutter.view,
+        "the gap between the pill and the circle; hit \(viewType(inGap)); \(bar)")
+    }
   }
 
   private func viewType(_ view: UIView?) -> String {
@@ -1312,7 +1376,10 @@ final class NativeTabsTests: XCTestCase {
   /// side that does not overlap the pill), and a shown "Find" label, which
   /// only an item inside the pill has (the circle's title is hidden).
   /// Drawn: shown, with something shown inside (UIKit keeps an empty
-  /// circle container when the search tab sits in the pill). Its
+  /// circle container when the search tab sits in the pill). Beside a
+  /// vertical bar (iPhone Duo) the items run down a column: the circle is
+  /// the drawn subview furthest down, below the Inbox label, that does not
+  /// hold it, and UIKit may draw no separate platter (`pill` nil). Its
   /// description goes into failure messages.
   private struct CompactBar: CustomStringConvertible, Equatable {
     var drawn: [CGRect] = []
@@ -1338,7 +1405,12 @@ final class NativeTabsTests: XCTestCase {
     bar.drawn = tabs.tabBar.subviews.filter(drawn).map { $0.convert($0.bounds, to: root) }
     bar.inbox = labelCentre("Inbox", in: tabs.view, tabs)
     if let inbox = bar.inbox { bar.pill = bar.drawn.first { $0.contains(inbox) } }
-    if let pill = bar.pill {
+    if hasVerticalBar(tabs) {
+      if let inbox = bar.inbox {
+        bar.circle = bar.drawn.filter { !$0.contains(inbox) && $0.minY > inbox.y }
+          .max { $0.minY < $1.minY }
+      }
+    } else if let pill = bar.pill {
       bar.circle = bar.drawn.filter { !$0.intersects(pill) }.max { $0.maxX < $1.maxX }
     }
     if let find = shownLabel("Find", in: tabs.view) {
@@ -1391,7 +1463,8 @@ final class NativeTabsTests: XCTestCase {
   /// dormant spell must not empty UIKit's tabs: emptied and refilled, the
   /// compact bar came back hidden under the content, with the host's (and
   /// so Flutter's) bottom safe area down to the home indicator (iPhone,
-  /// iOS 26.5, Task 7 dry run).
+  /// iOS 26.5, Task 7 dry run). Beside a vertical bar (iPhone Duo) the
+  /// column comes back on its side, with its items shown.
   func testADormantSpellKeepsTheTabsSoTheCompactBarComesBack() throws {
     let tabs = try installedShell(trailing: true, sizeClass: .compact)
     let root = try XCTUnwrap(tabs.parent?.view)
@@ -1409,8 +1482,24 @@ final class NativeTabsTests: XCTestCase {
     tabs.apply(config(trailing: true))
     settle()
     let host = try XCTUnwrap(tabs.selectedViewController?.view)
-    XCTAssertGreaterThan(host.safeAreaInsets.bottom, root.safeAreaInsets.bottom + 40)
-    XCTAssertEqual(tabs.flutter.view.safeAreaInsets.bottom, host.safeAreaInsets.bottom)
+    if hasVerticalBar(tabs) {
+      let column = tabs.tabBar.convert(tabs.tabBar.bounds, to: root)
+      let inset = barSideInset(host, tabs)
+      XCTAssertGreaterThanOrEqual(
+        inset, column.width, "vertical bar: the column \(column) is back in the host's side inset")
+      XCTAssertEqual(barSideInset(tabs.flutter.view, tabs), inset)
+      XCTAssertEqual(
+        host.safeAreaInsets.bottom, root.safeAreaInsets.bottom, accuracy: 0.5,
+        "vertical bar: no bottom bar, the home indicator only")
+      let inbox = try centreOfLabel("Inbox", in: tabs.view, tabs)
+      let inColumn =
+        VerticalBarReader.side(tabs.view) == .left
+        ? inbox.x < inset : inbox.x > root.bounds.width - inset
+      XCTAssertTrue(inColumn, "vertical bar: Inbox \(inbox) is back in the column \(column)")
+    } else {
+      XCTAssertGreaterThan(host.safeAreaInsets.bottom, root.safeAreaInsets.bottom + 40)
+      XCTAssertEqual(tabs.flutter.view.safeAreaInsets.bottom, host.safeAreaInsets.bottom)
+    }
   }
 
   /// Compact has no sidebar: Dart's request is ignored.
@@ -3041,11 +3130,23 @@ extension NativeTabsTests {
       "re-synced when the push ended")
   }
 
+  /// Beside a vertical bar (iPhone Duo) UIKit keeps the iPhone search
+  /// style's field collapsed (0 pt) and no tap opens it: a known product
+  /// gap. The expected failure is strict, so this test fails once the
+  /// field shows there and must then assert it as everywhere else.
   func testTheFieldFrameIsPublishedInFlutterCoordinatesWhileSelected() throws {
     let tabs = try installedSearchShell(selected: 2)
     let frame = try XCTUnwrap(events.fieldFrames.last)
     XCTAssertGreaterThan(frame.width, 100, "the field is on screen")
-    XCTAssertGreaterThan(frame.height, 30)
+    if hasVerticalBar(tabs) {
+      XCTExpectFailure(
+        "VK-979: iPhone Duo: search field unreachable under the vertical bar (0 pt at rest)"
+      ) {
+        XCTAssertGreaterThan(frame.height, 30)
+      }
+    } else {
+      XCTAssertGreaterThan(frame.height, 30)
+    }
     tabs.apply(searchConfig(selected: 0))
     settle()
     XCTAssertEqual(events.fieldFrames.last?.width, 0, "not selected: zero")
@@ -3061,6 +3162,10 @@ extension NativeTabsTests {
     XCTAssertEqual(tabs.windowControls(), windowed, "Home has no native bar: the compact read")
   }
 
+  /// Beside a vertical bar (iPhone Duo) the selected search tab shows no
+  /// field (collapsed to 0 pt, no tap opens it): a known product gap,
+  /// expected to fail strictly so the test changes once it is fixed.
+  /// Dart's activation still shows a native field there.
   func testInEveryPhaseTheFieldIsNativeAndTheBodyIsFlutters() throws {
     let tabs = try installedSearchShell(selected: 2)
     let root = try XCTUnwrap(tabs.parent?.view)
@@ -3074,7 +3179,17 @@ extension NativeTabsTests {
     // runner is still laying the bar out after the install's settle).
     let field = tabs.searchBridge.controller.searchBar.searchTextField
     _ = stable({ field.convert(field.bounds, to: root) }, until: { _ in field.window != nil })
-    XCTAssertTrue(isNative(try hit(tabs, try fieldCentre()), tabs), "selected: the field")
+    if hasVerticalBar(tabs) {
+      // Computed outside the expectation: only the native hit is the VK-979 gap.
+      let onField = try hit(tabs, try fieldCentre())
+      XCTExpectFailure(
+        "VK-979: iPhone Duo: search field unreachable under the vertical bar (0 pt at rest)"
+      ) {
+        XCTAssertTrue(isNative(onField, tabs), "selected: the field")
+      }
+    } else {
+      XCTAssertTrue(isNative(try hit(tabs, try fieldCentre()), tabs), "selected: the field")
+    }
     XCTAssertTrue(
       try hit(tabs, CGPoint(x: root.bounds.midX, y: root.bounds.midY)) === tabs.flutter.view,
       "selected: the body")
