@@ -871,6 +871,12 @@ final class NativeTabsTests: XCTestCase {
     try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .phone, "an iPhone")
   }
 
+  /// UIKit's vertical bar (iPhone Duo): the tab bar is a column on one side,
+  /// the navigation bar has no large-title row, the top safe inset is 0.
+  private func hasVerticalBar(_ tabs: NativeTabsController) -> Bool {
+    VerticalBarReader.side(tabs.view) != .none
+  }
+
   func testHidingTheChromeClosesAnOverlaySidebar() throws {
     try requireIPad()
     let tabs = try installedShell()
@@ -3516,9 +3522,22 @@ extension NativeTabsTests {
       XCTAssertTrue(nav.isNavigationBarHidden, "tab \(index): no LiquidPage, no bar")
     }
     let page = try XCTUnwrap(tabs.topHost(ofTab: 0)?.view)
-    XCTAssertEqual(
-      tabs.flutter.view.safeAreaInsets.top, page.safeAreaInsets.top, accuracy: 0.5,
-      "Flutter's top has no bar in it")
+    if hasVerticalBar(tabs) {
+      // iPhone Duo: the window's top inset is 0 and VK-930 raises Flutter's
+      // top to the top bar region beside the vertical bar (26 pt there),
+      // read on the tab's view as the shell does (`syncFlutter`).
+      let host = try XCTUnwrap(tabs.selectedViewController?.view)
+      let want = ShellMath.verticalBarTop(
+        safeTop: Double(page.safeAreaInsets.top),
+        barRegionTop: VerticalBarReader.topBarRegionTop(host))
+      XCTAssertEqual(
+        Double(tabs.flutter.view.safeAreaInsets.top), want, accuracy: 0.5,
+        "vertical bar: Flutter's top is the top bar region, no navigation bar in it")
+    } else {
+      XCTAssertEqual(
+        tabs.flutter.view.safeAreaInsets.top, page.safeAreaInsets.top, accuracy: 0.5,
+        "Flutter's top has no bar in it")
+    }
   }
 
   /// The title table's plain-tab rows on the real tree (spec P3b-2 §4.2):
@@ -3980,6 +3999,25 @@ extension NativeTabsTests {
     return height
   }
 
+  /// Beside a vertical bar (iPhone Duo) UIKit draws no large-title row: the
+  /// navigation bar keeps one height and the title sits on its bar row.
+  fileprivate func assertTitleOnTheBar(
+    _ title: String, of nav: UINavigationController,
+    file: StaticString = #filePath, line: UInt = #line
+  ) {
+    let bar = nav.navigationBar
+    guard let label = shownLabel(title, in: bar) else {
+      return XCTFail("vertical bar: no shown \(title) title in the bar", file: file, line: line)
+    }
+    let frame = label.convert(label.bounds, to: bar)
+    XCTAssertNotNil(
+      label.window, "vertical bar: the \(title) title is on screen", file: file, line: line)
+    XCTAssertTrue(
+      bar.bounds.contains(CGPoint(x: frame.midX, y: frame.midY)),
+      "vertical bar: the \(title) title \(frame) inside the bar \(bar.bounds)",
+      file: file, line: line)
+  }
+
   /// Library's case: a plain tab's pages reach native once the tab shows,
   /// so its root turns `.always` on screen. UIKit alone keeps that title
   /// collapsed (M5, P1: 54 pt against 106 on both devices, 26.5 and 27.0).
@@ -3997,7 +4035,8 @@ extension NativeTabsTests {
   /// The proxy's base is learned with the title out: Flutter's offset 0,
   /// sent in the same turn as the pages, keeps it out, and after a scroll
   /// offset 0 brings it back (M5: P1 + offset 0 stays 54; P17a: 400 → 0
-  /// gives 106).
+  /// gives 106). Beside a vertical bar (iPhone Duo) UIKit draws no
+  /// large-title row: the bar keeps its height (58 pt) throughout.
   func testALargeTitleDrawnOutOnScreenStaysOutAtZeroAndReturns() throws {
     let library = [NativePage(title: "Library", largeTitle: true)]
     let expanded = try expandedBarHeight(library)
@@ -4010,7 +4049,13 @@ extension NativeTabsTests {
       nav.rootHost.expandedTop, nav.rootHost.view.safeAreaInsets.top, accuracy: 0.5,
       "the proxy's base is the expanded top")
     tabs.setPageScroll(tab: 0, offset: 400)
-    XCTAssertLessThan(barHeight(of: nav), expanded - 20, "a scroll collapses it")
+    if hasVerticalBar(tabs) {
+      XCTAssertEqual(
+        barHeight(of: nav), expanded, accuracy: 0.5, "vertical bar: no large-title row to collapse")
+      assertTitleOnTheBar("Library", of: nav)
+    } else {
+      XCTAssertLessThan(barHeight(of: nav), expanded - 20, "a scroll collapses it")
+    }
     tabs.setPageScroll(tab: 0, offset: 0)
     XCTAssertEqual(barHeight(of: nav), expanded, accuracy: 0.5, "back at 0, the title returns")
   }
@@ -4034,7 +4079,8 @@ extension NativeTabsTests {
 
   /// A large title that turns on on screen while Flutter is scrolled stays
   /// collapsed while scrolled, and comes out once Flutter is back at 0: the
-  /// reveal waits for the top instead of being dropped.
+  /// reveal waits for the top instead of being dropped. Beside a vertical
+  /// bar (iPhone Duo) there is no large-title row: the height never moves.
   func testALargeTitleTurnedOnWhileScrolledComesOutAtTheTop() throws {
     let library = [NativePage(title: "Library", largeTitle: true)]
     let expanded = try expandedBarHeight(library)
@@ -4042,7 +4088,13 @@ extension NativeTabsTests {
     let nav = try XCTUnwrap(tabs.navControllers[0])
     tabs.setPageScroll(tab: 0, offset: 400)
     tabs.apply(pagesConfig(library))
-    XCTAssertLessThan(barHeight(of: nav), expanded - 20, "scrolled: collapsed")
+    if hasVerticalBar(tabs) {
+      XCTAssertEqual(
+        barHeight(of: nav), expanded, accuracy: 0.5, "vertical bar: scrolled, no row to collapse")
+      assertTitleOnTheBar("Library", of: nav)
+    } else {
+      XCTAssertLessThan(barHeight(of: nav), expanded - 20, "scrolled: collapsed")
+    }
     tabs.setPageScroll(tab: 0, offset: 0)
     XCTAssertEqual(barHeight(of: nav), expanded, accuracy: 0.5, "at the top, the title is out")
   }
@@ -4056,7 +4108,13 @@ extension NativeTabsTests {
     let nav = try XCTUnwrap(tabs.navControllers[0])
     tabs.apply(pagesConfig(library))
     tabs.setPageScroll(tab: 0, offset: 400)
-    XCTAssertLessThan(barHeight(of: nav), expanded - 20, "scrolled: collapsed")
+    if hasVerticalBar(tabs) {
+      XCTAssertEqual(
+        barHeight(of: nav), expanded, accuracy: 0.5, "vertical bar: scrolled, no row to collapse")
+      assertTitleOnTheBar("Library", of: nav)
+    } else {
+      XCTAssertLessThan(barHeight(of: nav), expanded - 20, "scrolled: collapsed")
+    }
     tabs.setPageScroll(tab: 0, offset: 0)
     XCTAssertEqual(barHeight(of: nav), expanded, accuracy: 0.5, "at the top, the title is out")
   }
@@ -4076,7 +4134,13 @@ extension NativeTabsTests {
       tabs.setPageScroll(tab: 0, offset: 400)
     }
     tabs.apply(pagesConfig(library))
-    XCTAssertLessThan(barHeight(of: nav), expanded - 20, "scrolled: collapsed")
+    if hasVerticalBar(tabs) {
+      XCTAssertEqual(
+        barHeight(of: nav), expanded, accuracy: 0.5, "vertical bar: scrolled, no row to collapse")
+      assertTitleOnTheBar("Library", of: nav)
+    } else {
+      XCTAssertLessThan(barHeight(of: nav), expanded - 20, "scrolled: collapsed")
+    }
     observation.invalidate()
     XCTAssertTrue(pulled, "precondition: the reveal pulled")
     tabs.setPageScroll(tab: 0, offset: 0)
@@ -4742,6 +4806,7 @@ extension NativeTabsTests {
   /// selects the tab, so `applyPages` turns the root `.always` before
   /// `select` puts it in the window. iOS 26.5 animates the switch and
   /// lays the bar out collapsed (54 pt against 106; 27.0 switches at once).
+  /// Beside a vertical bar (iPhone Duo) there is no large-title row.
   func testALargeTitleSetInTheConfigThatSelectsItsTabIsDrawnOut() throws {
     let library = [NativePage(title: "Library", largeTitle: true)]
     let expanded = try expandedBarHeight(library)
@@ -4760,13 +4825,21 @@ extension NativeTabsTests {
     XCTAssertEqual(height, expanded, accuracy: 0.5, "the large title is out at rest")
     XCTAssertLessThanOrEqual(sampler.highest, expanded + 0.5, "never pulled past expanded")
     tabs.setPageScroll(tab: 1, offset: 400)
-    XCTAssertLessThan(barHeight(of: nav), expanded - 20, "a scroll collapses it")
+    if hasVerticalBar(tabs) {
+      XCTAssertEqual(
+        barHeight(of: nav), expanded, accuracy: 0.5, "vertical bar: no large-title row to collapse")
+      assertTitleOnTheBar("Library", of: nav)
+    } else {
+      XCTAssertLessThan(barHeight(of: nav), expanded - 20, "a scroll collapses it")
+    }
     tabs.setPageScroll(tab: 1, offset: 0)
     XCTAssertEqual(barHeight(of: nav), expanded, accuracy: 0.5, "back at 0, the title returns")
   }
 
   /// A title UIKit lays out by itself (pages a turn before the selection,
-  /// M5 P2) is revealed too: the pull must not stretch it.
+  /// M5 P2) is revealed too: the pull must not stretch it. Beside a
+  /// vertical bar (iPhone Duo) there is no large-title row: the bar keeps
+  /// its resting height, scrolled too, and is never pulled past it.
   func testALargeTitleSetOffScreenBeforeItsTabIsSelectedIsNotStretched() throws {
     let library = [NativePage(title: "Library", largeTitle: true)]
     let tabs = try installedShell()
@@ -4781,7 +4854,14 @@ extension NativeTabsTests {
     tabs.apply(pages)
     let height = barHeight(of: nav)
     sampler.stop()
-    XCTAssertGreaterThan(height, 80, "the large title is out at rest")
+    if hasVerticalBar(tabs) {
+      assertTitleOnTheBar("Library", of: nav)
+      tabs.setPageScroll(tab: 1, offset: 400)
+      XCTAssertEqual(
+        barHeight(of: nav), height, accuracy: 0.5, "vertical bar: no large-title row to collapse")
+    } else {
+      XCTAssertGreaterThan(height, 80, "the large title is out at rest")
+    }
     XCTAssertLessThanOrEqual(sampler.highest, height + 0.5, "never pulled past expanded")
   }
 }
