@@ -263,7 +263,8 @@ class _LiquidPageState extends State<LiquidPage> {
   /// or leaves the screen; the next scroll view that qualifies and reports
   /// then takes over, and until one does the title keeps the last offset.
   /// A scroll view off screen neither takes the title nor keeps it, and
-  /// every other scroll view is ignored.
+  /// every other scroll view is ignored. A scroll view that a `GlobalKey`
+  /// moved out of the page neither takes the title nor keeps it.
   ///
   /// So in a segment switcher (an `IndexedStack` or `Offstage` of lists)
   /// and in a `PageView` of lists (a `TabBarView` too), kept alive or not,
@@ -277,15 +278,29 @@ class _LiquidPageState extends State<LiquidPage> {
   /// every element in the tree is active: a scroll view that left the tree
   /// is unmounted, so a driver that left it is released, never walked.
   bool _drivesLargeTitle(BuildContext origin) {
-    if (!isOnScreenUnder(origin, context)) return false;
+    if (!_isInPage(origin) || !isOnScreenUnder(origin, context)) return false;
     final driver = _titleScrollView;
     if (identical(origin, driver)) return true;
-    if (driver != null && driver.mounted && isOnScreenUnder(driver, context)) {
+    if (driver != null &&
+        driver.mounted &&
+        _isInPage(driver) &&
+        isOnScreenUnder(driver, context)) {
       return false;
     }
     if (!_isPageScrollView(origin)) return false;
     _titleScrollView = origin;
     return true;
+  }
+
+  // Whether [element] is under this page: a GlobalKey can move a scroll
+  // view out of the page while it stays mounted.
+  bool _isInPage(BuildContext element) {
+    var found = false;
+    element.visitAncestorElements((ancestor) {
+      found = identical(ancestor, context);
+      return !found;
+    });
+    return found;
   }
 
   // Whether the scroll view that reports from [origin] is inside neither

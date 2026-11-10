@@ -262,22 +262,31 @@ class _ResetListState extends State<_ResetList> {
 }
 
 class _Trigger extends StatefulWidget {
-  const _Trigger({required this.controller, required this.filter});
+  const _Trigger({
+    required this.controller,
+    required this.filter,
+    this.to = 0,
+  });
 
   final ScrollController controller;
   final int filter;
+
+  /// The offset it jumps to.
+  final double to;
 
   @override
   State<_Trigger> createState() => _TriggerState();
 }
 
-/// A zero-size widget that jumps [_Trigger.controller] to the top in the
-/// build when its filter changes.
+/// A zero-size widget that jumps [_Trigger.controller] to [_Trigger.to]
+/// (the top by default) in the build when its filter changes.
 class _TriggerState extends State<_Trigger> {
   @override
   void didUpdateWidget(_Trigger oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.filter != widget.filter) widget.controller.jumpTo(0);
+    if (oldWidget.filter != widget.filter) {
+      widget.controller.jumpTo(widget.to);
+    }
   }
 
   @override
@@ -965,6 +974,192 @@ void main() {
     );
     await _jump(tester, second, 30);
     expect(_largeTop(tester), rest - 30, reason: 'the shown list');
+  });
+
+  testWidgets('a list that a GlobalKey moves out of the page, still on '
+      'screen, stops driving the large title', (tester) async {
+    final first = _scroll();
+    final second = _scroll();
+    final firstKey = GlobalKey();
+    final inPage = ValueNotifier(true);
+    addTearDown(inPage.dispose);
+    final firstList = ListView(
+      key: firstKey,
+      controller: first,
+      children: [
+        for (var i = 0; i < 50; i++)
+          SizedBox(height: 40, child: Text('row $i')),
+      ],
+    );
+    await _pump(
+      tester,
+      home: Material(
+        child: ValueListenableBuilder<bool>(
+          valueListenable: inPage,
+          // Out of the page, the first list sits above it, still mounted.
+          builder: (context, isIn, _) => Stack(
+            children: [
+              LiquidPage(
+                title: 'Library',
+                largeTitle: true,
+                child: IndexedStack(
+                  index: isIn ? 0 : 1,
+                  children: [
+                    if (isIn) firstList else const SizedBox.shrink(),
+                    _rows(second),
+                  ],
+                ),
+              ),
+              if (!isIn)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: 200,
+                  child: firstList,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    final rest = _largeTop(tester);
+    await _jump(tester, first, 100);
+    expect(
+      _largeTop(tester),
+      rest - kLargeTitleExtent,
+      reason: 'the first list',
+    );
+    final firstState = tester.state<ScrollableState>(
+      find.descendant(
+        of: find.byKey(firstKey),
+        matching: find.byType(Scrollable),
+      ),
+    );
+
+    // One build moves the first list out of the page and shows the second.
+    inPage.value = false;
+    await tester.pump();
+    expect(
+      tester.state<ScrollableState>(
+        find.descendant(
+          of: find.byKey(firstKey),
+          matching: find.byType(Scrollable),
+        ),
+      ),
+      same(firstState),
+      reason: 'the first list moved, it was not recreated',
+    );
+    expect(
+      find.ancestor(
+        of: find.byKey(firstKey),
+        matching: find.byType(LiquidPage),
+      ),
+      findsNothing,
+      reason: 'the first list is out of the page',
+    );
+    expect(first.offset, 100, reason: 'the first list kept its offset');
+
+    await _jump(tester, second, 30);
+    expect(_largeTop(tester), rest - 30, reason: "the page's shown list");
+    await _jump(tester, first, 10);
+    expect(_largeTop(tester), rest - 30, reason: 'the list out of the page');
+  });
+
+  testWidgets('a list that jumps during a build, then moves out of the page '
+      'by a GlobalKey in that build, never takes the large title', (
+    tester,
+  ) async {
+    final header = _scroll();
+    final moved = _scroll();
+    final movedKey = GlobalKey();
+    final inPage = ValueNotifier(true);
+    addTearDown(inPage.dispose);
+    final movedList = ListView(
+      key: movedKey,
+      controller: moved,
+      children: [
+        for (var i = 0; i < 50; i++)
+          SizedBox(height: 40, child: Text('row $i')),
+      ],
+    );
+    await _pump(
+      tester,
+      home: Material(
+        child: ValueListenableBuilder<bool>(
+          valueListenable: inPage,
+          builder: (context, isIn, _) => Stack(
+            children: [
+              LiquidPage(
+                title: 'Library',
+                largeTitle: true,
+                child: Column(
+                  children: [
+                    if (isIn) SizedBox(height: 80, child: _rows(header)),
+                    // Builds before the moved list leaves the page: its
+                    // jump reports from inside the page.
+                    _Trigger(controller: moved, filter: isIn ? 0 : 1, to: 80),
+                    Expanded(
+                      child: isIn ? movedList : const SizedBox.shrink(),
+                    ),
+                  ],
+                ),
+              ),
+              if (!isIn)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: 200,
+                  child: movedList,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    final rest = _largeTop(tester);
+    // The header list, not flexible, lays out and reports first.
+    await _jump(tester, header, 10);
+    expect(_largeTop(tester), rest - 10, reason: 'the header list drives');
+    final movedState = tester.state<ScrollableState>(
+      find.descendant(
+        of: find.byKey(movedKey),
+        matching: find.byType(Scrollable),
+      ),
+    );
+
+    // One build: the list jumps from inside the page, then moves out of it,
+    // and the header list that drives the title is removed.
+    inPage.value = false;
+    await tester.pump();
+    expect(tester.takeException(), isNull, reason: 'the jump in the build');
+    await tester.pump();
+    expect(
+      tester.state<ScrollableState>(
+        find.descendant(
+          of: find.byKey(movedKey),
+          matching: find.byType(Scrollable),
+        ),
+      ),
+      same(movedState),
+      reason: 'the list moved, it was not recreated',
+    );
+    expect(
+      find.ancestor(
+        of: find.byKey(movedKey),
+        matching: find.byType(LiquidPage),
+      ),
+      findsNothing,
+      reason: 'the list is out of the page',
+    );
+    expect(moved.offset, 80, reason: 'the list jumped');
+    expect(header.hasClients, isFalse, reason: 'the header list is gone');
+    expect(
+      _largeTop(tester),
+      rest - 10,
+      reason: 'the title keeps the last offset of the page',
+    );
   });
 
   testWidgets('when lists jump during the build that removes the list that '
