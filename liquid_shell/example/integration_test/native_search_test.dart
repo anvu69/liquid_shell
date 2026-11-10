@@ -4,6 +4,8 @@
 // and iPad, iOS 26.5 and 27.0, and with EXPECT_NATIVE=false on iOS 18 when
 // that runtime exists (the Flutter search UI). It drives the native field
 // through the plugin's debug hooks and checks both sides.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -23,6 +25,84 @@ Future<void> _settle(WidgetTester tester) async {
     await tester.pump(const Duration(milliseconds: 100));
   }
   await tester.pumpAndSettle();
+}
+
+/// Pumps 100 ms at a time until [condition] holds; fails with [describe]
+/// after [timeout]. Returns how long it waited.
+Future<Duration> _pumpUntil(
+  WidgetTester tester,
+  FutureOr<bool> Function() condition, {
+  required String Function() describe,
+  Duration timeout = const Duration(seconds: 10),
+}) async {
+  final watch = Stopwatch()..start();
+  while (!await condition()) {
+    if (watch.elapsed >= timeout) {
+      fail('timed out after ${watch.elapsed}: ${describe()}');
+    }
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+  return watch.elapsed;
+}
+
+/// What a deadline failure reports (VK-815): the view's orientation and
+/// keyboard inset, and the native field from [snapshot], the latest one.
+String _describeView(WidgetTester tester, NativeDebugSnapshot? snapshot) {
+  final media = MediaQueryData.fromView(tester.view);
+  final field = snapshot?.fieldFrame;
+  return 'orientation ${media.orientation} '
+      'viewInsets.bottom ${media.viewInsets.bottom} size ${media.size} '
+      'fieldFrame ${field == null ? 'none' : '${field.x},${field.y} '
+                '${field.width}x${field.height}'} '
+      'firstResponderIsSearch ${snapshot?.firstResponderIsSearch}';
+}
+
+/// Asks for [target] and waits for the view to turn (VK-815). On a loaded
+/// simulator UIKit can drop the request (BSActionErrorDomain Code=2), and
+/// the engine only logs that. The engine also skips a mask equal to its
+/// current one (Flutter 3.44.9 FlutterViewController.mm,
+/// performOrientationUpdate:), so a retry sets a wider mask first, then
+/// [target] again. A retry fires after 3 s of the old orientation, at most
+/// twice; the wait fails after 10 s overall.
+Future<({int retries, Duration waited})> _rotateTo(
+  WidgetTester tester,
+  DeviceOrientation target,
+) async {
+  final landscape =
+      target == DeviceOrientation.landscapeLeft ||
+      target == DeviceOrientation.landscapeRight;
+  final wanted = landscape ? Orientation.landscape : Orientation.portrait;
+  final wider = landscape
+      ? const [
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]
+      : const [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown];
+  final sinceRequest = Stopwatch()..start();
+  var retries = 0;
+  NativeDebugSnapshot? last;
+  await SystemChrome.setPreferredOrientations([target]);
+  final waited = await _pumpUntil(
+    tester,
+    () async {
+      if (MediaQueryData.fromView(tester.view).orientation == wanted) {
+        return true;
+      }
+      if (sinceRequest.elapsed >= const Duration(seconds: 3) && retries < 2) {
+        retries++;
+        await SystemChrome.setPreferredOrientations(wider);
+        await tester.pump();
+        await SystemChrome.setPreferredOrientations([target]);
+        sinceRequest.reset();
+      }
+      last = await _ios.debugSnapshot();
+      return false;
+    },
+    describe: () =>
+        'rotating to $target ($retries retries): '
+        '${_describeView(tester, last)}',
+  );
+  return (retries: retries, waited: waited);
 }
 
 const _app = MaterialApp(debugShowCheckedModeBanner: false, home: SearchCase());
@@ -304,15 +384,36 @@ void main() {
       // SearchUITests turns the iPad itself.
       if (!_isPad(tester)) {
         addTearDown(() => SystemChrome.setPreferredOrientations(const []));
-        await SystemChrome.setPreferredOrientations(const [
-          DeviceOrientation.landscapeLeft,
-        ]);
+        // VK-815: UIKit turns the scene on its own time, and may drop the
+        // request; wait for it, retrying, instead of checking once.
+        final turn = await _rotateTo(tester, DeviceOrientation.landscapeLeft);
         await _settle(tester);
-        expect(
-          MediaQueryData.fromView(tester.view).orientation,
-          Orientation.landscape,
-        );
         await expectTheScopeBarOverTheResults('landscape');
+        // VK-815: the rotation takes the keyboard down and UIKit presents
+        // it again later, so wait until it is back and the native field
+        // rides on it (as the "active" check above asserts in portrait).
+        // The field is never refocused: a lost focus must fail here. Riding
+        // on the keyboard, rather than "differs from its resting frame",
+        // because no frame can be sampled as resting: right after the turn
+        // the keyboard may already be up (the field at its raised frame),
+        // and the portrait frame differs from the landscape resting one
+        // (393,338 on CI) even with the keyboard still down. A resting
+        // field with the keyboard up fails this too.
+        NativeDebugSnapshot? last;
+        final keyboardWait = await _pumpUntil(
+          tester,
+          () async {
+            last = await _ios.debugSnapshot();
+            final media = MediaQueryData.fromView(tester.view);
+            final keyboard = media.viewInsets.bottom;
+            final field = last!.fieldFrame;
+            return keyboard > 0 &&
+                field.y + field.height <= media.size.height - keyboard + 1;
+          },
+          describe: () =>
+              'the keyboard in landscape: '
+              '${_describeView(tester, last)}',
+        );
         // VK-594: the keyboard lifts the field into the upper half of the
         // landscape view. The content inset still covers it, and the
         // keyboard below it, as in portrait (the "active" check above).
@@ -324,7 +425,10 @@ void main() {
         debugPrint(
           'liquid_shell VK-594 landscape: keyboard '
           '${landscape.viewInsets.bottom} field ${raised.x},${raised.y} '
-          '${raised.width}x${raised.height} bottom $bottom',
+          '${raised.width}x${raised.height} bottom $bottom '
+          'rotation retries ${turn.retries} '
+          'rotation wait ${turn.waited.inMilliseconds} ms '
+          'keyboard wait ${keyboardWait.inMilliseconds} ms',
         );
         expect(
           landscape.viewInsets.bottom,
@@ -340,10 +444,12 @@ void main() {
               '${raised.height}, size ${landscape.size})',
         );
         await shot('scopes_landscape');
-        await SystemChrome.setPreferredOrientations(const [
-          DeviceOrientation.portraitUp,
-        ]);
+        final back = await _rotateTo(tester, DeviceOrientation.portraitUp);
         await _settle(tester);
+        debugPrint(
+          'liquid_shell VK-815 portrait again: rotation retries '
+          '${back.retries} rotation wait ${back.waited.inMilliseconds} ms',
+        );
         await expectTheScopeBarOverTheResults('portrait again');
       }
 
