@@ -5,6 +5,8 @@
   and `chromeInsets` is the bar's side (it was `bottomBar` with the home
   indicator's inset). The new enum value breaks an exhaustive `switch` over
   `LiquidChromeKind`: add the case.
+- A scroll view that a `GlobalKey` moves out of a `LiquidPage` no longer
+  drives, or keeps, that page's large title.
 
 ## 0.1.0-dev.11
 
