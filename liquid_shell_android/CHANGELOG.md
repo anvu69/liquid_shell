@@ -1,3 +1,7 @@
+## 0.1.0-dev.12
+
+Version bump to match liquid_shell.
+
 ## 0.1.0-dev.11
 
 Version bump to match liquid_shell.
