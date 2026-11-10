@@ -16,7 +16,14 @@ final class MinimizeUITests: XCTestCase {
     let app = XCUIApplication()
     app.launchEnvironment["LIQUID_SHELL_EXAMPLE_DEMO"] = demo
     app.launch()
-    XCTAssertTrue(tabButton(app, "Home").waitForExistence(timeout: timeout))
+    XCTAssertTrue(tabButton(app, "Home").waitForExistence(timeout: timeout), "launch: the tab bar")
+    // VK-1043: the `pages` demo's Home has an Add action, so a native bar
+    // that comes after Flutter's rows and moves them down.
+    if demo == "pages" {
+      XCTAssertTrue(
+        app.navigationBars["Home"].buttons["Add"].waitForExistence(timeout: 10),
+        "launch: Home's bar with Add")
+    }
     return app
   }
 
@@ -113,6 +120,27 @@ final class MinimizeUITests: XCTestCase {
       withVelocity: XCUIGestureVelocity(abs(dy) / seconds), thenHoldForDuration: 0.2)
   }
 
+  /// A minimizing drag ([drag], [dy] -300), then [waitMinimized]. A loaded
+  /// runner can drop or stretch the drag (VK-1043: one took 5 s to send),
+  /// and UIKit minimizes on speed: one more drag when the bar has not
+  /// minimized in 10 s. The retry is recorded (activity and log), so a
+  /// regression that always needs two drags shows; a broken minimize still
+  /// fails both.
+  private func dragToMinimize(
+    _ app: XCUIApplication, _ why: String,
+    selected: String = "Home", other: String = "Explore",
+    file: StaticString = #filePath, line: UInt = #line
+  ) {
+    drag(app, dy: -300)
+    if !wait(until: { self.isMinimized(app, selected: selected, other: other) }) {
+      XCTContext.runActivity(named: "VK-1043: retry the drag (the first was dropped)") { _ in
+        print("MinimizeUITests: the first drag did not minimize (\(why)); dragging again")
+        drag(app, dy: -300)
+      }
+    }
+    waitMinimized(app, true, why, selected: selected, other: other, file: file, line: line)
+  }
+
   /// A Flutter row (semantics on): its title and subtitle merge into one
   /// label, which starts with the title.
   private func flutterRow(_ app: XCUIApplication, _ title: String) -> XCUIElement {
@@ -168,8 +196,7 @@ final class MinimizeUITests: XCTestCase {
   func testAScrollMinimizesAndAFlingToTheTopExpands() throws {
     try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .phone, "compact bar")
     let app = launch()
-    drag(app, dy: -300)
-    waitMinimized(app, true, "a swipe up minimizes")
+    dragToMinimize(app, "a swipe up minimizes")
     drag(app, dy: 100, seconds: 1.0)
     staysMinimized(app, "a slow reverse drag in mid-content keeps it")
     app.windows.firstMatch.swipeDown(velocity: .fast)
@@ -184,11 +211,10 @@ final class MinimizeUITests: XCTestCase {
     let app = launch("pages")
     let detail = flutterRow(app, "Detail 1")
     XCTAssertTrue(detail.waitForExistence(timeout: 10), "Home's rows")
-    detail.tap()
+    tapWhenSettled(detail, "Home's Detail 1 row")
     let bar = app.navigationBars["Detail 1"]
     XCTAssertTrue(bar.waitForExistence(timeout: 10), "precondition: Home's pushed page")
-    drag(app, dy: -300)
-    waitMinimized(app, true, "a swipe on the pushed page minimizes", other: "Library")
+    dragToMinimize(app, "a swipe on the pushed page minimizes", other: "Library")
     app.navigationBars.buttons["BackButton"].tap()
     XCTAssertTrue(bar.waitForNonExistence(timeout: 10), "popped")
     sleep(1)
@@ -198,8 +224,7 @@ final class MinimizeUITests: XCTestCase {
   func testATapOnTheCircleExpands() throws {
     try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .phone, "compact bar")
     let app = launch()
-    drag(app, dy: -300)
-    waitMinimized(app, true, "minimized")
+    dragToMinimize(app, "minimized")
     app.tabBars.buttons["Home"].tap()
     waitMinimized(app, false, "the circle expands")
   }
@@ -260,8 +285,7 @@ final class MinimizeUITests: XCTestCase {
     let row = flutterRow(app, "Home item 6")
     XCTAssertTrue(row.waitForExistence(timeout: 10), "Flutter's rows")
     let before = row.frame.minY
-    drag(app, dy: -300)
-    waitMinimized(app, true, "a swipe up minimizes")
+    dragToMinimize(app, "a swipe up minimizes")
     XCTAssertTrue(scrolled(row, from: before), "the drag scrolled Flutter's list")
 
     app.buttons["Next tab"].tap()
@@ -284,8 +308,7 @@ final class MinimizeUITests: XCTestCase {
     let row = flutterRow(app, "Home item 6")
     XCTAssertTrue(row.waitForExistence(timeout: 10), "Flutter's rows")
     let top = row.frame.minY
-    drag(app, dy: -300)
-    waitMinimized(app, true, "a swipe up minimizes")
+    dragToMinimize(app, "a swipe up minimizes")
     XCTAssertTrue(scrolled(row, from: top), "scrolled")
 
     // On the status bar, clear of the Dynamic Island. The first tap can
@@ -315,8 +338,7 @@ final class MinimizeUITests: XCTestCase {
     let app = launch("search")
     app.tabBars.buttons["Library"].tap()
     XCTAssertTrue(flutterRow(app, "Diễm xưa").waitForExistence(timeout: 10), "Library's list")
-    drag(app, dy: -300)
-    waitMinimized(app, true, "a swipe up minimizes", selected: "Library", other: "Home")
+    dragToMinimize(app, "a swipe up minimizes", selected: "Library", other: "Home")
 
     let inBar = app.tabBars.buttons["Search"]
     let search = inBar.exists ? inBar : app.buttons["Search"].firstMatch
@@ -396,8 +418,7 @@ final class MinimizeUITests: XCTestCase {
     let row = flutterRow(app, "Home item 8")
     XCTAssertTrue(row.waitForExistence(timeout: 10), "Flutter's rows")
     let before = row.frame.minY
-    drag(app, dy: -300)
-    waitMinimized(app, true, "a swipe up minimizes in a narrow window")
+    dragToMinimize(app, "a swipe up minimizes in a narrow window")
     XCTAssertTrue(scrolled(row, from: before), "the drag scrolled the list")
     window.swipeDown(velocity: .fast)
     window.swipeDown(velocity: .fast)

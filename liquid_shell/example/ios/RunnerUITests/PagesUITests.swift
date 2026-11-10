@@ -14,6 +14,13 @@ final class PagesUITests: XCTestCase {
     app.launchEnvironment["LIQUID_SHELL_EXAMPLE_DEMO"] = "pages"
     app.launch()
     XCTAssertTrue(row(app, "Detail 1").waitForExistence(timeout: timeout), "Home's rows")
+    // VK-1043: the native chrome comes after Flutter's rows. Home's bar,
+    // with its Add action, moves the rows down once it is up.
+    XCTAssertTrue(
+      tabButton(app, "Library").waitForExistence(timeout: 10), "launch: the tab bar")
+    XCTAssertTrue(
+      app.navigationBars["Home"].buttons["Add"].waitForExistence(timeout: 10),
+      "launch: Home's bar with Add")
     return app
   }
 
@@ -40,7 +47,7 @@ final class PagesUITests: XCTestCase {
 
   func testABackTapAndSwipeOnHomesPushedPage() {
     let app = launch()
-    row(app, "Detail 1").tap()
+    tapWhenSettled(row(app, "Detail 1"), "Home's Detail 1 row")
     let bar = app.navigationBars["Detail 1"]
     XCTAssertTrue(bar.waitForExistence(timeout: 10), "UIKit's bar on Home's pushed page")
     let back = app.navigationBars.buttons["BackButton"]
@@ -51,7 +58,7 @@ final class PagesUITests: XCTestCase {
     XCTAssertTrue(row(app, "Detail 2").waitForExistence(timeout: 10), "Home again")
 
     // Q13: the edge swipe is Flutter's; the native bar follows at release.
-    row(app, "Detail 2").tap()
+    tapWhenSettled(row(app, "Detail 2"), "Home's Detail 2 row")
     let second = app.navigationBars["Detail 2"]
     XCTAssertTrue(second.waitForExistence(timeout: 10), "pushed again")
     let heading = row(app, "Detail 2 item 1")
@@ -68,8 +75,9 @@ final class PagesUITests: XCTestCase {
   /// bar and keeps the page's navigation bar; back brings the tab bar back.
   func testHideChromeOverAPageKeepsTheNavigationBar() {
     let app = launch()
-    XCTAssertTrue(tabButton(app, "Library").exists, "precondition: the tab bar")
-    row(app, "Photo").tap()
+    XCTAssertTrue(
+      tabButton(app, "Library").waitForExistence(timeout: 10), "precondition: the tab bar")
+    tapWhenSettled(row(app, "Photo"), "Home's Photo row")
     let bar = app.navigationBars["Photo"]
     XCTAssertTrue(bar.waitForExistence(timeout: 10), "the page keeps its bar")
     XCTAssertTrue(
@@ -84,7 +92,7 @@ final class PagesUITests: XCTestCase {
   /// Delete has `onPressed: null`: disabled.
   func testAPageActionTapRunsTheAppsCallback() {
     let app = launch()
-    row(app, "Detail 1").tap()
+    tapWhenSettled(row(app, "Detail 1"), "Home's Detail 1 row")
     let bar = app.navigationBars["Detail 1"]
     XCTAssertTrue(bar.waitForExistence(timeout: 10), "UIKit's bar on the detail")
     let favourite = bar.buttons["Favourite"]
