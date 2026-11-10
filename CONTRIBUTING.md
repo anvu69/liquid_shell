@@ -2,9 +2,10 @@
 
 ## Toolchain
 
-- Flutter **3.44.6** is the floor and the golden reference (`.fvmrc`).
+- Flutter **3.44.9** is the local toolchain and the golden reference
+  (`.fvmrc`); the packages' floor is 3.44.0.
   With [fvm](https://fvm.app) installed, `make` uses it automatically:
-  `fvm install 3.44.6`, then `make get`.
+  `fvm install 3.44.9`, then `make get`.
 - Without fvm, put a Flutter 3.44.x on `PATH`, or run
   `make verify FLUTTER=/path/to/flutter DART=/path/to/dart`.
 - Goldens are only valid on macOS with Flutter 3.44.x (spec Q11).
