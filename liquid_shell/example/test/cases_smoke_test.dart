@@ -216,13 +216,12 @@ void main() {
     await tester.tap(find.byTooltip('Share'));
     await tester.pumpAndSettle();
     expect(find.text('Shared 1 time'), findsOneWidget);
-    final delete = tester.widget<InkWell>(
-      find.descendant(
-        of: find.byTooltip('Delete'),
-        matching: find.byType(InkWell),
-      ),
+    final deleteInk = find.descendant(
+      of: find.byTooltip('Delete'),
+      matching: find.byType(InkWell),
     );
-    expect(delete.onTap, isNull);
+    expect(deleteInk, findsOneWidget, reason: 'one InkWell per action circle');
+    expect(tester.widget<InkWell>(deleteInk).onTap, isNull);
   });
 
   testWidgets('trailing compose opens a page with no chrome', (tester) async {

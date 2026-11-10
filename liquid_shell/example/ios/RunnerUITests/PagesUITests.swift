@@ -95,8 +95,8 @@ final class PagesUITests: XCTestCase {
     let filled = bar.buttons.matching(identifier: "heart.fill").firstMatch
     XCTAssertTrue(filled.waitForExistence(timeout: 10), "the callback ran: a new symbol")
     // The row's label is its title and subtitle: "Shared 0 times, A favourite".
-    let note = app.descendants(matching: .any)
-      .matching(NSPredicate(format: "label CONTAINS %@", "A favourite")).firstMatch
+    let note = app.staticTexts
+      .matching(NSPredicate(format: "label ENDSWITH %@", "A favourite")).firstMatch
     XCTAssertTrue(note.waitForExistence(timeout: 10), "the Flutter page too")
     XCTAssertTrue(bar.exists, "a tap pops nothing")
   }
