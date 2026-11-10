@@ -1688,6 +1688,16 @@ void main() {
       await tester.tap(find.byTooltip('Delete'));
       await tester.pumpAndSettle();
       expect(taps, ['Favourite']);
+      final deleteInk = find.descendant(
+        of: find.byTooltip('Delete'),
+        matching: find.byType(InkWell),
+      );
+      expect(
+        deleteInk,
+        findsOneWidget,
+        reason: 'one InkWell per action circle',
+      );
+      expect(tester.widget<InkWell>(deleteInk).onTap, isNull);
       expect(
         tester.getSemantics(find.bySemanticsLabel('Delete')),
         isSemantics(
