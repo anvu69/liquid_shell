@@ -417,6 +417,65 @@ void main() {
     });
   });
 
+  // VK-1046: a red XCTest run keeps the app's own liquid_shell lines.
+  group('applog', () {
+    List<File> appLogs() {
+      final root = Directory(sim.diagDir);
+      if (!root.existsSync()) return const [];
+      return root
+          .listSync()
+          .whereType<File>()
+          .where((f) => f.path.endsWith('-app.log'))
+          .toList();
+    }
+
+    test("writes the app's liquid_shell lines of the last SECONDS to a "
+        'file', () {
+      final r = sim.run(script, ['applog', udid, 'ios-ui', '1260']);
+      expect(r.exitCode, 0, reason: outputOf(r));
+      final log = appLogs().single;
+      expect(log.path, endsWith('-ios-ui-app.log'));
+      expect(log.readAsStringSync(), contains('tap dropped (symbol differs)'));
+      final call = sim.callsWith('log show').single;
+      expect(
+        call,
+        contains('simctl spawn $udid log show --last 1260s --style compact'),
+      );
+      expect(
+        call,
+        contains(
+          'process == "Runner" AND eventMessage CONTAINS "liquid_shell"',
+        ),
+      );
+      expect(sim.dumps, isEmpty, reason: 'a file, not a dump folder');
+    });
+
+    test('keeps only the last IOS_APPLOG_BYTES', () {
+      sim.run(
+        script,
+        ['applog', udid, 'x', '60'],
+        env: {'IOS_APPLOG_BYTES': '40'},
+      );
+      expect(appLogs().single.lengthSync(), 40);
+    });
+
+    test('a failed read exits 0 and leaves a note', () {
+      final r = sim.run(
+        script,
+        ['applog', udid, 'x', '60'],
+        env: {'FAKE_LOG_SHOW': 'fail'},
+      );
+      expect(r.exitCode, 0, reason: outputOf(r));
+      expect(appLogs().single.readAsStringSync(), contains('log show failed'));
+    });
+
+    test('a window that is not a number falls back to an hour', () {
+      final r = sim.run(script, ['applog', udid, 'x', 'soon']);
+      expect(r.exitCode, 0, reason: outputOf(r));
+      expect(sim.callsWith('log show --last 3600s'), hasLength(1));
+    });
+  });
+
   group('guard', () {
     // 5 s, not 2: a loaded machine (pre-commit runs every package's tests at
     // once) can take over 2 s just to start a fake drive (VK-990).

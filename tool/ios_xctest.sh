@@ -17,9 +17,12 @@
 # 3. `xcodebuild test-without-building` with the same selection (for
 #    example -only-testing:RunnerUITests), capped at SUITE_SECONDS by
 #    tool/with_timeout.sh. A stall (124) is diagnosed before the stop
-#    (tool/ios_sim.sh diagnose). A red run prints RESULT's summary: `-quiet`
-#    names a failing test but not its failed assertion. A green run that ran
-#    0 tests (the selection matched nothing) exits 1.
+#    (tool/ios_sim.sh diagnose). A red run, a stall included, first saves
+#    the app's liquid_shell log lines of the whole suite (tool/ios_sim.sh
+#    applog, VK-1046: the app's log is not in xcodebuild's output), then
+#    prints RESULT's summary: `-quiet` names a failing test but not its
+#    failed assertion. A green run that ran 0 tests (the selection matched
+#    nothing) exits 1.
 #
 # `-collect-test-diagnostics never`: with xcodebuild's default (on-failure,
 # a sysdiagnose-like bundle after a failure) a red run stalled past 7
@@ -46,6 +49,7 @@ cd ios
 "$tool_dir/ios_sim.sh" warmup "$udid" \
   "$derived/Build/Products/Debug-iphonesimulator/Runner.app"
 status=0
+started=$(date +%s)
 WITH_TIMEOUT_ON_STALL="$(printf '%q ' "$tool_dir/ios_sim.sh" diagnose "$udid" \
   "$(basename "$result" .xcresult) stall")" \
   cap "$suite_secs" xcodebuild test-without-building -workspace Runner.xcworkspace \
@@ -55,6 +59,9 @@ WITH_TIMEOUT_ON_STALL="$(printf '%q ' "$tool_dir/ios_sim.sh" diagnose "$udid" \
   -maximum-test-execution-time-allowance "$max_allowance" \
   -resultBundlePath "$result" -quiet || status=$?
 if [ "$status" -ne 0 ]; then
+  # The suite's seconds plus a minute: the dropped tap can be at its start.
+  "$tool_dir/ios_sim.sh" applog "$udid" "$(basename "$result" .xcresult)" \
+    "$(($(date +%s) - started + 60))" || true
   [ ! -d "$result" ] \
     || xcrun xcresulttool get test-results summary --path "$result" || true
   exit "$status"

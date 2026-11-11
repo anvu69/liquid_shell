@@ -97,7 +97,12 @@ tool/ios_sim.sh applog UDID LABEL SECONDS
 It writes `IOS_DIAG_DIR/<UTC time>-<LABEL>-app.log`: `xcrun simctl spawn UDID
 log show --last <SECONDS>s --style compact --predicate 'process == "Runner"
 AND eventMessage CONTAINS "liquid_shell"'`, the last 2 MB of it
-(`tail -c`), capped at 120 s by `tool/with_timeout.sh`. The predicate keeps
+(`tail -c`; `IOS_APPLOG_BYTES` overrides), capped at 120 s by
+`tool/with_timeout.sh`. A window that is not a number falls back to 3600 s.
+Default-level lines suffice: on an iPhone 17 Pro simulator (iOS 26.5) the read
+without `--info --debug` showed the example's `debugPrint` line
+(`Runner[…] (Flutter) flutter: liquid_shell: …`) and both new `NSLog` lines
+(`Runner[…] (Foundation) [liquid_shell] native page action tap dropped …`). The predicate keeps
 the app's own process (not `RunnerUITests-Runner`) and both prefixes
 (`liquid_shell:` from Dart's `debugPrint`, `[liquid_shell]` from `NSLog`). It
 always exits 0; a failed read leaves a note in the file.

@@ -22,6 +22,7 @@ import 'package:test/test.dart';
 ///   `build-for-testing`, space-separated: `pass`, `fail`, or `vk627` (Xcode's
 ///   Target Integrity error for the generated plugin package, exit 65).
 ///   Builds past the list pass. Overrides `FAKE_BUILD`.
+/// - `FAKE_LOG_SHOW`: `fail` makes `log show` fail.
 /// - `FAKE_TEST`: `fail` or `stall` for `xcodebuild test-without-building`.
 /// - `FAKE_DRIVE`: `fail`, `stall` (every drive), `stall-once` (the first
 ///   drive only) or `linger` (the drive passes, and leaves a `sleep 60`
@@ -143,6 +144,8 @@ case "$*" in
     fi
     sleep 300 ;;
   simctl\ spawn\ *\ log\ show*)
+    [ -z "${FAKE_LOG_SHOW:-}" ] || { echo 'log: fake failure' >&2; exit 1; }
+    echo '2026-10-16 10:00:00.000 Df Runner[4242:1] (Flutter) flutter: liquid_shell: native page action tap dropped (symbol differs): tab=0 page=1 index=1 sfSymbol=heart have=heart.fill'
     echo '2026-10-16 10:00:00.000 Df Runner[4242:1] (Flutter) flutter: The Dart VM service is listening on http://127.0.0.1:1/a=/' ;;
   simctl\ spawn\ *\ launchctl\ list)
     printf '%b\n' "${FAKE_LAUNCHCTL-4242\t0\tUIKitApplication:vn.lasoai.liquidShellExample[b61d][rb-legacy]}" ;;

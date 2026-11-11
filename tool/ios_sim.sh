@@ -7,6 +7,7 @@
 #
 #   tool/ios_sim.sh warmup UDID [APP | --build]
 #   tool/ios_sim.sh diagnose UDID LABEL [WINDOW]
+#   tool/ios_sim.sh applog UDID LABEL SECONDS
 #   tool/ios_sim.sh guard UDID LABEL SECONDS command [args...]
 #   tool/ios_sim.sh build UDID ACTION [xcodebuild args...]
 #
@@ -25,6 +26,13 @@
 #           default 15m, of the app's VM service line), launchctl.txt (the app in the
 #           simulator's launchd) and sample.txt (`sample` of the app for
 #           5 s when it is alive). Every step is capped; it exits 0.
+# applog    Writes IOS_DIAG_DIR/<UTC time>-<LABEL>-app.log: the example's own
+#           log lines that name liquid_shell (Dart's debugPrint
+#           `liquid_shell: ...`, the plugin's NSLog `[liquid_shell] ...`) of
+#           the last SECONDS (`log show --last`), at most its last
+#           IOS_APPLOG_BYTES. A red XCTest run's job log has only the test
+#           runner's output, never the app's (VK-1046). The read is capped
+#           at 120 s; a failed one leaves a note in the file; it exits 0.
 # guard     The stall guard. Runs the command under tool/with_timeout.sh for
 #           at most SECONDS. A stall (124) is diagnosed before the stop; then
 #           the app is terminated and the command runs once more on the same
@@ -59,6 +67,7 @@
 #                     attach before it launches (default 30)
 # IOS_BUILD_TIMEOUT   seconds each step of build (and --build) may take
 #                     (default 900)
+# IOS_APPLOG_BYTES    bytes applog keeps, the newest (default 2000000)
 # IOS_DIAG_DIR        diagnostics root
 #                     (default liquid_shell/example/build/ios-diagnostics)
 # FLUTTER             flutter command for build (default: flutter)
@@ -83,6 +92,7 @@ number_or_default() {
 }
 warmup_timeout=$(number_or_default IOS_WARMUP_TIMEOUT "$warmup_timeout" 180)
 ready_timeout=$(number_or_default IOS_WARMUP_READY_TIMEOUT "$ready_timeout" 30)
+applog_bytes=$(number_or_default IOS_APPLOG_BYTES "${IOS_APPLOG_BYTES:-2000000}" 2000000)
 last_dump=
 diag_root=${IOS_DIAG_DIR:-$example/build/ios-diagnostics}
 # The line flutter_tools waits for after `simctl launch` (simulators.dart),
@@ -91,6 +101,8 @@ diag_root=${IOS_DIAG_DIR:-$example/build/ios-diagnostics}
 # vm_line.
 vm_predicate='process == "Runner" AND eventMessage CONTAINS "Dart VM service is listening"'
 vm_line='Dart VM service is listening on'
+# applog: the app's process (never RunnerUITests-Runner), both prefixes.
+app_predicate='process == "Runner" AND eventMessage CONTAINS "liquid_shell"'
 # VK-627: the phrase of Xcode's Target Integrity error, as xcodebuild and
 # flutter print it, and the note that names the retry.
 vk627_signature='requires minimum platform version'
@@ -114,6 +126,7 @@ usage() {
   cat >&2 <<'EOF'
 usage: tool/ios_sim.sh warmup UDID [APP | --build]
        tool/ios_sim.sh diagnose UDID LABEL [WINDOW]
+       tool/ios_sim.sh applog UDID LABEL SECONDS
        tool/ios_sim.sh guard UDID LABEL SECONDS command [args...]
        tool/ios_sim.sh build UDID ACTION [xcodebuild args...]
 EOF
@@ -154,6 +167,19 @@ diagnose() { # <udid> <label> [window]
   fi
   echo "dump finished: $(now)" >> "$dir/meta.txt"
   note "diagnostics in $dir"
+}
+
+applog() { # <udid> <label> <seconds>
+  local udid=$1 label=$2 secs file
+  secs=$(number_or_default "applog SECONDS" "$3" 3600)
+  mkdir -p "$diag_root"
+  file="$diag_root/$(date -u +%Y%m%dT%H%M%SZ)-${label//[^A-Za-z0-9._-]/_}-app.log"
+  {
+    cap 120 xcrun simctl spawn "$udid" log show --last "${secs}s" --style compact \
+      --predicate "$app_predicate" 2>&1 \
+      || echo "ios_sim: log show failed (status $?)"
+  } | tail -c "$applog_bytes" > "$file"
+  note "app log in $file"
 }
 
 # Runs a command with its stdout and stderr shown on stdout and copied to
@@ -350,6 +376,7 @@ command=${1:-}
 case "$command" in
   warmup) [ $# -ge 1 ] && [ $# -le 2 ] || usage; warmup "$@" ;;
   diagnose) [ $# -ge 2 ] && [ $# -le 3 ] || usage; diagnose "$@" ;;
+  applog) [ $# -eq 3 ] || usage; applog "$@" ;;
   guard) [ $# -ge 4 ] || usage; guard "$@" ;;
   build) [ $# -ge 2 ] || usage; build "$@" ;;
   *) usage ;;
