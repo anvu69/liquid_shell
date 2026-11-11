@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Regenerates every golden and doc image in liquid_shell/doc/images
 # (spec §10.4). This is the ONLY way doc images are produced; never edit
-# them by hand. Reference toolchain only (Q11): macOS + Flutter 3.44.x.
+# them by hand. Reference toolchain only (Q11): macOS + Flutter 3.47.x
+# (.fvmrc pins 3.47.9; VK-1032 moved it from 3.44).
 set -euo pipefail
 cd "$(dirname "$0")/../liquid_shell/example"
 FLUTTER=${FLUTTER:-flutter}
@@ -13,9 +14,9 @@ if [ "$(uname)" != Darwin ]; then
 fi
 version=$($FLUTTER --version --machine | grep -o '"frameworkVersion": *"[^"]*"' | grep -o '[0-9][0-9.]*')
 case "$version" in
-  3.44.*) ;;
+  3.47.*) ;;
   *)
-    echo "✗ Flutter $version; goldens need 3.44.x (spec Q11)" >&2
+    echo "✗ Flutter $version; goldens need 3.47.x (spec Q11)" >&2
     exit 1
     ;;
 esac
