@@ -326,6 +326,15 @@ final class MinimizeUITests: XCTestCase {
     let atTop = { self.frameInTree(row).map { abs($0.minY - top) < 2 } ?? false }
     statusBar.tap()
     if !wait(timeout: 3, until: atTop) { statusBar.tap() }
+    // VK-1043: on a loaded runner a tap can take a minute to send and then
+    // reads as a press, so nothing scrolls. One more tap, recorded; a tap
+    // with the list already at the top changes nothing.
+    if !wait(until: atTop) {
+      XCTContext.runActivity(named: "VK-1043: retry the status-bar tap (the last was dropped)") { _ in
+        print("MinimizeUITests: the status-bar taps did not scroll to the top; tapping again")
+        statusBar.tap()
+      }
+    }
     XCTAssertTrue(wait(until: atTop), "at the top again: \(String(describing: frameInTree(row)))")
     waitMinimized(app, false, "a programmatic scroll to the top expands")
   }

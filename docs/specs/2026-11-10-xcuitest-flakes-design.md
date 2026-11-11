@@ -39,8 +39,11 @@ These are test-only changes in `liquid_shell/example/ios/RunnerUITests/`.
    shows one (the `pages` demo with `Add`). The deadline is 10 s, with a message.
 3. **A.** A shared helper, `tapWhenSettled(_ element:, timeout: 10)`. It waits
    until the element `isHittable` and its `frame` is the same in two samples
-   200 ms apart, then taps once. At the deadline it fails, and the message
-   gives the last frame and hittability. It never taps blindly a second time.
+   200 ms apart, then taps once. At the deadline it takes one last sample:
+   if that sample equals the one before it, it taps; otherwise it fails, and
+   the message gives the last frame and hittability. (On a loaded runner one
+   query can take seconds, so the deadline can pass after one sample.) It
+   never taps blindly a second time.
    The row taps in Pages and Minimize use it. The helper lives in a new
    `RunnerUITests/UITestWaits.swift` (an `XCTestCase` extension), which the
    other suites may adopt later. Moving them over is out of scope.
@@ -48,7 +51,10 @@ These are test-only changes in `liquid_shell/example/ios/RunnerUITests/`.
    recorded form that SearchUITests uses (VK-551): an
    `XCTContext.runActivity(named: "VK-1043: retry the drag (the first was dropped)")`
    plus a `print`. A second failure still fails. The Pages edge swipe at :63
-   already retries.
+   already retries. Added after the first CI round (owner, option A): the
+   status-bar test gets one more tap when its two taps leave the list
+   scrolled, recorded as `VK-1043: retry the status-bar tap (the last was
+   dropped)`. In CI one tap took 58 s to send and read as a press.
 5. **Follow-ups**, filed as new Plane items rather than fixed here:
    - whether Flutter's top inset always follows the root bar when it appears
      after launch (`syncFlutter`), which could be a VK-443 layout bug that

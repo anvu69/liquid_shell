@@ -26,6 +26,13 @@ extension XCTestCase {
       }
       Thread.sleep(forTimeInterval: 0.2)
     }
+    // VK-1043: on a loaded runner one query can take seconds, so the
+    // deadline can pass after a single sample. One last sample: equal to the
+    // one before it, the element has settled; otherwise fail.
+    if !last.isNull, element.exists, element.isHittable, element.frame == last {
+      element.tap()
+      return
+    }
     XCTFail(
       "\(what): not settled after \(timeout) s (exists \(element.exists), "
         + "hittable \(element.exists && element.isHittable), frame \(last))",
