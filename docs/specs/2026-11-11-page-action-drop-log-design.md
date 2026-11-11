@@ -115,7 +115,11 @@ stall test's single diagnose dump stays single.
 
 `IOS_DIAG_DIR` defaults to `liquid_shell/example/build/ios-diagnostics/`, which
 the `ios-unit`, `ios-ui` and `ios-minimize` jobs already upload with
-`if: always()` (`.github/workflows/ci.yaml`). No workflow change.
+`if: always()` (`.github/workflows/ci.yaml`) as `cold-launch-<job>-a<attempt>`.
+VK-1067: a red run also uploads the app log in `<job>-diagnostics`, next to
+the result bundle and the crash reports
+(`liquid_shell/example/build/ios-diagnostics/*-app.log`), so it is found where
+the failure's screenshot is.
 
 ### 2.4 CHANGELOG
 

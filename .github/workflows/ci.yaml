@@ -232,6 +232,7 @@ jobs:
           name: ios-unit-${{ matrix.device }}-diagnostics
           path: |
             liquid_shell/example/build/ios-unit.xcresult
+            liquid_shell/example/build/ios-diagnostics/*-app.log
             crash-reports/
           retention-days: 7
       - if: always()
@@ -284,6 +285,7 @@ jobs:
           name: ios-ui-${{ matrix.device }}-diagnostics
           path: |
             liquid_shell/example/build/ios-ui.xcresult
+            liquid_shell/example/build/ios-diagnostics/*-app.log
             crash-reports/
           retention-days: 7
       - if: always()
@@ -336,6 +338,7 @@ jobs:
           name: ios-minimize-iPhone-diagnostics
           path: |
             liquid_shell/example/build/ios-minimize.xcresult
+            liquid_shell/example/build/ios-diagnostics/*-app.log
             crash-reports/
           retention-days: 7
       - if: always()
