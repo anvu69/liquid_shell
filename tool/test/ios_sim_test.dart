@@ -469,6 +469,23 @@ void main() {
       expect(appLogs().single.readAsStringSync(), contains('log show failed'));
     });
 
+    test('a process that keeps the log output open does not hold it', () {
+      final watch = Stopwatch()..start();
+      final r = sim.run(
+        script,
+        ['applog', udid, 'x', '60'],
+        env: {'FAKE_LOG_SHOW': 'linger'},
+      );
+      watch.stop();
+      final lingerer = int.parse(
+        File('${sim.dir.path}/log-lingerer').readAsStringSync().trim(),
+      );
+      addTearDown(() => Process.killPid(lingerer));
+      expect(r.exitCode, 0, reason: outputOf(r));
+      expect(watch.elapsed, lessThan(const Duration(seconds: 30)));
+      expect(appLogs().single.readAsStringSync(), contains('tap dropped'));
+    });
+
     test('a window that is not a number falls back to an hour', () {
       final r = sim.run(script, ['applog', udid, 'x', 'soon']);
       expect(r.exitCode, 0, reason: outputOf(r));

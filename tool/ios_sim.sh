@@ -174,11 +174,13 @@ applog() { # <udid> <label> <seconds>
   secs=$(number_or_default "applog SECONDS" "$3" 3600)
   mkdir -p "$diag_root"
   file="$diag_root/$(date -u +%Y%m%dT%H%M%SZ)-${label//[^A-Za-z0-9._-]/_}-app.log"
-  {
-    cap 120 xcrun simctl spawn "$udid" log show --last "${secs}s" --style compact \
-      --predicate "$app_predicate" 2>&1 \
-      || echo "ios_sim: log show failed (status $?)"
-  } | tail -c "$applog_bytes" > "$file"
+  # Into a file, never a pipe: a process left holding the read's output
+  # would hold a reader at the pipe's end past the cap (as in diagnose).
+  cap 120 xcrun simctl spawn "$udid" log show --last "${secs}s" --style compact \
+    --predicate "$app_predicate" > "$file.full" 2>&1 \
+    || echo "ios_sim: log show failed (status $?)" >> "$file.full"
+  tail -c "$applog_bytes" "$file.full" > "$file"
+  rm -f "$file.full"
   note "app log in $file"
 }
 
