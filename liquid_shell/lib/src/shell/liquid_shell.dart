@@ -637,31 +637,64 @@ class _LiquidShellState extends State<LiquidShell>
   /// root native page i is record i - 1, and the stand-in has none. Native
   /// changed nothing.
   void _onNativePageAction(int tab, int page, int index, String sfSymbol) {
+    // A dropped tap says which check dropped it, every time, in debug
+    // builds only (VK-1046): a flaky native tap is otherwise unreadable.
+    void dropped(String check, [String state = '']) {
+      if (kDebugMode) {
+        debugPrint(
+          'liquid_shell: native page action tap dropped ($check): '
+          'tab=$tab page=$page index=$index sfSymbol=$sfSymbol'
+          '${state.isEmpty ? '' : ' $state'}',
+        );
+      }
+    }
+
+    String cover() => 'coveredByPush=$_coveredByPush tickersOff=$_tickersOff';
     // Spec P3b-2 §8.4 and §5.3 rule 4. Checked at the boundary: indices
     // from the platform.
-    if (page < 0 || index < 0 || index >= LiquidPage.maxActions) return;
-    if (tab !=
-            resolveSelectedIndex(
-              widget.selectedIndex,
-              widget.destinations.length,
-            ) ||
-        !_routeCurrent ||
-        _covered) {
-      return;
+    if (page < 0 || index < 0 || index >= LiquidPage.maxActions) {
+      return dropped('bad index');
     }
+    final selected = resolveSelectedIndex(
+      widget.selectedIndex,
+      widget.destinations.length,
+    );
+    if (tab != selected) {
+      return dropped('tab not selected', 'selected=$selected');
+    }
+    if (!_routeCurrent) return dropped('shell route not current', cover());
+    if (_covered) return dropped('shell covered', cover());
     final stack = _stackRecords[tab];
-    final target = page - (_standInRoots.contains(tab) ? 1 : 0);
-    if (stack == null || stack.isEmpty || target != stack.length - 1) return;
+    final standIn = _standInRoots.contains(tab);
+    final target = page - (standIn ? 1 : 0);
+    if (stack == null || stack.isEmpty || target != stack.length - 1) {
+      return dropped(
+        'not the top page',
+        'stack=${stack?.length} target=$target standIn=$standIn',
+      );
+    }
     final record = stack.last;
     // A record unregisters before the post-frame stack refresh: never run a
     // detached page's action.
-    if (!_pageRecords.contains(record)) return;
-    if (!(record.entry.route?.isCurrent ?? false)) return;
+    if (!_pageRecords.contains(record)) return dropped('page detached');
+    final route = record.entry.route;
+    if (!(route?.isCurrent ?? false)) {
+      return dropped(
+        'page route not current',
+        'route=${route == null ? 'null' : 'not current'}',
+      );
+    }
     final actions = record.entry.actions;
-    if (index >= actions.length) return;
+    if (index >= actions.length) {
+      return dropped('no action at index', 'actions=${actions.length}');
+    }
     final action = actions[index];
-    if (action.sfSymbol != sfSymbol) return;
-    action.onPressed?.call();
+    if (action.sfSymbol != sfSymbol) {
+      return dropped('symbol differs', 'have=${action.sfSymbol}');
+    }
+    final onPressed = action.onPressed;
+    if (onPressed == null) return dropped('no onPressed');
+    onPressed();
   }
 
   /// The native back button: a proposal for the selected
