@@ -45,10 +45,31 @@ final class PagesUITests: XCTestCase {
         thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)))
   }
 
+  /// Taps Home's [title] row and returns the pushed page's UIKit bar.
+  /// VK-1069: on a loaded iPad runner a settled row's tap can push nothing
+  /// (the same dropped tap as VK-1043 and VK-1063). One more tap when no
+  /// bar is up after 5 s while Home's bar is still up and the row is still
+  /// hittable; a page already pushing is not tapped again, and a row that
+  /// never pushes still fails the caller's wait.
+  private func openFromHome(_ app: XCUIApplication, _ title: String) -> XCUIElement {
+    let target = row(app, title)
+    tapWhenSettled(target, "Home's \(title) row")
+    let bar = app.navigationBars[title]
+    if !bar.waitForExistence(timeout: 5), app.navigationBars["Home"].exists,
+      target.exists, target.isHittable
+    {
+      XCTContext.runActivity(named: "VK-1069: retry the \(title) row tap (the first was dropped)") {
+        _ in
+        print("PagesUITests: the \(title) row tap pushed no page; tapping again")
+        target.tap()
+      }
+    }
+    return bar
+  }
+
   func testABackTapAndSwipeOnHomesPushedPage() {
     let app = launch()
-    tapWhenSettled(row(app, "Detail 1"), "Home's Detail 1 row")
-    let bar = app.navigationBars["Detail 1"]
+    let bar = openFromHome(app, "Detail 1")
     XCTAssertTrue(bar.waitForExistence(timeout: 10), "UIKit's bar on Home's pushed page")
     let back = app.navigationBars.buttons["BackButton"]
     XCTAssertTrue(back.waitForExistence(timeout: 10), "the native glass back button")
@@ -58,8 +79,7 @@ final class PagesUITests: XCTestCase {
     XCTAssertTrue(row(app, "Detail 2").waitForExistence(timeout: 10), "Home again")
 
     // Q13: the edge swipe is Flutter's; the native bar follows at release.
-    tapWhenSettled(row(app, "Detail 2"), "Home's Detail 2 row")
-    let second = app.navigationBars["Detail 2"]
+    let second = openFromHome(app, "Detail 2")
     XCTAssertTrue(second.waitForExistence(timeout: 10), "pushed again")
     let heading = row(app, "Detail 2 item 1")
     XCTAssertTrue(heading.waitForExistence(timeout: 10))
@@ -77,8 +97,7 @@ final class PagesUITests: XCTestCase {
     let app = launch()
     XCTAssertTrue(
       tabButton(app, "Library").waitForExistence(timeout: 10), "precondition: the tab bar")
-    tapWhenSettled(row(app, "Photo"), "Home's Photo row")
-    let bar = app.navigationBars["Photo"]
+    let bar = openFromHome(app, "Photo")
     XCTAssertTrue(bar.waitForExistence(timeout: 10), "the page keeps its bar")
     XCTAssertTrue(
       tabButton(app, "Library").waitForNonExistence(timeout: 10), "the tab bar hides")
@@ -92,8 +111,7 @@ final class PagesUITests: XCTestCase {
   /// Delete has `onPressed: null`: disabled.
   func testAPageActionTapRunsTheAppsCallback() {
     let app = launch()
-    tapWhenSettled(row(app, "Detail 1"), "Home's Detail 1 row")
-    let bar = app.navigationBars["Detail 1"]
+    let bar = openFromHome(app, "Detail 1")
     XCTAssertTrue(bar.waitForExistence(timeout: 10), "UIKit's bar on the detail")
     let favourite = bar.buttons["Favourite"]
     XCTAssertTrue(favourite.waitForExistence(timeout: 10), "the action is a bar button")
