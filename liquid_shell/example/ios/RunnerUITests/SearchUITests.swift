@@ -305,6 +305,20 @@ extension SearchUITests {
         format: "elementType IN %@",
         [XCUIElement.ElementType.searchField, .textField].map(\.rawValue))
     ).firstMatch
+    // VK-1063: on a loaded runner the Flutter ⌕ saw the touch (its press
+    // highlight came and went) but opened nothing, and the screen stayed on
+    // Home. One more tap when no field is up after 5 s and Home is still
+    // the selected tab; a search that is already open is not tapped again,
+    // and a ⌕ that never opens it still fails the wait below.
+    if !either.waitForExistence(timeout: 5) {
+      let home = tabButton(app, "Home")
+      if home.exists, home.isSelected {
+        XCTContext.runActivity(named: "VK-1063: retry the ⌕ tap (the first was dropped)") { _ in
+          print("SearchUITests: the first ⌕ tap opened no search (\(demo)); tapping again")
+          tab.tap()
+        }
+      }
+    }
     XCTAssertTrue(either.waitForExistence(timeout: 10), "a field")
     let field = native.exists ? native : flutter
     field.tap()
