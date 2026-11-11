@@ -12,7 +12,8 @@
   engine draws the dark liquid glass differently (VK-700), so the liquid
   goldens fail there by design.
 - CI guards the floor with `checks (3.44.x)` (analyze and unit tests, no
-  goldens) and runs the goldens and every build on 3.47.9; both block.
+  goldens) and runs the goldens and every build on 3.47.9. Both block,
+  except `ios-ui`, which stays non-blocking as before.
 - CI also runs the latest stable Flutter, never blocking. There the plain
   goldens and the shader probes (`make test-impeller`) must pass; the
   liquid goldens only inform, because a newer engine may draw the dark

@@ -12,7 +12,7 @@ tolerance of `TolerantGoldenComparator`, all of them dark and all under
 
 | Image | Pixels differing on 3.47.9 |
 |---|---|
-| `doc/images/liquid_default_dark.png` | fails (its failure files are overwritten by the band's, same name) |
+| `doc/images/liquid_default_dark.png` | 3.37 % locally (CI's failure files are overwritten by the band's, same name) |
 | `bands/liquid_default_dark.png` | 16.09 % |
 | `doc/images/liquid_hero_iphone_dark.png` | 3.37 % |
 | `doc/images/liquid_hero_android_dark.png` | 3.18 % |
