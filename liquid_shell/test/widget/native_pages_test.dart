@@ -873,6 +873,252 @@ void main() {
       await tester.pumpAndSettle();
       expect(taps, ['version 2']);
     });
+
+    // VK-1046: every dropped tap prints one line in debug, every time; a
+    // tap that runs prints nothing (spec 2026-11-11 §2.1).
+    group('VK-1046: a dropped tap logs its guard', () {
+      const dropped = 'liquid_shell: native page action tap dropped';
+
+      /// The drop lines printed while [events] are emitted one by one, each
+      /// followed by a settle. Restores `debugPrint` before the test ends:
+      /// testWidgets checks it.
+      Future<List<String>> dropsOf(
+        WidgetTester tester,
+        FakeNativePlatform fake,
+        List<LiquidNativePageActionTapped> events,
+      ) async {
+        final logs = <String>[];
+        final original = debugPrint;
+        debugPrint = (message, {wrapWidth}) {
+          if (message != null && message.startsWith(dropped)) {
+            logs.add(message);
+          }
+        };
+        try {
+          for (final event in events) {
+            fake.emitNative(event);
+            await tester.pumpAndSettle();
+          }
+        } finally {
+          debugPrint = original;
+        }
+        return logs;
+      }
+
+      testWidgets('a tap that runs its action logs nothing', (tester) async {
+        final taps = <String>[];
+        final fake = await _pump(tester);
+        await _push(tester, 0, withActions('Detail', taps));
+        expect(await dropsOf(tester, fake, [tap(1, 1, 'heart')]), isEmpty);
+        expect(taps, ['Favourite']);
+      });
+
+      testWidgets('bad index, every time', (tester) async {
+        final taps = <String>[];
+        final fake = await _pump(tester);
+        await _push(tester, 0, withActions('Detail', taps));
+        expect(
+          await dropsOf(tester, fake, [
+            tap(-1, 1, 'heart'),
+            tap(1, -1, 'heart'),
+            tap(1, 3, 'heart'),
+            tap(1, 3, 'heart'),
+          ]),
+          [
+            '$dropped (bad index): tab=0 page=-1 index=1 sfSymbol=heart',
+            '$dropped (bad index): tab=0 page=1 index=-1 sfSymbol=heart',
+            '$dropped (bad index): tab=0 page=1 index=3 sfSymbol=heart',
+            '$dropped (bad index): tab=0 page=1 index=3 sfSymbol=heart',
+          ],
+        );
+        expect(taps, isEmpty);
+      });
+
+      testWidgets('tab not selected', (tester) async {
+        final taps = <String>[];
+        final fake = await _pump(tester);
+        await _push(tester, 0, withActions('Detail', taps));
+        const expected =
+            '$dropped (tab not selected): tab=1 page=1 index=1 sfSymbol=heart '
+            'selected=0';
+        expect(await dropsOf(tester, fake, [tap(1, 1, 'heart', tab: 1)]), [
+          expected,
+        ]);
+        expect(taps, isEmpty);
+      });
+
+      testWidgets('shell route not current: a page pushed above the shell', (
+        tester,
+      ) async {
+        final taps = <String>[];
+        final fake = await _pump(tester);
+        await _push(tester, 0, withActions('Detail', taps));
+        Navigator.of(
+              tester.element(find.byType(TestPage).last),
+              rootNavigator: true,
+            )
+            .push(
+              MaterialPageRoute<void>(
+                builder: (_) => const Scaffold(body: Text('Above')),
+              ),
+            )
+            .ignore();
+        await tester.pumpAndSettle();
+        const expected =
+            '$dropped (shell route not current): tab=0 page=1 index=1 '
+            'sfSymbol=heart coveredByPush=true tickersOff=true';
+        expect(await dropsOf(tester, fake, [tap(1, 1, 'heart')]), [
+          expected,
+        ]);
+        expect(taps, isEmpty);
+      });
+
+      testWidgets('shell covered: tickers off, the route still current', (
+        tester,
+      ) async {
+        final taps = <String>[];
+        final ticking = ValueNotifier(true);
+        addTearDown(ticking.dispose);
+        final fake = installFakeNative(state: _compact);
+        await pumpShell(
+          tester,
+          ValueListenableBuilder<bool>(
+            valueListenable: ticking,
+            builder: (_, on, child) => TickerMode(enabled: on, child: child!),
+            child: const TestShell(
+              destinations: _destinations,
+              pageBuilder: _page,
+            ),
+          ),
+          padding: _compactPadding,
+        );
+        await _push(tester, 0, withActions('Detail', taps));
+        ticking.value = false;
+        await tester.pumpAndSettle();
+        const expected =
+            '$dropped (shell covered): tab=0 page=1 index=1 sfSymbol=heart '
+            'coveredByPush=false tickersOff=true';
+        expect(await dropsOf(tester, fake, [tap(1, 1, 'heart')]), [
+          expected,
+        ]);
+        expect(taps, isEmpty);
+      });
+
+      testWidgets('not the top page: a page pushed above it', (
+        tester,
+      ) async {
+        final taps = <String>[];
+        final fake = await _pump(tester);
+        await _push(tester, 0, withActions('Detail', taps));
+        await _push(tester, 0, withActions('Deeper', taps));
+        const expected =
+            '$dropped (not the top page): tab=0 page=1 index=1 sfSymbol=heart '
+            'stack=3 target=1 standIn=false';
+        expect(await dropsOf(tester, fake, [tap(1, 1, 'heart')]), [
+          expected,
+        ]);
+        expect(taps, isEmpty);
+      });
+
+      testWidgets('not the top page: the stand-in root has no actions', (
+        tester,
+      ) async {
+        final taps = <String>[];
+        final fake = await _pump(tester, initialIndex: 2);
+        await _push(tester, 2, withActions('About', taps));
+        const expected =
+            '$dropped (not the top page): tab=2 page=0 index=0 '
+            'sfSymbol=square.and.arrow.up stack=1 target=-1 standIn=true';
+        expect(
+          await dropsOf(tester, fake, [
+            tap(0, 0, 'square.and.arrow.up', tab: 2),
+          ]),
+          [
+            expected,
+          ],
+        );
+        expect(taps, isEmpty);
+      });
+
+      testWidgets('page route not current: a sheet in the tab', (
+        tester,
+      ) async {
+        final taps = <String>[];
+        final fake = await _pump(tester);
+        await _push(tester, 0, withActions('Detail', taps));
+        unawaited(
+          showModalBottomSheet<void>(
+            context: tester.element(find.byType(TestPage).last),
+            builder: (_) => const Text('sheet'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        const expected =
+            '$dropped (page route not current): tab=0 page=1 index=1 '
+            'sfSymbol=heart route=not current';
+        expect(await dropsOf(tester, fake, [tap(1, 1, 'heart')]), [
+          expected,
+        ]);
+        expect(taps, isEmpty);
+      });
+
+      testWidgets("no action at index: past the page's own actions", (
+        tester,
+      ) async {
+        final taps = <String>[];
+        final fake = await _pump(tester);
+        await _push(
+          tester,
+          0,
+          LiquidPage(
+            title: 'One',
+            actions: [
+              LiquidPageAction(
+                sfSymbol: 'heart',
+                icon: const Icon(Icons.favorite_border),
+                label: 'Favourite',
+                onPressed: () => taps.add('Favourite'),
+              ),
+            ],
+            child: const TestPage(label: 'One'),
+          ),
+        );
+        const expected =
+            '$dropped (no action at index): tab=0 page=1 index=2 '
+            'sfSymbol=heart actions=1';
+        expect(await dropsOf(tester, fake, [tap(1, 2, 'heart')]), [
+          expected,
+        ]);
+        expect(taps, isEmpty);
+      });
+
+      testWidgets('symbol differs, every time', (tester) async {
+        final taps = <String>[];
+        final fake = await _pump(tester);
+        await _push(tester, 0, withActions('Detail', taps));
+        const line =
+            '$dropped (symbol differs): tab=0 page=1 index=1 '
+            'sfSymbol=heart.fill have=heart';
+        expect(
+          await dropsOf(tester, fake, [
+            tap(1, 1, 'heart.fill'),
+            tap(1, 1, 'heart.fill'),
+          ]),
+          [line, line],
+        );
+        expect(taps, isEmpty);
+      });
+
+      testWidgets('no onPressed: a disabled action', (tester) async {
+        final taps = <String>[];
+        final fake = await _pump(tester);
+        await _push(tester, 0, withActions('Detail', taps));
+        expect(await dropsOf(tester, fake, [tap(1, 2, 'trash')]), [
+          '$dropped (no onPressed): tab=0 page=1 index=2 sfSymbol=trash',
+        ]);
+        expect(taps, isEmpty);
+      });
+    });
   });
 }
 

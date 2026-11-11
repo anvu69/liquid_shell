@@ -75,6 +75,17 @@ void main() {
     expect(sim.callsWith('test-without-building'), hasLength(1));
   });
 
+  /// The app logs written so far (`<time>-<label>-app.log`, VK-1046).
+  List<File> appLogs() {
+    final root = Directory(sim.diagDir);
+    if (!root.existsSync()) return const [];
+    return root
+        .listSync()
+        .whereType<File>()
+        .where((f) => f.path.endsWith('-app.log'))
+        .toList();
+  }
+
   test('a red suite prints the result summary and keeps its status', () {
     final r = run(env: {'FAKE_TEST': 'fail'});
     expect(r.exitCode, 65);
@@ -82,10 +93,40 @@ void main() {
     expect(sim.dumps, isEmpty, reason: 'a failure is not a stall');
   });
 
+  test("a red suite saves the app's liquid_shell lines of the whole suite", () {
+    final r = run(env: {'FAKE_TEST': 'fail'});
+    expect(r.exitCode, 65, reason: outputOf(r));
+    expect(appLogs().single.path, endsWith('-ios-ui-app.log'));
+    expect(
+      appLogs().single.readAsStringSync(),
+      contains('liquid_shell: native page action tap dropped'),
+    );
+    sim.expectInOrder(['test-without-building', 'log show', 'xcresulttool']);
+    final last = RegExp(
+      r'--last (\d+)s',
+    ).firstMatch(sim.callsWith('log show').single);
+    expect(last, isNotNull);
+    expect(int.parse(last!.group(1)!), greaterThanOrEqualTo(60));
+  });
+
+  test("a failed read of the app's log keeps the suite's status", () {
+    final r = run(env: {'FAKE_TEST': 'fail', 'FAKE_LOG_SHOW': 'fail'});
+    expect(r.exitCode, 65, reason: outputOf(r));
+    expect(outputOf(r), contains('FAKE SUMMARY'));
+  });
+
   test('a stalled suite is diagnosed before the stop and exits 124', () {
     final r = run(suite: '2', env: {'FAKE_TEST': 'stall'});
     expect(r.exitCode, 124, reason: outputOf(r));
     expect(sim.dumps.single.path, endsWith('-ios-ui_stall'));
+    expect(appLogs(), hasLength(1), reason: 'a stall is a red suite too');
+  });
+
+  test('a green suite saves no app log', () {
+    final r = run();
+    expect(r.exitCode, 0, reason: outputOf(r));
+    expect(appLogs(), isEmpty);
+    expect(sim.callsWith('eventMessage CONTAINS "liquid_shell"'), isEmpty);
   });
 
   test('a green run that selected no test is red', () {

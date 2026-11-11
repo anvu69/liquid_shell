@@ -151,7 +151,14 @@ final class ShellNavController: UINavigationController {
     // still shows it on top (spec §5.3 rule 4); native changes nothing.
     for (index, (host, page)) in zip(hosts, wanted).enumerated() {
       host.setActions(page.actions) { [weak host] action in
-        guard let host, host.actions.indices.contains(action) else { return }
+        guard let host, host.actions.indices.contains(action) else {
+          #if DEBUG
+            NSLog(
+              "[liquid_shell] native page action tap dropped (no host or bad index): "
+                + "tab=%ld page=%ld index=%ld", tabIndex, index, action)
+          #endif
+          return
+        }
         events.onPageActionTapped(
           tab: Int64(tabIndex), page: Int64(index), index: Int64(action),
           sfSymbol: host.actions[action].sfSymbol
@@ -267,7 +274,23 @@ final class PageHostController: UIViewController {
   /// A tap on action [index] (reading order), from its button or from
   /// `debugTap`: an enabled action is proposed to Dart; nothing changes here.
   func tapAction(at index: Int) {
-    guard actions.indices.contains(index), actions[index].enabled else { return }
+    // A dropped tap says why in debug builds (VK-1046), as Dart's guards do.
+    guard actions.indices.contains(index) else {
+      #if DEBUG
+        NSLog(
+          "[liquid_shell] native page action tap dropped (bad index): index=%ld actions=%ld",
+          index, actions.count)
+      #endif
+      return
+    }
+    guard actions[index].enabled else {
+      #if DEBUG
+        NSLog(
+          "[liquid_shell] native page action tap dropped (disabled): index=%ld sfSymbol=%@",
+          index, actions[index].sfSymbol)
+      #endif
+      return
+    }
     onActionTap?(index)
   }
 
