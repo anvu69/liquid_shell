@@ -92,7 +92,6 @@ number_or_default() {
 }
 warmup_timeout=$(number_or_default IOS_WARMUP_TIMEOUT "$warmup_timeout" 180)
 ready_timeout=$(number_or_default IOS_WARMUP_READY_TIMEOUT "$ready_timeout" 30)
-applog_bytes=$(number_or_default IOS_APPLOG_BYTES "${IOS_APPLOG_BYTES:-2000000}" 2000000)
 last_dump=
 diag_root=${IOS_DIAG_DIR:-$example/build/ios-diagnostics}
 # The line flutter_tools waits for after `simctl launch` (simulators.dart),
@@ -170,17 +169,22 @@ diagnose() { # <udid> <label> [window]
 }
 
 applog() { # <udid> <label> <seconds>
-  local udid=$1 label=$2 secs file
+  local udid=$1 label=$2 secs file full bytes
   secs=$(number_or_default "applog SECONDS" "$3" 3600)
+  bytes=$(number_or_default IOS_APPLOG_BYTES "${IOS_APPLOG_BYTES:-2000000}" 2000000)
+  [ "$bytes" -gt 0 ] || bytes=2000000
   mkdir -p "$diag_root"
   file="$diag_root/$(date -u +%Y%m%dT%H%M%SZ)-${label//[^A-Za-z0-9._-]/_}-app.log"
   # Into a file, never a pipe: a process left holding the read's output
   # would hold a reader at the pipe's end past the cap (as in diagnose).
+  # The untrimmed read stays outside the uploaded folder, so a cancelled
+  # job never uploads it.
+  full=$(mktemp "${TMPDIR:-/tmp}/ios_sim_applog.XXXXXX") || full="$file.full"
   cap 120 xcrun simctl spawn "$udid" log show --last "${secs}s" --style compact \
-    --predicate "$app_predicate" > "$file.full" 2>&1 \
-    || echo "ios_sim: log show failed (status $?)" >> "$file.full"
-  tail -c "$applog_bytes" "$file.full" > "$file"
-  rm -f "$file.full"
+    --predicate "$app_predicate" > "$full" 2>&1 \
+    || echo "ios_sim: log show failed (status $?)" >> "$full"
+  tail -c "$bytes" "$full" > "$file"
+  rm -f "$full"
   note "app log in $file"
 }
 

@@ -639,12 +639,14 @@ class _LiquidShellState extends State<LiquidShell>
   void _onNativePageAction(int tab, int page, int index, String sfSymbol) {
     // A dropped tap says which check dropped it, every time, in debug
     // builds only (VK-1046): a flaky native tap is otherwise unreadable.
-    void dropped(String check, [String state = '']) {
+    // [state] is a closure so release builds never build its text.
+    void dropped(String check, [String Function()? state]) {
       if (kDebugMode) {
+        final more = state?.call() ?? '';
         debugPrint(
           'liquid_shell: native page action tap dropped ($check): '
           'tab=$tab page=$page index=$index sfSymbol=$sfSymbol'
-          '${state.isEmpty ? '' : ' $state'}',
+          '${more.isEmpty ? '' : ' $more'}',
         );
       }
     }
@@ -660,17 +662,17 @@ class _LiquidShellState extends State<LiquidShell>
       widget.destinations.length,
     );
     if (tab != selected) {
-      return dropped('tab not selected', 'selected=$selected');
+      return dropped('tab not selected', () => 'selected=$selected');
     }
-    if (!_routeCurrent) return dropped('shell route not current', cover());
-    if (_covered) return dropped('shell covered', cover());
+    if (!_routeCurrent) return dropped('shell route not current', cover);
+    if (_covered) return dropped('shell covered', cover);
     final stack = _stackRecords[tab];
     final standIn = _standInRoots.contains(tab);
     final target = page - (standIn ? 1 : 0);
     if (stack == null || stack.isEmpty || target != stack.length - 1) {
       return dropped(
         'not the top page',
-        'stack=${stack?.length} target=$target standIn=$standIn',
+        () => 'stack=${stack?.length} target=$target standIn=$standIn',
       );
     }
     final record = stack.last;
@@ -681,16 +683,16 @@ class _LiquidShellState extends State<LiquidShell>
     if (!(route?.isCurrent ?? false)) {
       return dropped(
         'page route not current',
-        'route=${route == null ? 'null' : 'not current'}',
+        () => 'route=${route == null ? 'null' : 'not current'}',
       );
     }
     final actions = record.entry.actions;
     if (index >= actions.length) {
-      return dropped('no action at index', 'actions=${actions.length}');
+      return dropped('no action at index', () => 'actions=${actions.length}');
     }
     final action = actions[index];
     if (action.sfSymbol != sfSymbol) {
-      return dropped('symbol differs', 'have=${action.sfSymbol}');
+      return dropped('symbol differs', () => 'have=${action.sfSymbol}');
     }
     final onPressed = action.onPressed;
     if (onPressed == null) return dropped('no onPressed');
