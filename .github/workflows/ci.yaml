@@ -15,8 +15,12 @@ concurrency:
   group: ci-${{ github.event_name == 'workflow_dispatch' && format('dispatch-{0}', github.run_id) || github.ref }}
   cancel-in-progress: true
 
-# Flutter 3.44.x is the supported floor and blocks merges. Latest stable runs
-# as an early warning and never blocks (continue-on-error).
+# Two Flutter versions block merges. 3.44.x is the supported floor (the
+# packages' `flutter: ">=3.44.0"`): `checks` runs analyze and the unit tests
+# on it. 3.47.9 is the reference toolchain (`.fvmrc`, VK-1032): the goldens
+# and every build and integration job run on it, pinned exactly so that a new
+# release cannot move the golden reference. Latest stable runs as an early
+# warning and never blocks (continue-on-error).
 jobs:
   checks:
     name: checks (${{ matrix.flutter }})
@@ -116,7 +120,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.44.x
+          flutter-version: 3.47.9
           cache: true
       - run: make get
       - run: make android-unit
@@ -138,7 +142,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.44.x
+          flutter-version: 3.47.9
           cache: true
       - run: make get
       - uses: reactivecircus/android-emulator-runner@v2
@@ -171,7 +175,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.44.x
+          flutter-version: 3.47.9
           cache: true
       - run: make get
       - run: tool/integration_ios.sh
@@ -207,7 +211,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.44.x
+          flutter-version: 3.47.9
           cache: true
       - run: make get
       - name: XCTest of liquid_shell_ios on the newest ${{ matrix.device }} simulator
@@ -260,7 +264,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.44.x
+          flutter-version: 3.47.9
           cache: true
       - run: make get
       - name: XCUITest on the newest ${{ matrix.device }} simulator
@@ -307,7 +311,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.44.x
+          flutter-version: 3.47.9
           cache: true
       - name: iPhone 17 on iOS 26
         id: sim
@@ -371,7 +375,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.44.x
+          flutter-version: 3.47.9
           cache: true
       - name: The newest ${{ matrix.device }} simulator on ${{ matrix.runtime }}
         id: sim
@@ -441,7 +445,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - flutter: 3.44.x
+          # The golden reference (VK-1032). No 3.44.x leg: the 3.44 engine
+          # draws the dark liquid glass differently from 3.47 (VK-700), so
+          # its liquid goldens cannot match these images; `checks (3.44.x)`
+          # still guards the floor.
+          - flutter: 3.47.9
             experimental: false
           - flutter: stable
             experimental: true
@@ -456,11 +464,11 @@ jobs:
           flutter-version: ${{ matrix.flutter != 'stable' && matrix.flutter || '' }}
           cache: true
       - run: make get
-      # `make goldens` in two steps. On 3.44.x (the floor and the golden
-      # reference) both block. On stable the plain goldens and the shader
-      # probes decide the leg's colour, and the liquid goldens only inform:
-      # newer engines draw the dark glass slightly differently (VK-700),
-      # until the reference moves to a newer Flutter at 0.1.0.
+      # `make goldens` in two steps. On 3.47.9 (the golden reference) both
+      # block. On stable the plain goldens and the shader probes decide the
+      # leg's colour, and the liquid goldens only inform: a newer engine may
+      # draw the dark glass differently (as 3.47 did after 3.44, VK-700)
+      # until the reference moves again.
       - run: make goldens-plain
       - id: liquid
         run: make goldens-liquid

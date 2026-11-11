@@ -1,7 +1,7 @@
 # liquid_shell: one entry point per check. CI, the pre-commit hook and
 # contributors all call these targets, so "green" has exactly one definition.
 #
-# The SDK comes from fvm when it is installed (.fvmrc pins the local toolchain, 3.44.9),
+# The SDK comes from fvm when it is installed (.fvmrc pins the local toolchain, 3.47.9),
 # otherwise from the flutter on PATH (CI). Override with FLUTTER=... DART=...
 
 FVM := $(shell command -v fvm 2>/dev/null)
@@ -49,7 +49,7 @@ test: ## Unit and widget tests in every package and the example (no goldens)
 	done
 	$(DART) test tool/test
 
-test-impeller: ## Shader tests under Impeller (macOS + Flutter 3.44.x only)
+test-impeller: ## Shader tests under Impeller (macOS + the reference Flutter, 3.47.9)
 	@if [ "$$(uname)" != Darwin ]; then echo "▸ test-impeller runs on macOS only"; exit 0; fi
 	cd liquid_shell && $(FLUTTER) test --enable-impeller --tags impeller
 
@@ -64,7 +64,7 @@ coverage: ## Tests with coverage; fails below COVERAGE_MIN, with no tests, with 
 	  $(DART) run tool/check_coverage.dart $$p/coverage/lcov.info $(COVERAGE_MIN); \
 	done
 
-goldens: goldens-plain goldens-liquid ## Golden tests (reference toolchain: macOS + Flutter 3.44.x); liquid ones under Impeller
+goldens: goldens-plain goldens-liquid ## Golden tests (reference toolchain: macOS + Flutter 3.47.9); liquid ones under Impeller
 
 # The two halves of `goldens`. CI's latest-stable leg runs them as separate
 # steps: the plain half and the shader probes decide its colour, the liquid

@@ -2,18 +2,22 @@
 
 ## Toolchain
 
-- Flutter **3.44.9** is the local toolchain and the golden reference
-  (`.fvmrc`); the packages' floor is 3.44.0.
+- Flutter **3.47.9** is the local toolchain and the golden reference
+  (`.fvmrc`); the packages' floor is still 3.44.0.
   With [fvm](https://fvm.app) installed, `make` uses it automatically:
-  `fvm install 3.44.9`, then `make get`.
-- Without fvm, put a Flutter 3.44.x on `PATH`, or run
+  `fvm install 3.47.9`, then `make get`.
+- Without fvm, put a Flutter 3.47.9 on `PATH`, or run
   `make verify FLUTTER=/path/to/flutter DART=/path/to/dart`.
-- Goldens are only valid on macOS with Flutter 3.44.x (spec Q11).
+- Goldens are only valid on macOS with Flutter 3.47.x (spec Q11). The 3.44
+  engine draws the dark liquid glass differently (VK-700), so the liquid
+  goldens fail there by design.
+- CI guards the floor with `checks (3.44.x)` (analyze and unit tests, no
+  goldens) and runs the goldens and every build on 3.47.9; both block.
 - CI also runs the latest stable Flutter, never blocking. There the plain
   goldens and the shader probes (`make test-impeller`) must pass; the
-  liquid goldens only inform, because newer engines draw the dark glass
-  slightly differently (VK-700). At 0.1.0 the golden reference moves to a
-  newer Flutter and the images are regenerated once.
+  liquid goldens only inform, because a newer engine may draw the dark
+  glass differently again. When that happens for good, the reference moves
+  to that Flutter and the images are regenerated once.
 
 ## Commands
 
@@ -23,7 +27,7 @@
 | `make format` | Rewrite formatting in place |
 | `make verify` | format-check, analyze, provenance, tests, coverage ≥ 90 %, goldens, README snippets. **Must be green before a PR.** |
 | `make goldens-plain` / `make goldens-liquid` | The two halves of the goldens in `make verify`: plain, then the liquid tier under Impeller (CI's stable leg treats the liquid half as information only) |
-| `make goldens-update` | Regenerate goldens and `liquid_shell/doc/images`, then recompress them losslessly with `tool/compress_pngs.dart` (macOS + 3.44 only) |
+| `make goldens-update` | Regenerate goldens and `liquid_shell/doc/images`, then recompress them losslessly with `tool/compress_pngs.dart` (macOS + 3.47 only) |
 | `make android-unit` | Kotlin JVM tests of the Android plugin |
 | `make integration-ios` / `make integration-android` | Signal channel tests on a simulator / emulator |
 | `make integration-ios-native` | Native iOS 26 shell on an iPad and an iPhone simulator (both install it); saves screenshots |
