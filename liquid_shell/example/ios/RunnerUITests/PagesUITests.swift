@@ -21,6 +21,20 @@ final class PagesUITests: XCTestCase {
     XCTAssertTrue(
       app.navigationBars["Home"].buttons["Add"].waitForExistence(timeout: 10),
       "launch: Home's bar with Add")
+    // VK-1064: once settled, Home's rows sit below its bar, not under it.
+    let first = row(app, "Detail 1")
+    let bar = app.navigationBars["Home"]
+    let deadline = Date().addingTimeInterval(10)
+    var last: (row: CGRect, bar: CGRect) = (.null, .null)
+    while Date() < deadline {
+      let now = (row: first.frame, bar: bar.frame)
+      if now == last, now.row.minY >= now.bar.maxY - 0.5 { break }
+      last = now
+      Thread.sleep(forTimeInterval: 0.2)
+    }
+    XCTAssertGreaterThanOrEqual(
+      first.frame.minY, bar.frame.maxY - 0.5,
+      "launch: row.minY \(first.frame.minY) < bar.maxY \(bar.frame.maxY)")
     return app
   }
 
