@@ -139,16 +139,19 @@ final class NativeChromeHost extends ChangeNotifier {
     final config = _claims.isEmpty
         ? LiquidNativeChromeConfig.dormant
         : _claims.last._config;
-    if (config != null) _send(config, force: force);
+    if (config != null) unawaited(_send(config, force: force));
   }
 
-  void _send(LiquidNativeChromeConfig config, {required bool force}) {
+  /// The platform call's future, or null when nothing was sent.
+  Future<void>? _send(LiquidNativeChromeConfig config, {required bool force}) {
     final state = _state.value;
     // Nothing installed: nobody listens natively.
-    if (state == null || !state.installed) return;
-    if (!force && config == _sent) return;
+    if (state == null || !state.installed) return null;
+    if (!force && config == _sent) return null;
     _sent = config;
-    unawaited(LiquidShellPlatform.instance.updateNativeChrome(config));
+    final sent = LiquidShellPlatform.instance.updateNativeChrome(config);
+    unawaited(sent);
+    return sent;
   }
 
   /// Forgets every claim and stops listening. Shells still holding a claim
@@ -175,10 +178,12 @@ final class NativeChromeClaim {
 
   /// Sets this shell's config; sent when this claim owns the chrome and it
   /// changed, or always with [force] (re-sync after a refused selection).
-  void update(LiquidNativeChromeConfig config, {bool force = false}) {
-    if (_released) return;
+  /// Returns the platform call's future when it was sent: it completes once
+  /// the platform has applied the config.
+  Future<void>? update(LiquidNativeChromeConfig config, {bool force = false}) {
+    if (_released) return null;
     _config = config;
-    if (isOwner) _host._send(config, force: force);
+    return isOwner ? _host._send(config, force: force) : null;
   }
 
   /// Shows or hides the native sidebar, when this claim owns it.

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
+import 'package:liquid_shell/src/pages/page_bar.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
 import '../helpers/fake_native_platform.dart';
@@ -1120,6 +1121,190 @@ void main() {
       });
     });
   });
+
+  // VK-1064: Dart keeps its own page bar until native says it applied the
+  // engaged config (`engagedApplied`), and the first row never moves,
+  // whichever of the ack and the new top inset comes first.
+  group('VK-1064: the root bar hand-over', () {
+    const add = LiquidPageAction(
+      sfSymbol: 'plus',
+      icon: Icon(Icons.add),
+      label: 'Add',
+      onPressed: _noop,
+    );
+    const native = EdgeInsets.only(top: 116, bottom: 83);
+
+    /// Home: a LiquidPage root, with Add unless [actions] is false.
+    Widget home(int index, {bool actions = true}) => Navigator(
+      onGenerateRoute: (_) => MaterialPageRoute<void>(
+        builder: (_) => index == 0
+            ? LiquidPage(
+                title: 'Home',
+                largeTitle: false,
+                actions: actions ? const [add] : const [],
+                child: const TestPage(label: 'Home'),
+              )
+            : TestPage(label: 'Tab $index'),
+      ),
+    );
+
+    /// A pending shell (the attach not answered) whose ack the test sends.
+    Future<FakeNativePlatform> pending(
+      WidgetTester tester, {
+      bool actions = true,
+    }) async {
+      final fake = installFakeNative(state: _compact)
+        ..autoAck = false
+        ..attachGate = Completer<LiquidNativeShellState>();
+      await pumpShell(
+        tester,
+        TestShell(
+          destinations: _destinations,
+          pageBuilder: (index) => home(index, actions: actions),
+        ),
+        padding: _compactPadding,
+      );
+      return fake;
+    }
+
+    void setTop(WidgetTester tester, EdgeInsets padding) {
+      final view = FakeViewPadding(top: padding.top, bottom: padding.bottom);
+      tester.view
+        ..padding = view
+        ..viewPadding = view;
+    }
+
+    double rowY(WidgetTester tester) =>
+        tester.getTopLeft(find.byKey(const ValueKey('counter-Home'))).dy;
+
+    bool flutterBar() => find.byType(FlutterPageBar).evaluate().isNotEmpty;
+
+    bool nativePageBar(WidgetTester tester) => LiquidShellScope.of(
+      tester.element(find.byKey(const ValueKey('counter-Home'))),
+    ).nativePageBar;
+
+    /// The invariant, checked after every pump: Flutter's bar ⇔ not handed
+    /// over, never a Flutter tab bar, and the first row where it was.
+    void check(
+      WidgetTester tester, {
+      required bool handedOver,
+      required double y,
+      String? when,
+    }) {
+      expect(flutterBar(), !handedOver, reason: '$when: Flutter bar');
+      expect(nativePageBar(tester), handedOver, reason: '$when: native bar');
+      expect(find.byType(LiquidTabBar), findsNothing, reason: '$when');
+      expect(rowY(tester), y, reason: '$when: the first row stays');
+    }
+
+    testWidgets('metrics first: the bar stays put until the ack', (
+      tester,
+    ) async {
+      final fake = await pending(tester);
+      final y = rowY(tester);
+      check(tester, handedOver: false, y: y, when: 'pending');
+      fake.attachGate!.complete(_compact);
+      await tester.pump();
+      check(tester, handedOver: false, y: y, when: 'installed, not acked');
+      await tester.pump();
+      check(tester, handedOver: false, y: y, when: 'config sent');
+      final first = fake.configs.firstWhere((config) => config.engaged);
+      expect(first.tabs[0].pages.single.title, 'Home');
+      expect(first.tabs[0].pages.single.actions, hasLength(1));
+      setTop(tester, native);
+      await tester.pump();
+      check(tester, handedOver: false, y: y, when: 'metrics before the ack');
+      fake.ack();
+      await tester.pump();
+      check(tester, handedOver: true, y: y, when: 'acked');
+      await tester.pump(const Duration(milliseconds: 300));
+      check(tester, handedOver: true, y: y, when: 'later');
+    });
+
+    testWidgets('ack first: the content stays below the bar', (tester) async {
+      final fake = await pending(tester);
+      final y = rowY(tester);
+      fake.attachGate!.complete(_compact);
+      await tester.pump();
+      await tester.pump();
+      check(tester, handedOver: false, y: y, when: 'config sent');
+      fake.ack();
+      await tester.pump();
+      check(tester, handedOver: true, y: y, when: 'acked, old top');
+      await tester.pump();
+      check(tester, handedOver: true, y: y, when: 'acked, a frame later');
+      setTop(tester, native);
+      await tester.pump();
+      check(tester, handedOver: true, y: y, when: 'metrics after the ack');
+      await tester.pump(const Duration(milliseconds: 300));
+      check(tester, handedOver: true, y: y, when: 'later');
+    });
+
+    testWidgets('a root without actions hands over at the ack', (
+      tester,
+    ) async {
+      final fake = await pending(tester, actions: false);
+      final y = rowY(tester);
+      expect(flutterBar(), isFalse, reason: 'no title row, no actions');
+      fake.attachGate!.complete(_compact);
+      await tester.pump();
+      await tester.pump();
+      expect(nativePageBar(tester), isFalse, reason: 'not acked');
+      fake.ack();
+      await tester.pump();
+      expect(nativePageBar(tester), isTrue, reason: 'nothing to hand over');
+      expect(flutterBar(), isFalse);
+      expect(rowY(tester), y);
+    });
+
+    testWidgets('no ack: the layout engages 250 ms after native got the '
+        'config', (tester) async {
+      final fake = await pending(tester);
+      fake.attachGate!.complete(_compact);
+      await tester.pump();
+      await tester.pump();
+      expect(fake.configs.any((config) => config.engaged), isTrue);
+      await tester.pump(const Duration(milliseconds: 240));
+      expect(nativePageBar(tester), isFalse, reason: 'still waiting');
+      expect(flutterBar(), isTrue);
+      await tester.pump(const Duration(milliseconds: 20));
+      await tester.pump();
+      expect(nativePageBar(tester), isTrue, reason: 'the fallback');
+      expect(flutterBar(), isFalse);
+    });
+
+    testWidgets('no metrics after the ack: the hold ends after 250 ms', (
+      tester,
+    ) async {
+      final fake = await pending(tester);
+      final y = rowY(tester);
+      fake.attachGate!.complete(_compact);
+      await tester.pump();
+      await tester.pump();
+      fake.ack();
+      await tester.pump();
+      check(tester, handedOver: true, y: y, when: 'held');
+      await tester.pump(const Duration(milliseconds: 260));
+      await tester.pump();
+      expect(rowY(tester), y - kPageBarExtent, reason: 'the real top');
+    });
+
+    testWidgets('an ack already in the first answer engages at once', (
+      tester,
+    ) async {
+      final fake = await pending(tester);
+      fake.attachGate!.complete(
+        const LiquidNativeShellState(
+          installed: true,
+          compact: true,
+          engagedApplied: true,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(nativePageBar(tester), isTrue, reason: 'a reconnect');
+    });
+  });
 }
 
 /// A pushed page whose one action records the version it was built with;
@@ -1155,3 +1340,5 @@ class _VersionedState extends State<_Versioned> {
     );
   }
 }
+
+void _noop() {}

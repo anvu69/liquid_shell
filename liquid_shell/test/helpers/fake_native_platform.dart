@@ -63,18 +63,49 @@ class FakeNativePlatform extends FakeSignalsPlatform {
   /// Sends a native event.
   void emitNative(LiquidNativeEvent event) => _native.add(event);
 
+  /// Whether answers say native applied the engaged config
+  /// (`engagedApplied`), as soon as they are given: the default, so a test
+  /// that does not care about the hand-over (VK-1064) sees the shell engage
+  /// at once. False: answers keep the [state]'s own value until [ack].
+  bool autoAck = true;
+
+  LiquidNativeShellState _answer(LiquidNativeShellState state) =>
+      autoAck && state.installed && !state.engagedApplied
+      ? _acked(state)
+      : state;
+
+  static LiquidNativeShellState _acked(LiquidNativeShellState state) =>
+      LiquidNativeShellState(
+        installed: state.installed,
+        compact: state.compact,
+        sidebar: state.sidebar,
+        verticalBarSide: state.verticalBarSide,
+        engagedApplied: true,
+        unavailableReason: state.unavailableReason,
+      );
+
   /// Changes the state and pushes it, as UIKit does after a layout.
   void pushState(LiquidNativeShellState next) {
-    state = next;
-    _native.add(LiquidNativeStateChanged(next));
+    state = _answer(next);
+    _native.add(LiquidNativeStateChanged(state));
+  }
+
+  /// Pushes the current state with `engagedApplied: true`, as native does
+  /// once it has applied an engaged config.
+  void ack() {
+    state = _acked(state);
+    _native.add(LiquidNativeStateChanged(state));
   }
 
   @override
   bool get supportsNativeChrome => true;
 
   @override
-  Future<LiquidNativeShellState> attachNativeChrome() =>
-      attachGate?.future ?? Future.value(state);
+  Future<LiquidNativeShellState> attachNativeChrome() async {
+    final answer = _answer(await (attachGate?.future ?? Future.value(state)));
+    state = answer;
+    return answer;
+  }
 
   @override
   Future<void> updateNativeChrome(LiquidNativeChromeConfig config) async =>

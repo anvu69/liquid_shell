@@ -14,6 +14,17 @@ const double kPageBarExtent = 54;
 /// collapsing large title).
 const double kLargeTitleExtent = 52;
 
+/// How far a [FlutterPageBar] in [mode] moves its page down from the top
+/// padding: the bar row, plus the large-title row of a collapsing large
+/// title unless [hideLargeTitle]. Zero for a hidden title (no bar).
+double pageBarHeight(PageTitleMode mode, {bool hideLargeTitle = false}) =>
+    switch (mode) {
+      PageTitleMode.hidden => 0,
+      PageTitleMode.largeCollapsing when !hideLargeTitle =>
+        kPageBarExtent + kLargeTitleExtent,
+      _ => kPageBarExtent,
+    };
+
 /// Fade height of the scroll-edge effect under the bar.
 const double _kEdgeFade = 24;
 
@@ -109,7 +120,7 @@ class FlutterPageBar extends StatelessWidget {
         mode == PageTitleMode.largeCollapsing && !hideLargeTitle;
     // The page's top padding: it stays under the large row while the row
     // collapses.
-    final bottom = rowBottom + (showLargeRow ? kLargeTitleExtent : 0);
+    final bottom = barTop + pageBarHeight(mode, hideLargeTitle: hideLargeTitle);
     // Content shows below what is left of the large row.
     final fadeEnd = bottom - (showLargeRow ? collapse.largeShift : 0);
     final largeStyle = theme.textTheme.headlineLarge?.copyWith(

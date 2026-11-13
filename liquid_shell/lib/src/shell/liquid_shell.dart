@@ -21,7 +21,9 @@ import 'package:liquid_shell/src/native/native_layout.dart';
 import 'package:liquid_shell/src/native/native_minimize.dart';
 import 'package:liquid_shell/src/native/window_controls.dart';
 import 'package:liquid_shell/src/pages/liquid_page.dart';
+import 'package:liquid_shell/src/pages/page_bar.dart';
 import 'package:liquid_shell/src/pages/page_registry.dart';
+import 'package:liquid_shell/src/pages/page_title.dart';
 import 'package:liquid_shell/src/search/search.dart';
 import 'package:liquid_shell/src/search/search_chrome.dart';
 import 'package:liquid_shell/src/search/search_controller.dart';
@@ -249,6 +251,19 @@ class _LiquidShellState extends State<LiquidShell>
   double? _barBottom;
   Size? _barSize;
 
+  // --- the page bar's hand-over to native (VK-1064) ------------------------
+  // Engaged (the config) comes one turn before native shows its bar; the
+  // layout follows native's ack (`engagedApplied`), so a frame never shows
+  // neither bar and the first row never moves.
+  _Handover _handover = _Handover.none;
+  // The top padding and window size when the hand-over started.
+  double _handoverTop = 0;
+  Size _handoverSize = Size.zero;
+  // The Flutter bar's height that the holding phase keeps under the top.
+  double _handoverBar = 0;
+  Timer? _handoverTimer;
+  bool _handoverTimedOut = false;
+
   // --- the native bar's minimize (spec VK-600 §9) --------------------------
   final MinimizeScrollTracker _minimizeScroll = MinimizeScrollTracker();
   bool _minimizeActive = false;
@@ -430,6 +445,7 @@ class _LiquidShellState extends State<LiquidShell>
 
   @override
   void dispose() {
+    _handoverTimer?.cancel();
     _route?.secondaryAnimation?.removeStatusListener(_onCoverChanged);
     _claim?.release();
     _host.removeListener(_rebuild);
@@ -500,7 +516,8 @@ class _LiquidShellState extends State<LiquidShell>
       _forceNativeSend = false;
       if (mounted && latest != null) {
         final config = latest();
-        _claim?.update(config, force: force);
+        final sent = _claim?.update(config, force: force);
+        if (config.engaged) _armHandoverTimeout(sent);
         _search.afterConfigSent();
         // New native tab hosts start at offset 0: the offsets follow the
         // config that may have built them, never precede it. The top
@@ -1317,6 +1334,132 @@ class _LiquidShellState extends State<LiquidShell>
     return false;
   }
 
+  /// Whether this frame draws native's layout, and the step of
+  /// the hand-over that decides it. Native shows its bar only once it has
+  /// the engaged config, which this frame's post-frame callback sends, and
+  /// says so in `engagedApplied`:
+  ///
+  /// - waiting (engaged, not acked): the pending layout, LiquidPage's own
+  ///   bar, and the top held where it was ([_holdHandoverTop]), so native's
+  ///   new inset arriving first does not move that bar;
+  /// - holding (acked, the inset not here yet): native's layout, the top
+  ///   held below where the Flutter bar was, so the content stays put;
+  /// - done: native's layout and its real insets.
+  ///
+  /// An installed state already acked (a reconnect, a hot restart over the
+  /// shown chrome) engages at once. A new window size, a top page without
+  /// a Flutter bar, or [kNativeHandoverTimeout] ends a hold early.
+  bool _handOver({
+    required bool engaged,
+    required LiquidNativeShellState? state,
+    required MediaQueryData media,
+    required LiquidSizeClass flutterSizeClass,
+    required bool hideLargeTitle,
+  }) {
+    if (!engaged) {
+      _endHandover(_Handover.none);
+      return false;
+    }
+    final acked = state?.engagedApplied ?? false;
+    final moved =
+        media.padding.top != _handoverTop || media.size != _handoverSize;
+    switch (_handover) {
+      case _Handover.none:
+        if (acked) {
+          _handover = _Handover.done;
+          return true;
+        }
+        _handover = _Handover.waiting;
+        _handoverTop = media.padding.top;
+        _handoverSize = media.size;
+        return false;
+      case _Handover.waiting:
+        if (_handoverTimedOut) {
+          _endHandover(_Handover.done);
+          return true;
+        }
+        if (!acked) return false;
+        final bar = _flutterPageBarHeight(flutterSizeClass, hideLargeTitle);
+        if (bar == 0 || moved) {
+          _endHandover(_Handover.done);
+        } else {
+          _handover = _Handover.holding;
+          _handoverBar = bar;
+        }
+        return true;
+      case _Handover.holding:
+        if (_handoverTimedOut || moved) _endHandover(_Handover.done);
+        return true;
+      case _Handover.done:
+        return true;
+    }
+  }
+
+  void _endHandover(_Handover next) {
+    _handover = next;
+    _handoverTimer?.cancel();
+    _handoverTimer = null;
+    _handoverTimedOut = false;
+  }
+
+  /// The height of the bar LiquidPage draws for the selected tab's top
+  /// page in the pending layout; 0 without one.
+  double _flutterPageBarHeight(LiquidSizeClass sizeClass, bool hideLarge) {
+    final entry = _topRecord?.entry;
+    if (entry == null) return 0;
+    final mode = pageTitleModeFor(
+      root: !(entry.route?.impliesAppBarDismissal ?? false),
+      largeTitle: entry.largeTitle,
+      sizeClass: sizeClass,
+      hasActions: entry.actions.isNotEmpty,
+    );
+    return pageBarHeight(mode, hideLargeTitle: hideLarge);
+  }
+
+  /// The top the hand-over holds: where it was while LiquidPage still draws
+  /// its bar, then below that bar until native's inset arrives. A new
+  /// window size holds nothing.
+  MediaQueryData _holdHandoverTop(MediaQueryData media) {
+    final double top;
+    switch (_handover) {
+      case _Handover.waiting:
+        top = _handoverTop;
+      case _Handover.holding:
+        top = _handoverTop + _handoverBar;
+      case _Handover.none || _Handover.done:
+        return media;
+    }
+    if (media.size != _handoverSize) return media;
+    return media.copyWith(
+      padding: media.padding.copyWith(top: top),
+      viewPadding: media.viewPadding.copyWith(top: top),
+    );
+  }
+
+  /// Starts the hand-over's fallback once native has the engaged config
+  /// ([delivered] completed; null: it had it already), so a lost ack or a
+  /// lost inset never holds the bar or the top for good. Not from the
+  /// hand-over's start: a cold launch takes longer than the timeout to get
+  /// the config to native.
+  void _armHandoverTimeout(Future<void>? delivered) {
+    void arm() {
+      if (!mounted || _handoverTimer != null) return;
+      if (_handover != _Handover.waiting && _handover != _Handover.holding) {
+        return;
+      }
+      _handoverTimer = Timer(kNativeHandoverTimeout, () {
+        _handoverTimedOut = true;
+        _rebuild();
+      });
+    }
+
+    if (delivered == null) {
+      arm();
+    } else {
+      unawaited(delivered.then((_) => arm(), onError: (Object _) => arm()));
+    }
+  }
+
   /// A dialog, sheet or menu above the shell hides the compact native bar
   /// (it would cover the overlay's bottom), and native gives Flutter the
   /// window's own bottom safe area. The body behind the overlay keeps the
@@ -2101,14 +2244,26 @@ class _LiquidShellState extends State<LiquidShell>
       widget.destinations.length,
     );
     final searchIndex = searchIndexOf(widget.destinations);
+    // Config-engaged, not the layout: the ack must never drive the search's
+    // `native`, whose false branch writes the Flutter field.
     _search
       ..native = engaged
       ..selected = searchIndex != null && selected == searchIndex;
+    final searchActive = _search.controller?.isActive ?? false;
+    // What this frame draws: native's layout once native has applied the
+    // engaged config (VK-1064); the pending layout, with LiquidPage's own
+    // bar, until then.
+    final layout = _handOver(
+      engaged: engaged,
+      state: state,
+      media: media,
+      flutterSizeClass: sizeClassOf(presentation),
+      hideLargeTitle: searchActive && _search.selected,
+    );
     // Every tab of an engaged shell has a native navigation bar (spec
     // P3b-2 §4.5): LiquidPage draws only its child.
-    _nativePageBar = engaged;
+    _nativePageBar = layout;
     if (_nativePageBar || _scrollRecord != null) _scheduleScrollSync();
-    final searchActive = _search.controller?.isActive ?? false;
     // A dialog or sheet above an active search: the keyboard and the field
     // would sit above its barrier (spec §7.10). Once per covering.
     if (_routeCurrent) {
@@ -2184,22 +2339,25 @@ class _LiquidShellState extends State<LiquidShell>
     // it. Draw no chrome rather than flash the Flutter one (a frame or
     // two). A shell that could not use native chrome anyway (a missing
     // sfSymbol, a chromeBuilder) draws Flutter chrome from its first frame.
+    // Also while engaged but not handed over yet (VK-1064): native has the
+    // config but has not shown its bar.
     final pending =
         possible &&
         owner &&
-        state == null &&
+        (state == null || (engaged && !layout)) &&
         LiquidShellPlatform.instance.supportsNativeChrome;
     // Standby: another shell (pushed above, or nested) owns the native
     // chrome, which this one would otherwise use. Draw no chrome, so no
     // Flutter chrome shows beside the native one while the other shell's
     // route slides in or out; this one engages when it owns it again.
     final standby = possible && !owner && (state?.installed ?? false);
-    if (!engaged && !pending && !standby) return null;
+    if (!layout && !pending && !standby) return null;
 
-    final kind = engaged
+    final kind = layout
         ? nativeChromeKind(state: state!, hidden: _hideRequests > 0)
         : LiquidChromeKind.hidden;
     media = _holdBarInset(media, barShown: kind == LiquidChromeKind.bottomBar);
+    media = _holdHandoverTop(media);
     var insets = nativeChromeInsets(
       kind: kind,
       padding: media.padding,
@@ -2223,11 +2381,11 @@ class _LiquidShellState extends State<LiquidShell>
     }
     // UIKit's size class decides the bar once it has answered; before
     // that, the shell's own width.
-    final sizeClass = engaged
+    final sizeClass = layout
         ? (state!.compact ? LiquidSizeClass.compact : LiquidSizeClass.regular)
         : sizeClassOf(presentation);
     // UIKit's compact bar hides sidebar-only destinations, as P1's does.
-    if (engaged) {
+    if (layout) {
       _reportHiddenSelection(
         sizeClass == LiquidSizeClass.compact
             ? ShellPresentation.compact
@@ -2265,7 +2423,7 @@ class _LiquidShellState extends State<LiquidShell>
           chromeInsets: insets,
           sidebarVisible: state?.sidebarVisible ?? false,
           setSidebarVisible: _setSidebarVisible,
-          nativeChrome: engaged,
+          nativeChrome: layout,
           searchPhase: phase,
           nativePageBar: _nativePageBar,
           // UIKit's scope bar draws them (spec VK-550 §10.3). Native chrome
@@ -2284,7 +2442,7 @@ class _LiquidShellState extends State<LiquidShell>
           // §4.5): the compact bar is at the bottom, and a tab's bar may
           // be hidden.
           windowControls:
-              engaged &&
+              layout &&
                   ((sizeClass == LiquidSizeClass.regular &&
                           _hideRequests == 0) ||
                       _search.selected)
@@ -2362,3 +2520,12 @@ final class _PageRecord implements PageHandle {
     if (_shell.mounted) _shell._rebuild();
   }
 }
+
+/// How long after native received the engaged config the shell waits for
+/// its ack and its new top inset before it hands its page bar over anyway.
+@visibleForTesting
+const Duration kNativeHandoverTimeout = Duration(milliseconds: 250);
+
+/// The steps of the page bar's hand-over to native
+/// ([_LiquidShellState._handOver]).
+enum _Handover { none, waiting, holding, done }
