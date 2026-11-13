@@ -1273,6 +1273,93 @@ void main() {
       expect(flutterBar(), isFalse);
     });
 
+    testWidgets('the fallback waits for native to have the config, also '
+        'across a rebuild that resends nothing', (tester) async {
+      final fake = await pending(tester);
+      final delivered = fake.updateGate = Completer<void>();
+      fake.attachGate!.complete(_compact);
+      await tester.pump();
+      await tester.pump();
+      expect(fake.configs.any((config) => config.engaged), isTrue);
+      // The same config again: the host sends nothing.
+      tester.state<TestShellState>(find.byType(TestShell)).select(0);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(flutterBar(), isTrue, reason: 'native has not applied it yet');
+      expect(nativePageBar(tester), isFalse);
+      delivered.complete();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 260));
+      await tester.pump();
+      expect(nativePageBar(tester), isTrue, reason: '250 ms after delivery');
+    });
+
+    testWidgets('a composing field keeps its state, focus and composing '
+        'range through the whole hand-over', (tester) async {
+      final fake = installFakeNative(state: _compact)
+        ..autoAck = false
+        ..attachGate = Completer<LiquidNativeShellState>();
+      await pumpShell(
+        tester,
+        const TestShell(
+          destinations: _destinations,
+          initialIndex: 2,
+          pageBuilder: _page,
+        ),
+        padding: _compactPadding,
+      );
+      await _push(
+        tester,
+        2,
+        const LiquidPage(
+          title: 'Profile',
+          child: Material(child: Center(child: TextField())),
+        ),
+      );
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: 'hoa',
+          selection: TextSelection.collapsed(offset: 3),
+          composing: TextRange(start: 0, end: 3),
+        ),
+      );
+      await tester.pump();
+      final field = tester.state<EditableTextState>(find.byType(EditableText));
+      tester.testTextInput.log.clear();
+      void expectKept(String when) {
+        final now = tester.state<EditableTextState>(find.byType(EditableText));
+        expect(now, same(field), reason: when);
+        expect(now.widget.focusNode.hasFocus, isTrue, reason: when);
+        expect(
+          now.textEditingValue.composing,
+          const TextRange(start: 0, end: 3),
+          reason: when,
+        );
+        expect(now.textEditingValue.text, 'hoa', reason: when);
+        final methods = [
+          for (final call in tester.testTextInput.log) call.method,
+        ];
+        expect(methods, isNot(contains('TextInput.clearClient')));
+        expect(methods, isNot(contains('TextInput.setClient')));
+        expect(methods, isNot(contains('TextInput.setEditingState')));
+      }
+
+      fake.attachGate!.complete(_compact);
+      await tester.pump();
+      await tester.pump();
+      expectKept('waiting for the ack');
+      fake.ack();
+      await tester.pump();
+      expectKept('acked, top held');
+      setTop(tester, native);
+      await tester.pump();
+      expectKept('native top');
+      await tester.pump(const Duration(milliseconds: 300));
+      expectKept('after the fallback time');
+    });
+
     testWidgets('no metrics after the ack: the hold ends after 250 ms', (
       tester,
     ) async {

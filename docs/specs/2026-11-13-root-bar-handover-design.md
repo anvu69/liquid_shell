@@ -84,9 +84,10 @@ third-party implementation) engages 250 ms after native applied the
 config. The timer is cancelled when the hand-over ends, on disengage and
 on dispose.
 
-`NativeChromeClaim.update` returns the platform call's future when it
-sends (null when it does not send), so the shell can arm the timer; a
-config the host dedups arms it at once (native already has it).
+`NativeChromeClaim.update` returns the platform call that delivers the
+config (null when nothing listens), so the shell can arm the timer. A
+config the host dedups returns the earlier send's call: a rebuild while the
+first engaged config is still on its way must not start the clock.
 
 ### 2.3 Native: the first engage is not animated
 

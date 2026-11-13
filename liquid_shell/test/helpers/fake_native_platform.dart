@@ -107,9 +107,15 @@ class FakeNativePlatform extends FakeSignalsPlatform {
     return answer;
   }
 
+  /// When set, [updateNativeChrome] completes only once it does (native
+  /// still applying the config).
+  Completer<void>? updateGate;
+
   @override
-  Future<void> updateNativeChrome(LiquidNativeChromeConfig config) async =>
-      configs.add(config);
+  Future<void> updateNativeChrome(LiquidNativeChromeConfig config) async {
+    configs.add(config);
+    await updateGate?.future;
+  }
 
   @override
   Future<void> setNativeSidebarVisible({required bool visible}) async =>

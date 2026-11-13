@@ -41,6 +41,9 @@ final class NativeChromeHost extends ChangeNotifier {
   final List<NativeChromeClaim> _claims = [];
   StreamSubscription<LiquidNativeEvent>? _events;
   LiquidNativeChromeConfig? _sent;
+  // The platform call that sent [_sent]: a deduped send answers it, so a
+  // caller waiting for native to have the config still waits for it.
+  Future<void>? _delivered;
   bool _started = false;
 
   /// The platform's report; null until the first answer (pending).
@@ -142,16 +145,17 @@ final class NativeChromeHost extends ChangeNotifier {
     if (config != null) unawaited(_send(config, force: force));
   }
 
-  /// The platform call's future, or null when nothing was sent.
+  /// The platform call that delivers [config]: this send's, or the earlier
+  /// one's when [config] was already sent; null when nothing listens.
   Future<void>? _send(LiquidNativeChromeConfig config, {required bool force}) {
     final state = _state.value;
     // Nothing installed: nobody listens natively.
     if (state == null || !state.installed) return null;
-    if (!force && config == _sent) return null;
+    if (!force && config == _sent) return _delivered;
     _sent = config;
     final sent = LiquidShellPlatform.instance.updateNativeChrome(config);
     unawaited(sent);
-    return sent;
+    return _delivered = sent;
   }
 
   /// Forgets every claim and stops listening. Shells still holding a claim
@@ -178,8 +182,9 @@ final class NativeChromeClaim {
 
   /// Sets this shell's config; sent when this claim owns the chrome and it
   /// changed, or always with [force] (re-sync after a refused selection).
-  /// Returns the platform call's future when it was sent: it completes once
-  /// the platform has applied the config.
+  /// Returns the platform call that delivers it (this one's, or the earlier
+  /// one's when unchanged): it completes once the platform has applied the
+  /// config. Null when it is not sent.
   Future<void>? update(LiquidNativeChromeConfig config, {bool force = false}) {
     if (_released) return null;
     _config = config;

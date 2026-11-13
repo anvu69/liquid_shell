@@ -1437,7 +1437,7 @@ class _LiquidShellState extends State<LiquidShell>
   }
 
   /// Starts the hand-over's fallback once native has the engaged config
-  /// ([delivered] completed; null: it had it already), so a lost ack or a
+  /// ([delivered] completed; null: nothing to wait for), so a lost ack or a
   /// lost inset never holds the bar or the top for good. Not from the
   /// hand-over's start: a cold launch takes longer than the timeout to get
   /// the config to native.
