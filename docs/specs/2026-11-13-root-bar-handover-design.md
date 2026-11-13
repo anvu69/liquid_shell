@@ -94,7 +94,12 @@ In `apply`, an *engage* is a config with `engaged: true` while the applied
 config (`config`, read before it is replaced) was not engaged or absent.
 On an engage, `applyPages(new, animated: false)` shows the navigation bar
 at once, and `setChromeVisible` skips its 0.2 s alpha fade (the fade is on
-the whole chrome view, so the tab bar appears at once too). A show after a
+the whole chrome view, so the tab bar appears at once too). Shown without
+animation, UIKit lays the bar out only on its next pass, after `apply`'s
+state has acked (measured: the ack went out with Flutter's top still at
+62), so an engage lays the selected tab out (`layoutIfNeeded`) before the
+final `syncFlutter`: on the iPhone inline root the ack again goes out with
+the 54 pt inset already set. Dart does not rely on that order (§2.2). A show after a
 hide (a dialog's `hidden` toggling back) keeps the fade, and later page
 changes keep their animation. At launch this is the first engage; a
 Flutter → native switch is an engage too, because it also hands over from
