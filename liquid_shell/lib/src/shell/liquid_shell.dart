@@ -263,6 +263,9 @@ class _LiquidShellState extends State<LiquidShell>
   double _handoverBar = 0;
   Timer? _handoverTimer;
   bool _handoverTimedOut = false;
+  // Bumped whenever a hand-over ends: a delivery that an earlier one waited
+  // for must not arm a later one's fallback.
+  int _handoverGeneration = 0;
 
   // --- the native bar's minimize (spec VK-600 §9) --------------------------
   final MinimizeScrollTracker _minimizeScroll = MinimizeScrollTracker();
@@ -1396,6 +1399,7 @@ class _LiquidShellState extends State<LiquidShell>
   }
 
   void _endHandover(_Handover next) {
+    if (_handover != _Handover.none) _handoverGeneration++;
     _handover = next;
     _handoverTimer?.cancel();
     _handoverTimer = null;
@@ -1442,8 +1446,10 @@ class _LiquidShellState extends State<LiquidShell>
   /// hand-over's start: a cold launch takes longer than the timeout to get
   /// the config to native.
   void _armHandoverTimeout(Future<void>? delivered) {
+    final generation = _handoverGeneration;
     void arm() {
       if (!mounted || _handoverTimer != null) return;
+      if (generation != _handoverGeneration) return;
       if (_handover != _Handover.waiting && _handover != _Handover.holding) {
         return;
       }

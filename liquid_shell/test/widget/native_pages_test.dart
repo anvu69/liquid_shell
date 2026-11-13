@@ -1360,6 +1360,74 @@ void main() {
       expectKept('after the fallback time');
     });
 
+    /// Rebuilds the pending shell with [mode]: off disengages it, auto
+    /// engages it again (same state, the claim taken anew).
+    Future<void> setMode(WidgetTester tester, LiquidNativeChrome mode) async {
+      await pumpShell(
+        tester,
+        TestShell(
+          destinations: _destinations,
+          pageBuilder: home,
+          nativeChrome: mode,
+        ),
+        padding: _compactPadding,
+        settle: false,
+      );
+      await tester.pump();
+    }
+
+    testWidgets('a disengage mid-hand-over cancels its fallback; the next '
+        'engage waits again', (tester) async {
+      final fake = await pending(tester);
+      fake.attachGate!.complete(_compact);
+      await tester.pump();
+      await tester.pump();
+      expect(flutterBar(), isTrue, reason: 'waiting, the fallback armed');
+      await setMode(tester, LiquidNativeChrome.off);
+      await tester.pump(const Duration(milliseconds: 300));
+      await setMode(tester, LiquidNativeChrome.auto);
+      await tester.pump();
+      expect(flutterBar(), isTrue, reason: 'a new hand-over, waiting');
+      expect(nativePageBar(tester), isFalse);
+      await tester.pump(const Duration(milliseconds: 240));
+      expect(nativePageBar(tester), isFalse, reason: 'its own 250 ms');
+      fake.ack();
+      await tester.pump();
+      expect(nativePageBar(tester), isTrue, reason: 'acked');
+      expect(flutterBar(), isFalse);
+    });
+
+    testWidgets("an earlier engage's late delivery does not start a later "
+        "hand-over's fallback", (tester) async {
+      final fake = await pending(tester);
+      final first = fake.updateGate = Completer<void>();
+      fake.attachGate!.complete(_compact);
+      await tester.pump();
+      await tester.pump();
+      expect(fake.configs.where((c) => c.engaged), hasLength(1));
+      await setMode(tester, LiquidNativeChrome.off);
+      final second = fake.updateGate = Completer<void>();
+      await setMode(tester, LiquidNativeChrome.auto);
+      await tester.pump();
+      expect(fake.configs.where((c) => c.engaged), hasLength(2));
+      expect(flutterBar(), isTrue, reason: 'the second hand-over waits');
+      first.complete();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump();
+      expect(flutterBar(), isTrue, reason: 'the second config not delivered');
+      expect(nativePageBar(tester), isFalse);
+      second.complete();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 260));
+      await tester.pump();
+      expect(
+        nativePageBar(tester),
+        isTrue,
+        reason: '250 ms after its delivery',
+      );
+    });
+
     testWidgets('no metrics after the ack: the hold ends after 250 ms', (
       tester,
     ) async {
