@@ -209,6 +209,11 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   func apply(_ new: NativeChromeConfig) {
     loadViewIfNeeded()
     let wasVisible = chromeVisible
+    // An engage (the applied config was not engaged, VK-1064): Dart still
+    // draws its own page bar and drops it on this config's ack, so the
+    // native bar shows at once, with no slide and no fade of the chrome.
+    // A show after a hide (a dialog) keeps the fade.
+    let engaging = new.engaged && !(config?.engaged ?? false)
     // Read before `config` changes: once the new config hides the chrome,
     // `currentSidebar()` reports `.hidden` and an open overlay is missed.
     let overlayOpen = currentSidebar() == .overlay
@@ -230,7 +235,7 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       }
       showTabs(new)
       applySearch(new)
-      applyPages(new, animated: true)
+      applyPages(new, animated: !engaging)
       // A page pushed over the search root drops a kept activation: the
       // pop back must not bring the search (VK-634, `isSearchRootOnTop`).
       if !isSearchRootOnTop { searchBridge.dropPendingActivation() }
@@ -260,7 +265,13 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     // responder under it, the keyboard up with no field and no × to
     // dismiss it. The text is kept, as for any dismissal Dart asks for.
     if !chromeVisible { searchBridge.dismissKeepingText() }
-    if chromeVisible != wasVisible { setChromeVisible(chromeVisible, closingOverlay: overlayOpen) }
+    if chromeVisible != wasVisible {
+      setChromeVisible(chromeVisible, closingOverlay: overlayOpen, animated: !engaging)
+    }
+    // Shown without animation, the bar would lay out on UIKit's next pass,
+    // after the state below acks: lay the tab out now, so the ack goes out
+    // with Flutter's new top inset already set (VK-1064).
+    if engaging, chromeVisible { selectedViewController?.view.layoutIfNeeded() }
     syncFlutter()
     updateMinimizePan()
   }
@@ -532,12 +543,14 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     if sidebar.bottomBarView !== footer { sidebar.bottomBarView = footer }
   }
 
-  private func setChromeVisible(_ visible: Bool, closingOverlay overlayOpen: Bool) {
+  private func setChromeVisible(
+    _ visible: Bool, closingOverlay overlayOpen: Bool, animated: Bool
+  ) {
     // An overlay sidebar is transient: it does not come back with the chrome.
     // A tiled one keeps its state.
     if !visible, overlayOpen { sidebar.isHidden = true }
     view.isHidden = !visible
-    guard visible, !UIAccessibility.isReduceMotionEnabled else { return }
+    guard visible, animated, !UIAccessibility.isReduceMotionEnabled else { return }
     view.alpha = 0
     UIView.animate(withDuration: 0.2) { self.view.alpha = 1 }
   }
