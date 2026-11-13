@@ -4049,10 +4049,15 @@ extension NativeTabsTests {
     XCTAssertTrue(nav.isNavigationBarHidden, "no actions, no title row: hidden again")
     XCTAssertTrue(actionItems(ofTab: 0, tabs).isEmpty)
     if !hasVerticalBar(tabs) {
-      let window = try XCTUnwrap(tabs.view.window)
+      // No navigation bar: the window's top on an iPhone; under the regular
+      // top tab bar on an iPad, the page's own top.
+      let want =
+        tabs.isCompact
+        ? try XCTUnwrap(tabs.view.window).safeAreaInsets.top
+        : nav.rootHost.view.safeAreaInsets.top
       XCTAssertEqual(
-        tabs.flutter.view.safeAreaInsets.top, window.safeAreaInsets.top, accuracy: 0.5,
-        "no bar: the window's top")
+        tabs.flutter.view.safeAreaInsets.top, want, accuracy: 0.5,
+        "no bar: the top without one")
     }
   }
 
