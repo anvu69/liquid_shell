@@ -66,6 +66,7 @@ class LiquidNativeShellState {
     this.compact = false,
     this.sidebar = LiquidNativeSidebar.hidden,
     this.verticalBarSide = LiquidNativeVerticalBarSide.none,
+    this.engagedApplied = false,
     this.unavailableReason,
   });
 
@@ -92,6 +93,13 @@ class LiquidNativeShellState {
   /// bottom bar.
   final LiquidNativeVerticalBarSide verticalBarSide;
 
+  /// Whether the platform has applied an engaged config: the last config
+  /// it applied has `engaged: true`, so its chrome (and a page's native
+  /// bar) is up or comes up in this layout pass. A shell keeps drawing
+  /// its own page bar until then, so a frame never shows neither bar.
+  /// Not changed by `hidden`.
+  final bool engagedApplied;
+
   /// Set when [installed] is false.
   final LiquidNativeUnavailableReason? unavailableReason;
 
@@ -105,6 +113,7 @@ class LiquidNativeShellState {
       other.compact == compact &&
       other.sidebar == sidebar &&
       other.verticalBarSide == verticalBarSide &&
+      other.engagedApplied == engagedApplied &&
       other.unavailableReason == unavailableReason;
 
   @override
@@ -113,6 +122,7 @@ class LiquidNativeShellState {
     compact,
     sidebar,
     verticalBarSide,
+    engagedApplied,
     unavailableReason,
   );
 
@@ -121,6 +131,7 @@ class LiquidNativeShellState {
       'LiquidNativeShellState(installed: $installed, compact: $compact, '
       'sidebar: ${sidebar.name}, '
       'verticalBarSide: ${verticalBarSide.name}, '
+      'engagedApplied: $engagedApplied, '
       'unavailableReason: ${unavailableReason?.name})';
 }
 

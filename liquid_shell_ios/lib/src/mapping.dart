@@ -21,6 +21,7 @@ LiquidNativeShellState stateFromNative(
     NativeVerticalBarSide.left => LiquidNativeVerticalBarSide.left,
     NativeVerticalBarSide.right => LiquidNativeVerticalBarSide.right,
   },
+  engagedApplied: state.engagedApplied,
   unavailableReason: switch (state.unavailableReason) {
     null => null,
     NativeUnavailableReason.osTooOld => LiquidNativeUnavailableReason.osTooOld,

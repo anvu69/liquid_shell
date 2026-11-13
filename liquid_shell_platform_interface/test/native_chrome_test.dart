@@ -36,6 +36,15 @@ void main() {
       expect(b.toString(), contains('verticalBarSide: right'));
     });
 
+    test('engagedApplied defaults to false and takes part in equality', () {
+      const a = LiquidNativeShellState(installed: true);
+      const b = LiquidNativeShellState(installed: true, engagedApplied: true);
+      expect(a.engagedApplied, isFalse);
+      expect(a == b, isFalse);
+      expect(a.hashCode == b.hashCode, isFalse);
+      expect(b.toString(), contains('engagedApplied: true'));
+    });
+
     test('== compares every field', () {
       const a = LiquidNativeShellState(installed: true);
       expect(a, const LiquidNativeShellState(installed: true));

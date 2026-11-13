@@ -260,6 +260,9 @@ struct NativeShellState: Hashable, CustomStringConvertible {
   var compact: Bool
   var sidebar: NativeSidebar
   var verticalBarSide: NativeVerticalBarSide
+  /// The applied config's `engaged`: Dart hands its page bar to
+  /// the native one once this is true.
+  var engagedApplied: Bool
   var unavailableReason: NativeUnavailableReason? = nil
 
 
@@ -269,13 +272,15 @@ struct NativeShellState: Hashable, CustomStringConvertible {
     let compact = pigeonVar_list[1] as! Bool
     let sidebar = pigeonVar_list[2] as! NativeSidebar
     let verticalBarSide = pigeonVar_list[3] as! NativeVerticalBarSide
-    let unavailableReason: NativeUnavailableReason? = nilOrValue(pigeonVar_list[4])
+    let engagedApplied = pigeonVar_list[4] as! Bool
+    let unavailableReason: NativeUnavailableReason? = nilOrValue(pigeonVar_list[5])
 
     return NativeShellState(
       installed: installed,
       compact: compact,
       sidebar: sidebar,
       verticalBarSide: verticalBarSide,
+      engagedApplied: engagedApplied,
       unavailableReason: unavailableReason
     )
   }
@@ -285,6 +290,7 @@ struct NativeShellState: Hashable, CustomStringConvertible {
       compact,
       sidebar,
       verticalBarSide,
+      engagedApplied,
       unavailableReason,
     ]
   }
@@ -292,7 +298,7 @@ struct NativeShellState: Hashable, CustomStringConvertible {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return NativeShellApiPigeonInternal.deepEquals(lhs.installed, rhs.installed) && NativeShellApiPigeonInternal.deepEquals(lhs.compact, rhs.compact) && NativeShellApiPigeonInternal.deepEquals(lhs.sidebar, rhs.sidebar) && NativeShellApiPigeonInternal.deepEquals(lhs.verticalBarSide, rhs.verticalBarSide) && NativeShellApiPigeonInternal.deepEquals(lhs.unavailableReason, rhs.unavailableReason)
+    return NativeShellApiPigeonInternal.deepEquals(lhs.installed, rhs.installed) && NativeShellApiPigeonInternal.deepEquals(lhs.compact, rhs.compact) && NativeShellApiPigeonInternal.deepEquals(lhs.sidebar, rhs.sidebar) && NativeShellApiPigeonInternal.deepEquals(lhs.verticalBarSide, rhs.verticalBarSide) && NativeShellApiPigeonInternal.deepEquals(lhs.engagedApplied, rhs.engagedApplied) && NativeShellApiPigeonInternal.deepEquals(lhs.unavailableReason, rhs.unavailableReason)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -301,11 +307,12 @@ struct NativeShellState: Hashable, CustomStringConvertible {
     NativeShellApiPigeonInternal.deepHash(value: compact, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: sidebar, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: verticalBarSide, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: engagedApplied, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: unavailableReason, hasher: &hasher)
   }
 
   public var description: String {
-    return "NativeShellState(installed: \(String(describing: installed)), compact: \(String(describing: compact)), sidebar: \(String(describing: sidebar)), verticalBarSide: \(String(describing: verticalBarSide)), unavailableReason: \(String(describing: unavailableReason)))"
+    return "NativeShellState(installed: \(String(describing: installed)), compact: \(String(describing: compact)), sidebar: \(String(describing: sidebar)), verticalBarSide: \(String(describing: verticalBarSide)), engagedApplied: \(String(describing: engagedApplied)), unavailableReason: \(String(describing: unavailableReason)))"
   }
 }
 
