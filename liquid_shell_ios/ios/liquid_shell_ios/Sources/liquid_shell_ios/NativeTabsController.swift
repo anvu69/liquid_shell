@@ -71,6 +71,11 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   /// reads the window controls itself.
   var dartAttached = false
   private var lastState: NativeShellState?
+  // While `apply` runs: its own final `syncFlutter` publishes the state. A
+  // layout pass inside it (an engage's, VK-1064) would otherwise send the
+  // ack before the navigation controller has its new safe area (iPad: the
+  // top bar's inset, 150 pt for a moment, then 86 pt).
+  private var applyingConfig = false
   private var lastControls: (leading: Double, top: Double)?
   /// Reads the window controls from the Flutter view. Injectable for tests.
   var readWindowControls: (UIView?) -> NativeWindowControls = { WindowControlsReader.read($0) }
@@ -208,6 +213,8 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   /// (spec §5.5).
   func apply(_ new: NativeChromeConfig) {
     loadViewIfNeeded()
+    applyingConfig = true
+    defer { applyingConfig = false }
     let wasVisible = chromeVisible
     // An engage (the applied config was not engaged, VK-1064): Dart still
     // draws its own page bar and drops it on this config's ack, so the
@@ -269,9 +276,14 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       setChromeVisible(chromeVisible, closingOverlay: overlayOpen, animated: !engaging)
     }
     // Shown without animation, the bar would lay out on UIKit's next pass,
-    // after the state below acks: lay the tab out now, so the ack goes out
-    // with Flutter's new top inset already set (VK-1064).
-    if engaging, chromeVisible { selectedViewController?.view.layoutIfNeeded() }
+    // after the state below acks: lay the tab controller out now (on iPad
+    // its top bar and sidebar place the tab), then the tab, so the ack goes
+    // out with Flutter's new top inset already set (VK-1064).
+    if engaging, chromeVisible {
+      view.layoutIfNeeded()
+      selectedViewController?.view.layoutIfNeeded()
+    }
+    applyingConfig = false
     syncFlutter()
     updateMinimizePan()
   }
@@ -632,7 +644,7 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
   }
 
   private func publishState() {
-    guard dartAttached else { return }
+    guard dartAttached, !applyingConfig else { return }
     let state = currentState()
     guard state != lastState else { return }
     lastState = state

@@ -4098,7 +4098,6 @@ extension NativeTabsTests {
   /// slide of the bar and no fade of the chrome, which would show no bar
   /// right after Dart's is gone.
   func testTheFirstEngageShowsTheBarAtOnceAndAcksIt() throws {
-    try requirePhone()
     let tabs = try dormantFirstShell()
     XCTAssertFalse(tabs.currentState().engagedApplied, "precondition: nothing engaged")
     let nav = try XCTUnwrap(tabs.navControllers[0])
@@ -4114,8 +4113,14 @@ extension NativeTabsTests {
     XCTAssertNil(tabs.view.layer.animationKeys(), "no fade of the chrome")
     XCTAssertNil(nav.navigationBar.layer.animationKeys(), "no slide of the bar")
     settle()
-    let settled = nav.navigationBar.frame.maxY
-    XCTAssertEqual(tabs.flutter.view.safeAreaInsets.top, settled, accuracy: 0.5)
+    // iPhone: below the bar. Regular iPad: below the bar under the top tab
+    // bar, the page's own top.
+    let settled = tabs.flutter.view.safeAreaInsets.top
+    if tabs.isCompact {
+      XCTAssertEqual(settled, nav.navigationBar.frame.maxY, accuracy: 0.5)
+    } else {
+      XCTAssertEqual(settled, nav.rootHost.view.safeAreaInsets.top, accuracy: 0.5)
+    }
     XCTAssertEqual(
       try XCTUnwrap(topAtAck, "an acked state was sent"), settled, accuracy: 0.5,
       "Flutter's inset was set when the ack went out")
