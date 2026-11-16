@@ -19,6 +19,20 @@
   liquid goldens only inform, because a newer engine may draw the dark
   glass differently again. When that happens for good, the reference moves
   to that Flutter and the images are regenerated once.
+- On that stable leg `checks` runs `make analyze-stable` instead of
+  `make analyze`. It fails like `make analyze`, except for two info classes
+  that only the newer SDK reports and the 3.44 floor cannot fix, which it
+  prints and tolerates: `deprecated_member_use` of
+  `package:flutter/material.dart` / `cupertino.dart` (Flutter 3.50) and
+  `unnecessary_ignore` of `avoid_positional_boolean_parameters`
+  (`tool/check_analyze.dart`). The allowlist goes when VK-1077 and VK-1078
+  land. `make analyze` and `make verify` keep every info fatal.
+- `pana` blocks on 3.47.9, like the other blocking jobs; `pana (stable)`
+  runs the same steps on latest stable and never blocks.
+- The Pigeon generator is its own package, `tool/pigeon`, outside the pub
+  workspace (`make get` resolves both). Pigeon's analyzer range would
+  otherwise clash with the `test` version each Flutter SDK forces through
+  `flutter_test` (VK-1076).
 
 ## Commands
 
@@ -35,8 +49,9 @@
 | `make ios-unit IOS_UNIT_DEVICE=<udid>` | XCTest of `liquid_shell_ios` (example `RunnerTests`) on one simulator; CI runs it on the newest iPad and iPhone |
 | `make ios-ui IOS_UNIT_DEVICE=<udid>` | XCUITest: real taps on native dialogs (example `RunnerUITests`) on one simulator; CI runs it, non-blocking, on the newest iPad and iPhone |
 | `make ios-minimize IOS_UNIT_DEVICE=<udid>` | XCUITest: `MinimizeUITests` only (the native tab bar's minimize) on one simulator; CI runs it, blocking, on an iPhone 17 (iOS 26) |
-| `make pigeon` / `make pigeon-check` | Regenerate the native channel / fail when the generated files drift (part of `verify`) |
-| `make pana` / `make publish-check` | pub.dev scoring and publish dry-run; the four CI pana steps are blocking and need the max score on main (`webp` is installed on the runner for screenshots) |
+| `make pigeon` / `make pigeon-check` | Regenerate the native channel from `tool/pigeon/pigeons/native_shell.dart` / fail when the generated files drift (part of `verify`) |
+| `make analyze-stable` | `make analyze` for CI's latest-stable leg: the known stable-only infos are printed and tolerated, everything else fails |
+| `make pana` / `make publish-check` | pub.dev scoring and publish dry-run; the four CI pana steps are blocking on 3.47.9 and need the max score on main (`webp` is installed on the runner for screenshots); `pana (stable)` only informs |
 | `make test-impeller` | Shader tests under Impeller (macOS) |
 | `make compare-images` | Native vs Flutter liquid screenshots |
 
@@ -106,6 +121,7 @@ bug fix starts with a test that reproduces the bug.
 Runtime dependencies are Flutter, our own federated packages and
 `plugin_platform_interface` only, plus `meta` in `liquid_shell_ios`, which
 the Pigeon-generated channel imports and the Flutter SDK pins (P2 spec
-§6.1). Adding anything else needs a spec change. `pigeon` is a dev
-dependency of `liquid_shell_ios`, pinned exactly.
+§6.1). Adding anything else needs a spec change. `pigeon` is pinned
+exactly (27.3.0) in `tool/pigeon`, a package outside the workspace, not in
+`liquid_shell_ios`.
 `very_good_analysis` stays pinned to `10.3.0`.

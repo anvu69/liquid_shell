@@ -28,8 +28,9 @@ the spec in `docs/specs/`, and the plan in `docs/plans/`.
 - **Dependencies.** Flutter + our packages + `plugin_platform_interface`,
   plus `meta` in `liquid_shell_ios` (imported by the Pigeon-generated
   channel; pinned by the Flutter SDK). Nothing else at runtime.
-  `very_good_analysis` pinned to 10.3.0; `pigeon` pinned to 27.3.0 (dev).
-- **Generated channel.** Edit `liquid_shell_ios/pigeons/native_shell.dart`,
+  `very_good_analysis` pinned to 10.3.0; `pigeon` pinned to 27.3.0 in
+  `tool/pigeon` (its own package, outside the workspace).
+- **Generated channel.** Edit `tool/pigeon/pigeons/native_shell.dart`,
   run `make pigeon`, commit the source and both generated files.
 - **Never loosen `analysis_options.yaml`** to get code through. Fix the code.
 - **Goldens** are regenerated only with `make goldens-update` on macOS +
