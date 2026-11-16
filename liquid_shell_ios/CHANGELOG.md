@@ -1,3 +1,10 @@
+## 0.1.0-dev.13
+
+- The native state reports `engagedApplied`, the applied config's
+  `engaged` (a `hidden` toggle does not change it); the channel gains the
+  field. On an engage the native bar and chrome show at once, without the
+  slide or the fade.
+
 ## 0.1.0-dev.12
 
 - The native state reports the screen side of the iPhone Duo's vertical bar

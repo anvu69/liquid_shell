@@ -705,10 +705,16 @@ final class RecordingEvents: NativeShellFlutterApiProtocol {
     completion(.success(()))
   }
 
+  var states: [NativeShellState] = []
+  /// Runs as each state is sent: what the shell had set by then.
+  var onState: ((NativeShellState) -> Void)?
+
   func onStateChanged(
     state stateArg: NativeShellState, completion: @escaping (Result<Void, PigeonError>) -> Void
   ) {
     sent.append("state")
+    states.append(stateArg)
+    onState?(stateArg)
     completion(.success(()))
   }
 
@@ -4034,10 +4040,116 @@ extension NativeTabsTests {
     XCTAssertFalse(nav.isNavigationBarHidden, "a root with actions shows its bar")
     XCTAssertEqual(nav.rootHost.navigationItem.largeTitleDisplayMode, .never, "inline")
     XCTAssertEqual(actionItems(ofTab: 0, tabs).map(\.accessibilityIdentifier), ["plus"])
+    // VK-1064: Flutter's content starts below the bar.
+    XCTAssertEqual(
+      tabs.flutter.view.safeAreaInsets.top, nav.navigationBar.frame.maxY, accuracy: 0.5,
+      "Flutter's top is the bar's bottom")
     tabs.apply(pagesConfig([NativePage(title: "Home", largeTitle: false)]))
     settle()
     XCTAssertTrue(nav.isNavigationBarHidden, "no actions, no title row: hidden again")
     XCTAssertTrue(actionItems(ofTab: 0, tabs).isEmpty)
+    if !hasVerticalBar(tabs) {
+      // No navigation bar: the window's top on an iPhone; under the regular
+      // top tab bar on an iPad, the page's own top.
+      let want =
+        tabs.isCompact
+        ? try XCTUnwrap(tabs.view.window).safeAreaInsets.top
+        : nav.rootHost.view.safeAreaInsets.top
+      XCTAssertEqual(
+        tabs.flutter.view.safeAreaInsets.top, want, accuracy: 0.5,
+        "no bar: the top without one")
+    }
+  }
+
+  /// VK-1064, the late bar: a root first without actions (no bar), then
+  /// with Add. Flutter's top follows the bar that came later.
+  func testARootBarThatComesLaterStillSetsFlutterBelowIt() throws {
+    let tabs = try installedShell()
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    let plus = NativePageAction(sfSymbol: "plus", label: "Add", enabled: true)
+    tabs.apply(pagesConfig([NativePage(title: "Home", largeTitle: false)]))
+    settle()
+    XCTAssertTrue(nav.isNavigationBarHidden, "precondition: no bar")
+    tabs.apply(pagesConfig([NativePage(title: "Home", largeTitle: false, actions: [plus])]))
+    settle()
+    XCTAssertFalse(nav.isNavigationBarHidden, "the bar came")
+    XCTAssertEqual(
+      tabs.flutter.view.safeAreaInsets.top, nav.navigationBar.frame.maxY, accuracy: 0.5,
+      "Flutter's top is the late bar's bottom")
+  }
+
+  /// VK-1064: Dart's pending-era config (not engaged) applied first, as at
+  /// launch, then the first engaged one with Home's Add.
+  private func dormantFirstShell() throws -> NativeTabsController {
+    let flutter = UIViewController()
+    let tabs = NativeTabsController(flutter: flutter, events: events)
+    let window = try portraitWindow(root: UIViewController())
+    let container = ShellContainerController(tabs: tabs, flutter: flutter)
+    window.rootViewController = container
+    self.window = window
+    tabs.dartAttached = true
+    tabs.apply(config(engaged: false))
+    settle()
+    return tabs
+  }
+
+  /// VK-1064: the first engage acks in its state (Dart then drops its own
+  /// bar), with Flutter's inset already set, and shows the bar at once: no
+  /// slide of the bar and no fade of the chrome, which would show no bar
+  /// right after Dart's is gone.
+  func testTheFirstEngageShowsTheBarAtOnceAndAcksIt() throws {
+    let tabs = try dormantFirstShell()
+    XCTAssertFalse(tabs.currentState().engagedApplied, "precondition: nothing engaged")
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    var topAtAck: CGFloat?
+    events.onState = { [weak tabs] state in
+      if state.engagedApplied, topAtAck == nil { topAtAck = tabs?.flutter.view.safeAreaInsets.top }
+    }
+    let plus = NativePageAction(sfSymbol: "plus", label: "Add", enabled: true)
+    tabs.apply(pagesConfig([NativePage(title: "Home", largeTitle: false, actions: [plus])]))
+    XCTAssertTrue(tabs.currentState().engagedApplied, "the applied config is engaged")
+    XCTAssertEqual(events.states.last?.engagedApplied, true, "the ack is sent in apply")
+    XCTAssertFalse(nav.isNavigationBarHidden, "the bar is up")
+    XCTAssertNil(tabs.view.layer.animationKeys(), "no fade of the chrome")
+    XCTAssertNil(nav.navigationBar.layer.animationKeys(), "no slide of the bar")
+    settle()
+    // iPhone: below the bar. Regular iPad: below the bar under the top tab
+    // bar, the page's own top.
+    let settled = tabs.flutter.view.safeAreaInsets.top
+    if tabs.isCompact {
+      XCTAssertEqual(settled, nav.navigationBar.frame.maxY, accuracy: 0.5)
+    } else {
+      XCTAssertEqual(settled, nav.rootHost.view.safeAreaInsets.top, accuracy: 0.5)
+    }
+    XCTAssertEqual(
+      try XCTUnwrap(topAtAck, "an acked state was sent"), settled, accuracy: 0.5,
+      "Flutter's inset was set when the ack went out")
+  }
+
+  /// VK-1064: `engagedApplied` follows the applied config's `engaged`, not
+  /// `hidden`: a dialog's hide and show send no state (Dart would resend its
+  /// config for each). A show after a hide keeps the chrome's fade.
+  func testHiddenTogglesKeepEngagedAppliedAndSendNoState() throws {
+    try requirePhone()
+    let tabs = try installedShell()
+    tabs.dartAttached = true
+    tabs.apply(config())
+    settle()
+    XCTAssertTrue(tabs.currentState().engagedApplied)
+    let sent = events.states.count
+    tabs.apply(config(hidden: true))
+    settle()
+    XCTAssertTrue(tabs.currentState().engagedApplied, "hidden: still the engaged config")
+    tabs.apply(config())
+    if !UIAccessibility.isReduceMotionEnabled {
+      XCTAssertNotNil(tabs.view.layer.animationKeys(), "a show after a hide fades")
+    }
+    settle()
+    XCTAssertTrue(tabs.currentState().engagedApplied)
+    XCTAssertEqual(events.states.count, sent, "no state for a hidden toggle")
+    tabs.apply(config(engaged: false))
+    settle()
+    XCTAssertFalse(tabs.currentState().engagedApplied, "dormant: not engaged")
   }
 
   /// The B2 lesson: a size-class change re-applies the pages without a

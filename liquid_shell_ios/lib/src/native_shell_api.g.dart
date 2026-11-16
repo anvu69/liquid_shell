@@ -183,6 +183,7 @@ class NativeShellState {
     required this.compact,
     required this.sidebar,
     required this.verticalBarSide,
+    required this.engagedApplied,
     this.unavailableReason,
   });
 
@@ -194,6 +195,10 @@ class NativeShellState {
 
   NativeVerticalBarSide verticalBarSide;
 
+  /// The applied config's `engaged`: Dart hands its page bar to
+  /// the native one once this is true.
+  bool engagedApplied;
+
   NativeUnavailableReason? unavailableReason;
 
   List<Object?> _toList() {
@@ -202,6 +207,7 @@ class NativeShellState {
       compact,
       sidebar,
       verticalBarSide,
+      engagedApplied,
       unavailableReason,
     ];
   }
@@ -217,7 +223,8 @@ class NativeShellState {
       compact: result[1]! as bool,
       sidebar: result[2]! as NativeSidebar,
       verticalBarSide: result[3]! as NativeVerticalBarSide,
-      unavailableReason: result[4] as NativeUnavailableReason?,
+      engagedApplied: result[4]! as bool,
+      unavailableReason: result[5] as NativeUnavailableReason?,
     );
   }
 
@@ -234,6 +241,7 @@ class NativeShellState {
         _deepEquals(compact, other.compact) &&
         _deepEquals(sidebar, other.sidebar) &&
         _deepEquals(verticalBarSide, other.verticalBarSide) &&
+        _deepEquals(engagedApplied, other.engagedApplied) &&
         _deepEquals(unavailableReason, other.unavailableReason);
   }
 
@@ -243,7 +251,7 @@ class NativeShellState {
 
   @override
   String toString() {
-    return 'NativeShellState(installed: $installed, compact: $compact, sidebar: $sidebar, verticalBarSide: $verticalBarSide, unavailableReason: $unavailableReason)';
+    return 'NativeShellState(installed: $installed, compact: $compact, sidebar: $sidebar, verticalBarSide: $verticalBarSide, engagedApplied: $engagedApplied, unavailableReason: $unavailableReason)';
   }
 }
 

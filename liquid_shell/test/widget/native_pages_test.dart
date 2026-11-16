@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
+import 'package:liquid_shell/src/pages/page_bar.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
 import '../helpers/fake_native_platform.dart';
@@ -1120,6 +1121,345 @@ void main() {
       });
     });
   });
+
+  // VK-1064: Dart keeps its own page bar until native says it applied the
+  // engaged config (`engagedApplied`), and the first row never moves,
+  // whichever of the ack and the new top inset comes first.
+  group('VK-1064: the root bar hand-over', () {
+    const add = LiquidPageAction(
+      sfSymbol: 'plus',
+      icon: Icon(Icons.add),
+      label: 'Add',
+      onPressed: _noop,
+    );
+    const native = EdgeInsets.only(top: 116, bottom: 83);
+
+    /// Home: a LiquidPage root, with Add unless [actions] is false.
+    Widget home(int index, {bool actions = true}) => Navigator(
+      onGenerateRoute: (_) => MaterialPageRoute<void>(
+        builder: (_) => index == 0
+            ? LiquidPage(
+                title: 'Home',
+                largeTitle: false,
+                actions: actions ? const [add] : const [],
+                child: const TestPage(label: 'Home'),
+              )
+            : TestPage(label: 'Tab $index'),
+      ),
+    );
+
+    /// A pending shell (the attach not answered) whose ack the test sends.
+    Future<FakeNativePlatform> pending(
+      WidgetTester tester, {
+      bool actions = true,
+    }) async {
+      final fake = installFakeNative(state: _compact)
+        ..autoAck = false
+        ..attachGate = Completer<LiquidNativeShellState>();
+      await pumpShell(
+        tester,
+        TestShell(
+          destinations: _destinations,
+          pageBuilder: (index) => home(index, actions: actions),
+        ),
+        padding: _compactPadding,
+      );
+      return fake;
+    }
+
+    void setTop(WidgetTester tester, EdgeInsets padding) {
+      final view = FakeViewPadding(top: padding.top, bottom: padding.bottom);
+      tester.view
+        ..padding = view
+        ..viewPadding = view;
+    }
+
+    double rowY(WidgetTester tester) =>
+        tester.getTopLeft(find.byKey(const ValueKey('counter-Home'))).dy;
+
+    bool flutterBar() => find.byType(FlutterPageBar).evaluate().isNotEmpty;
+
+    bool nativePageBar(WidgetTester tester) => LiquidShellScope.of(
+      tester.element(find.byKey(const ValueKey('counter-Home'))),
+    ).nativePageBar;
+
+    /// The invariant, checked after every pump: Flutter's bar ⇔ not handed
+    /// over, never a Flutter tab bar, and the first row where it was.
+    void check(
+      WidgetTester tester, {
+      required bool handedOver,
+      required double y,
+      String? when,
+    }) {
+      expect(flutterBar(), !handedOver, reason: '$when: Flutter bar');
+      expect(nativePageBar(tester), handedOver, reason: '$when: native bar');
+      expect(find.byType(LiquidTabBar), findsNothing, reason: '$when');
+      expect(rowY(tester), y, reason: '$when: the first row stays');
+    }
+
+    testWidgets('metrics first: the bar stays put until the ack', (
+      tester,
+    ) async {
+      final fake = await pending(tester);
+      final y = rowY(tester);
+      check(tester, handedOver: false, y: y, when: 'pending');
+      fake.attachGate!.complete(_compact);
+      await tester.pump();
+      check(tester, handedOver: false, y: y, when: 'installed, not acked');
+      await tester.pump();
+      check(tester, handedOver: false, y: y, when: 'config sent');
+      final first = fake.configs.firstWhere((config) => config.engaged);
+      expect(first.tabs[0].pages.single.title, 'Home');
+      expect(first.tabs[0].pages.single.actions, hasLength(1));
+      setTop(tester, native);
+      await tester.pump();
+      check(tester, handedOver: false, y: y, when: 'metrics before the ack');
+      fake.ack();
+      await tester.pump();
+      check(tester, handedOver: true, y: y, when: 'acked');
+      await tester.pump(const Duration(milliseconds: 300));
+      check(tester, handedOver: true, y: y, when: 'later');
+    });
+
+    testWidgets('ack first: the content stays below the bar', (tester) async {
+      final fake = await pending(tester);
+      final y = rowY(tester);
+      fake.attachGate!.complete(_compact);
+      await tester.pump();
+      await tester.pump();
+      check(tester, handedOver: false, y: y, when: 'config sent');
+      fake.ack();
+      await tester.pump();
+      check(tester, handedOver: true, y: y, when: 'acked, old top');
+      await tester.pump();
+      check(tester, handedOver: true, y: y, when: 'acked, a frame later');
+      setTop(tester, native);
+      await tester.pump();
+      check(tester, handedOver: true, y: y, when: 'metrics after the ack');
+      await tester.pump(const Duration(milliseconds: 300));
+      check(tester, handedOver: true, y: y, when: 'later');
+    });
+
+    testWidgets('a root without actions hands over at the ack', (
+      tester,
+    ) async {
+      final fake = await pending(tester, actions: false);
+      final y = rowY(tester);
+      expect(flutterBar(), isFalse, reason: 'no title row, no actions');
+      fake.attachGate!.complete(_compact);
+      await tester.pump();
+      await tester.pump();
+      expect(nativePageBar(tester), isFalse, reason: 'not acked');
+      fake.ack();
+      await tester.pump();
+      expect(nativePageBar(tester), isTrue, reason: 'nothing to hand over');
+      expect(flutterBar(), isFalse);
+      expect(rowY(tester), y);
+    });
+
+    testWidgets('no ack: the layout engages 250 ms after native got the '
+        'config', (tester) async {
+      final fake = await pending(tester);
+      fake.attachGate!.complete(_compact);
+      await tester.pump();
+      await tester.pump();
+      expect(fake.configs.any((config) => config.engaged), isTrue);
+      await tester.pump(const Duration(milliseconds: 240));
+      expect(nativePageBar(tester), isFalse, reason: 'still waiting');
+      expect(flutterBar(), isTrue);
+      await tester.pump(const Duration(milliseconds: 20));
+      await tester.pump();
+      expect(nativePageBar(tester), isTrue, reason: 'the fallback');
+      expect(flutterBar(), isFalse);
+    });
+
+    testWidgets('the fallback waits for native to have the config, also '
+        'across a rebuild that resends nothing', (tester) async {
+      final fake = await pending(tester);
+      final delivered = fake.updateGate = Completer<void>();
+      fake.attachGate!.complete(_compact);
+      await tester.pump();
+      await tester.pump();
+      expect(fake.configs.any((config) => config.engaged), isTrue);
+      // The same config again: the host sends nothing.
+      tester.state<TestShellState>(find.byType(TestShell)).select(0);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(flutterBar(), isTrue, reason: 'native has not applied it yet');
+      expect(nativePageBar(tester), isFalse);
+      delivered.complete();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 260));
+      await tester.pump();
+      expect(nativePageBar(tester), isTrue, reason: '250 ms after delivery');
+    });
+
+    testWidgets('a composing field keeps its state, focus and composing '
+        'range through the whole hand-over', (tester) async {
+      final fake = installFakeNative(state: _compact)
+        ..autoAck = false
+        ..attachGate = Completer<LiquidNativeShellState>();
+      await pumpShell(
+        tester,
+        const TestShell(
+          destinations: _destinations,
+          initialIndex: 2,
+          pageBuilder: _page,
+        ),
+        padding: _compactPadding,
+      );
+      await _push(
+        tester,
+        2,
+        const LiquidPage(
+          title: 'Profile',
+          child: Material(child: Center(child: TextField())),
+        ),
+      );
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: 'hoa',
+          selection: TextSelection.collapsed(offset: 3),
+          composing: TextRange(start: 0, end: 3),
+        ),
+      );
+      await tester.pump();
+      final field = tester.state<EditableTextState>(find.byType(EditableText));
+      tester.testTextInput.log.clear();
+      void expectKept(String when) {
+        final now = tester.state<EditableTextState>(find.byType(EditableText));
+        expect(now, same(field), reason: when);
+        expect(now.widget.focusNode.hasFocus, isTrue, reason: when);
+        expect(
+          now.textEditingValue.composing,
+          const TextRange(start: 0, end: 3),
+          reason: when,
+        );
+        expect(now.textEditingValue.text, 'hoa', reason: when);
+        final methods = [
+          for (final call in tester.testTextInput.log) call.method,
+        ];
+        expect(methods, isNot(contains('TextInput.clearClient')));
+        expect(methods, isNot(contains('TextInput.setClient')));
+        expect(methods, isNot(contains('TextInput.setEditingState')));
+      }
+
+      fake.attachGate!.complete(_compact);
+      await tester.pump();
+      await tester.pump();
+      expectKept('waiting for the ack');
+      fake.ack();
+      await tester.pump();
+      expectKept('acked, top held');
+      setTop(tester, native);
+      await tester.pump();
+      expectKept('native top');
+      await tester.pump(const Duration(milliseconds: 300));
+      expectKept('after the fallback time');
+    });
+
+    /// Rebuilds the pending shell with [mode]: off disengages it, auto
+    /// engages it again (same state, the claim taken anew).
+    Future<void> setMode(WidgetTester tester, LiquidNativeChrome mode) async {
+      await pumpShell(
+        tester,
+        TestShell(
+          destinations: _destinations,
+          pageBuilder: home,
+          nativeChrome: mode,
+        ),
+        padding: _compactPadding,
+        settle: false,
+      );
+      await tester.pump();
+    }
+
+    testWidgets('a disengage mid-hand-over cancels its fallback; the next '
+        'engage waits again', (tester) async {
+      final fake = await pending(tester);
+      fake.attachGate!.complete(_compact);
+      await tester.pump();
+      await tester.pump();
+      expect(flutterBar(), isTrue, reason: 'waiting, the fallback armed');
+      await setMode(tester, LiquidNativeChrome.off);
+      await tester.pump(const Duration(milliseconds: 300));
+      await setMode(tester, LiquidNativeChrome.auto);
+      await tester.pump();
+      expect(flutterBar(), isTrue, reason: 'a new hand-over, waiting');
+      expect(nativePageBar(tester), isFalse);
+      await tester.pump(const Duration(milliseconds: 240));
+      expect(nativePageBar(tester), isFalse, reason: 'its own 250 ms');
+      fake.ack();
+      await tester.pump();
+      expect(nativePageBar(tester), isTrue, reason: 'acked');
+      expect(flutterBar(), isFalse);
+    });
+
+    testWidgets("an earlier engage's late delivery does not start a later "
+        "hand-over's fallback", (tester) async {
+      final fake = await pending(tester);
+      final first = fake.updateGate = Completer<void>();
+      fake.attachGate!.complete(_compact);
+      await tester.pump();
+      await tester.pump();
+      expect(fake.configs.where((c) => c.engaged), hasLength(1));
+      await setMode(tester, LiquidNativeChrome.off);
+      final second = fake.updateGate = Completer<void>();
+      await setMode(tester, LiquidNativeChrome.auto);
+      await tester.pump();
+      expect(fake.configs.where((c) => c.engaged), hasLength(2));
+      expect(flutterBar(), isTrue, reason: 'the second hand-over waits');
+      first.complete();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump();
+      expect(flutterBar(), isTrue, reason: 'the second config not delivered');
+      expect(nativePageBar(tester), isFalse);
+      second.complete();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 260));
+      await tester.pump();
+      expect(
+        nativePageBar(tester),
+        isTrue,
+        reason: '250 ms after its delivery',
+      );
+    });
+
+    testWidgets('no metrics after the ack: the hold ends after 250 ms', (
+      tester,
+    ) async {
+      final fake = await pending(tester);
+      final y = rowY(tester);
+      fake.attachGate!.complete(_compact);
+      await tester.pump();
+      await tester.pump();
+      fake.ack();
+      await tester.pump();
+      check(tester, handedOver: true, y: y, when: 'held');
+      await tester.pump(const Duration(milliseconds: 260));
+      await tester.pump();
+      expect(rowY(tester), y - kPageBarExtent, reason: 'the real top');
+    });
+
+    testWidgets('an ack already in the first answer engages at once', (
+      tester,
+    ) async {
+      final fake = await pending(tester);
+      fake.attachGate!.complete(
+        const LiquidNativeShellState(
+          installed: true,
+          compact: true,
+          engagedApplied: true,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(nativePageBar(tester), isTrue, reason: 'a reconnect');
+    });
+  });
 }
 
 /// A pushed page whose one action records the version it was built with;
@@ -1155,3 +1495,5 @@ class _VersionedState extends State<_Versioned> {
     );
   }
 }
+
+void _noop() {}

@@ -379,14 +379,16 @@ void main() {
       final pixels = _position(tester, 'Home').pixels;
       // Another shell owns the chrome a while, with other tabs: new native
       // hosts, at offset 0.
-      final other = NativeChromeHost.instance.claim((_) {})
-        ..update(
+      final other = NativeChromeHost.instance.claim((_) {});
+      unawaited(
+        other.update(
           const LiquidNativeChromeConfig(
             engaged: true,
             tabs: [LiquidNativeTab(title: 'Other', sfSymbol: 'star')],
             minimizeOnScroll: true,
           ),
-        );
+        ),
+      );
       await tester.pumpAndSettle();
       native.calls.clear();
       // It lets go in the frame a state report queues an offset send. The

@@ -15,6 +15,7 @@ class _FakeHost extends NativeShellHostApi {
     compact: false,
     sidebar: NativeSidebar.tiled,
     verticalBarSide: NativeVerticalBarSide.none,
+    engagedApplied: false,
   );
   NativeWindowControls controls = NativeWindowControls(leading: 66, top: 24);
   PlatformException? failure;
@@ -214,6 +215,21 @@ void main() {
     expect(host.calls, ['attach']);
   });
 
+  test('stateFromNative maps engagedApplied', () {
+    for (final applied in [false, true]) {
+      final state = stateFromNative(
+        NativeShellState(
+          installed: true,
+          compact: true,
+          sidebar: NativeSidebar.hidden,
+          verticalBarSide: NativeVerticalBarSide.none,
+          engagedApplied: applied,
+        ),
+      );
+      expect(state.engagedApplied, applied);
+    }
+  });
+
   test('stateFromNative maps the vertical bar side', () {
     for (final (native, side) in [
       (NativeVerticalBarSide.none, LiquidNativeVerticalBarSide.none),
@@ -226,6 +242,7 @@ void main() {
           compact: true,
           sidebar: NativeSidebar.hidden,
           verticalBarSide: native,
+          engagedApplied: false,
         ),
       );
       expect(state.verticalBarSide, side);
@@ -240,6 +257,7 @@ void main() {
           compact: true,
           sidebar: NativeSidebar.hidden,
           verticalBarSide: NativeVerticalBarSide.none,
+          engagedApplied: false,
           unavailableReason: reason,
         ),
       );
@@ -253,6 +271,7 @@ void main() {
           compact: false,
           sidebar: sidebar,
           verticalBarSide: NativeVerticalBarSide.none,
+          engagedApplied: false,
         ),
       );
       expect(state.sidebar.name, sidebar.name);
@@ -400,6 +419,7 @@ void main() {
         compact: true,
         sidebar: NativeSidebar.hidden,
         verticalBarSide: NativeVerticalBarSide.none,
+        engagedApplied: false,
       ),
     ]);
     await deliver('onWindowControlsChanged', [

@@ -40,6 +40,7 @@ class NativeShellState {
     required this.compact,
     required this.sidebar,
     required this.verticalBarSide,
+    required this.engagedApplied,
     this.unavailableReason,
   });
 
@@ -47,6 +48,10 @@ class NativeShellState {
   bool compact;
   NativeSidebar sidebar;
   NativeVerticalBarSide verticalBarSide;
+
+  /// The applied config's `engaged`: Dart hands its page bar to
+  /// the native one once this is true.
+  bool engagedApplied;
   NativeUnavailableReason? unavailableReason;
 }
 
