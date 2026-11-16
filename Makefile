@@ -18,7 +18,7 @@ EXAMPLE_GO_ROUTER := liquid_shell/example_go_router
 COVERED := liquid_shell liquid_shell_platform_interface liquid_shell_ios liquid_shell_android
 COVERAGE_MIN := 90
 
-.PHONY: help get format format-check analyze test coverage goldens \
+.PHONY: help get format format-check analyze analyze-stable test coverage goldens \
         goldens-plain goldens-liquid goldens-update provenance public-docs snippets verify pana publish-check \
         android-unit ios-unit ios-ui ios-minimize integration-ios integration-ios-native integration-android pigeon pigeon-check \
         test-impeller compare-images tab-traces tab-frames segment-traces \
@@ -38,8 +38,16 @@ format: ## Rewrite formatting in place (a fixer, not a gate)
 format-check: ## Formatting gate: check only, never rewrite
 	$(DART) format --output=none --set-exit-if-changed .
 
+ANALYZE_PATHS := $(PACKAGES) $(EXAMPLE) $(EXAMPLE_GO_ROUTER) tool
+
 analyze: ## Static analysis of every package, the example and tool/; infos and warnings are fatal
-	$(DART) analyze --fatal-infos --fatal-warnings $(PACKAGES) $(EXAMPLE) $(EXAMPLE_GO_ROUTER) tool
+	$(DART) analyze --fatal-infos --fatal-warnings $(ANALYZE_PATHS)
+
+# CI's latest-stable leg only (VK-1076): the same analysis, but the two info
+# classes that only the newer SDK reports and the 3.44 floor cannot fix are
+# printed and tolerated (tool/check_analyze.dart; exits VK-1077, VK-1078).
+analyze-stable: ## analyze for CI's stable leg: fatal except the allowlisted stable-only infos
+	$(DART) run tool/check_analyze.dart $(ANALYZE_PATHS)
 
 test: ## Unit and widget tests in every package and the example (no goldens)
 	@set -e; for p in $(PACKAGES) $(EXAMPLE) $(EXAMPLE_GO_ROUTER); do \
