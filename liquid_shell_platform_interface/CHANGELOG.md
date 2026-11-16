@@ -1,3 +1,9 @@
+## 0.1.0-dev.13
+
+- The native state reports `engagedApplied`: whether the platform has
+  applied an engaged config. The shell keeps its own page bar until it is
+  true; a platform implementation should set it.
+
 ## 0.1.0-dev.12
 
 - The native state reports the screen side of the iPhone Duo's vertical bar

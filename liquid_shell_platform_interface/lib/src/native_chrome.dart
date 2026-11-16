@@ -98,6 +98,10 @@ class LiquidNativeShellState {
   /// bar) is up or comes up in this layout pass. A shell keeps drawing
   /// its own page bar until then, so a frame never shows neither bar.
   /// Not changed by `hidden`.
+  ///
+  /// A platform implementation must set it from each config it applies.
+  /// Left false, the shell keeps its own bar for a short timeout after every
+  /// engage, and the content can then move.
   final bool engagedApplied;
 
   /// Set when [installed] is false.

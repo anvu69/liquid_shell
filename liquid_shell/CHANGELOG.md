@@ -3,7 +3,8 @@
 - Fixed: with native chrome, a root page with actions no longer shows a
   moment without any bar, then its content jumping down, when the native
   chrome comes up: the shell keeps its own page bar until the native bar
-  is shown.
+  is shown. The native chrome then appears at once: its tab bar no longer
+  fades in on a Flutter → native switch or after dormant.
 
 ## 0.1.0-dev.12
 

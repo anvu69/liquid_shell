@@ -66,7 +66,7 @@
 
 - [ ] **Step 1: Red tests.** A dormant-first shell (`config(engaged: false)`, `dartAttached`), then `Add` with no settle: `engagedApplied`, the recorded state acked with the inset already set (iPhone), the bar shown, and no animation keys on `tabs.view.layer` or the navigation bar's layer (the red part). `hidden` toggles: `engagedApplied` stays, no state sent (iPhone); a later show keeps the fade. Characterization (may be green): Flutter top ≈ bar `maxY` with `Add`, the window top without; the late-bar variant.
 - [ ] **Step 2: Run, see red** on the own iPhone simulator: `FLUTTER="fvm flutter" tool/ios_xctest.sh <udid> <xcresult> … -only-testing:RunnerTests/NativeTabsTests/<test>`.
-- [ ] **Step 3: Implement** (spec §2.3): `engaging` read before `config = new`; `applyPages(new, animated: !engaging)`; `setChromeVisible(..., animated: !engaging)`.
+- [ ] **Step 3: Implement** (spec §2.3): `engaging` read before `config = new`; `applyPages(new, animated: !engaging)`; `setChromeVisible(..., animated: !engaging)`; on an engage, an extra layout pass (`view.layoutIfNeeded()`, then the selected tab's) before the final `syncFlutter`, and `publishState` held while `apply` runs, so the ack goes out once, with the new inset (iPhone and regular iPad).
 - [ ] **Step 4: Green**: the new tests, then the whole RunnerTests target.
 - [ ] **Step 5: Commit** `fix(ios): the first engage shows the native bar without animation (VK-1064)`.
 

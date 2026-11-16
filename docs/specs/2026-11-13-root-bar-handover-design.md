@@ -100,7 +100,12 @@ animation, UIKit lays the bar out only on its next pass, after `apply`'s
 state has acked (measured: the ack went out with Flutter's top still at
 62), so an engage lays the selected tab out (`layoutIfNeeded`) before the
 final `syncFlutter`: on the iPhone inline root the ack again goes out with
-the 54 pt inset already set. Dart does not rely on that order (§2.2). A show after a
+the 54 pt inset already set. The pass lays out the tab controller's own
+view, then the tab. While `apply` runs, `publishState` holds back, and
+`apply`'s final `syncFlutter` sends the state once: on a regular iPad a
+layout pass inside `apply` ran before the navigation controller had its new
+safe area, and the ack went out with a 150 pt top that settled at 86 pt in
+the same `apply` (measured). Dart does not rely on that order (§2.2). A show after a
 hide (a dialog's `hidden` toggling back) keeps the fade, and later page
 changes keep their animation. At launch this is the first engage; a
 Flutter → native switch is an engage too, because it also hands over from
@@ -120,9 +125,15 @@ moves by the difference between the Flutter and the native large title
 - **VK-1074**: the disengage mirror (native → Flutter: Dart draws its bar
   at once while native still adds its inset until its disengage config
   lands).
-- **VK-1075**: a per-owner ack for a pushed shell popping back to its owner
-  (standby → engaged). `engagedApplied` is window-wide: the leaving shell's
-  engaged config is still applied, so the owner engages at once, as today.
+- **VK-1075**: a per-owner ack (for example a config sequence number or the
+  owner echoed in the state) for **any owner change or quick re-engage**:
+  a pushed shell popping back to its owner (standby → engaged), a shell
+  pushed over an engaged one, a root shell replaced (onboarding → main,
+  logout → login), and a disengage → re-engage before native's
+  `engagedApplied: false` arrives. `engagedApplied` is window-wide: the
+  previous owner's engaged config is still applied, so the new shell takes
+  the "acked at first sight" path and engages at once, as before this
+  change.
 
 ## 4. Tests
 
