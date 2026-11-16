@@ -21,6 +21,13 @@ concurrency:
 # and every build and integration job run on it, pinned exactly so that a new
 # release cannot move the golden reference. Latest stable runs as an early
 # warning and never blocks (continue-on-error).
+#
+# VK-1076: the Pigeon generator is its own package, tool/pigeon, outside the
+# pub workspace (`make get` resolves both), so no SDK's test_api pin can make
+# pigeon's analyzer range unsolvable again. The stable legs run
+# `make analyze-stable`: infos stay fatal except the stable-only ones that
+# the 3.44 floor cannot fix (tool/check_analyze.dart, exits VK-1077 and
+# VK-1078).
 jobs:
   checks:
     name: checks (${{ matrix.flutter }})
@@ -52,7 +59,13 @@ jobs:
       - run: make format-check
         if: ${{ success() || (failure() && matrix.experimental) }}
       - run: make analyze
-        if: ${{ success() || (failure() && matrix.experimental) }}
+        if: ${{ success() && !matrix.experimental }}
+      # Latest stable reports infos that the floor cannot fix without
+      # breaking 3.44 (Flutter 3.50's material/cupertino deprecations, R1,
+      # and unnecessary_ignore of avoid_positional_boolean_parameters, R2).
+      # This prints and tolerates exactly those; anything else still fails.
+      - run: make analyze-stable
+        if: ${{ (success() || failure()) && matrix.experimental }}
       - run: make provenance
         if: ${{ success() || (failure() && matrix.experimental) }}
       - run: make public-docs
@@ -66,6 +79,10 @@ jobs:
       - run: make snippets
         if: ${{ success() || (failure() && matrix.experimental) }}
 
+  # Blocking. Pinned to the reference toolchain like every other blocking job
+  # (VK-1076): pana scores lints and formatting with its own SDK, so a new
+  # stable release (3.50's material deprecations) could otherwise turn it
+  # red without a commit. `pana (stable)` below is the early warning.
   pana:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -74,11 +91,21 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.47.9
           cache: true
       - run: make get
       # pana reads screenshots with webpinfo/cwebp/gif2webp. Without them
-      # liquid_shell loses the 10 "screenshots" points on the runner.
-      - run: sudo apt-get update && sudo apt-get install -y webp
+      # liquid_shell loses the 10 "screenshots" points on the runner. Three
+      # attempts: on 2026-11-11 the runner's DNS failed to resolve the Ubuntu
+      # mirror twice (exit 100).
+      - name: Install webp
+        run: |
+          for attempt in 1 2 3; do
+            sudo apt-get update && sudo apt-get install -y webp && exit 0
+            echo "::warning::apt-get failed (attempt $attempt of 3)"
+            sleep 15
+          done
+          exit 1
       - run: dart pub global activate pana
       # All four packages are on pub.dev (0.1.0-dev.9), so pana resolves the
       # siblings and every step must reach the max score. pana also checks
@@ -107,6 +134,44 @@ jobs:
           --exit-code-threshold ${{ github.ref == 'refs/heads/main' && '0' || '10' }}
           liquid_shell_android
       - run: make publish-check
+
+  # Informational twin of `pana` on latest stable (VK-1076). It never blocks;
+  # a step below the max score shows what the next release will cost on
+  # pub.dev, which scores with its own current SDK.
+  pana-stable:
+    name: pana (stable)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: make get
+      - name: Install webp
+        run: |
+          for attempt in 1 2 3; do
+            sudo apt-get update && sudo apt-get install -y webp && exit 0
+            echo "::warning::apt-get failed (attempt $attempt of 3)"
+            sleep 15
+          done
+          exit 1
+      - run: dart pub global activate pana
+      # Every package runs even after one fails, so one run shows them all.
+      - name: pana liquid_shell_platform_interface
+        if: ${{ success() || failure() }}
+        run: dart pub global run pana --no-warning --exit-code-threshold 0 liquid_shell_platform_interface
+      - name: pana liquid_shell
+        if: ${{ success() || failure() }}
+        run: dart pub global run pana --no-warning --exit-code-threshold 0 liquid_shell
+      - name: pana liquid_shell_ios
+        if: ${{ success() || failure() }}
+        run: dart pub global run pana --no-warning --exit-code-threshold 0 liquid_shell_ios
+      - name: pana liquid_shell_android
+        if: ${{ success() || failure() }}
+        run: dart pub global run pana --no-warning --exit-code-threshold 0 liquid_shell_android
 
   android-unit:
     runs-on: ubuntu-latest

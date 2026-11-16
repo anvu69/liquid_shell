@@ -1,9 +1,13 @@
 // Pigeon source of the native shell channel (spec §6). Nothing imports it:
 // `make pigeon` reads it and writes both ends, which are committed:
-//   lib/src/native_shell_api.g.dart
-//   ios/liquid_shell_ios/Sources/liquid_shell_ios/NativeShellApi.g.swift
+//   liquid_shell_ios/lib/src/native_shell_api.g.dart
+//   liquid_shell_ios/ios/liquid_shell_ios/Sources/liquid_shell_ios/NativeShellApi.g.swift
 // Edit this file, run `make pigeon`, commit all three. `make pigeon-check`
 // (part of `make verify`) fails when the generated files drift.
+//
+// It lives in tool/pigeon, a package outside the pub workspace, so pigeon's
+// analyzer never constrains the workspace (VK-1076). The out paths are
+// relative to tool/pigeon, where `make pigeon` runs.
 //
 // Pigeon's DSL: positional parameters are the order on the wire.
 // ignore_for_file: avoid_positional_boolean_parameters
@@ -11,10 +15,10 @@ import 'package:pigeon/pigeon.dart';
 
 @ConfigurePigeon(
   PigeonOptions(
-    dartOut: 'lib/src/native_shell_api.g.dart',
+    dartOut: '../../liquid_shell_ios/lib/src/native_shell_api.g.dart',
     dartPackageName: 'liquid_shell_ios',
     swiftOut:
-        'ios/liquid_shell_ios/Sources/liquid_shell_ios/NativeShellApi.g.swift',
+        '../../liquid_shell_ios/ios/liquid_shell_ios/Sources/liquid_shell_ios/NativeShellApi.g.swift',
   ),
 )
 /// Where the native sidebar is.

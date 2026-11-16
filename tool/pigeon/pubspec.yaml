@@ -1,0 +1,15 @@
+name: liquid_shell_pigeon
+description: Generates the native shell channel of liquid_shell_ios. Not published.
+publish_to: none
+
+# Not part of the root pub workspace on purpose (VK-1076): pigeon's analyzer
+# range must never constrain the workspace's `test` (which each Flutter SDK
+# fixes through flutter_test's test_api pin) or a published package.
+environment:
+  sdk: ^3.12.0
+
+dev_dependencies:
+  # Exact pin: the generated header embeds the version, and
+  # `make pigeon-check` fails on any drift. Bump it on its own ticket.
+  pigeon: 27.3.0
+  very_good_analysis: 10.3.0
