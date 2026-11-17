@@ -715,7 +715,7 @@ void main() {
     test(
       'collapse waits 0.24 s, then settles on the collapse spring ± 10 %',
       () {
-        final m = MinimizeMotion(minimized: false)..set(true);
+        final m = MinimizeMotion(minimized: false)..set(minimized: true);
         final values = <double>[];
         for (var f = 0; f < 120; f++) {
           m.advance(dt);
@@ -738,7 +738,8 @@ void main() {
     );
 
     test('the dip reaches ×0.96 at the midpoint', () {
-      final m = MinimizeMotion(minimized: false)..set(true, delayed: false);
+      final m = MinimizeMotion(minimized: false)
+        ..set(minimized: true, delayed: false);
       var lowest = 1.0;
       for (var f = 0; f < 60; f++) {
         m.advance(dt);
@@ -748,7 +749,7 @@ void main() {
     });
 
     test('expand overshoots slightly below 0, then rests at 0', () {
-      final m = MinimizeMotion(minimized: true)..set(false);
+      final m = MinimizeMotion(minimized: true)..set(minimized: false);
       var lowest = 1.0;
       for (var f = 0; f < 90; f++) {
         m.advance(dt);
@@ -761,7 +762,7 @@ void main() {
 
     test('expand: the 3-tab pill right edge overshoots ≈ 4 pt, as native '
         '(VK-503 Task 16, TabFid expand strip; ζ 0.70 gave ≈ 12)', () {
-      final m = MinimizeMotion(minimized: true)..set(false);
+      final m = MinimizeMotion(minimized: true)..set(minimized: false);
       var lowest = 1.0;
       for (var f = 0; f < 90; f++) {
         m.advance(dt);
@@ -775,7 +776,7 @@ void main() {
 
     test('expand answers 25 ms after the tap, then runs the expand spring '
         '(review item 7: the search close led native by about a row)', () {
-      final m = MinimizeMotion(minimized: true)..set(false);
+      final m = MinimizeMotion(minimized: true)..set(minimized: false);
       final values = <double>[];
       for (var f = 0; f < 30; f++) {
         m.advance(dt);
@@ -795,9 +796,9 @@ void main() {
 
     test('a quick reverse during the delay never collapses', () {
       final m = MinimizeMotion(minimized: false)
-        ..set(true)
+        ..set(minimized: true)
         ..advance(0.1)
-        ..set(false);
+        ..set(minimized: false);
       for (var f = 0; f < 60; f++) {
         m.advance(dt);
       }
@@ -807,7 +808,7 @@ void main() {
     test('reduce motion: instant', () {
       final m = MinimizeMotion(minimized: false)
         ..reduceMotion = true
-        ..set(true);
+        ..set(minimized: true);
       expect(m.value, 1);
       expect(m.advance(dt), isFalse);
     });

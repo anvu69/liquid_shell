@@ -1175,9 +1175,7 @@ class MinimizeMotion {
 
   /// Requests [minimized]; a collapse waits [TabSprings.minimizeDelay]
   /// when [delayed].
-  // The state is the call's subject (`set(true)`), as on a switch.
-  // ignore: avoid_positional_boolean_parameters
-  void set(bool minimized, {bool delayed = true}) {
+  void set({required bool minimized, bool delayed = true}) {
     if (minimized == _target) return;
     _target = minimized;
     final end = minimized ? 1.0 : 0.0;

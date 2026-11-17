@@ -206,7 +206,7 @@ class _GlassTabBarState extends State<GlassTabBar>
       if (widget.minimized) _cancel(building: true);
       _minimize
         ..reduceMotion = MediaQuery.disableAnimationsOf(context)
-        ..set(widget.minimized, delayed: widget.collapseDelay);
+        ..set(minimized: widget.minimized, delayed: widget.collapseDelay);
       // Reduce motion jumps: this build already draws the circle.
       _dropRingWhenCollapsed();
       _ticker.kick();

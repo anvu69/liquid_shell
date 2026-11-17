@@ -1802,10 +1802,9 @@ void main() {
       void select(int _) {}
       void expand() {}
       // One shared instance: LiquidChromeDetails == compares the callbacks.
-      // The positional bool is the public callback's own signature
-      // (`void Function(bool)`), which a test double cannot change.
-      // ignore: avoid_positional_boolean_parameters
-      void setVisible(bool _) {}
+      // A tear-off fits the public `ValueSetter<bool>` without declaring a
+      // positional bool parameter of its own.
+      final setVisible = <bool>[].add;
       LiquidChromeDetails details({
         LiquidChromeSlot slot = LiquidChromeSlot.tabBar,
         LiquidChromeKind kind = LiquidChromeKind.bottomBar,
