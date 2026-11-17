@@ -9,12 +9,12 @@ library;
 import 'dart:math' as math;
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/chrome/glass_tab_bar.dart';
 import 'package:liquid_shell/src/chrome/tab_geometry.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 
 const _scale = 3.0;
 const _screen = Size(402, 420);

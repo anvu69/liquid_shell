@@ -1,13 +1,13 @@
 // liquid_shell/test/widget/scroll_pocket_test.dart
 import 'dart:ui' as ui;
 
-import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/chrome/glass_tab_bar.dart';
 import 'package:liquid_shell/src/glass/liquid_backdrop.dart';
 import 'package:liquid_shell/src/glass/scroll_pocket.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 
 import '../helpers/fake_signals_platform.dart';
 import '../helpers/shell_harness.dart';

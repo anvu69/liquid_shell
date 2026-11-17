@@ -1,9 +1,9 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/src/chrome/lens_motion.dart';
 import 'package:liquid_shell/src/chrome/lens_ticker.dart';
 import 'package:liquid_shell/src/chrome/tab_geometry.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 
 /// The smallest lens widget: a [LensTicker] over a 3-slot compact track.
 /// [adopt]: the app takes every commit as its selection.

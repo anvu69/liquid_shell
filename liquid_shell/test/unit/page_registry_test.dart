@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 import 'package:liquid_shell/src/pages/page_registry.dart';
 
 // Spec P3b-2 §8.4 (VK-443): a page entry compares its actions by what the

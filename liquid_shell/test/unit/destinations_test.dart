@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/destinations/badge.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 
 String _otherBadgeCount(int count) => '$count unread';
 

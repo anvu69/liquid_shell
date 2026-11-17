@@ -1,11 +1,11 @@
 import 'dart:ui' show FrameTiming, ImageFilter;
 
-import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/glass/frame_guard.dart';
 import 'package:liquid_shell/src/glass/liquid_backdrop.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 
 const _ms = Duration(milliseconds: 1);
 const _budget = Duration(microseconds: 16667);

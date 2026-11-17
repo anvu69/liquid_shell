@@ -18,6 +18,7 @@
 // keeps the deprecated library out of lib/ and test/.
 export 'package:flutter/src/material/app.dart';
 export 'package:flutter/src/material/badge.dart';
+export 'package:flutter/src/material/bottom_sheet.dart';
 export 'package:flutter/src/material/color_scheme.dart';
 export 'package:flutter/src/material/colors.dart';
 export 'package:flutter/src/material/dialog.dart';
@@ -26,7 +27,11 @@ export 'package:flutter/src/material/icons.dart';
 export 'package:flutter/src/material/ink_well.dart';
 export 'package:flutter/src/material/input_decorator.dart';
 export 'package:flutter/src/material/material.dart';
+export 'package:flutter/src/material/page.dart';
 export 'package:flutter/src/material/scaffold.dart';
+export 'package:flutter/src/material/tab_controller.dart';
+export 'package:flutter/src/material/tabs.dart';
+export 'package:flutter/src/material/text_button.dart';
 export 'package:flutter/src/material/text_field.dart';
 export 'package:flutter/src/material/text_theme.dart';
 export 'package:flutter/src/material/theme.dart';

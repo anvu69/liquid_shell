@@ -1,6 +1,6 @@
 // liquid_shell/test/unit/native_minimize_test.dart
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 import 'package:liquid_shell/src/native/native_minimize.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 

@@ -1,5 +1,4 @@
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,6 +7,7 @@ import 'package:liquid_shell/src/chrome/fit_label.dart';
 import 'package:liquid_shell/src/chrome/glass_tab_bar.dart';
 import 'package:liquid_shell/src/chrome/large_content_viewer.dart';
 import 'package:liquid_shell/src/chrome/tab_bar.dart' show LiquidActionCircle;
+import 'package:liquid_shell/src/material_sdk.dart';
 
 import '../helpers/shell_harness.dart';
 

@@ -2,11 +2,11 @@
 // engaged, its own backdrop group, the tier variants and the trace hook.
 import 'dart:ui' as ui;
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/glass/liquid_backdrop.dart';
 import 'package:liquid_shell/src/glass/liquid_lens.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 import 'package:liquid_shell/src/segmented/segmented_control.dart';
 
 import '../helpers/native_rows.dart';

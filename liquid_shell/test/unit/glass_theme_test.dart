@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/glass/liquid_optics.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 
 /// The liquid tint defaults (VK-503 Task 16): neutral, near-opaque.
 final Color _tintLight = const Color(0xFFFFFFFF).withValues(alpha: 0.55);

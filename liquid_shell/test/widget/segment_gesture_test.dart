@@ -4,12 +4,12 @@
 import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart' show kLongPressTimeout;
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/chrome/large_content_viewer.dart';
 import 'package:liquid_shell/src/glass/liquid_lens.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 import 'package:liquid_shell/src/segmented/segmented_control.dart';
 
 import '../helpers/native_rows.dart';

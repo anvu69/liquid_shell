@@ -1,6 +1,5 @@
 import 'package:flutter/gestures.dart'
     show DeviceGestureSettings, kLongPressTimeout;
-import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart' show SpringSimulation;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,6 +8,7 @@ import 'package:liquid_shell/src/chrome/glass_tab_bar.dart';
 import 'package:liquid_shell/src/chrome/large_content_viewer.dart';
 import 'package:liquid_shell/src/chrome/tab_geometry.dart';
 import 'package:liquid_shell/src/chrome/tab_springs.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 
 const _screen = Size(402, 874);
 const double _y = 874.0 - 21 - 31;

@@ -113,9 +113,10 @@ segment-traces: ## Flutter segmented control traces on an iOS 26.5 iPhone 17 Pro
 segment-frames: ## Native vs Flutter liquid segmented control strips at 60 fps on an iOS 26.5 simulator (needs ffmpeg)
 	FLUTTER="$(FLUTTER)" DART="$(DART)" tool/segment_frames.sh
 
-provenance: ## Fail on app names or banned dependencies outside docs/, or glass outside LiquidGlass
+provenance: ## Fail on app names or banned dependencies outside docs/, glass outside LiquidGlass, or SDK material.dart in liquid_shell lib/test
 	tool/check_provenance.sh
 	tool/check_glass_seam.sh
+	tool/check_material_seam.sh
 
 public-docs: ## Fail on internal references (§, VK-, phase codes) in dartdoc, READMEs and doc/
 	tool/check_public_docs.sh

@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/chrome/sidebar_toggle.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
 import '../helpers/fake_native_platform.dart';

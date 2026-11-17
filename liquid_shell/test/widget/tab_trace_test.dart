@@ -1,9 +1,9 @@
 // The acceptance trace hook (spec VK-503 §17.4).
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 // The trace hook is test-only and stays out of the public API (spec §16).
 import 'package:liquid_shell/src/chrome/glass_tab_bar.dart' show debugTabTrace;
+import 'package:liquid_shell/src/material_sdk.dart';
 
 void main() {
   testWidgets('debugTabTrace receives one global sample per tick', (

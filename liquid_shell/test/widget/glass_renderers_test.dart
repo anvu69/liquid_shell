@@ -1,12 +1,12 @@
 import 'dart:ui' as ui;
 
-import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/glass/frosted_renderer.dart';
 import 'package:liquid_shell/src/glass/outside_shadow.dart';
 import 'package:liquid_shell/src/glass/solid_renderer.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 
 final _scheme = ColorScheme.fromSeed(seedColor: const Color(0xFF3366CC));
 final _theme = LiquidGlassTheme.fromColorScheme(_scheme);
