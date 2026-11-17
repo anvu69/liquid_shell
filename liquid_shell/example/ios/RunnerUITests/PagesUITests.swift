@@ -9,33 +9,21 @@ final class PagesUITests: XCTestCase {
 
   override func setUp() { continueAfterFailure = false }
 
+  /// VK-1081: through `launchShowingFlutter`, which relaunches once,
+  /// recorded, when the Flutter UI is never displayed.
   private func launch() -> XCUIApplication {
-    let app = XCUIApplication()
-    app.launchEnvironment["LIQUID_SHELL_EXAMPLE_DEMO"] = "pages"
-    app.launch()
-    XCTAssertTrue(row(app, "Detail 1").waitForExistence(timeout: timeout), "Home's rows")
-    // VK-1043: the native chrome comes after Flutter's rows. Home's bar,
-    // with its Add action, moves the rows down once it is up.
-    XCTAssertTrue(
-      tabButton(app, "Library").waitForExistence(timeout: 10), "launch: the tab bar")
-    XCTAssertTrue(
-      app.navigationBars["Home"].buttons["Add"].waitForExistence(timeout: 10),
-      "launch: Home's bar with Add")
-    // VK-1064: once settled, Home's rows sit below its bar, not under it.
-    let first = row(app, "Detail 1")
-    let bar = app.navigationBars["Home"]
-    let deadline = Date().addingTimeInterval(10)
-    var last: (row: CGRect, bar: CGRect) = (.null, .null)
-    while Date() < deadline {
-      let now = (row: first.frame, bar: bar.frame)
-      if now == last, now.row.minY >= now.bar.maxY - 0.5 { break }
-      last = now
-      Thread.sleep(forTimeInterval: 0.2)
+    launchShowingFlutter("pages") { app in
+      XCTAssertTrue(row(app, "Detail 1").waitForExistence(timeout: timeout), "Home's rows")
+      // VK-1043: the native chrome comes after Flutter's rows. Home's bar,
+      // with its Add action, moves the rows down once it is up.
+      XCTAssertTrue(
+        tabButton(app, "Library").waitForExistence(timeout: 10), "launch: the tab bar")
+      let bar = app.navigationBars["Home"]
+      XCTAssertTrue(
+        bar.buttons["Add"].waitForExistence(timeout: 10), "launch: Home's bar with Add")
+      // VK-1064: once settled, Home's rows sit below its bar, not under it.
+      waitRowBelowBar(row(app, "Detail 1"), bar)
     }
-    XCTAssertGreaterThanOrEqual(
-      first.frame.minY, bar.frame.maxY - 0.5,
-      "launch: row.minY \(first.frame.minY) < bar.maxY \(bar.frame.maxY)")
-    return app
   }
 
   /// A Flutter row (semantics on): its label starts with [title].
