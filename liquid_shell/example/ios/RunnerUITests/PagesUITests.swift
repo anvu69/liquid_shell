@@ -81,6 +81,20 @@ final class PagesUITests: XCTestCase {
     return bar
   }
 
+  /// VK-1081: the example's probe (`FlutterUIProbe`, AppDelegate.swift)
+  /// reads "displayed" on a normal launch, the signal that gates the
+  /// launch's one relaunch.
+  func testTheFlutterUIProbeReadsDisplayed() {
+    let app = launch()
+    let probe = app.staticTexts["flutterUIProbe"]
+    XCTAssertTrue(probe.waitForExistence(timeout: 10), "the probe's label")
+    let displayed = NSPredicate(format: "label == %@", "flutterUI: displayed")
+    let reads = XCTNSPredicateExpectation(predicate: displayed, object: probe)
+    XCTAssertEqual(
+      XCTWaiter.wait(for: [reads], timeout: 20), .completed,
+      "the probe reads \"\(probe.exists ? probe.label : "nothing")\"")
+  }
+
   func testABackTapAndSwipeOnHomesPushedPage() {
     let app = launch()
     let bar = openFromHome(app, "Detail 1")
