@@ -22,11 +22,21 @@
 - On that stable leg `checks` runs `make analyze-stable` instead of
   `make analyze`. It fails like `make analyze`, except for two info classes
   that only the newer SDK reports and the 3.44 floor cannot fix, which it
-  prints and tolerates: `deprecated_member_use` of
-  `package:flutter/material.dart` / `cupertino.dart` (Flutter 3.50) and
-  `unnecessary_ignore` of `avoid_positional_boolean_parameters`
-  (`tool/check_analyze.dart`). The allowlist goes when VK-1077 and VK-1078
-  land. `make analyze` and `make verify` keep every info fatal.
+  prints and tolerates (`tool/check_analyze.dart`):
+  `deprecated_member_use` of `package:flutter/material.dart` /
+  `cupertino.dart` (Flutter 3.50), only in the two example apps, whose
+  code the READMEs show; and `unnecessary_ignore` of
+  `avoid_positional_boolean_parameters` (Dart 3.14 flags only two or more
+  positional bools), only in `LiquidNativeSearchActiveChanged` and the
+  Pigeon source. That second entry goes when the floor reaches Flutter
+  3.50. `make analyze` and `make verify` keep every info fatal.
+- liquid_shell's `lib/` and `test/` import
+  `package:liquid_shell/src/material_sdk.dart` (tests: also
+  `test/helpers/cupertino_sdk.dart`), never the deprecated
+  `material.dart` / `cupertino.dart`. The barrel re-exports the SDK's own
+  `src/material` files, so the types are unchanged; add a file to it when
+  you need a new symbol. `tool/check_material_seam.sh`
+  (`make provenance`) enforces it on every toolchain.
 - `pana` blocks on 3.47.9, like the other blocking jobs; `pana (stable)`
   runs the same steps on latest stable and never blocks.
 - The Pigeon generator is its own package, `tool/pigeon`, outside the pub

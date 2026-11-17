@@ -1,3 +1,9 @@
+## 0.1.0-dev.14
+
+- liquid_shell's own code no longer imports `package:flutter/material.dart`,
+  which Flutter 3.50 deprecates, so its static analysis is clean on 3.50.
+  Nothing changes for apps: the Material types are still the SDK's own.
+
 ## 0.1.0-dev.13
 
 - Fixed: with native chrome, a root page with actions no longer shows a

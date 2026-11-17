@@ -43,9 +43,11 @@ ANALYZE_PATHS := $(PACKAGES) $(EXAMPLE) $(EXAMPLE_GO_ROUTER) tool
 analyze: ## Static analysis of every package, the example and tool/; infos and warnings are fatal
 	$(DART) analyze --fatal-infos --fatal-warnings $(ANALYZE_PATHS)
 
-# CI's latest-stable leg only (VK-1076): the same analysis, but the two info
-# classes that only the newer SDK reports and the 3.44 floor cannot fix are
-# printed and tolerated (tool/check_analyze.dart; exits VK-1077, VK-1078).
+# CI's latest-stable leg only (VK-1076): the same analysis, but the infos
+# that only the newer SDK reports and the 3.44 floor cannot fix are printed
+# and tolerated (tool/check_analyze.dart): the SDK material import in the
+# two examples, and two positional-bool ignores until the floor reaches
+# Dart 3.14 (VK-1077, VK-1078).
 analyze-stable: ## analyze for CI's stable leg: fatal except the allowlisted stable-only infos
 	$(DART) run tool/check_analyze.dart $(ANALYZE_PATHS)
 
