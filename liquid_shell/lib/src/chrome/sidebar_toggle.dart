@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:liquid_shell/src/glass/liquid_glass.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 
 /// Size of the show-sidebar toggle.
 const double kSidebarToggleSize = 48;

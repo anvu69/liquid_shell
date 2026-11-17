@@ -1,11 +1,11 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:liquid_shell/src/chrome/glass_tab_bar.dart';
 import 'package:liquid_shell/src/chrome/tab_geometry.dart';
 import 'package:liquid_shell/src/destinations/destination.dart';
 import 'package:liquid_shell/src/destinations/tab_action.dart';
 import 'package:liquid_shell/src/glass/glass_theme.dart';
 import 'package:liquid_shell/src/glass/liquid_glass.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 import 'package:liquid_shell/src/shell/strings.dart';
 
 /// Where a [LiquidTabBar] sits, which sets its cell layout.

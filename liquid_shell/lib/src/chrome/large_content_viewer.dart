@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:liquid_shell/src/chrome/text_scale.dart';
 import 'package:liquid_shell/src/glass/liquid_glass.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 
 /// iOS-style large content viewer: at accessibility text sizes a long press
 /// on a control shows its icon and label large in the middle of the screen
