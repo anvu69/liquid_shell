@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:liquid_shell/src/glass/liquid_glass.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 import 'package:liquid_shell/src/pages/page_action.dart';
 import 'package:liquid_shell/src/pages/page_bar.dart';
 import 'package:liquid_shell/src/pages/page_registry.dart';

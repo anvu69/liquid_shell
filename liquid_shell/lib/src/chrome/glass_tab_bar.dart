@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/semantics.dart';
 import 'package:liquid_shell/src/chrome/fit_label.dart';
@@ -22,6 +21,7 @@ import 'package:liquid_shell/src/destinations/tab_action.dart';
 import 'package:liquid_shell/src/glass/glass_theme.dart';
 import 'package:liquid_shell/src/glass/liquid_glass.dart';
 import 'package:liquid_shell/src/glass/liquid_lens.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 import 'package:liquid_shell/src/shell/strings.dart';
 
 /// The pill glass (tests).
@@ -206,7 +206,7 @@ class _GlassTabBarState extends State<GlassTabBar>
       if (widget.minimized) _cancel(building: true);
       _minimize
         ..reduceMotion = MediaQuery.disableAnimationsOf(context)
-        ..set(widget.minimized, delayed: widget.collapseDelay);
+        ..set(minimized: widget.minimized, delayed: widget.collapseDelay);
       // Reduce motion jumps: this build already draws the circle.
       _dropRingWhenCollapsed();
       _ticker.kick();

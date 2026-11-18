@@ -1,11 +1,12 @@
 import 'dart:ui' as ui;
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/src/glass/drift_guard.dart';
 import 'package:liquid_shell/src/glass/liquid_backdrop.dart';
 import 'package:liquid_shell/src/glass/liquid_optics.dart';
+
+import '../helpers/cupertino_sdk.dart';
 
 const _params = LiquidOpticsParams(
   tint: Color(0x38FFFFFF),

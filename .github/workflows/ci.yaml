@@ -26,8 +26,8 @@ concurrency:
 # pub workspace (`make get` resolves both), so no SDK's test_api pin can make
 # pigeon's analyzer range unsolvable again. The stable legs run
 # `make analyze-stable`: infos stay fatal except the stable-only ones that
-# the 3.44 floor cannot fix (tool/check_analyze.dart, exits VK-1077 and
-# VK-1078).
+# the 3.44 floor cannot fix (tool/check_analyze.dart; narrowed to the
+# examples and two files by VK-1077 and VK-1078).
 jobs:
   checks:
     name: checks (${{ matrix.flutter }})
@@ -61,9 +61,12 @@ jobs:
       - run: make analyze
         if: ${{ success() && !matrix.experimental }}
       # Latest stable reports infos that the floor cannot fix without
-      # breaking 3.44 (Flutter 3.50's material/cupertino deprecations, R1,
-      # and unnecessary_ignore of avoid_positional_boolean_parameters, R2).
-      # This prints and tolerates exactly those; anything else still fails.
+      # breaking 3.44: Flutter 3.50's material/cupertino deprecation in the
+      # two example apps (R1; lib/ and test/ use liquid_shell's internal
+      # barrel), and unnecessary_ignore of avoid_positional_boolean_parameters
+      # in the two files that keep a positional bool (R2, until the floor is
+      # Dart 3.14). This prints and tolerates exactly those; anything else
+      # still fails.
       - run: make analyze-stable
         if: ${{ (success() || failure()) && matrix.experimental }}
       - run: make provenance

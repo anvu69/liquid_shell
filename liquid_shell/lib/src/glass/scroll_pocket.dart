@@ -1,10 +1,10 @@
 import 'dart:ui' as ui;
 
-import 'package:flutter/material.dart';
 import 'package:liquid_shell/src/glass/glass_theme.dart';
 import 'package:liquid_shell/src/glass/liquid_glass.dart';
 import 'package:liquid_shell/src/glass/signals_controller.dart';
 import 'package:liquid_shell/src/glass/tier.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 
 /// Height of the scroll-edge pocket (147.8 pt).
 const double kScrollPocketExtent = 148;

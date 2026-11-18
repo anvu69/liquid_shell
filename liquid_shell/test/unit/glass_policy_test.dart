@@ -1,12 +1,12 @@
 import 'dart:ui' show ImageFilter;
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/glass/frosted_renderer.dart';
 import 'package:liquid_shell/src/glass/liquid_renderer.dart';
 import 'package:liquid_shell/src/glass/policy.dart';
 import 'package:liquid_shell/src/glass/solid_renderer.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 
 class _FakeRenderer extends LiquidGlassRenderer {
   const _FakeRenderer(this.tier, {this.supported = true, this.throws = false});

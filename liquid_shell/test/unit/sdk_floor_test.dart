@@ -3,9 +3,9 @@
 // This file only compiles if they exist, so CI's 3.44.x job guards the floor.
 import 'dart:ui' as ui;
 
-import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 
 void main() {
   test('ImageFilter.isShaderFilterSupported is a bool getter', () {

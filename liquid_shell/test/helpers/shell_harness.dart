@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/chrome/glass_tab_bar.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 
 /// Home · Inbox (count 3) · Reports (sidebar only) · Settings (dot).
 const kDestinations = [

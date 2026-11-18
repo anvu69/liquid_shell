@@ -7,10 +7,16 @@
 //
 // - R1: `deprecated_member_use` of `package:flutter/material.dart` or
 //   `package:flutter/cupertino.dart` (Flutter 3.50 moves them to
-//   material_ui / cupertino_ui). Exit: VK-1077.
-// - R2: `unnecessary_ignore` of `avoid_positional_boolean_parameters` (the
-//   3.50 linter no longer reports it where 3.44 and 3.47 still do).
-//   Exit: VK-1078.
+//   material_ui / cupertino_ui), only in the two example apps: the README
+//   snippets come from them, so they keep the import a reader uses.
+//   liquid_shell's lib/ and test/ go through lib/src/material_sdk.dart
+//   (VK-1077).
+// - R2: `unnecessary_ignore` of `avoid_positional_boolean_parameters` (Dart
+//   3.14 flags only two or more positional bools; 3.44 and 3.47 still flag
+//   one), only in the two files that cannot drop it: the public
+//   LiquidNativeSearchActiveChanged and the Pigeon source (Pigeon rejects
+//   named FlutterApi parameters). Exit: the floor reaches Dart 3.14
+//   (VK-1078).
 //
 // Each tolerated issue is printed. `make analyze` (the floor, `make verify`,
 // the pre-commit hook) keeps `--fatal-infos` and knows nothing of this list.
@@ -97,17 +103,28 @@ final _sdkUiLibrary = RegExp(
   r"^'package:flutter/(material|cupertino)\.dart' is deprecated",
 );
 
+/// Directories whose files may keep the SDK Material import (R1).
+const _r1Dirs = ['/liquid_shell/example/', '/liquid_shell/example_go_router/'];
+
+/// Files that must keep their positional-bool ignore (R2).
+const _r2Files = [
+  '/liquid_shell_platform_interface/lib/src/native_chrome.dart',
+  '/tool/pigeon/pigeons/native_shell.dart',
+];
+
 /// Why [issue] is tolerated on the stable leg, or null when it blocks.
-/// Only infos are ever tolerated.
+/// Only infos are ever tolerated, and only at the paths above.
 String? toleratedBecause(AnalyzerIssue issue) {
   if (issue.severity != 'INFO') return null;
   if (issue.code == 'deprecated_member_use' &&
-      _sdkUiLibrary.hasMatch(issue.message)) {
-    return 'R1, VK-1077';
+      _sdkUiLibrary.hasMatch(issue.message) &&
+      _r1Dirs.any(issue.path.contains)) {
+    return 'R1, VK-1077 (examples: README)';
   }
   if (issue.code == 'unnecessary_ignore' &&
-      issue.message.contains("'avoid_positional_boolean_parameters'")) {
-    return 'R2, VK-1078';
+      issue.message.contains("'avoid_positional_boolean_parameters'") &&
+      _r2Files.any(issue.path.endsWith)) {
+    return 'R2, VK-1078 (floor < Dart 3.14)';
   }
   return null;
 }

@@ -1,10 +1,10 @@
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:liquid_shell/src/dialogs/dialog_layout.dart';
 import 'package:liquid_shell/src/dialogs/dialog_metrics.dart';
 import 'package:liquid_shell/src/glass/liquid_glass.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 import 'package:liquid_shell/src/shell/breakpoints.dart';
 import 'package:liquid_shell/src/shell/strings.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';

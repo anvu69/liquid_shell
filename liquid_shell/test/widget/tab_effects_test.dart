@@ -1,6 +1,5 @@
 import 'dart:ui' as ui;
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/chrome/glass_tab_bar.dart';
@@ -8,6 +7,7 @@ import 'package:liquid_shell/src/chrome/tab_geometry.dart';
 import 'package:liquid_shell/src/glass/liquid_backdrop.dart';
 import 'package:liquid_shell/src/glass/liquid_lens.dart';
 import 'package:liquid_shell/src/glass/outside_shadow.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 
 const _screen = Size(402, 874);
 const double _y = 874.0 - 21 - 31;

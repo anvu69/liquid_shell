@@ -3,7 +3,7 @@ library;
 
 import 'dart:ui' show lerpDouble;
 
-import 'package:flutter/material.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 
 /// Colours and shapes of `liquid_shell` glass.
 ///

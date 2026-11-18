@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:liquid_shell/src/glass/glass_theme.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 import 'package:liquid_shell/src/shell/strings.dart';
 
 /// A badge on a destination: a count or a dot.

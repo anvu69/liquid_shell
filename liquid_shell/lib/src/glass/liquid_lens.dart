@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:ui' as ui;
 
-import 'package:flutter/material.dart';
 import 'package:liquid_shell/src/glass/glass_theme.dart';
 import 'package:liquid_shell/src/glass/lens_look.dart';
 import 'package:liquid_shell/src/glass/liquid_backdrop.dart';
@@ -12,6 +11,7 @@ import 'package:liquid_shell/src/glass/outside_shadow.dart';
 import 'package:liquid_shell/src/glass/shader_program.dart';
 import 'package:liquid_shell/src/glass/signals_controller.dart';
 import 'package:liquid_shell/src/glass/tier.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 
 export 'package:liquid_shell/src/glass/lens_look.dart';
 

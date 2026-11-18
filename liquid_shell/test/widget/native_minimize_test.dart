@@ -1,9 +1,9 @@
 // liquid_shell/test/widget/native_minimize_test.dart
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 import 'package:liquid_shell/src/native/native_host.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 

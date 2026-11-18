@@ -1,10 +1,10 @@
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/glass/liquid_backdrop.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 
 import '../helpers/fake_signals_platform.dart';
 

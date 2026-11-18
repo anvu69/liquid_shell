@@ -3,6 +3,9 @@
 Status: approved by the owner on 2026-11-16 (Option A + S1, every
 recommended default of the decision table in §7).
 
+Addendum 2026-11-18: R1 and R2 were narrowed, not removed, by VK-1077 and
+VK-1078; see `docs/specs/2026-11-18-material-seam-design.md`.
+
 ## 1. Problem
 
 On 2026-11-11 Flutter 3.50.0 (Dart 3.14.0) became `stable`. CI's stable legs

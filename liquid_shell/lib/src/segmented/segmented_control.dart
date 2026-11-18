@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:liquid_shell/src/chrome/large_content_viewer.dart';
 import 'package:liquid_shell/src/chrome/lens_clip.dart';
 import 'package:liquid_shell/src/chrome/lens_gesture.dart';
@@ -13,6 +12,7 @@ import 'package:liquid_shell/src/chrome/sized_layout_builder.dart';
 import 'package:liquid_shell/src/chrome/text_scale.dart';
 import 'package:liquid_shell/src/glass/glass_theme.dart';
 import 'package:liquid_shell/src/glass/liquid_lens.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 import 'package:liquid_shell/src/segmented/segment_geometry.dart';
 
 /// The track, for tests.

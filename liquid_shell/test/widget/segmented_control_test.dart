@@ -1,12 +1,12 @@
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/chrome/lens_clip.dart';
 import 'package:liquid_shell/src/chrome/sf_tracking.dart';
 import 'package:liquid_shell/src/chrome/sized_layout_builder.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 import 'package:liquid_shell/src/segmented/segmented_control.dart';
 
 import '../helpers/native_rows.dart';

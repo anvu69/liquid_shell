@@ -1,13 +1,12 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show SemanticsNode;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
-
 import 'package:liquid_shell/src/chrome/glass_tab_bar.dart';
 import 'package:liquid_shell/src/chrome/sidebar_toggle.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 import 'package:liquid_shell/src/search/search_chrome.dart'
     show kSearchFieldKey;
 import 'package:liquid_shell/src/shell/shell_layout.dart'
@@ -1803,10 +1802,9 @@ void main() {
       void select(int _) {}
       void expand() {}
       // One shared instance: LiquidChromeDetails == compares the callbacks.
-      // The positional bool is the public callback's own signature
-      // (`void Function(bool)`), which a test double cannot change.
-      // ignore: avoid_positional_boolean_parameters
-      void setVisible(bool _) {}
+      // A tear-off fits the public `ValueSetter<bool>` without declaring a
+      // positional bool parameter of its own.
+      final setVisible = <bool>[].add;
       LiquidChromeDetails details({
         LiquidChromeSlot slot = LiquidChromeSlot.tabBar,
         LiquidChromeKind kind = LiquidChromeKind.bottomBar,

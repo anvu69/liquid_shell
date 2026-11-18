@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:liquid_shell/src/dialogs/dialog_types.dart';
+import 'package:liquid_shell/src/material_sdk.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
 /// Throws [ArgumentError] for actions UIKit would crash on, draw blank, or
