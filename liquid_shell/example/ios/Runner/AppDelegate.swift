@@ -12,6 +12,9 @@ import UIKit
     if ProcessInfo.processInfo.environment["LIQUID_SHELL_EXAMPLE_TRACE_NAV"] != nil {
       AnimatedStackTrace.install()
     }
+    if ProcessInfo.processInfo.environment["LIQUID_SHELL_EXAMPLE_DEMO"] != nil {
+      FlutterUIProbe.install()
+    }
     #if DEBUG
       // tool/segment_frames.sh: UIKit's segmented controls instead of
       // Flutter's, at the same frames (spec VK-550 §14.5).
@@ -34,6 +37,75 @@ import UIKit
       guard call.method == "demo" else { return result(FlutterMethodNotImplemented) }
       result(ProcessInfo.processInfo.environment["LIQUID_SHELL_EXAMPLE_DEMO"])
     }
+  }
+}
+
+/// UI tests only (LIQUID_SHELL_EXAMPLE_DEMO, VK-1081): whether the Flutter
+/// UI is displayed, as an accessibility label ("flutterUI: displayed" or
+/// "flutterUI: not displayed") and a `[liquid_shell] example:` log line. A
+/// launch can show the native chrome over a white screen that never gets
+/// Flutter's first frame; the tests relaunch once on this signal.
+///
+/// KVO on `displayingFlutterUI`, not `setFlutterViewDidRenderCallback`: that
+/// slot is single, and the app's to use. Armed when the scene activates,
+/// after the plugin's install in `willConnect`, and never reads
+/// `flutter.view`, so it cannot change the launch it observes.
+enum FlutterUIProbe {
+  static let label: UILabel = {
+    let label = UILabel(frame: CGRect(x: 0, y: 0, width: 2, height: 2))
+    label.textColor = .clear
+    label.isUserInteractionEnabled = false
+    label.accessibilityIdentifier = "flutterUIProbe"
+    return label
+  }()
+  private static var launchedAt: CFTimeInterval = 0
+  private static var activation: NSObjectProtocol?
+  private static weak var observed: FlutterViewController?
+  private static var observation: NSKeyValueObservation?
+
+  static func install() {
+    launchedAt = CACurrentMediaTime()
+    activation = NotificationCenter.default.addObserver(
+      forName: UIScene.didActivateNotification, object: nil, queue: .main
+    ) { note in
+      guard let scene = note.object as? UIWindowScene else { return }
+      attach(in: scene)
+    }
+  }
+
+  private static func attach(in scene: UIWindowScene) {
+    guard
+      let window = scene.windows.first(where: \.isKeyWindow) ?? scene.windows.first,
+      let flutter = find(in: window.rootViewController),
+      flutter !== observed
+    else { return }
+    observed = flutter
+    // `.initial`: the first frame may already be up.
+    observation = flutter.observe(\.isDisplayingFlutterUI, options: [.initial, .new]) {
+      [weak window] flutter, _ in
+      report(flutter.isDisplayingFlutterUI, in: window)
+    }
+  }
+
+  /// The Flutter view controller: the root, or a descendant of it (the
+  /// plugin's shell container holds it as a child).
+  private static func find(in controller: UIViewController?) -> FlutterViewController? {
+    guard let controller else { return nil }
+    if let flutter = controller as? FlutterViewController { return flutter }
+    for child in controller.children {
+      if let flutter = find(in: child) { return flutter }
+    }
+    return nil
+  }
+
+  private static func report(_ displayed: Bool, in window: UIWindow?) {
+    label.accessibilityLabel = "flutterUI: \(displayed ? "displayed" : "not displayed")"
+    NSLog(
+      "[liquid_shell] example: Flutter UI displayed %d after %.0f ms", displayed ? 1 : 0,
+      (CACurrentMediaTime() - launchedAt) * 1000)
+    guard let window else { return }
+    if label.superview !== window { window.addSubview(label) }
+    window.bringSubviewToFront(label)
   }
 }
 

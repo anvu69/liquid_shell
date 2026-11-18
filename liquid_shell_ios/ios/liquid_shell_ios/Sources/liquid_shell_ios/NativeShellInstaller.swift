@@ -166,6 +166,16 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
   func install(_ flutter: UIViewController, in window: UIWindow) {
     let tabs = NativeTabsController(flutter: flutter, events: events)
     tabs.dartAttached = dartAttached
+    #if DEBUG
+      // VK-1081: a launch whose Flutter UI is never displayed needs the
+      // view's state here. `viewIfLoaded` only: reading `view` would load it.
+      // scene: the activation state's raw value (-1 unattached, 0 active,
+      // 1 inactive, 2 background; -2 no scene).
+      NSLog(
+        "[liquid_shell] install: view loaded %d, in window %d, scene %ld",
+        flutter.isViewLoaded ? 1 : 0, flutter.viewIfLoaded?.window != nil ? 1 : 0,
+        window.windowScene?.activationState.rawValue ?? -2)
+    #endif
     // Detach the Flutter view controller from the root role first, or
     // `addChild` throws UIViewControllerHierarchyInconsistency.
     window.rootViewController = nil

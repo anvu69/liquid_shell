@@ -12,19 +12,24 @@ final class MinimizeUITests: XCTestCase {
 
   override func setUp() { continueAfterFailure = false }
 
+  /// VK-1081: through `launchShowingFlutter`, which relaunches once,
+  /// recorded, when the Flutter UI is never displayed.
   private func launch(_ demo: String = "tabs") -> XCUIApplication {
-    let app = XCUIApplication()
-    app.launchEnvironment["LIQUID_SHELL_EXAMPLE_DEMO"] = demo
-    app.launch()
-    XCTAssertTrue(tabButton(app, "Home").waitForExistence(timeout: timeout), "launch: the tab bar")
-    // VK-1043: the `pages` demo's Home has an Add action, so a native bar
-    // that comes after Flutter's rows and moves them down.
-    if demo == "pages" {
+    launchShowingFlutter(demo) { app in
       XCTAssertTrue(
-        app.navigationBars["Home"].buttons["Add"].waitForExistence(timeout: 10),
-        "launch: Home's bar with Add")
+        tabButton(app, "Home").waitForExistence(timeout: timeout), "launch: the tab bar")
+      // VK-1043: the `pages` demo's Home has an Add action, so a native bar
+      // that comes after Flutter's rows and moves them down (VK-1064: below
+      // it once settled).
+      if demo == "pages" {
+        let bar = app.navigationBars["Home"]
+        XCTAssertTrue(
+          bar.buttons["Add"].waitForExistence(timeout: 10), "launch: Home's bar with Add")
+        let first = flutterRow(app, "Detail 1")
+        XCTAssertTrue(first.waitForExistence(timeout: 10), "launch: Home's rows")
+        waitRowBelowBar(first, bar)
+      }
     }
-    return app
   }
 
   /// A tab's button. The iPhone's bar is a tab bar in the accessibility
