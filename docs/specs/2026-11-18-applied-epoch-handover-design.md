@@ -140,7 +140,8 @@ covered, so its outer pages keep their Flutter bars and back buttons.
 
 ### 2.6 Task 0: the native disengage, measured
 
-See §9 (filled in by Task 0).
+GO for D6 (§9): native hides, resets Flutter's frame and insets, then
+publishes the disengaged state, in one `apply`.
 
 ### 2.7 B6: `LiquidNativeSearchActiveChanged(active: …)`
 
@@ -234,4 +235,20 @@ before every commit; pana on 3.50.0 for the interface.
 
 ## 9. Task 0 measurement
 
-(Filled in by Task 0.)
+`RunnerTests/NativeTabsTests/testTheDisengageHidesAndResetsFlutterBeforeItsState`
+(own simulators, iOS 26.5): engage Home with `Add`, settle, apply the
+dormant config, and read the controller inside `onStateChanged` for the
+first state with `engagedApplied == false`.
+
+| Device | `additionalSafeAreaInsets` at the state | Flutter frame | chrome hidden | Flutter safe top at the state / window / settled |
+|---|---|---|---|---|
+| iPhone 17 Pro | `.zero` | root bounds | yes | 62.0 / 62.0 / 62.0 |
+| iPad Air 11-inch (M4) | `.zero` | root bounds | yes | 32.0 / 32.0 / 32.0 |
+
+**Verdict: GO.** Everything native changes for a disengage is set before
+the state that says so is sent, and UIKit has already recomputed the safe
+area by then. Flutter's metrics still reach Dart on the engine's own path
+(the next layout pass), so either order can arrive in Dart: the releasing
+phase handles both. The Dart → native → Dart round trip was not measured on
+a device for the disengage (see the report); the code path is the engage's
+(one platform message each way), which VK-1064 measured at about 25 ms.

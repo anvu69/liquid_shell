@@ -4152,6 +4152,47 @@ extension NativeTabsTests {
     XCTAssertFalse(tabs.currentState().engagedApplied, "dormant: not engaged")
   }
 
+  /// VK-1074 (characterization): the dormant config hides the chrome,
+  /// gives Flutter the whole window and drops its extra insets, all before
+  /// the state that says so goes out. Dart can then keep native's layout
+  /// until that state, and draw its own bars right after it.
+  func testTheDisengageHidesAndResetsFlutterBeforeItsState() throws {
+    let tabs = try dormantFirstShell()
+    let plus = NativePageAction(sfSymbol: "plus", label: "Add", enabled: true)
+    tabs.apply(pagesConfig([NativePage(title: "Home", largeTitle: false, actions: [plus])]))
+    settle()
+    XCTAssertTrue(tabs.currentState().engagedApplied, "precondition: engaged")
+    XCTAssertGreaterThan(
+      tabs.flutter.additionalSafeAreaInsets.top + tabs.flutter.additionalSafeAreaInsets.bottom, 0,
+      "precondition: native adds insets")
+    let root = try XCTUnwrap(tabs.view.superview).bounds
+    var atState: (additional: UIEdgeInsets, frame: CGRect, hidden: Bool, top: CGFloat)?
+    events.onState = { [weak tabs] state in
+      guard let tabs, !state.engagedApplied, atState == nil else { return }
+      atState = (
+        tabs.flutter.additionalSafeAreaInsets, tabs.flutter.view.frame, tabs.view.isHidden,
+        tabs.flutter.view.safeAreaInsets.top
+      )
+    }
+    let dormant = NativeChromeConfig(
+      engaged: false, tabs: [], selectedIndex: 0, tintArgb: 0xFF00_7AFF, dark: false,
+      rtl: false, hidden: false, interactive: true, minimizeOnScroll: false,
+      tabBarHidden: false)
+    tabs.apply(dormant)
+    let seen = try XCTUnwrap(atState, "the disengage sends its state in apply")
+    XCTAssertEqual(seen.additional, .zero, "no extra insets when the state goes out")
+    XCTAssertEqual(seen.frame, root, "the whole window when the state goes out")
+    XCTAssertTrue(seen.hidden, "the chrome is hidden when the state goes out")
+    settle()
+    let window = try XCTUnwrap(tabs.view.window).safeAreaInsets.top
+    XCTAssertEqual(tabs.flutter.view.safeAreaInsets.top, window, accuracy: 0.5)
+    // Logged, not asserted: whether UIKit had already recomputed the safe
+    // area itself (it may lag to its next layout pass).
+    NSLog(
+      "VK-1074 disengage: top at state %.1f, window top %.1f, settled %.1f",
+      seen.top, window, tabs.flutter.view.safeAreaInsets.top)
+  }
+
   /// The B2 lesson: a size-class change re-applies the pages without a
   /// config from Dart; the buttons stay with the bar.
   func testASizeClassChangeKeepsARootsBarAndItsButtons() throws {
