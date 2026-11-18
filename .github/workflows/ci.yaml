@@ -64,8 +64,8 @@ jobs:
       # breaking 3.44: Flutter 3.50's material/cupertino deprecation in the
       # two example apps (R1; lib/ and test/ use liquid_shell's internal
       # barrel), and unnecessary_ignore of avoid_positional_boolean_parameters
-      # in the two files that keep a positional bool (R2, until the floor is
-      # Dart 3.14). This prints and tolerates exactly those; anything else
+      # in the Pigeon source, which keeps a positional bool (R2, until the
+      # floor is Dart 3.14). This prints and tolerates exactly those; anything else
       # still fails.
       - run: make analyze-stable
         if: ${{ (success() || failure()) && matrix.experimental }}

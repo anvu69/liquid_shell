@@ -16,6 +16,7 @@ class _FakeHost extends NativeShellHostApi {
     sidebar: NativeSidebar.tiled,
     verticalBarSide: NativeVerticalBarSide.none,
     engagedApplied: false,
+    appliedEpoch: 0,
   );
   NativeWindowControls controls = NativeWindowControls(leading: 66, top: 24);
   PlatformException? failure;
@@ -224,10 +225,37 @@ void main() {
           sidebar: NativeSidebar.hidden,
           verticalBarSide: NativeVerticalBarSide.none,
           engagedApplied: applied,
+          appliedEpoch: 0,
         ),
       );
       expect(state.engagedApplied, applied);
     }
+  });
+
+  test('stateFromNative maps appliedEpoch', () {
+    for (final epoch in [0, 7]) {
+      final state = stateFromNative(
+        NativeShellState(
+          installed: true,
+          compact: true,
+          sidebar: NativeSidebar.hidden,
+          verticalBarSide: NativeVerticalBarSide.none,
+          engagedApplied: true,
+          appliedEpoch: epoch,
+        ),
+      );
+      expect(state.appliedEpoch, epoch);
+    }
+  });
+
+  test('configToNative maps epoch', () {
+    expect(
+      configToNative(
+        const LiquidNativeChromeConfig(engaged: true, epoch: 5),
+      ).epoch,
+      5,
+    );
+    expect(configToNative(LiquidNativeChromeConfig.dormant).epoch, 0);
   });
 
   test('stateFromNative maps the vertical bar side', () {
@@ -243,6 +271,7 @@ void main() {
           sidebar: NativeSidebar.hidden,
           verticalBarSide: native,
           engagedApplied: false,
+          appliedEpoch: 0,
         ),
       );
       expect(state.verticalBarSide, side);
@@ -258,6 +287,7 @@ void main() {
           sidebar: NativeSidebar.hidden,
           verticalBarSide: NativeVerticalBarSide.none,
           engagedApplied: false,
+          appliedEpoch: 0,
           unavailableReason: reason,
         ),
       );
@@ -272,6 +302,7 @@ void main() {
           sidebar: sidebar,
           verticalBarSide: NativeVerticalBarSide.none,
           engagedApplied: false,
+          appliedEpoch: 0,
         ),
       );
       expect(state.sidebar.name, sidebar.name);
@@ -420,6 +451,7 @@ void main() {
         sidebar: NativeSidebar.hidden,
         verticalBarSide: NativeVerticalBarSide.none,
         engagedApplied: false,
+        appliedEpoch: 0,
       ),
     ]);
     await deliver('onWindowControlsChanged', [
@@ -724,7 +756,7 @@ void main() {
 
       expect(events, [
         const LiquidNativeSearchTextChanged('hô', composing: true),
-        const LiquidNativeSearchActiveChanged(true),
+        const LiquidNativeSearchActiveChanged(active: true),
         const LiquidNativeSearchSubmitted('hồ'),
         const LiquidNativeSearchFieldChanged(Rect.fromLTWH(8, 490, 330, 48)),
         const LiquidNativeBackTapped(2),

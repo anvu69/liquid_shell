@@ -264,6 +264,8 @@ struct NativeShellState: Hashable, CustomStringConvertible {
   /// the native one once this is true.
   var engagedApplied: Bool
   var unavailableReason: NativeUnavailableReason? = nil
+  /// The applied config's `epoch` (0: none applied).
+  var appliedEpoch: Int64
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -274,6 +276,7 @@ struct NativeShellState: Hashable, CustomStringConvertible {
     let verticalBarSide = pigeonVar_list[3] as! NativeVerticalBarSide
     let engagedApplied = pigeonVar_list[4] as! Bool
     let unavailableReason: NativeUnavailableReason? = nilOrValue(pigeonVar_list[5])
+    let appliedEpoch = pigeonVar_list[6] as! Int64
 
     return NativeShellState(
       installed: installed,
@@ -281,7 +284,8 @@ struct NativeShellState: Hashable, CustomStringConvertible {
       sidebar: sidebar,
       verticalBarSide: verticalBarSide,
       engagedApplied: engagedApplied,
-      unavailableReason: unavailableReason
+      unavailableReason: unavailableReason,
+      appliedEpoch: appliedEpoch
     )
   }
   func toList() -> [Any?] {
@@ -292,13 +296,14 @@ struct NativeShellState: Hashable, CustomStringConvertible {
       verticalBarSide,
       engagedApplied,
       unavailableReason,
+      appliedEpoch,
     ]
   }
   static func == (lhs: NativeShellState, rhs: NativeShellState) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return NativeShellApiPigeonInternal.deepEquals(lhs.installed, rhs.installed) && NativeShellApiPigeonInternal.deepEquals(lhs.compact, rhs.compact) && NativeShellApiPigeonInternal.deepEquals(lhs.sidebar, rhs.sidebar) && NativeShellApiPigeonInternal.deepEquals(lhs.verticalBarSide, rhs.verticalBarSide) && NativeShellApiPigeonInternal.deepEquals(lhs.engagedApplied, rhs.engagedApplied) && NativeShellApiPigeonInternal.deepEquals(lhs.unavailableReason, rhs.unavailableReason)
+    return NativeShellApiPigeonInternal.deepEquals(lhs.installed, rhs.installed) && NativeShellApiPigeonInternal.deepEquals(lhs.compact, rhs.compact) && NativeShellApiPigeonInternal.deepEquals(lhs.sidebar, rhs.sidebar) && NativeShellApiPigeonInternal.deepEquals(lhs.verticalBarSide, rhs.verticalBarSide) && NativeShellApiPigeonInternal.deepEquals(lhs.engagedApplied, rhs.engagedApplied) && NativeShellApiPigeonInternal.deepEquals(lhs.unavailableReason, rhs.unavailableReason) && NativeShellApiPigeonInternal.deepEquals(lhs.appliedEpoch, rhs.appliedEpoch)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -309,10 +314,11 @@ struct NativeShellState: Hashable, CustomStringConvertible {
     NativeShellApiPigeonInternal.deepHash(value: verticalBarSide, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: engagedApplied, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: unavailableReason, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: appliedEpoch, hasher: &hasher)
   }
 
   public var description: String {
-    return "NativeShellState(installed: \(String(describing: installed)), compact: \(String(describing: compact)), sidebar: \(String(describing: sidebar)), verticalBarSide: \(String(describing: verticalBarSide)), engagedApplied: \(String(describing: engagedApplied)), unavailableReason: \(String(describing: unavailableReason)))"
+    return "NativeShellState(installed: \(String(describing: installed)), compact: \(String(describing: compact)), sidebar: \(String(describing: sidebar)), verticalBarSide: \(String(describing: verticalBarSide)), engagedApplied: \(String(describing: engagedApplied)), unavailableReason: \(String(describing: unavailableReason)), appliedEpoch: \(String(describing: appliedEpoch)))"
   }
 }
 
@@ -869,6 +875,9 @@ struct NativeChromeConfig: Hashable, CustomStringConvertible {
   /// Hide the tab bar and the sidebar, keep the selected tab's navigation
   /// bar. Ignored while [hidden].
   var tabBarHidden: Bool
+  /// The hand-over this config belongs to (stamped by Dart): a new one
+  /// over an engaged config is another shell taking over.
+  var epoch: Int64
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -886,6 +895,7 @@ struct NativeChromeConfig: Hashable, CustomStringConvertible {
     let interactive = pigeonVar_list[10] as! Bool
     let minimizeOnScroll = pigeonVar_list[11] as! Bool
     let tabBarHidden = pigeonVar_list[12] as! Bool
+    let epoch = pigeonVar_list[13] as! Int64
 
     return NativeChromeConfig(
       engaged: engaged,
@@ -900,7 +910,8 @@ struct NativeChromeConfig: Hashable, CustomStringConvertible {
       hidden: hidden,
       interactive: interactive,
       minimizeOnScroll: minimizeOnScroll,
-      tabBarHidden: tabBarHidden
+      tabBarHidden: tabBarHidden,
+      epoch: epoch
     )
   }
   func toList() -> [Any?] {
@@ -918,13 +929,14 @@ struct NativeChromeConfig: Hashable, CustomStringConvertible {
       interactive,
       minimizeOnScroll,
       tabBarHidden,
+      epoch,
     ]
   }
   static func == (lhs: NativeChromeConfig, rhs: NativeChromeConfig) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return NativeShellApiPigeonInternal.deepEquals(lhs.engaged, rhs.engaged) && NativeShellApiPigeonInternal.deepEquals(lhs.tabs, rhs.tabs) && NativeShellApiPigeonInternal.deepEquals(lhs.selectedIndex, rhs.selectedIndex) && NativeShellApiPigeonInternal.deepEquals(lhs.trailing, rhs.trailing) && NativeShellApiPigeonInternal.deepEquals(lhs.footer, rhs.footer) && NativeShellApiPigeonInternal.deepEquals(lhs.search, rhs.search) && NativeShellApiPigeonInternal.deepEquals(lhs.tintArgb, rhs.tintArgb) && NativeShellApiPigeonInternal.deepEquals(lhs.dark, rhs.dark) && NativeShellApiPigeonInternal.deepEquals(lhs.rtl, rhs.rtl) && NativeShellApiPigeonInternal.deepEquals(lhs.hidden, rhs.hidden) && NativeShellApiPigeonInternal.deepEquals(lhs.interactive, rhs.interactive) && NativeShellApiPigeonInternal.deepEquals(lhs.minimizeOnScroll, rhs.minimizeOnScroll) && NativeShellApiPigeonInternal.deepEquals(lhs.tabBarHidden, rhs.tabBarHidden)
+    return NativeShellApiPigeonInternal.deepEquals(lhs.engaged, rhs.engaged) && NativeShellApiPigeonInternal.deepEquals(lhs.tabs, rhs.tabs) && NativeShellApiPigeonInternal.deepEquals(lhs.selectedIndex, rhs.selectedIndex) && NativeShellApiPigeonInternal.deepEquals(lhs.trailing, rhs.trailing) && NativeShellApiPigeonInternal.deepEquals(lhs.footer, rhs.footer) && NativeShellApiPigeonInternal.deepEquals(lhs.search, rhs.search) && NativeShellApiPigeonInternal.deepEquals(lhs.tintArgb, rhs.tintArgb) && NativeShellApiPigeonInternal.deepEquals(lhs.dark, rhs.dark) && NativeShellApiPigeonInternal.deepEquals(lhs.rtl, rhs.rtl) && NativeShellApiPigeonInternal.deepEquals(lhs.hidden, rhs.hidden) && NativeShellApiPigeonInternal.deepEquals(lhs.interactive, rhs.interactive) && NativeShellApiPigeonInternal.deepEquals(lhs.minimizeOnScroll, rhs.minimizeOnScroll) && NativeShellApiPigeonInternal.deepEquals(lhs.tabBarHidden, rhs.tabBarHidden) && NativeShellApiPigeonInternal.deepEquals(lhs.epoch, rhs.epoch)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -942,10 +954,11 @@ struct NativeChromeConfig: Hashable, CustomStringConvertible {
     NativeShellApiPigeonInternal.deepHash(value: interactive, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: minimizeOnScroll, hasher: &hasher)
     NativeShellApiPigeonInternal.deepHash(value: tabBarHidden, hasher: &hasher)
+    NativeShellApiPigeonInternal.deepHash(value: epoch, hasher: &hasher)
   }
 
   public var description: String {
-    return "NativeChromeConfig(engaged: \(String(describing: engaged)), tabs: \(String(describing: tabs)), selectedIndex: \(String(describing: selectedIndex)), trailing: \(String(describing: trailing)), footer: \(String(describing: footer)), search: \(String(describing: search)), tintArgb: \(String(describing: tintArgb)), dark: \(String(describing: dark)), rtl: \(String(describing: rtl)), hidden: \(String(describing: hidden)), interactive: \(String(describing: interactive)), minimizeOnScroll: \(String(describing: minimizeOnScroll)), tabBarHidden: \(String(describing: tabBarHidden)))"
+    return "NativeChromeConfig(engaged: \(String(describing: engaged)), tabs: \(String(describing: tabs)), selectedIndex: \(String(describing: selectedIndex)), trailing: \(String(describing: trailing)), footer: \(String(describing: footer)), search: \(String(describing: search)), tintArgb: \(String(describing: tintArgb)), dark: \(String(describing: dark)), rtl: \(String(describing: rtl)), hidden: \(String(describing: hidden)), interactive: \(String(describing: interactive)), minimizeOnScroll: \(String(describing: minimizeOnScroll)), tabBarHidden: \(String(describing: tabBarHidden)), epoch: \(String(describing: epoch)))"
   }
 }
 

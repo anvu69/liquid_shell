@@ -232,7 +232,7 @@ final class NativeShellInstaller: NSObject, NativeShellHostApi {
     }
     return NativeShellState(
       installed: false, compact: false, sidebar: .hidden, verticalBarSide: .none,
-      engagedApplied: false, unavailableReason: reason)
+      engagedApplied: false, unavailableReason: reason, appliedEpoch: 0)
   }
 
   func update(config: NativeChromeConfig) throws {

@@ -46,8 +46,8 @@ analyze: ## Static analysis of every package, the example and tool/; infos and w
 # CI's latest-stable leg only (VK-1076): the same analysis, but the infos
 # that only the newer SDK reports and the 3.44 floor cannot fix are printed
 # and tolerated (tool/check_analyze.dart): the SDK material import in the
-# two examples, and two positional-bool ignores until the floor reaches
-# Dart 3.14 (VK-1077, VK-1078).
+# two examples, and the Pigeon source's positional-bool ignore until the
+# floor reaches Dart 3.14 (VK-1077, VK-1078).
 analyze-stable: ## analyze for CI's stable leg: fatal except the allowlisted stable-only infos
 	$(DART) run tool/check_analyze.dart $(ANALYZE_PATHS)
 

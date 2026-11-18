@@ -22,6 +22,7 @@ LiquidNativeShellState stateFromNative(
     NativeVerticalBarSide.right => LiquidNativeVerticalBarSide.right,
   },
   engagedApplied: state.engagedApplied,
+  appliedEpoch: state.appliedEpoch,
   unavailableReason: switch (state.unavailableReason) {
     null => null,
     NativeUnavailableReason.osTooOld => LiquidNativeUnavailableReason.osTooOld,
@@ -110,6 +111,7 @@ NativeChromeConfig configToNative(LiquidNativeChromeConfig config) =>
       interactive: config.interactive,
       minimizeOnScroll: config.minimizeOnScroll,
       tabBarHidden: config.tabBarHidden,
+      epoch: config.epoch,
     );
 
 /// A native rect, checked at the boundary: any non-finite field makes it

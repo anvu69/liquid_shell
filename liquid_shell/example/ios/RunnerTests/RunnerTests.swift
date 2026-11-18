@@ -836,7 +836,7 @@ final class NativeTabsTests: XCTestCase {
           semanticLabel: "Account, Ann Lee")
         : nil,
       tintArgb: 0xFF00_7AFF, dark: false, rtl: false, hidden: hidden, interactive: interactive,
-      minimizeOnScroll: minimize, tabBarHidden: false)
+      minimizeOnScroll: minimize, tabBarHidden: false, epoch: 1)
   }
 
   /// Lets UIKit finish layout and any sidebar transition.
@@ -1524,7 +1524,7 @@ final class NativeTabsTests: XCTestCase {
       NativeChromeConfig(
         engaged: false, tabs: [], selectedIndex: 0, tintArgb: 0xFF00_7AFF, dark: false,
         rtl: false, hidden: false, interactive: true, minimizeOnScroll: false,
-        tabBarHidden: false))
+        tabBarHidden: false, epoch: 1))
     settle()
     XCTAssertFalse(tabs.chromeVisible)
     XCTAssertEqual(tabs.tabs.map(\.identifier), shown, "dormant leaves the tabs alone")
@@ -1650,7 +1650,7 @@ final class NativeTabsTests: XCTestCase {
       NativeChromeConfig(
         engaged: false, tabs: [], selectedIndex: 0, tintArgb: 0xFF00_7AFF, dark: false,
         rtl: false, hidden: false, interactive: true, minimizeOnScroll: false,
-        tabBarHidden: false))
+        tabBarHidden: false, epoch: 1))
     settle()
 
     container.traitOverrides.horizontalSizeClass = .compact
@@ -2250,7 +2250,7 @@ extension NativeTabsTests {
       search: NativeSearchConfig(placeholder: placeholder, scopes: scopes), tintArgb: 0xFF00_7AFF,
       dark: false,
       rtl: false, hidden: hidden, interactive: interactive, minimizeOnScroll: minimize,
-      tabBarHidden: false)
+      tabBarHidden: false, epoch: 1)
   }
 
   fileprivate func installedSearchShell(
@@ -2655,7 +2655,7 @@ extension NativeTabsTests {
     let dormant = NativeChromeConfig(
       engaged: false, tabs: [], selectedIndex: 0, tintArgb: 0xFF00_7AFF, dark: false,
       rtl: false, hidden: false, interactive: true, minimizeOnScroll: false,
-      tabBarHidden: false)
+      tabBarHidden: false, epoch: 1)
     for (name, hide) in [("dormant", dormant), ("hidden", searchConfig(selected: 2, hidden: true))] {
       let tabs = try installedSearchShell(selected: 2)
       let bridge = tabs.searchBridge
@@ -4177,7 +4177,7 @@ extension NativeTabsTests {
     let dormant = NativeChromeConfig(
       engaged: false, tabs: [], selectedIndex: 0, tintArgb: 0xFF00_7AFF, dark: false,
       rtl: false, hidden: false, interactive: true, minimizeOnScroll: false,
-      tabBarHidden: false)
+      tabBarHidden: false, epoch: 1)
     tabs.apply(dormant)
     let seen = try XCTUnwrap(atState, "the disengage sends its state in apply")
     XCTAssertEqual(seen.additional, .zero, "no extra insets when the state goes out")

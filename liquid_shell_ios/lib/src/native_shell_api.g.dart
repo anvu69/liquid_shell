@@ -185,6 +185,7 @@ class NativeShellState {
     required this.verticalBarSide,
     required this.engagedApplied,
     this.unavailableReason,
+    required this.appliedEpoch,
   });
 
   bool installed;
@@ -201,6 +202,9 @@ class NativeShellState {
 
   NativeUnavailableReason? unavailableReason;
 
+  /// The applied config's `epoch` (0: none applied).
+  int appliedEpoch;
+
   List<Object?> _toList() {
     return <Object?>[
       installed,
@@ -209,6 +213,7 @@ class NativeShellState {
       verticalBarSide,
       engagedApplied,
       unavailableReason,
+      appliedEpoch,
     ];
   }
 
@@ -225,6 +230,7 @@ class NativeShellState {
       verticalBarSide: result[3]! as NativeVerticalBarSide,
       engagedApplied: result[4]! as bool,
       unavailableReason: result[5] as NativeUnavailableReason?,
+      appliedEpoch: result[6]! as int,
     );
   }
 
@@ -242,7 +248,8 @@ class NativeShellState {
         _deepEquals(sidebar, other.sidebar) &&
         _deepEquals(verticalBarSide, other.verticalBarSide) &&
         _deepEquals(engagedApplied, other.engagedApplied) &&
-        _deepEquals(unavailableReason, other.unavailableReason);
+        _deepEquals(unavailableReason, other.unavailableReason) &&
+        _deepEquals(appliedEpoch, other.appliedEpoch);
   }
 
   @override
@@ -251,7 +258,7 @@ class NativeShellState {
 
   @override
   String toString() {
-    return 'NativeShellState(installed: $installed, compact: $compact, sidebar: $sidebar, verticalBarSide: $verticalBarSide, engagedApplied: $engagedApplied, unavailableReason: $unavailableReason)';
+    return 'NativeShellState(installed: $installed, compact: $compact, sidebar: $sidebar, verticalBarSide: $verticalBarSide, engagedApplied: $engagedApplied, unavailableReason: $unavailableReason, appliedEpoch: $appliedEpoch)';
   }
 }
 
@@ -933,6 +940,7 @@ class NativeChromeConfig {
     required this.interactive,
     required this.minimizeOnScroll,
     required this.tabBarHidden,
+    required this.epoch,
   });
 
   bool engaged;
@@ -964,6 +972,10 @@ class NativeChromeConfig {
   /// bar. Ignored while [hidden].
   bool tabBarHidden;
 
+  /// The hand-over this config belongs to (stamped by Dart): a new one
+  /// over an engaged config is another shell taking over.
+  int epoch;
+
   List<Object?> _toList() {
     return <Object?>[
       engaged,
@@ -979,6 +991,7 @@ class NativeChromeConfig {
       interactive,
       minimizeOnScroll,
       tabBarHidden,
+      epoch,
     ];
   }
 
@@ -1002,6 +1015,7 @@ class NativeChromeConfig {
       interactive: result[10]! as bool,
       minimizeOnScroll: result[11]! as bool,
       tabBarHidden: result[12]! as bool,
+      epoch: result[13]! as int,
     );
   }
 
@@ -1026,7 +1040,8 @@ class NativeChromeConfig {
         _deepEquals(hidden, other.hidden) &&
         _deepEquals(interactive, other.interactive) &&
         _deepEquals(minimizeOnScroll, other.minimizeOnScroll) &&
-        _deepEquals(tabBarHidden, other.tabBarHidden);
+        _deepEquals(tabBarHidden, other.tabBarHidden) &&
+        _deepEquals(epoch, other.epoch);
   }
 
   @override
@@ -1035,7 +1050,7 @@ class NativeChromeConfig {
 
   @override
   String toString() {
-    return 'NativeChromeConfig(engaged: $engaged, tabs: $tabs, selectedIndex: $selectedIndex, trailing: $trailing, footer: $footer, search: $search, tintArgb: $tintArgb, dark: $dark, rtl: $rtl, hidden: $hidden, interactive: $interactive, minimizeOnScroll: $minimizeOnScroll, tabBarHidden: $tabBarHidden)';
+    return 'NativeChromeConfig(engaged: $engaged, tabs: $tabs, selectedIndex: $selectedIndex, trailing: $trailing, footer: $footer, search: $search, tintArgb: $tintArgb, dark: $dark, rtl: $rtl, hidden: $hidden, interactive: $interactive, minimizeOnScroll: $minimizeOnScroll, tabBarHidden: $tabBarHidden, epoch: $epoch)';
   }
 }
 

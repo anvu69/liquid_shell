@@ -255,7 +255,7 @@ final class _NativeReceiver implements NativeShellFlutterApi {
 
   @override
   void onSearchActiveChanged(bool active) =>
-      _emit(LiquidNativeSearchActiveChanged(active));
+      _emit(LiquidNativeSearchActiveChanged(active: active));
 
   @override
   void onSearchSubmitted(String text) =>

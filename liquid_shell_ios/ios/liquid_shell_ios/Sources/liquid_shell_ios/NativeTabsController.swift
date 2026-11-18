@@ -595,7 +595,8 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       // The applied config's, not `chromeVisible`: a `hidden` toggle (a
       // dialog) must not send a state, whose forced resend Dart pays for
       // (VK-1064).
-      engagedApplied: config?.engaged ?? false)
+      engagedApplied: config?.engaged ?? false,
+      appliedEpoch: 0)
   }
 
   // MARK: - Flutter frame and safe area (spec §5.4)

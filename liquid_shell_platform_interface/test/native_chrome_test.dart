@@ -45,6 +45,16 @@ void main() {
       expect(b.toString(), contains('engagedApplied: true'));
     });
 
+    test('appliedEpoch defaults to 0 and takes part in equality', () {
+      const a = LiquidNativeShellState(installed: true);
+      const b = LiquidNativeShellState(installed: true, appliedEpoch: 3);
+      expect(a.appliedEpoch, 0);
+      expect(a == b, isFalse);
+      expect(a.hashCode == b.hashCode, isFalse);
+      expect(b, const LiquidNativeShellState(installed: true, appliedEpoch: 3));
+      expect(b.toString(), contains('appliedEpoch: 3'));
+    });
+
     test('== compares every field', () {
       const a = LiquidNativeShellState(installed: true);
       expect(a, const LiquidNativeShellState(installed: true));
@@ -495,8 +505,8 @@ void main() {
         isNot(const LiquidNativeSearchTextChanged('hồ', composing: false)),
       );
       expect(
-        const LiquidNativeSearchActiveChanged(true),
-        const LiquidNativeSearchActiveChanged(true),
+        const LiquidNativeSearchActiveChanged(active: true),
+        const LiquidNativeSearchActiveChanged(active: true),
       );
       expect(
         const LiquidNativeSearchSubmitted('ho'),
@@ -524,6 +534,10 @@ void main() {
         isNot(const LiquidNativePopToPage(1, index: 0)),
       );
       expect(
+        const LiquidNativeSearchActiveChanged(active: true),
+        isNot(const LiquidNativeSearchActiveChanged(active: false)),
+      );
+      expect(
         const LiquidNativeSearchTextChanged('a', composing: false).toString(),
         'LiquidNativeSearchTextChanged(a, composing: false)',
       );
@@ -548,9 +562,9 @@ void main() {
           'LiquidNativeSearchTextChanged(a, composing: true)',
         ),
         (
-          const LiquidNativeSearchActiveChanged(false),
-          const LiquidNativeSearchActiveChanged(false),
-          'LiquidNativeSearchActiveChanged(false)',
+          const LiquidNativeSearchActiveChanged(active: false),
+          const LiquidNativeSearchActiveChanged(active: false),
+          'LiquidNativeSearchActiveChanged(active: false)',
         ),
         (
           const LiquidNativeSearchSubmitted('ho'),
@@ -592,6 +606,22 @@ void main() {
       const LiquidNativeChromeConfig(engaged: true, minimizeOnScroll: true),
     );
     expect(on.toString(), contains('minimizeOnScroll: true'));
+  });
+
+  test('epoch: 0 by default, part of equality', () {
+    const a = LiquidNativeChromeConfig(engaged: true);
+    const b = LiquidNativeChromeConfig(engaged: true, epoch: 4);
+    expect(a.epoch, 0);
+    expect(LiquidNativeChromeConfig.dormant.epoch, 0);
+    expect(a == b, isFalse);
+    expect(a.hashCode == b.hashCode, isFalse);
+    expect(b, const LiquidNativeChromeConfig(engaged: true, epoch: 4));
+    expect(b.toString(), contains('epoch: 4'));
+    expect(b.copyWithEpoch(7).epoch, 7);
+    expect(
+      b.copyWithEpoch(7),
+      const LiquidNativeChromeConfig(engaged: true, epoch: 7),
+    );
   });
 
   test('tabBarHidden: off by default, part of equality (VK-442)', () {
