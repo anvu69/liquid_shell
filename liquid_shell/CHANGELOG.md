@@ -3,6 +3,22 @@
 - liquid_shell's own code no longer imports `package:flutter/material.dart`,
   which Flutter 3.50 deprecates, so its static analysis is clean on 3.50.
   Nothing changes for apps: the Material types are still the SDK's own.
+- Fixed: with native chrome, a shell under a pushed shell no longer draws
+  its own page bar under the native one, 54 pt low, during the push and
+  the pop; its content stays put.
+- Fixed: a shell that takes the native chrome over from another one (a
+  pushed or replaced shell, one popping back to its owner, a quick
+  off → auto, a hot restart) keeps native's layout until its own config is
+  shown, so there is no frame without a bar and no jump; where native shows
+  no page bar (an iPad's default root), it keeps its own bar until then.
+- Fixed: a shell that leaves native chrome (`nativeChrome: off`, a
+  `chromeBuilder`, a destination without an `sfSymbol`) no longer shows its
+  page bar and tab bar under the native ones for a moment: it keeps
+  native's layout until native has hidden, then draws its bars where the
+  native ones were.
+- `LiquidNativeSearchActiveChanged` takes a named `active` (see
+  liquid_shell_platform_interface). liquid_shell requires the 0.1.0-dev.14
+  platform packages.
 
 ## 0.1.0-dev.13
 

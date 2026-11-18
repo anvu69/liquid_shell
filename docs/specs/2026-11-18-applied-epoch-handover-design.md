@@ -1,7 +1,8 @@
 # The hand-over follows the config native has applied, per config (VK-1074, VK-1075, VK-1082)
 
 Status: approved by the owner on 2026-11-18 (option C and every default of
-the decision table in §8, plus B6). Evidence: `.superpowers/sdd/vk1074-1075-design.md`
+the decision table in §8, plus B6). Implemented on branch
+`VK-1075-engaged-ack` (§10 records what changed on the way). Evidence: `.superpowers/sdd/vk1074-1075-design.md`
 in the vankhan ledger dir (not in this worktree): the code trace and a
 widget probe of every case below.
 
@@ -252,3 +253,32 @@ area by then. Flutter's metrics still reach Dart on the engine's own path
 phase handles both. The Dart → native → Dart round trip was not measured on
 a device for the disengage (see the report); the code path is the engage's
 (one platform message each way), which VK-1064 measured at about 25 ms.
+
+## 10. As built
+
+- **D3, simplified.** "Native shows no page bar there" alone sends a new
+  owner to waiting; "and mine has one" is dropped. The incoming shell's
+  page registers after its first build, so on that frame "mine" is
+  unknown; waiting draws the Flutter bar only when the page has one, so
+  the result is the same without the race.
+- **S-1 rule.** A covered standby shell drops its Flutter bar only while
+  native shows a page bar there (and its config is not hidden); over a
+  shell whose root has no bar it keeps its own, so its page is never
+  without one. The cover is latched until the shell owns the chrome
+  again: a popped route is dismissed a frame or more before its shell is
+  disposed and gives the chrome back.
+- **Epoch 0 and release.** With epoch 0 (not echoed) a release is taken
+  as done at once (the dev.13 rule), so a platform that does not echo
+  never waits 250 ms on a disengage.
+- **Tests** live in `liquid_shell/test/widget/native_handover_test.dart`
+  (widget), `test/unit/native_handover_test.dart` (the phase step) and
+  `test/unit/native_host_test.dart` (the host), beside the VK-1064 tests
+  in `native_pages_test.dart`, which are unchanged.
+- **Residual.** The mirror hold is for the top only. In the ack-first
+  order the Flutter tab bar sits above the home indicator by the native
+  bar's height for the round trip until Flutter's metrics drop: Dart does
+  not know the window's own bottom inset then. Native is already hidden,
+  so there is no double tab bar.
+- **Example.** The `pages` case's Settings opens "A shell over this one",
+  a full-screen route with its own shell.
+
