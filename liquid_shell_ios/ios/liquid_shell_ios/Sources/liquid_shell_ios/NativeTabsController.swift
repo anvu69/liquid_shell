@@ -221,6 +221,14 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     // native bar shows at once, with no slide and no fade of the chrome.
     // A show after a hide (a dialog) keeps the fade.
     let engaging = new.engaged && !(config?.engaged ?? false)
+    // A takeover (VK-1075): another shell's config, a new epoch, over an
+    // engaged one. Flutter's route transition is the animation, and Dart
+    // keeps native's layout until this config's ack: applied as an engage,
+    // also over a hidden config (a route covered the old owner), so no
+    // fade either.
+    let takeover =
+      new.engaged && (config?.engaged ?? false) && new.epoch != (config?.epoch ?? new.epoch)
+    let atOnce = engaging || takeover
     // Read before `config` changes: once the new config hides the chrome,
     // `currentSidebar()` reports `.hidden` and an open overlay is missed.
     let overlayOpen = currentSidebar() == .overlay
@@ -242,7 +250,7 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       }
       showTabs(new)
       applySearch(new)
-      applyPages(new, animated: !engaging)
+      applyPages(new, animated: !atOnce)
       // A page pushed over the search root drops a kept activation: the
       // pop back must not bring the search (VK-634, `isSearchRootOnTop`).
       if !isSearchRootOnTop { searchBridge.dropPendingActivation() }
@@ -273,13 +281,13 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
     // dismiss it. The text is kept, as for any dismissal Dart asks for.
     if !chromeVisible { searchBridge.dismissKeepingText() }
     if chromeVisible != wasVisible {
-      setChromeVisible(chromeVisible, closingOverlay: overlayOpen, animated: !engaging)
+      setChromeVisible(chromeVisible, closingOverlay: overlayOpen, animated: !atOnce)
     }
     // Shown without animation, the bar would lay out on UIKit's next pass,
     // after the state below acks: lay the tab controller out now (on iPad
     // its top bar and sidebar place the tab), then the tab, so the ack goes
     // out with Flutter's new top inset already set (VK-1064).
-    if engaging, chromeVisible {
+    if atOnce, chromeVisible {
       view.layoutIfNeeded()
       selectedViewController?.view.layoutIfNeeded()
     }
@@ -596,7 +604,8 @@ final class NativeTabsController: UITabBarController, UITabBarControllerDelegate
       // dialog) must not send a state, whose forced resend Dart pays for
       // (VK-1064).
       engagedApplied: config?.engaged ?? false,
-      appliedEpoch: 0)
+      // Which config that is (VK-1075): a hidden toggle keeps it too.
+      appliedEpoch: config?.epoch ?? 0)
   }
 
   // MARK: - Flutter frame and safe area (spec §5.4)

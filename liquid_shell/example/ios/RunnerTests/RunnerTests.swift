@@ -4193,6 +4193,97 @@ extension NativeTabsTests {
       seen.top, window, tabs.flutter.view.safeAreaInsets.top)
   }
 
+  /// VK-1075: the state names the config native applied by its epoch, so
+  /// a shell knows its own config is the one shown.
+  func testAppliedEpochFollowsTheAppliedConfig() throws {
+    let tabs = try installedShell()
+    XCTAssertEqual(tabs.currentState().appliedEpoch, 1)
+    var next = config()
+    next.epoch = 5
+    tabs.apply(next)
+    XCTAssertEqual(tabs.currentState().appliedEpoch, 5)
+    var off = config(engaged: false)
+    off.epoch = 6
+    tabs.apply(off)
+    XCTAssertEqual(tabs.currentState().appliedEpoch, 6, "a disengage too")
+  }
+
+  /// VK-1075: a new epoch over an engaged config is another shell taking
+  /// over (Flutter's route transition is the animation): the new page's
+  /// bar shows at once, with no slide, and the state that acks it goes out
+  /// with Flutter's inset already below that bar.
+  func testATakeoverShowsTheBarAtOnceAndAcksWithItsInset() throws {
+    try requirePhone()
+    let tabs = try installedShell()
+    tabs.dartAttached = true
+    tabs.apply(pagesConfig([NativePage(title: "Home", largeTitle: false)]))
+    settle()
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    XCTAssertTrue(nav.isNavigationBarHidden, "precondition: no bar")
+    var topAtAck: CGFloat?
+    events.onState = { [weak tabs] state in
+      if state.appliedEpoch == 2, topAtAck == nil {
+        topAtAck = tabs?.flutter.view.safeAreaInsets.top
+      }
+    }
+    let plus = NativePageAction(sfSymbol: "plus", label: "Add", enabled: true)
+    var next = pagesConfig([NativePage(title: "Feed", largeTitle: false, actions: [plus])])
+    next.epoch = 2
+    tabs.apply(next)
+    XCTAssertFalse(nav.isNavigationBarHidden, "the bar is up")
+    XCTAssertNil(nav.navigationBar.layer.animationKeys(), "no slide of the bar")
+    XCTAssertEqual(events.states.last?.appliedEpoch, 2, "the ack is sent in apply")
+    settle()
+    XCTAssertEqual(
+      try XCTUnwrap(topAtAck, "an acked state was sent"), nav.navigationBar.frame.maxY,
+      accuracy: 0.5, "Flutter's inset was set when the ack went out")
+  }
+
+  /// VK-1075: the same epoch is the same shell's page change: it keeps the
+  /// bar's animation.
+  func testTheSameEpochKeepsTheBarAnimation() throws {
+    try requirePhone()
+    try XCTSkipIf(UIAccessibility.isReduceMotionEnabled, "no animation with Reduce Motion")
+    let tabs = try installedShell()
+    tabs.apply(pagesConfig([NativePage(title: "Home", largeTitle: false)]))
+    settle()
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    let plus = NativePageAction(sfSymbol: "plus", label: "Add", enabled: true)
+    tabs.apply(pagesConfig([NativePage(title: "Home", largeTitle: false, actions: [plus])]))
+    XCTAssertNotNil(nav.navigationBar.layer.animationKeys(), "the bar slides in")
+    settle()
+  }
+
+  /// VK-1075: a takeover over a hidden config (a route covered the old
+  /// owner) shows the chrome without the dialog's fade.
+  func testATakeoverFromAHiddenConfigDoesNotFade() throws {
+    let tabs = try installedShell()
+    tabs.apply(config(hidden: true))
+    settle()
+    XCTAssertTrue(tabs.view.isHidden, "precondition: hidden")
+    var next = config()
+    next.epoch = 2
+    tabs.apply(next)
+    XCTAssertFalse(tabs.view.isHidden)
+    XCTAssertNil(tabs.view.layer.animationKeys(), "no fade")
+    settle()
+  }
+
+  /// VK-1075: a scene reconnect re-applies the last config, epoch and all:
+  /// the new shell reports the state the old one did.
+  func testAReconnectKeepsTheAppliedEpoch() throws {
+    let (installer, window) = try installedByInstaller()
+    _ = try installer.attach()
+    var applied = config()
+    applied.epoch = 3
+    try installer.update(config: applied)
+    settle()
+    let before = try tabs(in: window).currentState()
+    XCTAssertEqual(before.appliedEpoch, 3)
+    let next = try reconnect(installer, from: window)
+    XCTAssertEqual(try tabs(in: next).currentState(), before)
+  }
+
   /// The B2 lesson: a size-class change re-applies the pages without a
   /// config from Dart; the buttons stay with the bar.
   func testASizeClassChangeKeepsARootsBarAndItsButtons() throws {
