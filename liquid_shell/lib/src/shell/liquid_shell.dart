@@ -242,10 +242,14 @@ class _LiquidShellState extends State<LiquidShell>
   // A route above this shell's, pushing, shown or popping (its secondary
   // animation not dismissed): unlike [_coveredByPush], also during a pop.
   bool _underRoute = false;
-  // Set while [_underRoute] and kept until this shell owns the chrome
-  // again: a popped route is dismissed a frame or more before its shell
-  // is disposed and gives the chrome back.
+  // Set while [_underRoute] when the owner changed since the cover started
+  // (a pushed shell claimed the chrome), and kept until this shell owns it
+  // again: a popped route is dismissed a frame or more before its shell is
+  // disposed and gives the chrome back. A cover that changed no owner (a
+  // plain page over a same-route nested shell) clears it when it ends.
   bool _coveredStandby = false;
+  // Who owned the chrome when the current cover started.
+  NativeChromeClaim? _ownerAtCover;
   bool _tickersOff = false;
   bool _nativeEngaged = false;
   LiquidNativeShellState? _nativeState;
@@ -433,7 +437,9 @@ class _LiquidShellState extends State<LiquidShell>
     _hosted = hosted;
     _coveredByPush =
         route?.secondaryAnimation?.status.isForwardOrCompleted ?? false;
-    _underRoute = !(route?.secondaryAnimation?.status.isDismissed ?? true);
+    final under = !(route?.secondaryAnimation?.status.isDismissed ?? true);
+    if (under && !_underRoute) _ownerAtCover = _host.owner;
+    _underRoute = under;
     // A dependency: the change rebuilds us. The layout builder still runs
     // under an obstructed entry (Flutter >= 3.44), so the config is sent.
     _tickersOff = !TickerMode.valuesOf(context).enabled;
@@ -442,6 +448,7 @@ class _LiquidShellState extends State<LiquidShell>
   void _onCoverChanged(AnimationStatus status) {
     final covered = status.isForwardOrCompleted;
     final under = !status.isDismissed;
+    if (under && !_underRoute) _ownerAtCover = _host.owner;
     if ((covered != _coveredByPush || under != _underRoute) && mounted) {
       setState(() {
         _coveredByPush = covered;
@@ -2369,10 +2376,13 @@ class _LiquidShellState extends State<LiquidShell>
     // over this shell's page through the push and the pop: no Flutter bar
     // under it, unless native shows none there. Not for a same-route
     // nested shell's host, whose pages stay on screen with their own bars.
+    final ownerChanged = !identical(_host.owner, _ownerAtCover);
     if (owner || claim == null) {
       _coveredStandby = false;
     } else if (_underRoute) {
-      _coveredStandby = true;
+      _coveredStandby = ownerChanged;
+    } else if (!ownerChanged) {
+      _coveredStandby = false;
     }
     final applied = _host.appliedConfig;
     final standbyUnderNativeBar =

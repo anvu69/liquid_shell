@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:liquid_shell/liquid_shell.dart';
 import 'package:liquid_shell/src/material_sdk.dart';
+import 'package:liquid_shell/src/native/native_layout.dart';
 import 'package:liquid_shell/src/pages/page_bar.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
@@ -192,6 +193,39 @@ void main() {
       await tester.pump();
       _check(tester, 'Home', flutterBar: false, y: 116, when: 'mine');
     });
+
+    testWidgets(
+      'known gap: a hot restart over a hidden config (a dialog was up) draws '
+      'its own page bar until its own config is applied',
+      // Follow-up (accepted): after a hot restart the host has no record of
+      // native's config, so it cannot see hidden; treating that as "nothing on
+      // screen" would draw a second bar under the native one in the common case
+      // (a hot restart over shown chrome) instead.
+      skip: true,
+      (tester) async {
+        final fake =
+            installFakeNative(
+                state: const LiquidNativeShellState(
+                  installed: true,
+                  compact: true,
+                  engagedApplied: true,
+                  appliedEpoch: 41,
+                ),
+              )
+              ..echoEpochs = true
+              ..autoApply = false;
+        await pumpShell(
+          tester,
+          _shell('Home'),
+          padding: _window,
+          settle: false,
+        );
+        await tester.pump();
+        await tester.pump();
+        expect(fake.last.epoch, greaterThan(41));
+        expect(_flutterBars(tester, 'Home'), 1, reason: 'nothing on screen');
+      },
+    );
 
     testWidgets('takeover falls back to the real top 250 ms after native got '
         'the config', (tester) async {
@@ -452,6 +486,54 @@ void main() {
         reason: "the outer page's own bar stays",
       );
     });
+
+    testWidgets('a plain page pushed and popped over a same-route nested '
+        "shell's route leaves the outer pages' Flutter bars (the owner never "
+        'changed)', (tester) async {
+      final fake = installFakeNative(state: _compact)..echoEpochs = true;
+      await pumpShell(
+        tester,
+        TestShell(
+          destinations: _destinations,
+          pageBuilder: (index) => LiquidPage(
+            title: 'Outer $index',
+            actions: const [_add],
+            largeTitle: false,
+            child: index == 0
+                ? _shell('Inner')
+                : TestPage(label: 'Outer $index'),
+          ),
+        ),
+        padding: _native,
+      );
+      Finder outerBars() => find.descendant(
+        of: find.byWidgetPredicate(
+          (widget) => widget is LiquidPage && widget.title == 'Outer 0',
+        ),
+        matching: find.byType(FlutterPageBar),
+      );
+      expect(outerBars(), findsOneWidget, reason: 'precondition');
+      final navigator = Navigator.of(
+        tester.element(find.byType(LiquidShell).first),
+      );
+      navigator
+          .push(
+            MaterialPageRoute<void>(builder: (_) => const Text('a plain page')),
+          )
+          .ignore();
+      await tester.pumpAndSettle();
+      navigator.pop();
+      await tester.pumpAndSettle();
+      expect(fake.last.hidden, isFalse, reason: "the inner's config shown");
+      expect(
+        nativeConfigShowsPageBar(fake.last, compact: true),
+        isTrue,
+        reason: 'precondition: native shows a page bar',
+      );
+      expect(outerBars(), findsOneWidget, reason: 'after the pop');
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(outerBars(), findsOneWidget, reason: 'later');
+    });
   });
 
   group("VK-1074: a disengaging shell keeps native's layout until native "
@@ -512,6 +594,32 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       flutterLayout(tester, 'later');
     });
+
+    testWidgets(
+      'known gap: during the mirror the Flutter tab bar sits on the window '
+      "bottom, not native's bar height above it",
+      // Follow-up to VK-1074 (accepted residual): in the ack-first order the
+      // bottom inset is still native's (83 pt) for one round trip; Dart does
+      // not know the window's own bottom then.
+      skip: true,
+      (tester) async {
+        final fake = await _engaged(tester);
+        await mode(tester, LiquidNativeChrome.off);
+        fake.apply(disengaged(fake));
+        await tester.pump();
+        flutterLayout(tester, 'mirror');
+        // The window's bottom inset is 34 pt; native's bar is gone.
+        expect(
+          tester.getBottomLeft(find.byType(LiquidTabBar)).dy,
+          lessThanOrEqualTo(kPhone.height - _window.bottom),
+        );
+        expect(
+          tester.getBottomLeft(find.byType(LiquidTabBar)).dy,
+          greaterThan(kPhone.height - _native.bottom),
+          reason: "not native's bar height above it",
+        );
+      },
+    );
 
     testWidgets('a platform that does not echo epochs: the Flutter layout at '
         'the real top at once (the dev.13 rule)', (tester) async {
@@ -679,24 +787,60 @@ void main() {
       expectKept(tester, field, 'Flutter layout');
     });
 
-    testWidgets('a field under a pushed shell keeps its state and text '
-        'through the push and the pop (standby)', (tester) async {
+    testWidgets('a composing field under a pushed shell keeps its State and '
+        'its value through the push and the pop, as under a plain page '
+        '(standby)', (tester) async {
       await _engaged(tester, hold: false, app: fieldShell());
       final field = await compose(tester);
+      final value = field.textEditingValue;
       final navigator = Navigator.of(
         tester.element(find.byType(LiquidShell)),
       );
+      // The pushed route takes focus by Flutter's own rules (its navigators
+      // autofocus), so the field's connection closes and reopens on the
+      // pop, and its focus loss ends the composition: the same as under a
+      // plain page with no shell (measured). What the shell must not do is
+      // rebuild the field or write it.
+      List<String> methods() => [
+        for (final call in tester.testTextInput.log) call.method,
+      ];
+      void same(String when) {
+        expectKept(tester, field, when, focused: false);
+        final now = tester.state<EditableTextState>(
+          find.byType(EditableText, skipOffstage: false),
+        );
+        expect(now.textEditingValue.text, value.text, reason: when);
+        expect(
+          now.textEditingValue.selection,
+          value.selection,
+          reason: when,
+        );
+      }
+
       navigator
           .push(MaterialPageRoute<void>(builder: (_) => _shell('Feed')))
           .ignore();
       for (var i = 0; i < 30; i++) {
         await tester.pump(const Duration(milliseconds: 20));
-        expectKept(tester, field, 'push $i', focused: false);
+        same('push $i');
+        expect(methods(), isNot(contains('TextInput.setClient')));
+        expect(methods(), isNot(contains('TextInput.setEditingState')));
       }
+      tester.testTextInput.log.clear();
       navigator.pop();
       for (var i = 0; i < 30; i++) {
         await tester.pump(const Duration(milliseconds: 20));
-        expectKept(tester, field, 'pop $i', focused: false);
+        same('pop $i');
+        expect(methods(), isNot(contains('TextInput.clearClient')));
+      }
+      // Focus back: the field's own reopen sends the value it kept.
+      final sent = [
+        for (final call in tester.testTextInput.log)
+          if (call.method == 'TextInput.setEditingState') call.arguments,
+      ];
+      for (final state in sent) {
+        expect((state as Map)['text'], 'hoa');
+        expect(state['selectionBase'], 3);
       }
     });
   });

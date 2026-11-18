@@ -62,7 +62,12 @@ final class NativeChromeHost extends ChangeNotifier {
 
   /// The last config sent with the epoch the platform reports applied
   /// ([LiquidNativeShellState.appliedEpoch]); null when the platform does
-  /// not echo epochs, or the config is no longer known.
+  /// not echo epochs, or the config is no longer known (a hot restart, an
+  /// epoch older than the ones kept).
+  ///
+  /// A prediction, not a confirmation: native confirms the epoch only, and
+  /// a later config of the same epoch (a page change, a `hidden` toggle)
+  /// may still be on its way.
   LiquidNativeChromeConfig? get appliedConfig {
     final epoch = _state.value?.appliedEpoch ?? 0;
     return epoch == 0 ? null : _byEpoch[epoch];
@@ -150,6 +155,9 @@ final class NativeChromeHost extends ChangeNotifier {
     notifyListeners();
     return claim;
   }
+
+  /// The claim that owns the native chrome; null with none.
+  NativeChromeClaim? get owner => _claims.isEmpty ? null : _claims.last;
 
   /// Whether [claim] owns the native chrome.
   bool isOwner(NativeChromeClaim claim) =>
