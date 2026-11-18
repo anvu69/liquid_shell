@@ -239,6 +239,13 @@ class _LiquidShellState extends State<LiquidShell>
   ModalRoute<Object?>? _route;
   bool _routeCurrent = true;
   bool _coveredByPush = false;
+  // A route above this shell's, pushing, shown or popping (its secondary
+  // animation not dismissed): unlike [_coveredByPush], also during a pop.
+  bool _underRoute = false;
+  // Set while [_underRoute] and kept until this shell owns the chrome
+  // again: a popped route is dismissed a frame or more before its shell
+  // is disposed and gives the chrome back.
+  bool _coveredStandby = false;
   bool _tickersOff = false;
   bool _nativeEngaged = false;
   LiquidNativeShellState? _nativeState;
@@ -417,6 +424,7 @@ class _LiquidShellState extends State<LiquidShell>
     _hosted = hosted;
     _coveredByPush =
         route?.secondaryAnimation?.status.isForwardOrCompleted ?? false;
+    _underRoute = !(route?.secondaryAnimation?.status.isDismissed ?? true);
     // A dependency: the change rebuilds us. The layout builder still runs
     // under an obstructed entry (Flutter >= 3.44), so the config is sent.
     _tickersOff = !TickerMode.valuesOf(context).enabled;
@@ -424,8 +432,12 @@ class _LiquidShellState extends State<LiquidShell>
 
   void _onCoverChanged(AnimationStatus status) {
     final covered = status.isForwardOrCompleted;
-    if (covered != _coveredByPush && mounted) {
-      setState(() => _coveredByPush = covered);
+    final under = !status.isDismissed;
+    if ((covered != _coveredByPush || under != _underRoute) && mounted) {
+      setState(() {
+        _coveredByPush = covered;
+        _underRoute = under;
+      });
     }
   }
 
@@ -2281,8 +2293,27 @@ class _LiquidShellState extends State<LiquidShell>
       hideLargeTitle: searchActive && _search.selected,
     );
     // Every tab of an engaged shell has a native navigation bar (spec
-    // P3b-2 §4.5): LiquidPage draws only its child.
-    _nativePageBar = layout;
+    // P3b-2 §4.5): LiquidPage draws only its child. In standby under
+    // another shell's route (S-1, VK-1082), that shell's native bar is
+    // over this shell's page through the push and the pop: no Flutter bar
+    // under it, unless native shows none there. Not for a same-route
+    // nested shell's host, whose pages stay on screen with their own bars.
+    if (owner || claim == null) {
+      _coveredStandby = false;
+    } else if (_underRoute) {
+      _coveredStandby = true;
+    }
+    final applied = _host.appliedConfig;
+    final standbyUnderNativeBar =
+        !owner &&
+        _coveredStandby &&
+        possible &&
+        (state?.installed ?? false) &&
+        (state?.engagedApplied ?? false) &&
+        applied != null &&
+        !applied.hidden &&
+        nativeConfigShowsPageBar(applied, compact: state?.compact ?? false);
+    _nativePageBar = layout || standbyUnderNativeBar;
     if (_nativePageBar || _scrollRecord != null) _scheduleScrollSync();
     // A dialog or sheet above an active search: the keyboard and the field
     // would sit above its barrier (spec §7.10). Once per covering.

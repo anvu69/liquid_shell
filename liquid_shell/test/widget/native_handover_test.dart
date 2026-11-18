@@ -293,13 +293,113 @@ void main() {
       expect(fake.last.hidden, isTrue, reason: 'precondition: hidden');
       expect(fake.state.appliedEpoch, fake.last.epoch);
       fake.autoApply = false;
-      root.push(MaterialPageRoute<void>(builder: (_) => _shell('Feed')));
+      root
+          .push(MaterialPageRoute<void>(builder: (_) => _shell('Feed')))
+          .ignore();
       await tester.pump();
       await tester.pump();
       expect(_flutterBars(tester, 'Feed'), 1, reason: 'nothing on screen');
       fake.applyLast();
       await tester.pump();
       expect(_flutterBars(tester, 'Feed'), 0, reason: 'mine');
+    });
+  });
+
+  group('VK-1082: a shell in standby under a pushed shell (S-1)', () {
+    /// A's row and Flutter bars on every frame where A is on screen.
+    void checkA(WidgetTester tester, String when) {
+      final row = find.byKey(const ValueKey('counter-Home'));
+      if (row.evaluate().isEmpty) return;
+      _check(tester, 'Home', flutterBar: false, y: 116, when: when);
+    }
+
+    testWidgets('A keeps no Flutter bar and its row through the push and '
+        'the pop', (tester) async {
+      final fake = await _engaged(tester, hold: false);
+      final navigator = Navigator.of(
+        tester.element(find.byType(LiquidShell)),
+      );
+      navigator
+          .push(MaterialPageRoute<void>(builder: (_) => _shell('Feed')))
+          .ignore();
+      for (var i = 0; i < 30; i++) {
+        await tester.pump(const Duration(milliseconds: 20));
+        checkA(tester, 'push frame $i');
+      }
+      await tester.pumpAndSettle();
+      expect(fake.state.appliedEpoch, fake.last.epoch, reason: "B's applied");
+      navigator.pop();
+      for (var i = 0; i < 30; i++) {
+        await tester.pump(const Duration(milliseconds: 20));
+        checkA(tester, 'pop frame $i');
+      }
+      await tester.pumpAndSettle();
+      checkA(tester, 'settled');
+      expect(fake.last.tabs.first.title, 'Home', reason: 'A owns it again');
+    });
+
+    testWidgets('over a shell whose root has no bar, A draws its own through '
+        'the pop and holds its row until its own config is applied', (
+      tester,
+    ) async {
+      final fake = await _engaged(tester, hold: false);
+      final navigator = Navigator.of(
+        tester.element(find.byType(LiquidShell)),
+      );
+      navigator
+          .push(
+            MaterialPageRoute<void>(
+              builder: (_) => _shell('Feed', actions: false),
+            ),
+          )
+          .ignore();
+      await tester.pumpAndSettle();
+      // B's root has no bar: native's top is the window's.
+      _setPadding(tester, _window);
+      await tester.pumpAndSettle();
+      fake.autoApply = false;
+      navigator.pop();
+      // Native shows B's root, which has no bar: A draws its own, through
+      // the pop and until its own config is applied (no frame without one).
+      for (var i = 0; i < 30; i++) {
+        await tester.pump(const Duration(milliseconds: 20));
+        _check(tester, 'Home', flutterBar: true, y: 116, when: 'pop $i');
+      }
+      await tester.pumpAndSettle();
+      _check(tester, 'Home', flutterBar: true, y: 116, when: 'popped');
+      expect(fake.last.epoch, greaterThan(fake.state.appliedEpoch));
+      fake.applyLast();
+      _setPadding(tester, _native);
+      await tester.pump();
+      _check(tester, 'Home', flutterBar: false, y: 116, when: 'mine');
+    });
+
+    testWidgets("a same-route nested shell on auto leaves the outer pages' "
+        'Flutter bars (not covered by a route)', (tester) async {
+      installFakeNative(state: _compact).echoEpochs = true;
+      await pumpShell(
+        tester,
+        TestShell(
+          destinations: _destinations,
+          pageBuilder: (index) => LiquidPage(
+            title: 'Outer $index',
+            actions: const [_add],
+            largeTitle: false,
+            child: index == 0
+                ? _shell('Inner')
+                : TestPage(label: 'Outer $index'),
+          ),
+        ),
+        padding: _native,
+      );
+      expect(
+        find.ancestor(
+          of: find.byType(FlutterPageBar),
+          matching: find.byType(LiquidPage),
+        ),
+        findsWidgets,
+        reason: "the outer page's own bar stays",
+      );
     });
   });
 }
