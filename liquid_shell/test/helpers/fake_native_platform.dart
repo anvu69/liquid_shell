@@ -104,8 +104,12 @@ class FakeNativePlatform extends FakeSignalsPlatform {
   /// Native applies the last config it got (and so every earlier one):
   /// pushes its `engaged` and `epoch` when they change the state.
   void applyLast() {
-    if (configs.isEmpty) return;
-    final config = configs.last;
+    if (configs.isNotEmpty) apply(configs.last);
+  }
+
+  /// Native applies [config]: pushes its `engaged` and `epoch` when they
+  /// change the state.
+  void apply(LiquidNativeChromeConfig config) {
     final next = _with(
       state,
       engagedApplied: config.engaged,

@@ -255,7 +255,7 @@ class _LiquidShellState extends State<LiquidShell>
   // Engaged (the config) comes one turn before native shows its bar; the
   // layout follows native's ack (`engagedApplied`), so a frame never shows
   // neither bar and the first row never moves.
-  _Handover _handover = _Handover.none;
+  NativeHandover _handover = NativeHandover.none;
   // The top padding and window size when the hand-over started.
   double _handoverTop = 0;
   Size _handoverSize = Size.zero;
@@ -1337,21 +1337,22 @@ class _LiquidShellState extends State<LiquidShell>
     return false;
   }
 
-  /// Whether this frame draws native's layout, and the step of
-  /// the hand-over that decides it. Native shows its bar only once it has
-  /// the engaged config, which this frame's post-frame callback sends, and
-  /// says so in `engagedApplied`:
+  /// Whether this frame draws native's layout, and the step of the page
+  /// bar's hand-over that decides it (spec 2026-11-18, applied-epoch hand-over;
+  /// [nativeHandoverStep]). Native says which config it applied by its
+  /// epoch (`appliedEpoch`), so the shell tells its own config from
+  /// another shell's:
   ///
-  /// - waiting (engaged, not acked): the pending layout, LiquidPage's own
-  ///   bar, and the top held where it was ([_holdHandoverTop]), so native's
-  ///   new inset arriving first does not move that bar;
-  /// - holding (acked, the inset not here yet): native's layout, the top
-  ///   held below where the Flutter bar was, so the content stays put;
+  /// - waiting (native shows nothing engaged, or no page bar there): the
+  ///   pending layout, LiquidPage's own bar, the top held
+  ///   ([_holdHandoverTop]);
+  /// - holding (mine applied, the inset not here yet): native's layout, the
+  ///   top held below where the Flutter bar was;
+  /// - takeover (another engaged config on screen): native's layout, the top
+  ///   held, until mine is applied;
   /// - done: native's layout and its real insets.
   ///
-  /// An installed state already acked (a reconnect, a hot restart over the
-  /// shown chrome) engages at once. A new window size, a top page without
-  /// a Flutter bar, or [kNativeHandoverTimeout] ends a hold early.
+  /// A new window size or [kNativeHandoverTimeout] ends a hold early.
   bool _handOver({
     required bool engaged,
     required LiquidNativeShellState? state,
@@ -1359,47 +1360,55 @@ class _LiquidShellState extends State<LiquidShell>
     required LiquidSizeClass flutterSizeClass,
     required bool hideLargeTitle,
   }) {
-    if (!engaged) {
-      _endHandover(_Handover.none);
-      return false;
+    final claim = _claim;
+    final applied = state?.engagedApplied ?? false;
+    final epoch = state?.appliedEpoch ?? 0;
+    // Epoch 0: the platform does not echo epochs; any engaged config is
+    // taken as this shell's (the window-wide rule of VK-1064).
+    final echoed = epoch != 0;
+    final mine = applied && (!echoed || epoch == claim?.epoch);
+    final appliedConfig = _host.appliedConfig;
+    final nativeUp = applied && !(appliedConfig?.hidden ?? false);
+    final compact = state?.compact ?? false;
+    // Native shows no page bar there (D3): the Flutter bar until mine is
+    // applied, whatever this shell's top page turns out to be (its page
+    // registers after this build). A page without a bar draws none in
+    // waiting either.
+    final barMismatch =
+        appliedConfig != null &&
+        !nativeConfigShowsPageBar(appliedConfig, compact: compact);
+    final bar = _flutterPageBarHeight(flutterSizeClass, hideLargeTitle);
+    final resized = media.size != _handoverSize;
+    final step = nativeHandoverStep(
+      _handover,
+      engaged: engaged,
+      releasable: false,
+      mine: mine,
+      nativeUp: nativeUp,
+      barMismatch: barMismatch,
+      released: !applied,
+      timedOut: _handoverTimedOut,
+      moved: resized || media.padding.top != _handoverTop,
+      resized: resized,
+      flutterBar: bar > 0,
+    );
+    if (step.restart) {
+      _endHandover(step.phase);
+      _handoverTop = media.padding.top;
+      _handoverSize = media.size;
+      _handoverBar = bar;
+    } else if (step.phase == NativeHandover.holding &&
+        _handover == NativeHandover.waiting) {
+      _handover = NativeHandover.holding;
+      _handoverBar = bar;
+    } else if (step.phase != _handover) {
+      _endHandover(step.phase);
     }
-    final acked = state?.engagedApplied ?? false;
-    final moved =
-        media.padding.top != _handoverTop || media.size != _handoverSize;
-    switch (_handover) {
-      case _Handover.none:
-        if (acked) {
-          _handover = _Handover.done;
-          return true;
-        }
-        _handover = _Handover.waiting;
-        _handoverTop = media.padding.top;
-        _handoverSize = media.size;
-        return false;
-      case _Handover.waiting:
-        if (_handoverTimedOut) {
-          _endHandover(_Handover.done);
-          return true;
-        }
-        if (!acked) return false;
-        final bar = _flutterPageBarHeight(flutterSizeClass, hideLargeTitle);
-        if (bar == 0 || moved) {
-          _endHandover(_Handover.done);
-        } else {
-          _handover = _Handover.holding;
-          _handoverBar = bar;
-        }
-        return true;
-      case _Handover.holding:
-        if (_handoverTimedOut || moved) _endHandover(_Handover.done);
-        return true;
-      case _Handover.done:
-        return true;
-    }
+    return step.layout;
   }
 
-  void _endHandover(_Handover next) {
-    if (_handover != _Handover.none) _handoverGeneration++;
+  void _endHandover(NativeHandover next) {
+    if (_handover != NativeHandover.none) _handoverGeneration++;
     _handover = next;
     _handoverTimer?.cancel();
     _handoverTimer = null;
@@ -1426,11 +1435,14 @@ class _LiquidShellState extends State<LiquidShell>
   MediaQueryData _holdHandoverTop(MediaQueryData media) {
     final double top;
     switch (_handover) {
-      case _Handover.waiting:
+      case NativeHandover.waiting || NativeHandover.takeover:
         top = _handoverTop;
-      case _Handover.holding:
+      case NativeHandover.holding:
         top = _handoverTop + _handoverBar;
-      case _Handover.none || _Handover.done:
+      case NativeHandover.none ||
+          NativeHandover.done ||
+          NativeHandover.releasing ||
+          NativeHandover.mirror:
         return media;
     }
     if (media.size != _handoverSize) return media;
@@ -1450,7 +1462,9 @@ class _LiquidShellState extends State<LiquidShell>
     void arm() {
       if (!mounted || _handoverTimer != null) return;
       if (generation != _handoverGeneration) return;
-      if (_handover != _Handover.waiting && _handover != _Handover.holding) {
+      if (_handover != NativeHandover.waiting &&
+          _handover != NativeHandover.holding &&
+          _handover != NativeHandover.takeover) {
         return;
       }
       _handoverTimer = Timer(kNativeHandoverTimeout, () {
@@ -2531,7 +2545,3 @@ final class _PageRecord implements PageHandle {
 /// its ack and its new top inset before it hands its page bar over anyway.
 @visibleForTesting
 const Duration kNativeHandoverTimeout = Duration(milliseconds: 250);
-
-/// The steps of the page bar's hand-over to native
-/// ([_LiquidShellState._handOver]).
-enum _Handover { none, waiting, holding, done }

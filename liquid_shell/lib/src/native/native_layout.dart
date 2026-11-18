@@ -3,7 +3,9 @@ import 'package:liquid_shell/src/destinations/badge.dart';
 import 'package:liquid_shell/src/destinations/destination.dart';
 import 'package:liquid_shell/src/destinations/tab_action.dart';
 import 'package:liquid_shell/src/native/native_chrome.dart';
+import 'package:liquid_shell/src/pages/page_title.dart';
 import 'package:liquid_shell/src/search/search_layout.dart';
+import 'package:liquid_shell/src/shell/breakpoints.dart';
 import 'package:liquid_shell/src/shell/shell_layout.dart';
 import 'package:liquid_shell_platform_interface/liquid_shell_platform_interface.dart';
 
@@ -206,4 +208,148 @@ LiquidNativeChromeConfig nativeConfigFor({
             scopes: searchScopes,
           ),
   );
+}
+
+/// The steps of the page bar's hand-over between Flutter and native
+/// (spec 2026-11-18, applied-epoch hand-over).
+enum NativeHandover {
+  /// Flutter's layout; no hand-over under way.
+  none,
+
+  /// Engaged, native not showing an engaged config yet (or showing one
+  /// without the bar this shell's top page has): the pending layout and
+  /// LiquidPage's own bar, the top held.
+  waiting,
+
+  /// This shell's config applied, its inset not here yet: native's layout,
+  /// the top held below where the Flutter bar was.
+  holding,
+
+  /// Another engaged config on screen (an owner change, a quick
+  /// re-engage): native's layout, the top held, until this shell's config
+  /// is applied.
+  takeover,
+
+  /// Native's layout and its real insets.
+  done,
+
+  /// Disengaged, native still showing: native's layout kept, the top and
+  /// bottom held, until native has let go.
+  releasing,
+
+  /// Native let go, its inset not gone yet: Flutter's layout, the top held
+  /// above where native's bar was.
+  mirror,
+}
+
+/// One frame's verdict: the phase, whether the frame draws native's
+/// layout, and whether a new hand-over starts (restart: take the top and
+/// size now, and drop an earlier fallback).
+typedef NativeHandoverStep = ({
+  NativeHandover phase,
+  bool layout,
+  bool restart,
+});
+
+/// The next step of the hand-over from [phase]. Pure.
+///
+/// [engaged]: this shell's config is engaged. [releasable]: disengaged by
+/// this shell itself (its mode, its destinations), not by another shell
+/// taking the chrome. [mine]: native shows this shell's engaged config.
+/// [nativeUp]: native shows an engaged config, not hidden. [barMismatch]:
+/// that config shows no page bar, so this shell waits with its own.
+/// [released]: native applied this shell's disengage or a later config.
+/// [timedOut]: the phase's fallback fired. [moved]: the top or the size
+/// differs from the hand-over's start; [resized]: the size does.
+/// [flutterBar]: the top page draws a Flutter bar in Flutter's layout.
+NativeHandoverStep nativeHandoverStep(
+  NativeHandover phase, {
+  required bool engaged,
+  required bool releasable,
+  required bool mine,
+  required bool nativeUp,
+  required bool barMismatch,
+  required bool released,
+  required bool timedOut,
+  required bool moved,
+  required bool resized,
+  required bool flutterBar,
+}) {
+  const none = (phase: NativeHandover.none, layout: false, restart: false);
+  const done = (phase: NativeHandover.done, layout: true, restart: false);
+  NativeHandoverStep stay() => (
+    phase: phase,
+    layout: phase != NativeHandover.waiting && phase != NativeHandover.mirror,
+    restart: false,
+  );
+  NativeHandoverStep start(NativeHandover next) => (
+    phase: next,
+    layout: next != NativeHandover.waiting && next != NativeHandover.mirror,
+    restart: true,
+  );
+  NativeHandoverStep letGo() =>
+      flutterBar ? start(NativeHandover.mirror) : none;
+
+  if (!engaged) {
+    switch (phase) {
+      case NativeHandover.holding ||
+          NativeHandover.takeover ||
+          NativeHandover.done:
+        if (!releasable) return none;
+        return released ? letGo() : start(NativeHandover.releasing);
+      case NativeHandover.releasing:
+        if (released) return letGo();
+        return timedOut || resized ? none : stay();
+      case NativeHandover.mirror:
+        return moved || timedOut ? none : stay();
+      case NativeHandover.none || NativeHandover.waiting:
+        return none;
+    }
+  }
+  switch (phase) {
+    case NativeHandover.none || NativeHandover.mirror:
+      if (mine) return done;
+      return start(
+        nativeUp && !barMismatch
+            ? NativeHandover.takeover
+            : NativeHandover.waiting,
+      );
+    case NativeHandover.releasing:
+      return mine ? done : start(NativeHandover.takeover);
+    case NativeHandover.waiting:
+      if (timedOut) return done;
+      if (!mine) return stay();
+      return !flutterBar || moved
+          ? done
+          : (phase: NativeHandover.holding, layout: true, restart: false);
+    case NativeHandover.holding:
+      return timedOut || moved ? done : stay();
+    case NativeHandover.takeover:
+      return mine || resized || timedOut ? done : stay();
+    case NativeHandover.done:
+      return done;
+  }
+}
+
+/// Whether native draws a page bar for [config]'s selected tab: the bar
+/// of its top page by the same rule as LiquidPage's (`pageTitleModeFor`),
+/// at UIKit's size class ([compact]). The search tab always has one; a tab
+/// without pages has none. Pure.
+bool nativeConfigShowsPageBar(
+  LiquidNativeChromeConfig config, {
+  required bool compact,
+}) {
+  final index = config.selectedIndex;
+  if (index < 0 || index >= config.tabs.length) return false;
+  final tab = config.tabs[index];
+  if (tab.search) return true;
+  if (tab.pages.isEmpty) return false;
+  final page = tab.pages.last;
+  return pageTitleModeFor(
+        root: tab.pages.length == 1,
+        largeTitle: page.largeTitle,
+        sizeClass: compact ? LiquidSizeClass.compact : LiquidSizeClass.regular,
+        hasActions: page.actions.isNotEmpty,
+      ) !=
+      PageTitleMode.hidden;
 }
