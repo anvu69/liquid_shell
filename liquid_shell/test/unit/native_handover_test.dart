@@ -70,11 +70,12 @@ void main() {
       );
     });
 
-    test('another config up without a page bar: waiting', () {
+    test('another config up without a page bar: still a takeover (the '
+        'page bar alone differs)', () {
       expectStep(
         _step(NativeHandover.none, nativeUp: true, barMismatch: true),
-        NativeHandover.waiting,
-        layout: false,
+        NativeHandover.takeover,
+        layout: true,
         restart: true,
       );
     });
@@ -169,6 +170,25 @@ void main() {
       );
       expectStep(
         _step(NativeHandover.takeover, mine: true, nativeUp: true),
+        NativeHandover.done,
+        layout: true,
+      );
+    });
+
+    test('with its own Flutter bar drawn, mine hands it over through '
+        'holding; moved first, done', () {
+      expectStep(
+        _step(NativeHandover.takeover, mine: true, barMismatch: true),
+        NativeHandover.holding,
+        layout: true,
+      );
+      expectStep(
+        _step(
+          NativeHandover.takeover,
+          mine: true,
+          barMismatch: true,
+          moved: true,
+        ),
         NativeHandover.done,
         layout: true,
       );

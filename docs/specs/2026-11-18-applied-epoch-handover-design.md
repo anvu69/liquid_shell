@@ -256,11 +256,17 @@ a device for the disengage (see the report); the code path is the engage's
 
 ## 10. As built
 
-- **D3, simplified.** "Native shows no page bar there" alone sends a new
-  owner to waiting; "and mine has one" is dropped. The incoming shell's
-  page registers after its first build, so on that frame "mine" is
-  unknown; waiting draws the Flutter bar only when the page has one, so
-  the result is the same without the race.
+- **D3, as a takeover with the Flutter bar.** Where the engaged config
+  native shows has no page bar there, the new owner still takes over
+  (native's layout: chrome kind, size class, a tiled sidebar's body offset
+  all unchanged) and only lets LiquidPage draw its own bar, latched for the
+  takeover; mine applied, it hands the bar over through holding (top =
+  start + bar until the metrics move). "And mine has one" is not asked: the
+  incoming shell's page registers after its first build, and a page
+  without a bar draws none anyway. Waiting (the pending layout) stays for
+  "nothing engaged on screen" (none, or a hidden config). A first cut sent
+  the mismatch to waiting, which moved an iPad tiled body by the sidebar's
+  width for a bar-less to bar-less owner change (caught by review, tested).
 - **S-1 rule.** A covered standby shell drops its Flutter bar only while
   native shows a page bar there (and its config is not hidden); over a
   shell whose root has no bar it keeps its own, so its page is never
@@ -268,8 +274,9 @@ a device for the disengage (see the report); the code path is the engage's
   again: a popped route is dismissed a frame or more before its shell is
   disposed and gives the chrome back.
 - **Epoch 0 and release.** With epoch 0 (not echoed) a release is taken
-  as done at once (the dev.13 rule), so a platform that does not echo
-  never waits 250 ms on a disengage.
+  as done at once and no mirror hold follows (the dev.13 rule: the Flutter
+  layout at the real top), so a platform that does not echo never waits
+  250 ms on a disengage.
 - **Tests** live in `liquid_shell/test/widget/native_handover_test.dart`
   (widget), `test/unit/native_handover_test.dart` (the phase step) and
   `test/unit/native_host_test.dart` (the host), beside the VK-1064 tests

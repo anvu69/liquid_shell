@@ -256,6 +256,57 @@ void main() {
       expect(_rowY(tester, 'Feed'), y, reason: 'held below the bar');
     });
 
+    testWidgets('iPad landscape, tiled sidebar: a bar-less root replaced by '
+        "a bar-less root keeps native's layout on every frame", (
+      tester,
+    ) async {
+      const tiled = LiquidNativeShellState(
+        installed: true,
+        sidebar: LiquidNativeSidebar.tiled,
+      );
+      const padding = EdgeInsets.only(left: 300, top: 24, bottom: 20);
+      final fake = await _engaged(
+        tester,
+        app: _shell(
+          'Home',
+          key: const ValueKey('a'),
+          actions: false,
+          largeTitle: null,
+        ),
+        state: tiled,
+        size: kTabletLandscape,
+        window: padding,
+        native: padding,
+      );
+      void same(String when) {
+        final row = find.byKey(const ValueKey('counter-Feed'));
+        final scope = LiquidShellScope.of(tester.element(row));
+        expect(scope.chromeKind, LiquidChromeKind.sidebarTiled, reason: when);
+        expect(scope.nativeChrome, isTrue, reason: when);
+        expect(tester.getTopLeft(row).dx, 300, reason: '$when: dx');
+        expect(_flutterBars(tester, 'Feed'), 0, reason: when);
+      }
+
+      await pumpShell(
+        tester,
+        _shell(
+          'Feed',
+          key: const ValueKey('b'),
+          actions: false,
+          largeTitle: null,
+        ),
+        size: kTabletLandscape,
+        padding: padding,
+        settle: false,
+      );
+      same('replaced');
+      await tester.pump();
+      same('sent');
+      fake.applyLast();
+      await tester.pump();
+      same('mine');
+    });
+
     testWidgets('a root replaced in one frame with the same bar: no Flutter '
         'bar, the row held, until its own config is applied', (tester) async {
       final fake = await _engaged(
@@ -460,6 +511,16 @@ void main() {
       flutterLayout(tester, 'metrics after the ack');
       await tester.pump(const Duration(milliseconds: 300));
       flutterLayout(tester, 'later');
+    });
+
+    testWidgets('a platform that does not echo epochs: the Flutter layout at '
+        'the real top at once (the dev.13 rule)', (tester) async {
+      installFakeNative(state: _compact);
+      await pumpShell(tester, _shell('Home'), padding: _native);
+      expect(_rowY(tester, 'Home'), 116);
+      await mode(tester, LiquidNativeChrome.off);
+      expect(_flutterBars(tester, 'Home'), 1);
+      expect(_rowY(tester, 'Home'), 170, reason: "native's inset, no hold");
     });
 
     testWidgets('no ack: the Flutter layout 250 ms after the disengage', (

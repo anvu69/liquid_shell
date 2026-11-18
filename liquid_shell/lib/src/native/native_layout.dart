@@ -216,9 +216,8 @@ enum NativeHandover {
   /// Flutter's layout; no hand-over under way.
   none,
 
-  /// Engaged, native not showing an engaged config yet (or showing one
-  /// without the bar this shell's top page has): the pending layout and
-  /// LiquidPage's own bar, the top held.
+  /// Engaged, native not showing an engaged config yet (none, or a hidden
+  /// one): the pending layout and LiquidPage's own bar, the top held.
   waiting,
 
   /// This shell's config applied, its inset not here yet: native's layout,
@@ -227,7 +226,8 @@ enum NativeHandover {
 
   /// Another engaged config on screen (an owner change, a quick
   /// re-engage): native's layout, the top held, until this shell's config
-  /// is applied.
+  /// is applied. Where that config shows no page bar, LiquidPage draws its
+  /// own meanwhile.
   takeover,
 
   /// Native's layout and its real insets.
@@ -257,7 +257,8 @@ typedef NativeHandoverStep = ({
 /// this shell itself (its mode, its destinations), not by another shell
 /// taking the chrome. [mine]: native shows this shell's engaged config.
 /// [nativeUp]: native shows an engaged config, not hidden. [barMismatch]:
-/// that config shows no page bar, so this shell waits with its own.
+/// that config shows no page bar, so a takeover draws this shell's own,
+/// and hands it over through holding.
 /// [released]: native applied this shell's disengage or a later config.
 /// [timedOut]: the phase's fallback fired. [moved]: the top or the size
 /// differs from the hand-over's start; [resized]: the size does.
@@ -310,9 +311,7 @@ NativeHandoverStep nativeHandoverStep(
     case NativeHandover.none || NativeHandover.mirror:
       if (mine) return done;
       return start(
-        nativeUp && !barMismatch
-            ? NativeHandover.takeover
-            : NativeHandover.waiting,
+        nativeUp ? NativeHandover.takeover : NativeHandover.waiting,
       );
     case NativeHandover.releasing:
       return mine ? done : start(NativeHandover.takeover);
@@ -325,6 +324,9 @@ NativeHandoverStep nativeHandoverStep(
     case NativeHandover.holding:
       return timedOut || moved ? done : stay();
     case NativeHandover.takeover:
+      if (mine && barMismatch && flutterBar && !moved) {
+        return (phase: NativeHandover.holding, layout: true, restart: false);
+      }
       return mine || resized || timedOut ? done : stay();
     case NativeHandover.done:
       return done;

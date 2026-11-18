@@ -272,6 +272,9 @@ class _LiquidShellState extends State<LiquidShell>
   // The epoch of the config that replaced this shell's after it gave the
   // chrome back (mode off); null while it holds a claim.
   int? _releaseEpoch;
+  // A takeover over a config with no page bar there: LiquidPage draws its
+  // own bar meanwhile.
+  bool _takeoverFlutterBar = false;
   // The Flutter bar's height that the holding phase keeps under the top.
   double _handoverBar = 0;
   Timer? _handoverTimer;
@@ -1368,13 +1371,14 @@ class _LiquidShellState extends State<LiquidShell>
   /// epoch (`appliedEpoch`), so the shell tells its own config from
   /// another shell's:
   ///
-  /// - waiting (native shows nothing engaged, or no page bar there): the
+  /// - waiting (native shows nothing engaged, or a hidden config): the
   ///   pending layout, LiquidPage's own bar, the top held
   ///   ([_holdHandoverTop]);
   /// - holding (mine applied, the inset not here yet): native's layout, the
   ///   top held below where the Flutter bar was;
   /// - takeover (another engaged config on screen): native's layout, the top
-  ///   held, until mine is applied;
+  ///   held, until mine is applied; LiquidPage's own bar where native shows
+  ///   none there, handed over through holding;
   /// - done: native's layout and its real insets.
   ///
   /// A new window size or [kNativeHandoverTimeout] ends a hold early.
@@ -1395,12 +1399,13 @@ class _LiquidShellState extends State<LiquidShell>
     final appliedConfig = _host.appliedConfig;
     final nativeUp = applied && !(appliedConfig?.hidden ?? false);
     final compact = state?.compact ?? false;
-    // Native shows no page bar there (D3): the Flutter bar until mine is
-    // applied, whatever this shell's top page turns out to be (its page
-    // registers after this build). A page without a bar draws none in
-    // waiting either.
+    // Native shows no page bar there (D3): a takeover lets LiquidPage draw
+    // its own bar until mine is applied, whatever this shell's top page
+    // turns out to be (its page registers after this build); a page
+    // without a bar draws none. Only the page bar differs from a takeover.
     final barMismatch =
         appliedConfig != null &&
+        appliedConfig.engaged &&
         !nativeConfigShowsPageBar(appliedConfig, compact: compact);
     // Native let go of this shell's config: it applied the disengage (or a
     // later config). Not echoed: at once, the dev.13 rule.
@@ -1417,12 +1422,17 @@ class _LiquidShellState extends State<LiquidShell>
       releasable: claim == null || claim.isOwner,
       mine: mine,
       nativeUp: nativeUp,
-      barMismatch: barMismatch,
+      // In a takeover: whether this shell drew its own bar (the config now
+      // applied may be its own, with a bar).
+      barMismatch: _handover == NativeHandover.takeover
+          ? _takeoverFlutterBar
+          : barMismatch,
       released: released,
       timedOut: _handoverTimedOut,
       moved: resized || media.padding.top != _handoverTop,
       resized: resized,
-      flutterBar: bar > 0,
+      // Not echoed: no mirror after a release (the dev.13 rule).
+      flutterBar: bar > 0 && (engaged || echoed),
     );
     if (step.restart) {
       _endHandover(step.phase);
@@ -1442,11 +1452,17 @@ class _LiquidShellState extends State<LiquidShell>
         _armHandoverTimeout(null);
       }
     } else if (step.phase == NativeHandover.holding &&
-        _handover == NativeHandover.waiting) {
+        (_handover == NativeHandover.waiting ||
+            _handover == NativeHandover.takeover)) {
       _handover = NativeHandover.holding;
       _handoverBar = bar;
     } else if (step.phase != _handover) {
       _endHandover(step.phase);
+    }
+    if (_handover != NativeHandover.takeover) {
+      _takeoverFlutterBar = false;
+    } else if (step.restart) {
+      _takeoverFlutterBar = barMismatch;
     }
     return step.layout;
   }
@@ -2368,7 +2384,7 @@ class _LiquidShellState extends State<LiquidShell>
         applied != null &&
         !applied.hidden &&
         nativeConfigShowsPageBar(applied, compact: state?.compact ?? false);
-    _nativePageBar = layout || standbyUnderNativeBar;
+    _nativePageBar = (layout && !_takeoverFlutterBar) || standbyUnderNativeBar;
     if (_nativePageBar || _scrollRecord != null) _scheduleScrollSync();
     // A dialog or sheet above an active search: the keyboard and the field
     // would sit above its barrier (spec §7.10). Once per covering.
