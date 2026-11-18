@@ -250,9 +250,23 @@ first state with `engagedApplied == false`.
 the state that says so is sent, and UIKit has already recomputed the safe
 area by then. Flutter's metrics still reach Dart on the engine's own path
 (the next layout pass), so either order can arrive in Dart: the releasing
-phase handles both. The Dart → native → Dart round trip was not measured on
-a device for the disengage (see the report); the code path is the engage's
-(one platform message each way), which VK-1064 measured at about 25 ms.
+phase handles both.
+
+**Round trip, end to end** (the example's `pages` demo on the iPhone 17 Pro
+simulator, iOS 26.5, debug build; a temporary, uncommitted `debugPrint` in
+the host at each send and each state; the app flipped to a forced glass
+tier after 4 s, the claim kept, and back after 3 s). Every config's epoch
+came back as `appliedEpoch`:
+
+| Config | Epoch | Send → state |
+|---|---|---|
+| pending (not engaged), cold launch | 2 | 159.5 ms |
+| first engage, cold launch | 3 | 53.1 ms |
+| disengage (forced tier, claim kept) | 4 | 2.5 ms |
+| re-engage | 5 | 8.4 ms |
+
+Warm, the disengage round trip is a few milliseconds: well inside the
+250 ms fallback, which stays a fallback.
 
 ## 10. As built
 
