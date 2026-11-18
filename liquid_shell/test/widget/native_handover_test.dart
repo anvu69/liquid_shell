@@ -518,4 +518,141 @@ void main() {
       releasing(tester, 'mine');
     });
   });
+
+  group('IME across the hand-overs', () {
+    /// Home with Add and a text field under its first row.
+    Widget fieldShell({LiquidNativeChrome mode = LiquidNativeChrome.auto}) =>
+        TestShell(
+          destinations: _destinations,
+          nativeChrome: mode,
+          pageBuilder: (index) => Navigator(
+            onGenerateRoute: (_) => MaterialPageRoute<void>(
+              builder: (_) => index == 0
+                  ? const LiquidPage(
+                      title: 'Home',
+                      largeTitle: false,
+                      actions: [_add],
+                      child: _FieldPage(),
+                    )
+                  : TestPage(label: 'Tab $index'),
+            ),
+          ),
+        );
+
+    Future<EditableTextState> compose(WidgetTester tester) async {
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: 'hoa',
+          selection: TextSelection.collapsed(offset: 3),
+          composing: TextRange(start: 0, end: 3),
+        ),
+      );
+      await tester.pump();
+      tester.testTextInput.log.clear();
+      return tester.state<EditableTextState>(find.byType(EditableText));
+    }
+
+    void expectKept(
+      WidgetTester tester,
+      EditableTextState field,
+      String when, {
+      bool focused = true,
+    }) {
+      final now = tester.state<EditableTextState>(
+        find.byType(EditableText, skipOffstage: false),
+      );
+      expect(now, same(field), reason: when);
+      expect(now.textEditingValue.text, 'hoa', reason: when);
+      if (!focused) return;
+      expect(now.widget.focusNode.hasFocus, isTrue, reason: when);
+      expect(
+        now.textEditingValue.composing,
+        const TextRange(start: 0, end: 3),
+        reason: when,
+      );
+      final methods = [
+        for (final call in tester.testTextInput.log) call.method,
+      ];
+      expect(methods, isNot(contains('TextInput.clearClient')), reason: when);
+      expect(methods, isNot(contains('TextInput.setClient')), reason: when);
+      expect(
+        methods,
+        isNot(contains('TextInput.setEditingState')),
+        reason: when,
+      );
+    }
+
+    Future<void> mode(WidgetTester tester, LiquidNativeChrome mode) async {
+      await pumpShell(
+        tester,
+        fieldShell(mode: mode),
+        padding: _native,
+        settle: false,
+      );
+      _setPadding(tester, _native);
+      await tester.pump();
+    }
+
+    testWidgets('a composing field keeps its state, focus and composing '
+        'range through a release, a takeover and a mirror hold', (
+      tester,
+    ) async {
+      final fake = await _engaged(tester, app: fieldShell());
+      final field = await compose(tester);
+      await mode(tester, LiquidNativeChrome.off);
+      expectKept(tester, field, 'releasing');
+      await mode(tester, LiquidNativeChrome.auto);
+      expectKept(tester, field, 'takeover');
+      await tester.pump();
+      fake.applyLast();
+      await tester.pump();
+      expectKept(tester, field, 'mine');
+      await mode(tester, LiquidNativeChrome.off);
+      fake.apply(fake.configs.lastWhere((config) => !config.engaged));
+      await tester.pump();
+      expectKept(tester, field, 'mirror');
+      _setPadding(tester, _window);
+      await tester.pump(const Duration(milliseconds: 300));
+      expectKept(tester, field, 'Flutter layout');
+    });
+
+    testWidgets('a field under a pushed shell keeps its state and text '
+        'through the push and the pop (standby)', (tester) async {
+      await _engaged(tester, hold: false, app: fieldShell());
+      final field = await compose(tester);
+      final navigator = Navigator.of(
+        tester.element(find.byType(LiquidShell)),
+      );
+      navigator
+          .push(MaterialPageRoute<void>(builder: (_) => _shell('Feed')))
+          .ignore();
+      for (var i = 0; i < 30; i++) {
+        await tester.pump(const Duration(milliseconds: 20));
+        expectKept(tester, field, 'push $i', focused: false);
+      }
+      navigator.pop();
+      for (var i = 0; i < 30; i++) {
+        await tester.pump(const Duration(milliseconds: 20));
+        expectKept(tester, field, 'pop $i', focused: false);
+      }
+    });
+  });
+}
+
+/// A first row (the counter key the checks read) and a text field.
+class _FieldPage extends StatelessWidget {
+  const _FieldPage();
+
+  @override
+  Widget build(BuildContext context) => Material(
+    child: ListView(
+      padding: LiquidShellScope.contentPaddingOf(context),
+      children: const [
+        SizedBox(key: ValueKey('counter-Home'), height: 40),
+        TextField(),
+      ],
+    ),
+  );
 }

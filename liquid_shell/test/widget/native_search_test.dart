@@ -1597,6 +1597,26 @@ void main() {
       expect(fake.searchActives, [false]);
     });
 
+    testWidgets('a takeover ack (a state with a new appliedEpoch) is not a '
+        'reconnect: an active native search stays', (tester) async {
+      final (fake, controller, _) = await _pump(tester);
+      fake.emitNative(const LiquidNativeSearchActiveChanged(active: true));
+      await tester.pump();
+      expect(controller.isActive, isTrue, reason: 'precondition');
+      fake.searchActives.clear();
+      fake.pushState(
+        LiquidNativeShellState(
+          installed: true,
+          compact: true,
+          engagedApplied: true,
+          appliedEpoch: fake.last.epoch,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(controller.isActive, isTrue);
+      expect(fake.searchActives, isEmpty);
+    });
+
     testWidgets('Minor 3: the first native entry after an attach (a hot '
         'restart) tells native the search is inactive', (tester) async {
       final fake = installFakeNative(state: _compact);
