@@ -402,4 +402,120 @@ void main() {
       );
     });
   });
+
+  group("VK-1074: a disengaging shell keeps native's layout until native "
+      'let go', () {
+    bool flutterTabBar() => find.byType(LiquidTabBar).evaluate().isNotEmpty;
+
+    Future<void> mode(WidgetTester tester, LiquidNativeChrome mode) async {
+      await pumpShell(
+        tester,
+        _shell('Home', mode: mode),
+        padding: _native,
+        settle: false,
+      );
+      _setPadding(tester, _native);
+      await tester.pump();
+    }
+
+    /// The dormant (or this shell's disengaged) config native applies.
+    LiquidNativeChromeConfig disengaged(FakeNativePlatform fake) =>
+        fake.configs.lastWhere((config) => !config.engaged);
+
+    void releasing(WidgetTester tester, String when) {
+      _check(tester, 'Home', flutterBar: false, y: 116, when: when);
+      expect(flutterTabBar(), isFalse, reason: '$when: no Flutter tab bar');
+    }
+
+    void flutterLayout(WidgetTester tester, String when) {
+      _check(tester, 'Home', flutterBar: true, y: 116, when: when);
+      expect(flutterTabBar(), isTrue, reason: '$when: Flutter tab bar');
+    }
+
+    testWidgets("mode off, metrics first: native's layout until the ack, "
+        "then the Flutter bars where native's were", (tester) async {
+      final fake = await _engaged(tester);
+      await mode(tester, LiquidNativeChrome.off);
+      expect(fake.last.engaged, isFalse, reason: 'dormant sent');
+      releasing(tester, 'off, not applied');
+      _setPadding(tester, _window);
+      await tester.pump();
+      releasing(tester, 'metrics before the ack');
+      fake.apply(disengaged(fake));
+      await tester.pump();
+      flutterLayout(tester, 'released');
+      await tester.pump(const Duration(milliseconds: 300));
+      flutterLayout(tester, 'later');
+    });
+
+    testWidgets("mode off, ack first: the Flutter bar held where native's "
+        'was until the metrics drop', (tester) async {
+      final fake = await _engaged(tester);
+      await mode(tester, LiquidNativeChrome.off);
+      fake.apply(disengaged(fake));
+      await tester.pump();
+      flutterLayout(tester, 'released, old metrics');
+      _setPadding(tester, _window);
+      await tester.pump();
+      flutterLayout(tester, 'metrics after the ack');
+      await tester.pump(const Duration(milliseconds: 300));
+      flutterLayout(tester, 'later');
+    });
+
+    testWidgets('no ack: the Flutter layout 250 ms after the disengage', (
+      tester,
+    ) async {
+      await _engaged(tester);
+      await mode(tester, LiquidNativeChrome.off);
+      await tester.pump(const Duration(milliseconds: 240));
+      releasing(tester, 'still releasing');
+      await tester.pump(const Duration(milliseconds: 20));
+      await tester.pump();
+      expect(_flutterBars(tester, 'Home'), 1, reason: 'the fallback');
+      expect(flutterTabBar(), isTrue);
+    });
+
+    testWidgets('a destination losing its symbol (the claim kept) releases '
+        'on its own disengaged config', (tester) async {
+      final fake = await _engaged(tester);
+      const plain = [
+        LiquidDestination(
+          icon: Icon(Icons.home),
+          label: 'Home',
+          sfSymbol: 'house',
+        ),
+        LiquidDestination(icon: Icon(Icons.book), label: 'Library'),
+      ];
+      await pumpShell(
+        tester,
+        _shell('Home', destinations: plain),
+        padding: _native,
+        settle: false,
+      );
+      _setPadding(tester, _native);
+      await tester.pump();
+      releasing(tester, 'flapped');
+      await tester.pump();
+      expect(fake.last.engaged, isFalse, reason: 'its own disengaged config');
+      releasing(tester, 'sent');
+      fake.applyLast();
+      await tester.pump();
+      flutterLayout(tester, 'released');
+    });
+
+    testWidgets('a re-engage while releasing is a takeover: no Flutter bar', (
+      tester,
+    ) async {
+      final fake = await _engaged(tester);
+      await mode(tester, LiquidNativeChrome.off);
+      releasing(tester, 'off');
+      await mode(tester, LiquidNativeChrome.auto);
+      releasing(tester, 'auto again');
+      await tester.pump();
+      releasing(tester, 'sent');
+      fake.applyLast();
+      await tester.pump();
+      releasing(tester, 'mine');
+    });
+  });
 }
