@@ -261,6 +261,45 @@ void main() {
       expect(sim.dumps.single.path, endsWith('-ios-ui_terminate'));
     });
 
+    /// The files directly in the diagnostics root whose name ends with
+    /// [suffix].
+    List<File> diagFiles(String suffix) {
+      final root = Directory(sim.diagDir);
+      if (!root.existsSync()) return const [];
+      return root
+          .listSync()
+          .whereType<File>()
+          .where((f) => f.path.endsWith(suffix))
+          .toList();
+    }
+
+    test('a rescued run keeps the first summary and the termination log in '
+        'the diagnostics root', () {
+      final r = redRun([h2Entry()]);
+      expect(r.exitCode, 0, reason: outputOf(r));
+      final copy = diagFiles('-ios-ui-terminate-rerun.json').single;
+      final summary =
+          jsonDecode(copy.readAsStringSync()) as Map<String, Object?>;
+      expect(summary['testFailures'], [h2Entry()]);
+      expect(diagFiles('-ios-ui-term.log'), hasLength(1));
+      final termlog = sim.callsWith('process == "runningboardd"').single;
+      final last = RegExp(r'--last (\d+)s').firstMatch(termlog);
+      expect(int.parse(last!.group(1)!), greaterThanOrEqualTo(60));
+      sim.expectInOrder([
+        'xcresulttool',
+        'launchctl list',
+        'process == "runningboardd"',
+        '-rerun.xcresult',
+      ]);
+    });
+
+    test('a run that is not rerun keeps no terminate record', () {
+      final r = redRun([h2Entry()], failed: 2);
+      expect(r.exitCode, 65, reason: outputOf(r));
+      expect(diagFiles('-terminate-rerun.json'), isEmpty);
+      expect(diagFiles('-term.log'), isEmpty);
+    });
+
     test('two terminate failures rerun both, capped for two', () {
       final r = redRun([h2Entry(), entry('testATapOnTheCircleExpands')]);
       expect(r.exitCode, 0, reason: outputOf(r));

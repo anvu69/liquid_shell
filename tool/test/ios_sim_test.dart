@@ -493,6 +493,59 @@ void main() {
     });
   });
 
+  // VK-1083: a terminate rerun keeps the termination path's log lines.
+  group('termlog', () {
+    List<File> termLogs() {
+      final root = Directory(sim.diagDir);
+      if (!root.existsSync()) return const [];
+      return root
+          .listSync()
+          .whereType<File>()
+          .where((f) => f.path.endsWith('-term.log'))
+          .toList();
+    }
+
+    test('writes the termination path of the last SECONDS to a file', () {
+      final r = sim.run(script, ['termlog', udid, 'ios-minimize', '780']);
+      expect(r.exitCode, 0, reason: outputOf(r));
+      final log = termLogs().single;
+      expect(log.path, endsWith('-ios-minimize-term.log'));
+      expect(log.readAsStringSync(), contains('liquid_shell'));
+      final call = sim.callsWith('log show').single;
+      expect(
+        call,
+        contains('simctl spawn $udid log show --last 780s --style compact'),
+      );
+      expect(
+        call,
+        contains(
+          'process == "runningboardd" OR process == "testmanagerd" OR '
+          'eventMessage CONTAINS "liquidShellExample"',
+        ),
+      );
+      expect(sim.dumps, isEmpty, reason: 'a file, not a dump folder');
+    });
+
+    test('keeps only the last IOS_TERMLOG_BYTES', () {
+      sim.run(
+        script,
+        ['termlog', udid, 'x', '60'],
+        env: {'IOS_TERMLOG_BYTES': '40'},
+      );
+      expect(termLogs().single.lengthSync(), 40);
+    });
+
+    test('a failed read exits 0 and leaves a note', () {
+      final r = sim.run(
+        script,
+        ['termlog', udid, 'x', '60'],
+        env: {'FAKE_LOG_SHOW': 'fail'},
+      );
+      expect(r.exitCode, 0, reason: outputOf(r));
+      expect(termLogs().single.readAsStringSync(), contains('log show failed'));
+    });
+  });
+
   group('guard', () {
     // 5 s, not 2: a loaded machine (pre-commit runs every package's tests at
     // once) can take over 2 s just to start a fake drive (VK-990).
@@ -620,6 +673,7 @@ void main() {
     expect(sim.run(script, ['warmup']).exitCode, 2);
     expect(sim.run(script, ['guard', udid, 'x', '5']).exitCode, 2);
     expect(sim.run(script, ['build', udid]).exitCode, 2);
+    expect(sim.run(script, ['termlog', udid, 'x']).exitCode, 2);
     expect(sim.run(script, ['nope', udid]).exitCode, 2);
   });
 }

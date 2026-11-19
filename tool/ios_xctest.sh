@@ -32,7 +32,11 @@
 #    listed ids) and at most 2 tests, runs once more: only those tests
 #    (-only-testing:<target>/<class>/<test>, replacing the selection), into
 #    RESULT-rerun.xcresult, capped at MAX_ALLOWANCE x n + 120 s. It is
-#    recorded first: a ::warning:: and a `tool/ios_sim.sh diagnose` dump.
+#    recorded first, all under IOS_DIAG_DIR (a rescued job is green, so
+#    only CI's always() upload of that folder keeps it): a ::warning::, the
+#    first summary as <UTC>-<label>-terminate-rerun.json, a
+#    `tool/ios_sim.sh diagnose` dump and `tool/ios_sim.sh termlog` of the
+#    suite's seconds plus a minute (the termination path's log lines).
 #    The run's status is then the rerun's, and the 0-test guard reads the
 #    rerun's bundle. Anything else, python3 failing included, keeps the
 #    first status. Never more than one rerun.
@@ -57,6 +61,7 @@ tool_dir=$(cd "$(dirname "$0")" && pwd)
 example=$(cd "$tool_dir/../liquid_shell/example" && pwd)
 derived="$example/build/ios-derived"
 bundle=${IOS_APP_BUNDLE_ID:-vn.lasoai.liquidShellExample}
+diag_root=${IOS_DIAG_DIR:-$example/build/ios-diagnostics}
 cap() { "$tool_dir/with_timeout.sh" "$@"; }
 label=$(basename "$result" .xcresult)
 rerun_result="${result%.xcresult}-rerun.xcresult"
@@ -152,7 +157,12 @@ if [ "$status" -ne 0 ]; then
     selection+=("-only-testing:$id")
   done <<< "$ids"
   echo "::warning::ios_xctest: XCTest failed to terminate the previous app before $(echo "$ids" | paste -sd , - | sed 's/,/, /g') (VK-1083); rerunning only those, once" >&2
+  mkdir -p "$diag_root"
+  cp "$tmp/$label.json" \
+    "$diag_root/$(date -u +%Y%m%dT%H%M%SZ)-$label-terminate-rerun.json" || true
   "$tool_dir/ios_sim.sh" diagnose "$udid" "$label terminate" || true
+  "$tool_dir/ios_sim.sh" termlog "$udid" "$label" \
+    "$(($(date +%s) - started + 60))" || true
   rerun_secs=$((max_allowance * ${#selection[@]} + 120))
   echo "ios_xctest: the rerun is capped at $rerun_secs s" >&2
   # From here on, the run is the rerun: its bundle, its selection.
