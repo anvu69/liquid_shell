@@ -51,7 +51,7 @@
 
 - [x] **Step 1:** §2.3: the bottom sentence names the mirror's bottom hold, not `_holdBarInset`.
 - [x] **Step 2:** §10: the "Residual" bullet becomes the as-built rule and the iOS note.
-- [ ] **Step 3:** CHANGELOG `## Unreleased` "Fixed" line, if `tool/test/release_version_test.dart` accepts the heading; otherwise stop and report (it does not: spec §7).
+- [x] **Step 3:** CHANGELOG `## Unreleased` "Fixed" line, if `tool/test/release_version_test.dart` accepts the heading; otherwise stop and report (it does not: spec §7).
 - [x] **Step 4:** Pre-commit; commit `fix(shell): the mirror hold keeps the window's bottom safe area (VK-1086)` with Tasks 2–4.
 
 ### Verification
