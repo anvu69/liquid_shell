@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:test/test.dart';
@@ -19,10 +20,11 @@ void main() {
 
   ProcessResult run({
     String suite = '30',
+    String selection = '-only-testing:RunnerUITests',
     Map<String, String> env = const {},
   }) => sim.run(
     script,
-    [udid, result, suite, '180', '300', '-only-testing:RunnerUITests'],
+    [udid, result, suite, '180', '300', selection],
     env: {'FAKE_VM_DELAY': '0', ...env},
   );
 
@@ -182,5 +184,186 @@ void main() {
 
   test('too few arguments print usage and exit 2', () {
     expect(sim.run(script, [udid, result, '30']).exitCode, 2);
+  });
+
+  // VK-1083: XCTest failed to terminate the previous test's app inside
+  // launch() on a stalled runner. Only that failure, and only its tests,
+  // run once more.
+  group('terminate rerun', () {
+    const minimize = '-only-testing:RunnerUITests/MinimizeUITests';
+    const scrollId =
+        'RunnerUITests/MinimizeUITests/'
+        'testAScrollMinimizesAndAFlingToTheTopExpands';
+    const scroll = '-only-testing:$scrollId';
+    const circle =
+        '-only-testing:RunnerUITests/MinimizeUITests/'
+        'testATapOnTheCircleExpands';
+    String rerun() => '${sim.dir.path}/ios-ui-rerun.xcresult';
+
+    /// H2's failure entry (spec §1), from its real summary.
+    Map<String, Object?> h2Entry() {
+      final summary =
+          jsonDecode(
+                File(
+                  'tool/test/fixtures/h2-terminate-summary.json',
+                ).readAsStringSync(),
+              )
+              as Map<String, Object?>;
+      return (summary['testFailures']! as List<Object?>).single!
+          as Map<String, Object?>;
+    }
+
+    /// H2's entry, for [test] of MinimizeUITests and with [text] when given.
+    Map<String, Object?> entry(String test, {String? text}) => {
+      ...h2Entry(),
+      'testIdentifierString': 'MinimizeUITests/$test()',
+      'testName': '$test()',
+      'failureText': ?text,
+    };
+
+    /// A red first run whose summary lists [failures], `failedTests`
+    /// [failed] (default: their count), then [tests] outcomes.
+    ProcessResult redRun(
+      List<Map<String, Object?>> failures, {
+      int? failed,
+      String tests = 'fail pass',
+      Map<String, String> env = const {},
+    }) => run(
+      selection: minimize,
+      env: {
+        'FAKE_TESTS': tests,
+        'FAKE_FAILURES': jsonEncode(failures),
+        'FAKE_FAILED': '${failed ?? failures.length}',
+        ...env,
+      },
+    );
+
+    List<String> testCalls() => sim.callsWith('test-without-building');
+
+    test("a red run whose only failure is H2's reruns that test alone, "
+        'once, and passes', () {
+      final r = redRun([h2Entry()]);
+      expect(r.exitCode, 0, reason: outputOf(r));
+      expect(testCalls(), hasLength(2), reason: sim.calls.join('\n'));
+      final second = testCalls()[1].split(' ');
+      expect(second, contains(scroll));
+      expect(second, isNot(contains(minimize)));
+      expect(testCalls()[1], contains('-resultBundlePath ${rerun()}'));
+      expect(
+        outputOf(r),
+        contains(
+          '::warning::ios_xctest: XCTest failed to terminate the previous '
+          'app before $scrollId (VK-1083); '
+          'rerunning only those, once',
+        ),
+      );
+      expect(outputOf(r), contains('ios_xctest: the rerun is capped at 420 s'));
+      expect(sim.dumps.single.path, endsWith('-ios-ui_terminate'));
+    });
+
+    test('two terminate failures rerun both, capped for two', () {
+      final r = redRun([h2Entry(), entry('testATapOnTheCircleExpands')]);
+      expect(r.exitCode, 0, reason: outputOf(r));
+      final second = testCalls()[1].split(' ');
+      expect(
+        second,
+        containsAll([scroll, circle]),
+      );
+      expect(outputOf(r), contains('the rerun is capped at 720 s'));
+    });
+
+    /// Expects the first run's status and no rerun.
+    void expectNoRerun(ProcessResult r, {int status = 65}) {
+      expect(r.exitCode, status, reason: outputOf(r));
+      expect(testCalls(), hasLength(1), reason: sim.calls.join('\n'));
+      expect(outputOf(r), isNot(contains('rerunning only those')));
+    }
+
+    test('a failedTests count above the listed failures is not rerun (the '
+        'list is not exhaustive)', () {
+      final r = redRun([h2Entry()], failed: 2);
+      expectNoRerun(r);
+      expect(outputOf(r), contains('ios_xctest: no terminate rerun:'));
+    });
+
+    test('three terminate failures are not rerun', () {
+      expectNoRerun(
+        redRun([
+          h2Entry(),
+          entry('testATapOnTheCircleExpands'),
+          entry('testAStatusBarTapScrollsToTheTopAndExpands'),
+        ]),
+      );
+    });
+
+    test('a terminate failure beside any other failure is not rerun', () {
+      expectNoRerun(
+        redRun([
+          h2Entry(),
+          entry(
+            'testAPushedPageOnHomeMinimizesTheBar',
+            text: 'XCTAssertTrue failed - Flutter popped the page',
+          ),
+        ]),
+      );
+    });
+
+    test('a terminate failure of another app is not rerun', () {
+      expectNoRerun(
+        redRun([
+          entry(
+            'testATapOnTheCircleExpands',
+            text: 'Failed to terminate com.apple.Preferences:12: x',
+          ),
+        ]),
+      );
+    });
+
+    test('a red run with no listed failure is not rerun', () {
+      expectNoRerun(redRun([], failed: 0));
+    });
+
+    test('a test id of an unexpected shape is not rerun', () {
+      expectNoRerun(
+        redRun([
+          {...h2Entry(), 'testIdentifierString': 'MinimizeUITests/test(x:)'},
+        ]),
+      );
+    });
+
+    test('an unreadable summary is not rerun', () {
+      expectNoRerun(redRun([h2Entry()], env: {'FAKE_SUMMARY': 'broken'}));
+    });
+
+    test('an absent result bundle is not rerun', () {
+      expectNoRerun(redRun([h2Entry()], env: {'FAKE_RESULT_MISSING': '1'}));
+    });
+
+    test('a stalled suite is not rerun', () {
+      final r = run(
+        suite: '2',
+        selection: minimize,
+        env: {
+          'FAKE_TESTS': 'stall',
+          'FAKE_FAILURES': jsonEncode([h2Entry()]),
+        },
+      );
+      expectNoRerun(r, status: 124);
+    });
+
+    test('a red rerun exits with its own status and prints both '
+        'summaries', () {
+      final r = redRun([h2Entry()], tests: 'fail fail');
+      expect(r.exitCode, 65, reason: outputOf(r));
+      expect(testCalls(), hasLength(2));
+      expect('FAKE SUMMARY'.allMatches(outputOf(r)), hasLength(2));
+      expect(sim.callsWith('xcresulttool').last, endsWith(rerun()));
+    });
+
+    test('a green rerun that ran 0 tests is red', () {
+      final r = redRun([h2Entry()], env: {'FAKE_RERUN_TOTAL': '0'});
+      expect(r.exitCode, 1, reason: outputOf(r));
+      expect(outputOf(r), contains('ran 0 tests'));
+    });
   });
 }
