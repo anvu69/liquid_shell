@@ -565,6 +565,40 @@ void main() {
       expect(flutterTabBar(), isTrue, reason: '$when: Flutter tab bar');
     }
 
+    /// Home under a mode the test flips with [chrome], so the flip does not
+    /// reset the view (size, padding, view insets) as `pumpShell` would.
+    Widget flippable(ValueNotifier<LiquidNativeChrome> chrome) =>
+        ValueListenableBuilder<LiquidNativeChrome>(
+          valueListenable: chrome,
+          builder: (_, mode, _) => _shell('Home', mode: mode),
+        );
+
+    Future<void> flip(
+      WidgetTester tester,
+      ValueNotifier<LiquidNativeChrome> chrome,
+      LiquidNativeChrome mode,
+    ) async {
+      chrome.value = mode;
+      await tester.pump();
+      await tester.pump();
+    }
+
+    /// The body's bottom safe area at Home's first row.
+    void bodyBottom(
+      WidgetTester tester, {
+      required double padding,
+      required double view,
+      required String when,
+    }) {
+      final row = tester.element(find.byKey(const ValueKey('counter-Home')));
+      expect(MediaQuery.paddingOf(row).bottom, padding, reason: '$when: pad');
+      expect(
+        MediaQuery.viewPaddingOf(row).bottom,
+        view,
+        reason: '$when: viewPad',
+      );
+    }
+
     testWidgets("mode off, metrics first: native's layout until the ack, "
         "then the Flutter bars where native's were", (tester) async {
       final fake = await _engaged(tester);
@@ -577,6 +611,7 @@ void main() {
       fake.apply(disengaged(fake));
       await tester.pump();
       flutterLayout(tester, 'released');
+      bodyBottom(tester, padding: 34, view: 34, when: 'released');
       await tester.pump(const Duration(milliseconds: 300));
       flutterLayout(tester, 'later');
     });
@@ -618,6 +653,66 @@ void main() {
           greaterThan(kPhone.height - _native.bottom),
           reason: "not native's bar height above it",
         );
+      },
+    );
+
+    testWidgets(
+      'rotated between the engage and the disengage: the mirror holds no '
+      'bottom',
+      variant: iosDevice,
+      (tester) async {
+        final chrome = ValueNotifier(LiquidNativeChrome.auto);
+        addTearDown(chrome.dispose);
+        final fake = await _engaged(tester, app: flippable(chrome));
+        // The window bottom was seen in portrait only.
+        const landscape = EdgeInsets.only(top: 44, bottom: 70);
+        tester.view.physicalSize = kPhoneLandscape;
+        tester.view.display.size = kPhoneLandscape;
+        _setPadding(tester, landscape);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        await flip(tester, chrome, LiquidNativeChrome.off);
+        fake.apply(disengaged(fake));
+        await tester.pump();
+        expect(_flutterBars(tester, 'Home'), 1, reason: 'mirror: Flutter bar');
+        bodyBottom(tester, padding: 70, view: 70, when: 'mirror');
+      },
+    );
+
+    testWidgets(
+      'a takeover start never saw the window: the mirror holds no bottom',
+      variant: iosDevice,
+      (tester) async {
+        // The hot-restart attach of the VK-1075 group: native's insets from
+        // the first frame.
+        final fake =
+            installFakeNative(
+                state: const LiquidNativeShellState(
+                  installed: true,
+                  compact: true,
+                  engagedApplied: true,
+                  appliedEpoch: 41,
+                ),
+              )
+              ..echoEpochs = true
+              ..autoApply = false;
+        await pumpShell(
+          tester,
+          _shell('Home'),
+          padding: _native,
+          settle: false,
+        );
+        await tester.pump();
+        await tester.pump();
+        expect(fake.last.epoch, greaterThan(41));
+        fake.applyLast();
+        await tester.pump();
+        releasing(tester, 'mine');
+        await mode(tester, LiquidNativeChrome.off);
+        fake.apply(disengaged(fake));
+        await tester.pump();
+        flutterLayout(tester, 'mirror');
+        bodyBottom(tester, padding: 83, view: 83, when: 'mirror');
       },
     );
 
