@@ -114,8 +114,10 @@ Phases (`_Handover`), decided by a pure function (`handoverStep` in
   unanimated takeover the swap is one unanimated round trip.
 - **Mirror hold after release.** Flutter layout with `top = start −
   flutterBar` (`pageBarHeight` of the top page) until the metrics move, the
-  size changes, or 250 ms pass. Bottom: `_holdBarInset` already holds the
-  compact bar's bottom.
+  size changes, or 250 ms pass. Bottom: the body's bottom safe area is
+  held at the window's own, last seen at this size (VK-1086, spec
+  2026-11-19); `_holdBarInset` is native-layout only and never lowers an
+  inset.
 - One shared fallback, `kNativeHandoverTimeout` = 250 ms (D7), armed at
   delivery, with the generation guard of VK-1064.
 
@@ -295,11 +297,15 @@ Warm, the disengage round trip is a few milliseconds: well inside the
   (widget), `test/unit/native_handover_test.dart` (the phase step) and
   `test/unit/native_host_test.dart` (the host), beside the VK-1064 tests
   in `native_pages_test.dart`, which are unchanged.
-- **Residual.** The mirror hold is for the top only. In the ack-first
-  order the Flutter tab bar sits above the home indicator by the native
-  bar's height for the round trip until Flutter's metrics drop: Dart does
-  not know the window's own bottom inset then. Native is already hidden,
-  so there is no double tab bar.
+- **The mirror's bottom (VK-1086, spec 2026-11-19).** In the ack-first
+  order Flutter's bottom inset is still native's (83 pt on an iPhone) for
+  the round trip until its metrics drop. The mirror holds the body's
+  `viewPadding.bottom` at `min(real, the window's)`, the window's read from
+  the last Flutter-layout frame or the engage's start at the same size, and
+  `padding.bottom` at what the keyboard leaves of it; no value at this size
+  (a rotation, a takeover start) holds nothing. The tab bar never moved on
+  iOS: its gap there is a constant 21 (VK-702). The 761 of the old skipped
+  test was the Android test platform, where the gap reads the inset.
 - **Example.** The `pages` case's Settings opens "A shell over this one",
   a full-screen route with its own shell.
 

@@ -1,3 +1,11 @@
+## 0.1.0-dev.15
+
+- Fixed: with native chrome, a shell leaving it no longer gives its pages
+  native's tab bar inset (83 pt on an iPhone) as their bottom safe area
+  for the moment before Flutter's metrics follow; `SafeArea` and
+  `MediaQuery.paddingOf` keep the window's bottom. The tab bar itself
+  never moved.
+
 ## 0.1.0-dev.14
 
 - liquid_shell's own code no longer imports `package:flutter/material.dart`,

@@ -273,6 +273,11 @@ class _LiquidShellState extends State<LiquidShell>
   double _handoverBottom = 0;
   double _handoverViewBottom = 0;
   Size _handoverSize = Size.zero;
+  // The window's own bottom view padding (no native bar) and the size it
+  // was read at, from the Flutter layout or an engage's start; null before
+  // either. The mirror holds the body's bottom at it (VK-1086).
+  double? _windowBottom;
+  Size? _windowBottomSize;
   // The epoch of the config that replaced this shell's after it gave the
   // chrome back (mode off); null while it holds a claim.
   int? _releaseEpoch;
@@ -1442,6 +1447,12 @@ class _LiquidShellState extends State<LiquidShell>
       flutterBar: bar > 0 && (engaged || echoed),
     );
     if (step.restart) {
+      // An engage from the Flutter layout: the metrics are still the
+      // window's (a cold launch engages before any Flutter-layout frame).
+      if (previous == NativeHandover.none &&
+          step.phase == NativeHandover.waiting) {
+        _recordWindowBottom(media);
+      }
       _endHandover(step.phase);
       // The mirror after a release holds above the top the release held.
       if (!(step.phase == NativeHandover.mirror &&
@@ -1528,19 +1539,45 @@ class _LiquidShellState extends State<LiquidShell>
     );
   }
 
-  /// After a release, while native's inset is still there: the
+  void _recordWindowBottom(MediaQueryData media) {
+    _windowBottom = media.viewPadding.bottom;
+    _windowBottomSize = media.size;
+  }
+
+  /// After a release, while native's insets are still there: the
   /// Flutter layout with its top held above native's, by the Flutter bar's
   /// height, so LiquidPage's bar sits where native's was and the first row
-  /// does not move. A new window size holds nothing.
-  MediaQueryData _holdMirrorTop(MediaQueryData media) {
+  /// does not move; and the body's bottom safe area held at the window's
+  /// own, last seen at this size, so content reading it does not jump by
+  /// native's bar height. Both bottoms only ever lower; the padding is what
+  /// the keyboard leaves of the held view padding. A new window size holds
+  /// nothing; a size the window's bottom was not seen at holds the top only.
+  MediaQueryData _holdMirror(MediaQueryData media) {
     if (_handover != NativeHandover.mirror || media.size != _handoverSize) {
       return media;
     }
     final top = math.max(0, _handoverTop - _handoverBar).toDouble();
-    return media.copyWith(
-      padding: media.padding.copyWith(top: top),
-      viewPadding: media.viewPadding.copyWith(top: top),
-    );
+    var padding = media.padding.copyWith(top: top);
+    var viewPadding = media.viewPadding.copyWith(top: top);
+    final window = _windowBottom;
+    if (window != null &&
+        media.size == _windowBottomSize &&
+        window < media.viewPadding.bottom) {
+      viewPadding = viewPadding.copyWith(bottom: window);
+      // Never above the real padding: what an ancestor consumed stays so.
+      padding = padding.copyWith(
+        bottom: math
+            .max(
+              0,
+              math.min(
+                media.padding.bottom,
+                window - media.viewInsets.bottom,
+              ),
+            )
+            .toDouble(),
+      );
+    }
+    return media.copyWith(padding: padding, viewPadding: viewPadding);
   }
 
   /// Starts the hand-over's fallback once native has the engaged config
@@ -1710,7 +1747,10 @@ class _LiquidShellState extends State<LiquidShell>
     );
     _presentation = presentation;
 
-    final media = _holdMirrorTop(MediaQuery.of(context));
+    final raw = MediaQuery.of(context);
+    // The Flutter layout's own metrics carry the window's bottom.
+    if (_handover == NativeHandover.none) _recordWindowBottom(raw);
+    final media = _holdMirror(raw);
     final rtl = Directionality.of(context) == TextDirection.rtl;
     final sizeClass = sizeClassOf(presentation);
     final selected = resolveSelectedIndex(
