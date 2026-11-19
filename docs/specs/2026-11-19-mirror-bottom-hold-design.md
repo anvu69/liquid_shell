@@ -130,6 +130,13 @@ turns `make test` red. Left for the owner (§8).
 - Spec 2026-11-18 §2.3 and §10 are corrected: the bottom is held by this
   rule, not by `_holdBarInset`, and the residual's 761 was the Android test
   platform.
+- The hold lowers only (`window < real`); otherwise the bottom passes
+  through untouched. A takeover start that recorded native's 83 would hold
+  83, the same as no hold, so the takeover guard checks the outcome (83).
+  The rotation guard fails without the size check (measured: 34 instead of
+  70).
+- Rotation and keyboard tests flip the mode through a `ValueNotifier`, not
+  `pumpShell`, which would reset the view's size and padding.
 
 ## 9. Verification
 

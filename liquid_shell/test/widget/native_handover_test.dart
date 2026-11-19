@@ -631,28 +631,67 @@ void main() {
     });
 
     testWidgets(
-      'known gap: during the mirror the Flutter tab bar sits on the window '
-      "bottom, not native's bar height above it",
-      // Follow-up to VK-1074 (accepted residual): in the ack-first order the
-      // bottom inset is still native's (83 pt) for one round trip; Dart does
-      // not know the window's own bottom then.
-      skip: true,
+      "ack first on an iPhone: the mirror frame's body sees the window's "
+      'bottom safe area, and the tab bar does not move',
+      // VK-1086: the bottom inset is still native's (83 pt) until Flutter's
+      // metrics follow; the body keeps the window's 34 meanwhile. On iOS the
+      // tab bar's gap does not read the bottom inset (VK-702).
+      variant: iosDevice,
       (tester) async {
         final fake = await _engaged(tester);
         await mode(tester, LiquidNativeChrome.off);
         fake.apply(disengaged(fake));
         await tester.pump();
         flutterLayout(tester, 'mirror');
-        // The window's bottom inset is 34 pt; native's bar is gone.
+        final row = find.byKey(const ValueKey('counter-Home'));
+        final bar = tester.getRect(find.byType(LiquidTabBar));
+        final content = LiquidShellScope.contentPaddingOf(
+          tester.element(row),
+        ).bottom;
+        bodyBottom(tester, padding: 34, view: 34, when: 'mirror');
+        _setPadding(tester, _window);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        flutterLayout(tester, 'settled');
+        bodyBottom(tester, padding: 34, view: 34, when: 'settled');
+        expect(tester.getRect(find.byType(LiquidTabBar)), bar, reason: 'bar');
+        expect(bar.bottom, 831, reason: 'above the home indicator');
         expect(
-          tester.getBottomLeft(find.byType(LiquidTabBar)).dy,
-          lessThanOrEqualTo(kPhone.height - _window.bottom),
+          LiquidShellScope.contentPaddingOf(tester.element(row)).bottom,
+          content,
+          reason: 'content padding',
         );
-        expect(
-          tester.getBottomLeft(find.byType(LiquidTabBar)).dy,
-          greaterThan(kPhone.height - _native.bottom),
-          reason: "not native's bar height above it",
-        );
+      },
+    );
+
+    testWidgets(
+      'ack first with the keyboard up: the mirror holds viewPadding.bottom at '
+      "the window's, padding stays 0, viewInsets kept",
+      variant: iosDevice,
+      (tester) async {
+        final chrome = ValueNotifier(LiquidNativeChrome.auto);
+        addTearDown(chrome.dispose);
+        final fake = await _engaged(tester, app: flippable(chrome));
+        // The keyboard covers the bottom inset: padding 0, view padding
+        // native's.
+        tester.view
+          ..viewInsets = const FakeViewPadding(bottom: 336)
+          ..padding = const FakeViewPadding(top: 116)
+          ..viewPadding = const FakeViewPadding(top: 116, bottom: 83);
+        await tester.pump();
+        await flip(tester, chrome, LiquidNativeChrome.off);
+        fake.apply(disengaged(fake));
+        await tester.pump();
+        expect(_flutterBars(tester, 'Home'), 1, reason: 'mirror: Flutter bar');
+        bodyBottom(tester, padding: 0, view: 34, when: 'mirror');
+        final row = tester.element(find.byKey(const ValueKey('counter-Home')));
+        expect(MediaQuery.viewInsetsOf(row).bottom, 336, reason: 'insets');
+        tester.view
+          ..padding = const FakeViewPadding(top: 62)
+          ..viewPadding = const FakeViewPadding(top: 62, bottom: 34);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        bodyBottom(tester, padding: 0, view: 34, when: 'metrics dropped');
       },
     );
 
@@ -881,6 +920,28 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       expectKept(tester, field, 'Flutter layout');
     });
+
+    testWidgets(
+      'a composing field keeps its state, focus and composing range through '
+      'a mirror hold with the bottom held (iOS)',
+      variant: iosDevice,
+      (tester) async {
+        final fake = await _engaged(tester, app: fieldShell());
+        final field = await compose(tester);
+        await mode(tester, LiquidNativeChrome.off);
+        expectKept(tester, field, 'releasing');
+        fake.apply(fake.configs.lastWhere((config) => !config.engaged));
+        await tester.pump();
+        expectKept(tester, field, 'mirror');
+        final row = tester.element(find.byKey(const ValueKey('counter-Home')));
+        expect(MediaQuery.paddingOf(row).bottom, 34, reason: 'bottom held');
+        _setPadding(tester, _window);
+        await tester.pump();
+        expectKept(tester, field, 'metrics dropped');
+        await tester.pump(const Duration(milliseconds: 300));
+        expectKept(tester, field, 'Flutter layout');
+      },
+    );
 
     testWidgets('a composing field under a pushed shell keeps its State and '
         'its value through the push and the pop, as under a plain page '
