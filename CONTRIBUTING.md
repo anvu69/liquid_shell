@@ -27,8 +27,7 @@
   `cupertino.dart` (Flutter 3.50), only in the two example apps, whose
   code the READMEs show; and `unnecessary_ignore` of
   `avoid_positional_boolean_parameters` (Dart 3.14 flags only two or more
-  positional bools), only in `LiquidNativeSearchActiveChanged` and the
-  Pigeon source. That second entry goes when the floor reaches Flutter
+  positional bools), only in the Pigeon source. That second entry goes when the floor reaches Flutter
   3.50. `make analyze` and `make verify` keep every info fatal.
 - liquid_shell's `lib/` and `test/` import
   `package:liquid_shell/src/material_sdk.dart` (tests: also

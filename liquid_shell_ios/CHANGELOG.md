@@ -1,3 +1,13 @@
+## 0.1.0-dev.14
+
+- Changed: the native state reports `appliedEpoch`, the epoch of the
+  applied config; the channel's config and state gain the fields.
+  Requires liquid_shell_platform_interface 0.1.0-dev.14.
+- A config with a new epoch over an engaged one (another shell taking the
+  chrome over: a pushed or replaced shell, one popping back) is applied
+  without the bar's slide or the chrome's fade, and the tab is laid out
+  before the state is sent, as on an engage.
+
 ## 0.1.0-dev.13
 
 - The native state reports `engagedApplied`, the applied config's

@@ -836,7 +836,7 @@ final class NativeTabsTests: XCTestCase {
           semanticLabel: "Account, Ann Lee")
         : nil,
       tintArgb: 0xFF00_7AFF, dark: false, rtl: false, hidden: hidden, interactive: interactive,
-      minimizeOnScroll: minimize, tabBarHidden: false)
+      minimizeOnScroll: minimize, tabBarHidden: false, epoch: 1)
   }
 
   /// Lets UIKit finish layout and any sidebar transition.
@@ -1524,7 +1524,7 @@ final class NativeTabsTests: XCTestCase {
       NativeChromeConfig(
         engaged: false, tabs: [], selectedIndex: 0, tintArgb: 0xFF00_7AFF, dark: false,
         rtl: false, hidden: false, interactive: true, minimizeOnScroll: false,
-        tabBarHidden: false))
+        tabBarHidden: false, epoch: 1))
     settle()
     XCTAssertFalse(tabs.chromeVisible)
     XCTAssertEqual(tabs.tabs.map(\.identifier), shown, "dormant leaves the tabs alone")
@@ -1650,7 +1650,7 @@ final class NativeTabsTests: XCTestCase {
       NativeChromeConfig(
         engaged: false, tabs: [], selectedIndex: 0, tintArgb: 0xFF00_7AFF, dark: false,
         rtl: false, hidden: false, interactive: true, minimizeOnScroll: false,
-        tabBarHidden: false))
+        tabBarHidden: false, epoch: 1))
     settle()
 
     container.traitOverrides.horizontalSizeClass = .compact
@@ -2250,7 +2250,7 @@ extension NativeTabsTests {
       search: NativeSearchConfig(placeholder: placeholder, scopes: scopes), tintArgb: 0xFF00_7AFF,
       dark: false,
       rtl: false, hidden: hidden, interactive: interactive, minimizeOnScroll: minimize,
-      tabBarHidden: false)
+      tabBarHidden: false, epoch: 1)
   }
 
   fileprivate func installedSearchShell(
@@ -2655,7 +2655,7 @@ extension NativeTabsTests {
     let dormant = NativeChromeConfig(
       engaged: false, tabs: [], selectedIndex: 0, tintArgb: 0xFF00_7AFF, dark: false,
       rtl: false, hidden: false, interactive: true, minimizeOnScroll: false,
-      tabBarHidden: false)
+      tabBarHidden: false, epoch: 1)
     for (name, hide) in [("dormant", dormant), ("hidden", searchConfig(selected: 2, hidden: true))] {
       let tabs = try installedSearchShell(selected: 2)
       let bridge = tabs.searchBridge
@@ -4150,6 +4150,138 @@ extension NativeTabsTests {
     tabs.apply(config(engaged: false))
     settle()
     XCTAssertFalse(tabs.currentState().engagedApplied, "dormant: not engaged")
+  }
+
+  /// VK-1074 (characterization): the dormant config hides the chrome,
+  /// gives Flutter the whole window and drops its extra insets, all before
+  /// the state that says so goes out. Dart can then keep native's layout
+  /// until that state, and draw its own bars right after it.
+  func testTheDisengageHidesAndResetsFlutterBeforeItsState() throws {
+    let tabs = try dormantFirstShell()
+    let plus = NativePageAction(sfSymbol: "plus", label: "Add", enabled: true)
+    tabs.apply(pagesConfig([NativePage(title: "Home", largeTitle: false, actions: [plus])]))
+    settle()
+    XCTAssertTrue(tabs.currentState().engagedApplied, "precondition: engaged")
+    XCTAssertGreaterThan(
+      tabs.flutter.additionalSafeAreaInsets.top + tabs.flutter.additionalSafeAreaInsets.bottom, 0,
+      "precondition: native adds insets")
+    let root = try XCTUnwrap(tabs.view.superview).bounds
+    var atState: (additional: UIEdgeInsets, frame: CGRect, hidden: Bool, top: CGFloat)?
+    events.onState = { [weak tabs] state in
+      guard let tabs, !state.engagedApplied, atState == nil else { return }
+      atState = (
+        tabs.flutter.additionalSafeAreaInsets, tabs.flutter.view.frame, tabs.view.isHidden,
+        tabs.flutter.view.safeAreaInsets.top
+      )
+    }
+    let dormant = NativeChromeConfig(
+      engaged: false, tabs: [], selectedIndex: 0, tintArgb: 0xFF00_7AFF, dark: false,
+      rtl: false, hidden: false, interactive: true, minimizeOnScroll: false,
+      tabBarHidden: false, epoch: 1)
+    tabs.apply(dormant)
+    let seen = try XCTUnwrap(atState, "the disengage sends its state in apply")
+    XCTAssertEqual(seen.additional, .zero, "no extra insets when the state goes out")
+    XCTAssertEqual(seen.frame, root, "the whole window when the state goes out")
+    XCTAssertTrue(seen.hidden, "the chrome is hidden when the state goes out")
+    settle()
+    let window = try XCTUnwrap(tabs.view.window).safeAreaInsets.top
+    XCTAssertEqual(tabs.flutter.view.safeAreaInsets.top, window, accuracy: 0.5)
+    // Logged, not asserted: whether UIKit had already recomputed the safe
+    // area itself (it may lag to its next layout pass).
+    NSLog(
+      "VK-1074 disengage: top at state %.1f, window top %.1f, settled %.1f",
+      seen.top, window, tabs.flutter.view.safeAreaInsets.top)
+  }
+
+  /// VK-1075: the state names the config native applied by its epoch, so
+  /// a shell knows its own config is the one shown.
+  func testAppliedEpochFollowsTheAppliedConfig() throws {
+    let tabs = try installedShell()
+    XCTAssertEqual(tabs.currentState().appliedEpoch, 1)
+    var next = config()
+    next.epoch = 5
+    tabs.apply(next)
+    XCTAssertEqual(tabs.currentState().appliedEpoch, 5)
+    var off = config(engaged: false)
+    off.epoch = 6
+    tabs.apply(off)
+    XCTAssertEqual(tabs.currentState().appliedEpoch, 6, "a disengage too")
+  }
+
+  /// VK-1075: a new epoch over an engaged config is another shell taking
+  /// over (Flutter's route transition is the animation): the new page's
+  /// bar shows at once, with no slide, and the state that acks it goes out
+  /// with Flutter's inset already below that bar.
+  func testATakeoverShowsTheBarAtOnceAndAcksWithItsInset() throws {
+    try requirePhone()
+    let tabs = try installedShell()
+    tabs.dartAttached = true
+    tabs.apply(pagesConfig([NativePage(title: "Home", largeTitle: false)]))
+    settle()
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    XCTAssertTrue(nav.isNavigationBarHidden, "precondition: no bar")
+    var topAtAck: CGFloat?
+    events.onState = { [weak tabs] state in
+      if state.appliedEpoch == 2, topAtAck == nil {
+        topAtAck = tabs?.flutter.view.safeAreaInsets.top
+      }
+    }
+    let plus = NativePageAction(sfSymbol: "plus", label: "Add", enabled: true)
+    var next = pagesConfig([NativePage(title: "Feed", largeTitle: false, actions: [plus])])
+    next.epoch = 2
+    tabs.apply(next)
+    XCTAssertFalse(nav.isNavigationBarHidden, "the bar is up")
+    XCTAssertNil(nav.navigationBar.layer.animationKeys(), "no slide of the bar")
+    XCTAssertEqual(events.states.last?.appliedEpoch, 2, "the ack is sent in apply")
+    settle()
+    XCTAssertEqual(
+      try XCTUnwrap(topAtAck, "an acked state was sent"), nav.navigationBar.frame.maxY,
+      accuracy: 0.5, "Flutter's inset was set when the ack went out")
+  }
+
+  /// VK-1075: the same epoch is the same shell's page change: it keeps the
+  /// bar's animation.
+  func testTheSameEpochKeepsTheBarAnimation() throws {
+    try requirePhone()
+    try XCTSkipIf(UIAccessibility.isReduceMotionEnabled, "no animation with Reduce Motion")
+    let tabs = try installedShell()
+    tabs.apply(pagesConfig([NativePage(title: "Home", largeTitle: false)]))
+    settle()
+    let nav = try XCTUnwrap(tabs.navControllers[0])
+    let plus = NativePageAction(sfSymbol: "plus", label: "Add", enabled: true)
+    tabs.apply(pagesConfig([NativePage(title: "Home", largeTitle: false, actions: [plus])]))
+    XCTAssertNotNil(nav.navigationBar.layer.animationKeys(), "the bar slides in")
+    settle()
+  }
+
+  /// VK-1075: a takeover over a hidden config (a route covered the old
+  /// owner) shows the chrome without the dialog's fade.
+  func testATakeoverFromAHiddenConfigDoesNotFade() throws {
+    let tabs = try installedShell()
+    tabs.apply(config(hidden: true))
+    settle()
+    XCTAssertTrue(tabs.view.isHidden, "precondition: hidden")
+    var next = config()
+    next.epoch = 2
+    tabs.apply(next)
+    XCTAssertFalse(tabs.view.isHidden)
+    XCTAssertNil(tabs.view.layer.animationKeys(), "no fade")
+    settle()
+  }
+
+  /// VK-1075: a scene reconnect re-applies the last config, epoch and all:
+  /// the new shell reports the state the old one did.
+  func testAReconnectKeepsTheAppliedEpoch() throws {
+    let (installer, window) = try installedByInstaller()
+    _ = try installer.attach()
+    var applied = config()
+    applied.epoch = 3
+    try installer.update(config: applied)
+    settle()
+    let before = try tabs(in: window).currentState()
+    XCTAssertEqual(before.appliedEpoch, 3)
+    let next = try reconnect(installer, from: window)
+    XCTAssertEqual(try tabs(in: next).currentState(), before)
   }
 
   /// The B2 lesson: a size-class change re-applies the pages without a

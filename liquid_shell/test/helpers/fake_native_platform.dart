@@ -75,14 +75,50 @@ class FakeNativePlatform extends FakeSignalsPlatform {
       : state;
 
   static LiquidNativeShellState _acked(LiquidNativeShellState state) =>
-      LiquidNativeShellState(
-        installed: state.installed,
-        compact: state.compact,
-        sidebar: state.sidebar,
-        verticalBarSide: state.verticalBarSide,
-        engagedApplied: true,
-        unavailableReason: state.unavailableReason,
-      );
+      _with(state, engagedApplied: true);
+
+  static LiquidNativeShellState _with(
+    LiquidNativeShellState state, {
+    bool? engagedApplied,
+    int? appliedEpoch,
+  }) => LiquidNativeShellState(
+    installed: state.installed,
+    compact: state.compact,
+    sidebar: state.sidebar,
+    verticalBarSide: state.verticalBarSide,
+    engagedApplied: engagedApplied ?? state.engagedApplied,
+    appliedEpoch: appliedEpoch ?? state.appliedEpoch,
+    unavailableReason: state.unavailableReason,
+  );
+
+  /// The native model (spec 2026-11-18 applied-epoch): when true, applying
+  /// a config pushes a state with that config's `engaged` and `epoch`, as
+  /// native does, once per change. Off by default: the platform then never
+  /// echoes an epoch (0), the window-wide rule of dev.13.
+  bool echoEpochs = false;
+
+  /// With [echoEpochs], whether each config is applied as it arrives.
+  /// False: native holds it until [applyLast].
+  bool autoApply = true;
+
+  /// Native applies the last config it got (and so every earlier one):
+  /// pushes its `engaged` and `epoch` when they change the state.
+  void applyLast() {
+    if (configs.isNotEmpty) apply(configs.last);
+  }
+
+  /// Native applies [config]: pushes its `engaged` and `epoch` when they
+  /// change the state.
+  void apply(LiquidNativeChromeConfig config) {
+    final next = _with(
+      state,
+      engagedApplied: config.engaged,
+      appliedEpoch: config.epoch,
+    );
+    if (next == state) return;
+    state = next;
+    _native.add(LiquidNativeStateChanged(state));
+  }
 
   /// Changes the state and pushes it, as UIKit does after a layout.
   void pushState(LiquidNativeShellState next) {
@@ -93,6 +129,7 @@ class FakeNativePlatform extends FakeSignalsPlatform {
   /// Pushes the current state with `engagedApplied: true`, as native does
   /// once it has applied an engaged config.
   void ack() {
+    if (echoEpochs) return applyLast();
     state = _acked(state);
     _native.add(LiquidNativeStateChanged(state));
   }
@@ -115,6 +152,7 @@ class FakeNativePlatform extends FakeSignalsPlatform {
   Future<void> updateNativeChrome(LiquidNativeChromeConfig config) async {
     configs.add(config);
     await updateGate?.future;
+    if (echoEpochs && autoApply) applyLast();
   }
 
   @override

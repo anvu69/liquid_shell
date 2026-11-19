@@ -14,6 +14,9 @@ import 'package:liquid_shell_example/support/wallpaper.dart';
 /// page's own bar. Library has a large title that collapses as the page
 /// scrolls. Settings has a root without `LiquidPage`: the pages it pushes
 /// get a back circle to it all the same, and Profile has a text field.
+/// Settings also opens a second shell over this one, full screen: with
+/// native chrome it takes the native bar and tabs over, and gives them back
+/// on Close.
 ///
 /// Page actions: Home's root has Add, which opens a detail; each detail
 /// has Share (counts), Favourite (its symbol toggles) and Delete
@@ -301,8 +304,93 @@ class _SettingsPage extends StatelessWidget {
         subtitle: 'A text field: type with any keyboard',
         onTap: () => _push(context, const _ProfilePage()),
       ),
+      _Row(
+        title: 'A shell over this one',
+        subtitle: 'A full-screen route with its own LiquidShell',
+        onTap: () => Navigator.of(context, rootNavigator: true).push(
+          MaterialPageRoute<void>(
+            fullscreenDialog: true,
+            builder: (_) => const _OverShell(),
+          ),
+        ),
+      ),
     ],
   );
+}
+
+/// A second shell, pushed over the case's shell: with native chrome it takes
+/// the window's native chrome over while its route slides in, and gives it
+/// back on Close. The shell underneath keeps its own layout meanwhile.
+class _OverShell extends StatefulWidget {
+  const _OverShell();
+
+  @override
+  State<_OverShell> createState() => _OverShellState();
+}
+
+class _OverShellState extends State<_OverShell> {
+  int _index = 0;
+
+  static const _destinations = [
+    LiquidDestination(
+      icon: Icon(Icons.layers_outlined),
+      selectedIcon: Icon(Icons.layers),
+      label: 'Over',
+      sfSymbol: 'square.stack',
+    ),
+    LiquidDestination(
+      icon: Icon(Icons.info_outline),
+      selectedIcon: Icon(Icons.info),
+      label: 'Info',
+      sfSymbol: 'info.circle',
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final close = LiquidPageAction(
+      sfSymbol: 'xmark',
+      icon: const Icon(Icons.close),
+      label: 'Close',
+      onPressed: () => Navigator.of(context).pop(),
+    );
+    return LiquidShell(
+      destinations: _destinations,
+      selectedIndex: _index,
+      onDestinationSelected: (i) => setState(() => _index = i),
+      body: IndexedStack(
+        index: _index,
+        children: [
+          Navigator(
+            onGenerateRoute: (_) => MaterialPageRoute<void>(
+              builder: (_) => _Page(
+                title: 'Over',
+                largeTitle: false,
+                actions: [close],
+                children: [
+                  for (var i = 1; i <= 20; i++) _Row(title: 'Over item $i'),
+                ],
+              ),
+            ),
+          ),
+          Navigator(
+            onGenerateRoute: (_) => MaterialPageRoute<void>(
+              builder: (_) => _Page(
+                title: 'Info',
+                actions: [close],
+                children: const [
+                  _Row(
+                    title: 'One window, one native chrome',
+                    subtitle: 'The newest shell owns it',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _AboutPage extends StatelessWidget {

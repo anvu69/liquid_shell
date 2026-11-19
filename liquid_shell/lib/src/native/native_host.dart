@@ -41,6 +41,17 @@ final class NativeChromeHost extends ChangeNotifier {
   final List<NativeChromeClaim> _claims = [];
   StreamSubscription<LiquidNativeEvent>? _events;
   LiquidNativeChromeConfig? _sent;
+  // The hand-over epoch every config goes out with (spec 2026-11-18
+  // applied-epoch §2.1). 0 is never sent: a state that reports 0 does not
+  // echo epochs. Bumped only when a hand-over starts (an owner change, an
+  // engaged flip), never by the forced resend after a state.
+  int _epoch = 1;
+  // The last config sent, never forgotten (unlike [_sent]): its `engaged`
+  // tells an engaged flip from a resend.
+  LiquidNativeChromeConfig? _last;
+  // The last config sent with each recent epoch: what native shows for the
+  // epoch its state reports.
+  final Map<int, LiquidNativeChromeConfig> _byEpoch = {};
   // The platform call that sent [_sent]: a deduped send answers it, so a
   // caller waiting for native to have the config still waits for it.
   Future<void>? _delivered;
@@ -48,6 +59,19 @@ final class NativeChromeHost extends ChangeNotifier {
 
   /// The platform's report; null until the first answer (pending).
   ValueListenable<LiquidNativeShellState?> get state => _state;
+
+  /// The last config sent with the epoch the platform reports applied
+  /// ([LiquidNativeShellState.appliedEpoch]); null when the platform does
+  /// not echo epochs, or the config is no longer known (a hot restart, an
+  /// epoch older than the ones kept).
+  ///
+  /// A prediction, not a confirmation: native confirms the epoch only, and
+  /// a later config of the same epoch (a page change, a `hidden` toggle)
+  /// may still be on its way.
+  LiquidNativeChromeConfig? get appliedConfig {
+    final epoch = _state.value?.appliedEpoch ?? 0;
+    return epoch == 0 ? null : _byEpoch[epoch];
+  }
 
   /// Asks the platform once. Platforms without native chrome answer
   /// synchronously, so a shell there never waits.
@@ -63,6 +87,9 @@ final class NativeChromeHost extends ChangeNotifier {
     unawaited(
       platform.attachNativeChrome().then((state) {
         if (!_started) return;
+        // A hot restart: native still has the old run's epoch; never
+        // stamp one it could mistake for it.
+        if (state.appliedEpoch >= _epoch) _epoch = state.appliedEpoch + 1;
         _setState(state);
         // After a hot restart the native chrome still shows the old
         // config: send the owner's again, whole.
@@ -123,9 +150,14 @@ final class NativeChromeHost extends ChangeNotifier {
     _start();
     final claim = NativeChromeClaim._(this, onEvent);
     _claims.add(claim);
+    // A new owner: a new hand-over.
+    _epoch++;
     notifyListeners();
     return claim;
   }
+
+  /// The claim that owns the native chrome; null with none.
+  NativeChromeClaim? get owner => _claims.isEmpty ? null : _claims.last;
 
   /// Whether [claim] owns the native chrome.
   bool isOwner(NativeChromeClaim claim) =>
@@ -134,26 +166,44 @@ final class NativeChromeHost extends ChangeNotifier {
   void _release(NativeChromeClaim claim) {
     final wasOwner = isOwner(claim);
     _claims.remove(claim);
-    if (wasOwner) _sendOwner(force: false);
+    if (wasOwner) {
+      // The previous claim (or dormant) owns it again: a new hand-over.
+      _epoch++;
+      _sendOwner(force: false);
+    }
+    claim._releaseEpoch = _epoch;
     notifyListeners();
   }
 
   void _sendOwner({required bool force}) {
-    final config = _claims.isEmpty
+    final owner = _claims.isEmpty ? null : _claims.last;
+    final config = owner == null
         ? LiquidNativeChromeConfig.dormant
-        : _claims.last._config;
-    if (config != null) unawaited(_send(config, force: force));
+        : owner._config;
+    if (config != null) unawaited(_send(config, force: force, owner: owner));
   }
 
   /// The platform call that delivers [config]: this send's, or the earlier
   /// one's when [config] was already sent; null when nothing listens.
-  Future<void>? _send(LiquidNativeChromeConfig config, {required bool force}) {
+  Future<void>? _send(
+    LiquidNativeChromeConfig config, {
+    required bool force,
+    NativeChromeClaim? owner,
+  }) {
     final state = _state.value;
     // Nothing installed: nobody listens natively.
     if (state == null || !state.installed) return null;
-    if (!force && config == _sent) return _delivered;
-    _sent = config;
-    final sent = LiquidShellPlatform.instance.updateNativeChrome(config);
+    final last = _last;
+    if (last != null && last.engaged != config.engaged) _epoch++;
+    final stamped = config.copyWithEpoch(_epoch);
+    if (!force && stamped == _sent) return _delivered;
+    _sent = stamped;
+    _last = stamped;
+    _byEpoch[_epoch] = stamped;
+    _byEpoch.removeWhere((epoch, _) => epoch < _epoch - _keptEpochs);
+    owner?._sentEpoch = _epoch;
+    owner?._sentEngaged = config.engaged;
+    final sent = LiquidShellPlatform.instance.updateNativeChrome(stamped);
     unawaited(sent);
     return _delivered = sent;
   }
@@ -168,6 +218,10 @@ final class NativeChromeHost extends ChangeNotifier {
   }
 }
 
+/// How many epochs before the current one [NativeChromeHost.appliedConfig]
+/// still knows: native is at most a few hand-overs behind.
+const int _keptEpochs = 8;
+
 /// One shell's claim on the native chrome.
 final class NativeChromeClaim {
   NativeChromeClaim._(this._host, this._handler);
@@ -176,6 +230,19 @@ final class NativeChromeClaim {
   final ValueChanged<LiquidNativeEvent> _handler;
   LiquidNativeChromeConfig? _config;
   bool _released = false;
+  int? _sentEpoch;
+  bool? _sentEngaged;
+  int? _releaseEpoch;
+
+  /// The epoch of the last config sent for this claim; null until one is.
+  int? get epoch => _sentEpoch;
+
+  /// The epoch of the config that replaced this claim's engaged one: the
+  /// next owner's or the dormant one after [release], or this claim's own
+  /// disengaged config. Null while that config is not sent yet (or this
+  /// claim's last config is engaged): native has not been asked to let go.
+  int? get releaseEpoch =>
+      _releaseEpoch ?? (_sentEngaged == false ? _sentEpoch : null);
 
   /// Whether this claim owns the native chrome.
   bool get isOwner => !_released && _host.isOwner(this);
@@ -188,7 +255,7 @@ final class NativeChromeClaim {
   Future<void>? update(LiquidNativeChromeConfig config, {bool force = false}) {
     if (_released) return null;
     _config = config;
-    return isOwner ? _host._send(config, force: force) : null;
+    return isOwner ? _host._send(config, force: force, owner: this) : null;
   }
 
   /// Shows or hides the native sidebar, when this claim owns it.

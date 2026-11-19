@@ -124,8 +124,9 @@ void main() {
       );
     });
 
-    test('the same ignore in the platform interface event is tolerated', () {
-      expect(_judge([_at(_ignore, _nativeChrome)]).passed, isTrue);
+    test('the same ignore in the platform interface fails: the event '
+        'takes a named bool now', () {
+      expect(_judge([_at(_ignore, _nativeChrome)]).passed, isFalse);
     });
 
     test('the same ignore anywhere else fails', () {

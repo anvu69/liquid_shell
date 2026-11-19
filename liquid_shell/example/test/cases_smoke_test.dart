@@ -185,6 +185,21 @@ void main() {
     expect(find.text('Home item 1'), findsOneWidget);
   });
 
+  testWidgets('pages: Settings opens a shell over the shell, and its Close '
+      'pops it', (tester) async {
+    await _openCase(tester, 'pages');
+    await tester.tap(find.text('Settings').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('A shell over this one'));
+    await tester.pumpAndSettle();
+    expect(find.byType(LiquidShell), findsOneWidget, reason: 'the top one');
+    expect(find.text('Over item 1'), findsOneWidget);
+    await tester.tap(find.byTooltip('Close'));
+    await tester.pumpAndSettle();
+    expect(find.text('Over item 1'), findsNothing);
+    expect(find.text('A shell over this one'), findsOneWidget);
+  });
+
   testWidgets('pages: a pushed page has a back button that pops it', (
     tester,
   ) async {

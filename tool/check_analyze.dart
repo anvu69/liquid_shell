@@ -13,10 +13,10 @@
 //   (VK-1077).
 // - R2: `unnecessary_ignore` of `avoid_positional_boolean_parameters` (Dart
 //   3.14 flags only two or more positional bools; 3.44 and 3.47 still flag
-//   one), only in the two files that cannot drop it: the public
-//   LiquidNativeSearchActiveChanged and the Pigeon source (Pigeon rejects
-//   named FlutterApi parameters). Exit: the floor reaches Dart 3.14
-//   (VK-1078).
+//   one), only in the one file that cannot drop it: the Pigeon source
+//   (Pigeon rejects named FlutterApi parameters). The public
+//   LiquidNativeSearchActiveChanged takes a named bool since 0.1.0-dev.14
+//   (B6). Exit: the floor reaches Dart 3.14 (VK-1078).
 //
 // Each tolerated issue is printed. `make analyze` (the floor, `make verify`,
 // the pre-commit hook) keeps `--fatal-infos` and knows nothing of this list.
@@ -107,10 +107,7 @@ final _sdkUiLibrary = RegExp(
 const _r1Dirs = ['/liquid_shell/example/', '/liquid_shell/example_go_router/'];
 
 /// Files that must keep their positional-bool ignore (R2).
-const _r2Files = [
-  '/liquid_shell_platform_interface/lib/src/native_chrome.dart',
-  '/tool/pigeon/pigeons/native_shell.dart',
-];
+const _r2Files = ['/tool/pigeon/pigeons/native_shell.dart'];
 
 /// Why [issue] is tolerated on the stable leg, or null when it blocks.
 /// Only infos are ever tolerated, and only at the paths above.

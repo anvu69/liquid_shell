@@ -45,6 +45,7 @@ class NativeShellState {
     required this.sidebar,
     required this.verticalBarSide,
     required this.engagedApplied,
+    required this.appliedEpoch,
     this.unavailableReason,
   });
 
@@ -57,6 +58,9 @@ class NativeShellState {
   /// the native one once this is true.
   bool engagedApplied;
   NativeUnavailableReason? unavailableReason;
+
+  /// The applied config's `epoch` (0: none applied).
+  int appliedEpoch;
 }
 
 class NativeTab {
@@ -255,6 +259,7 @@ class NativeChromeConfig {
     required this.interactive,
     required this.minimizeOnScroll,
     required this.tabBarHidden,
+    required this.epoch,
     this.trailing,
     this.footer,
     this.search,
@@ -278,6 +283,10 @@ class NativeChromeConfig {
   /// Hide the tab bar and the sidebar, keep the selected tab's navigation
   /// bar. Ignored while [hidden].
   bool tabBarHidden;
+
+  /// The hand-over this config belongs to (stamped by Dart): a new one
+  /// over an engaged config is another shell taking over.
+  int epoch;
 }
 
 class NativeWindowControls {

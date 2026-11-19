@@ -1507,7 +1507,9 @@ void main() {
         await app.select(tester, 2);
         app.search.activate();
         // Natively, the search is active once UIKit says so.
-        app.fake?.emitNative(const LiquidNativeSearchActiveChanged(true));
+        app.fake?.emitNative(
+          const LiquidNativeSearchActiveChanged(active: true),
+        );
         await tester.pumpAndSettle();
         expect(app.search.isActive, isTrue, reason: 'precondition');
         await back(app, tester);

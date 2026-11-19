@@ -1,3 +1,17 @@
+## 0.1.0-dev.14
+
+- **Breaking.** `LiquidNativeSearchActiveChanged` takes a named
+  `required bool active` (`LiquidNativeSearchActiveChanged(active: true)`)
+  instead of a positional bool; its `toString` names the field.
+- Changed: `LiquidNativeChromeConfig.epoch` (default 0, with
+  `copyWithEpoch`) and `LiquidNativeShellState.appliedEpoch` (default 0),
+  both in `==`, `hashCode` and `toString`. The shell stamps every config
+  with the epoch of its hand-over; a platform reports the epoch of the
+  config it applied, so the shell knows whether its own config is the one
+  shown. 0 is reserved for "not echoed": a platform that leaves it at 0
+  keeps the `engagedApplied`-only behaviour of 0.1.0-dev.13. Platform
+  implementations should copy the epoch of each config they apply.
+
 ## 0.1.0-dev.13
 
 - The native state reports `engagedApplied`: whether the platform has

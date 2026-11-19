@@ -239,6 +239,17 @@ class _LiquidShellState extends State<LiquidShell>
   ModalRoute<Object?>? _route;
   bool _routeCurrent = true;
   bool _coveredByPush = false;
+  // A route above this shell's, pushing, shown or popping (its secondary
+  // animation not dismissed): unlike [_coveredByPush], also during a pop.
+  bool _underRoute = false;
+  // Set while [_underRoute] when the owner changed since the cover started
+  // (a pushed shell claimed the chrome), and kept until this shell owns it
+  // again: a popped route is dismissed a frame or more before its shell is
+  // disposed and gives the chrome back. A cover that changed no owner (a
+  // plain page over a same-route nested shell) clears it when it ends.
+  bool _coveredStandby = false;
+  // Who owned the chrome when the current cover started.
+  NativeChromeClaim? _ownerAtCover;
   bool _tickersOff = false;
   bool _nativeEngaged = false;
   LiquidNativeShellState? _nativeState;
@@ -255,10 +266,19 @@ class _LiquidShellState extends State<LiquidShell>
   // Engaged (the config) comes one turn before native shows its bar; the
   // layout follows native's ack (`engagedApplied`), so a frame never shows
   // neither bar and the first row never moves.
-  _Handover _handover = _Handover.none;
+  NativeHandover _handover = NativeHandover.none;
   // The top padding and window size when the hand-over started.
   double _handoverTop = 0;
+  // The bottom padding and view padding when a release started.
+  double _handoverBottom = 0;
+  double _handoverViewBottom = 0;
   Size _handoverSize = Size.zero;
+  // The epoch of the config that replaced this shell's after it gave the
+  // chrome back (mode off); null while it holds a claim.
+  int? _releaseEpoch;
+  // A takeover over a config with no page bar there: LiquidPage draws its
+  // own bar meanwhile.
+  bool _takeoverFlutterBar = false;
   // The Flutter bar's height that the holding phase keeps under the top.
   double _handoverBar = 0;
   Timer? _handoverTimer;
@@ -417,6 +437,9 @@ class _LiquidShellState extends State<LiquidShell>
     _hosted = hosted;
     _coveredByPush =
         route?.secondaryAnimation?.status.isForwardOrCompleted ?? false;
+    final under = !(route?.secondaryAnimation?.status.isDismissed ?? true);
+    if (under && !_underRoute) _ownerAtCover = _host.owner;
+    _underRoute = under;
     // A dependency: the change rebuilds us. The layout builder still runs
     // under an obstructed entry (Flutter >= 3.44), so the config is sent.
     _tickersOff = !TickerMode.valuesOf(context).enabled;
@@ -424,8 +447,13 @@ class _LiquidShellState extends State<LiquidShell>
 
   void _onCoverChanged(AnimationStatus status) {
     final covered = status.isForwardOrCompleted;
-    if (covered != _coveredByPush && mounted) {
-      setState(() => _coveredByPush = covered);
+    final under = !status.isDismissed;
+    if (under && !_underRoute) _ownerAtCover = _host.owner;
+    if ((covered != _coveredByPush || under != _underRoute) && mounted) {
+      setState(() {
+        _coveredByPush = covered;
+        _underRoute = under;
+      });
     }
   }
 
@@ -439,9 +467,14 @@ class _LiquidShellState extends State<LiquidShell>
   /// Claims the native chrome in `auto`, gives it back in `off`.
   void _syncClaim() {
     if (widget.nativeChrome == LiquidNativeChrome.auto) {
+      if (_claim == null) _releaseEpoch = null;
       _claim ??= _host.claim(_onNativeEvent);
     } else {
-      _claim?.release();
+      final claim = _claim;
+      if (claim != null) {
+        claim.release();
+        _releaseEpoch = claim.releaseEpoch;
+      }
       _claim = null;
     }
   }
@@ -520,7 +553,9 @@ class _LiquidShellState extends State<LiquidShell>
       if (mounted && latest != null) {
         final config = latest();
         final sent = _claim?.update(config, force: force);
-        if (config.engaged) _armHandoverTimeout(sent);
+        // The engaged config's delivery arms waiting, holding and takeover;
+        // the disengaged one's arms releasing (generation-guarded).
+        _armHandoverTimeout(sent);
         _search.afterConfigSent();
         // New native tab hosts start at offset 0: the offsets follow the
         // config that may have built them, never precede it. The top
@@ -1337,21 +1372,23 @@ class _LiquidShellState extends State<LiquidShell>
     return false;
   }
 
-  /// Whether this frame draws native's layout, and the step of
-  /// the hand-over that decides it. Native shows its bar only once it has
-  /// the engaged config, which this frame's post-frame callback sends, and
-  /// says so in `engagedApplied`:
+  /// Whether this frame draws native's layout, and the step of the page
+  /// bar's hand-over that decides it (spec 2026-11-18, applied-epoch hand-over;
+  /// [nativeHandoverStep]). Native says which config it applied by its
+  /// epoch (`appliedEpoch`), so the shell tells its own config from
+  /// another shell's:
   ///
-  /// - waiting (engaged, not acked): the pending layout, LiquidPage's own
-  ///   bar, and the top held where it was ([_holdHandoverTop]), so native's
-  ///   new inset arriving first does not move that bar;
-  /// - holding (acked, the inset not here yet): native's layout, the top
-  ///   held below where the Flutter bar was, so the content stays put;
+  /// - waiting (native shows nothing engaged, or a hidden config): the
+  ///   pending layout, LiquidPage's own bar, the top held
+  ///   ([_holdHandoverTop]);
+  /// - holding (mine applied, the inset not here yet): native's layout, the
+  ///   top held below where the Flutter bar was;
+  /// - takeover (another engaged config on screen): native's layout, the top
+  ///   held, until mine is applied; LiquidPage's own bar where native shows
+  ///   none there, handed over through holding;
   /// - done: native's layout and its real insets.
   ///
-  /// An installed state already acked (a reconnect, a hot restart over the
-  /// shown chrome) engages at once. A new window size, a top page without
-  /// a Flutter bar, or [kNativeHandoverTimeout] ends a hold early.
+  /// A new window size or [kNativeHandoverTimeout] ends a hold early.
   bool _handOver({
     required bool engaged,
     required LiquidNativeShellState? state,
@@ -1359,47 +1396,86 @@ class _LiquidShellState extends State<LiquidShell>
     required LiquidSizeClass flutterSizeClass,
     required bool hideLargeTitle,
   }) {
-    if (!engaged) {
-      _endHandover(_Handover.none);
-      return false;
-    }
-    final acked = state?.engagedApplied ?? false;
-    final moved =
-        media.padding.top != _handoverTop || media.size != _handoverSize;
-    switch (_handover) {
-      case _Handover.none:
-        if (acked) {
-          _handover = _Handover.done;
-          return true;
-        }
-        _handover = _Handover.waiting;
+    final claim = _claim;
+    final applied = state?.engagedApplied ?? false;
+    final epoch = state?.appliedEpoch ?? 0;
+    // Epoch 0: the platform does not echo epochs; any engaged config is
+    // taken as this shell's (the window-wide rule of VK-1064).
+    final echoed = epoch != 0;
+    final mine = applied && (!echoed || epoch == claim?.epoch);
+    final appliedConfig = _host.appliedConfig;
+    final nativeUp = applied && !(appliedConfig?.hidden ?? false);
+    final compact = state?.compact ?? false;
+    // Native shows no page bar there (D3): a takeover lets LiquidPage draw
+    // its own bar until mine is applied, whatever this shell's top page
+    // turns out to be (its page registers after this build); a page
+    // without a bar draws none. Only the page bar differs from a takeover.
+    final barMismatch =
+        appliedConfig != null &&
+        appliedConfig.engaged &&
+        !nativeConfigShowsPageBar(appliedConfig, compact: compact);
+    // Native let go of this shell's config: it applied the disengage (or a
+    // later config). Not echoed: at once, the dev.13 rule.
+    final releaseEpoch = claim != null ? claim.releaseEpoch : _releaseEpoch;
+    final released =
+        !applied || !echoed || (releaseEpoch != null && epoch >= releaseEpoch);
+    final bar = _flutterPageBarHeight(flutterSizeClass, hideLargeTitle);
+    final resized = media.size != _handoverSize;
+    final previous = _handover;
+    final step = nativeHandoverStep(
+      _handover,
+      engaged: engaged,
+      // Disengaged by this shell itself, not by another shell taking it.
+      releasable: claim == null || claim.isOwner,
+      mine: mine,
+      nativeUp: nativeUp,
+      // In a takeover: whether this shell drew its own bar (the config now
+      // applied may be its own, with a bar).
+      barMismatch: _handover == NativeHandover.takeover
+          ? _takeoverFlutterBar
+          : barMismatch,
+      released: released,
+      timedOut: _handoverTimedOut,
+      moved: resized || media.padding.top != _handoverTop,
+      resized: resized,
+      // Not echoed: no mirror after a release (the dev.13 rule).
+      flutterBar: bar > 0 && (engaged || echoed),
+    );
+    if (step.restart) {
+      _endHandover(step.phase);
+      // The mirror after a release holds above the top the release held.
+      if (!(step.phase == NativeHandover.mirror &&
+          previous == NativeHandover.releasing)) {
         _handoverTop = media.padding.top;
         _handoverSize = media.size;
-        return false;
-      case _Handover.waiting:
-        if (_handoverTimedOut) {
-          _endHandover(_Handover.done);
-          return true;
-        }
-        if (!acked) return false;
-        final bar = _flutterPageBarHeight(flutterSizeClass, hideLargeTitle);
-        if (bar == 0 || moved) {
-          _endHandover(_Handover.done);
-        } else {
-          _handover = _Handover.holding;
-          _handoverBar = bar;
-        }
-        return true;
-      case _Handover.holding:
-        if (_handoverTimedOut || moved) _endHandover(_Handover.done);
-        return true;
-      case _Handover.done:
-        return true;
+      }
+      _handoverBottom = media.padding.bottom;
+      _handoverViewBottom = media.viewPadding.bottom;
+      _handoverBar = bar;
+      // Nothing is sent for these after the frame (the claim is gone, or the
+      // mirror follows native's ack): their fallback starts now.
+      if (step.phase == NativeHandover.mirror ||
+          (step.phase == NativeHandover.releasing && claim == null)) {
+        _armHandoverTimeout(null);
+      }
+    } else if (step.phase == NativeHandover.holding &&
+        (_handover == NativeHandover.waiting ||
+            _handover == NativeHandover.takeover)) {
+      _handover = NativeHandover.holding;
+      _handoverBar = bar;
+    } else if (step.phase != _handover) {
+      _endHandover(step.phase);
     }
+    if (_handover != NativeHandover.takeover) {
+      _takeoverFlutterBar = false;
+    } else if (step.restart) {
+      _takeoverFlutterBar = barMismatch;
+    }
+    return step.layout;
   }
 
-  void _endHandover(_Handover next) {
-    if (_handover != _Handover.none) _handoverGeneration++;
+  void _endHandover(NativeHandover next) {
+    if (_handover != NativeHandover.none) _handoverGeneration++;
     _handover = next;
     _handoverTimer?.cancel();
     _handoverTimer = null;
@@ -1426,14 +1502,41 @@ class _LiquidShellState extends State<LiquidShell>
   MediaQueryData _holdHandoverTop(MediaQueryData media) {
     final double top;
     switch (_handover) {
-      case _Handover.waiting:
+      case NativeHandover.waiting || NativeHandover.takeover:
         top = _handoverTop;
-      case _Handover.holding:
+      case NativeHandover.holding:
         top = _handoverTop + _handoverBar;
-      case _Handover.none || _Handover.done:
+      case NativeHandover.releasing:
+        if (media.size != _handoverSize) return media;
+        return media.copyWith(
+          padding: media.padding.copyWith(
+            top: _handoverTop,
+            bottom: _handoverBottom,
+          ),
+          viewPadding: media.viewPadding.copyWith(
+            top: _handoverTop,
+            bottom: _handoverViewBottom,
+          ),
+        );
+      case NativeHandover.none || NativeHandover.done || NativeHandover.mirror:
         return media;
     }
     if (media.size != _handoverSize) return media;
+    return media.copyWith(
+      padding: media.padding.copyWith(top: top),
+      viewPadding: media.viewPadding.copyWith(top: top),
+    );
+  }
+
+  /// After a release, while native's inset is still there: the
+  /// Flutter layout with its top held above native's, by the Flutter bar's
+  /// height, so LiquidPage's bar sits where native's was and the first row
+  /// does not move. A new window size holds nothing.
+  MediaQueryData _holdMirrorTop(MediaQueryData media) {
+    if (_handover != NativeHandover.mirror || media.size != _handoverSize) {
+      return media;
+    }
+    final top = math.max(0, _handoverTop - _handoverBar).toDouble();
     return media.copyWith(
       padding: media.padding.copyWith(top: top),
       viewPadding: media.viewPadding.copyWith(top: top),
@@ -1450,7 +1553,8 @@ class _LiquidShellState extends State<LiquidShell>
     void arm() {
       if (!mounted || _handoverTimer != null) return;
       if (generation != _handoverGeneration) return;
-      if (_handover != _Handover.waiting && _handover != _Handover.holding) {
+      if (_handover == NativeHandover.none ||
+          _handover == NativeHandover.done) {
         return;
       }
       _handoverTimer = Timer(kNativeHandoverTimeout, () {
@@ -1606,7 +1710,7 @@ class _LiquidShellState extends State<LiquidShell>
     );
     _presentation = presentation;
 
-    final media = MediaQuery.of(context);
+    final media = _holdMirrorTop(MediaQuery.of(context));
     final rtl = Directionality.of(context) == TextDirection.rtl;
     final sizeClass = sizeClassOf(presentation);
     final selected = resolveSelectedIndex(
@@ -2267,8 +2371,30 @@ class _LiquidShellState extends State<LiquidShell>
       hideLargeTitle: searchActive && _search.selected,
     );
     // Every tab of an engaged shell has a native navigation bar (spec
-    // P3b-2 §4.5): LiquidPage draws only its child.
-    _nativePageBar = layout;
+    // P3b-2 §4.5): LiquidPage draws only its child. In standby under
+    // another shell's route (S-1, VK-1082), that shell's native bar is
+    // over this shell's page through the push and the pop: no Flutter bar
+    // under it, unless native shows none there. Not for a same-route
+    // nested shell's host, whose pages stay on screen with their own bars.
+    final ownerChanged = !identical(_host.owner, _ownerAtCover);
+    if (owner || claim == null) {
+      _coveredStandby = false;
+    } else if (_underRoute) {
+      _coveredStandby = ownerChanged;
+    } else if (!ownerChanged) {
+      _coveredStandby = false;
+    }
+    final applied = _host.appliedConfig;
+    final standbyUnderNativeBar =
+        !owner &&
+        _coveredStandby &&
+        possible &&
+        (state?.installed ?? false) &&
+        (state?.engagedApplied ?? false) &&
+        applied != null &&
+        !applied.hidden &&
+        nativeConfigShowsPageBar(applied, compact: state?.compact ?? false);
+    _nativePageBar = (layout && !_takeoverFlutterBar) || standbyUnderNativeBar;
     if (_nativePageBar || _scrollRecord != null) _scheduleScrollSync();
     // A dialog or sheet above an active search: the keyboard and the field
     // would sit above its barrier (spec §7.10). Once per covering.
@@ -2531,7 +2657,3 @@ final class _PageRecord implements PageHandle {
 /// its ack and its new top inset before it hands its page bar over anyway.
 @visibleForTesting
 const Duration kNativeHandoverTimeout = Duration(milliseconds: 250);
-
-/// The steps of the page bar's hand-over to native
-/// ([_LiquidShellState._handOver]).
-enum _Handover { none, waiting, holding, done }

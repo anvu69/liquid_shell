@@ -67,6 +67,7 @@ class LiquidNativeShellState {
     this.sidebar = LiquidNativeSidebar.hidden,
     this.verticalBarSide = LiquidNativeVerticalBarSide.none,
     this.engagedApplied = false,
+    this.appliedEpoch = 0,
     this.unavailableReason,
   });
 
@@ -104,6 +105,17 @@ class LiquidNativeShellState {
   /// engage, and the content can then move.
   final bool engagedApplied;
 
+  /// The [LiquidNativeChromeConfig.epoch] of the last config the platform
+  /// applied: which config [engagedApplied] is about. A shell hands its
+  /// bars over only for its own config, and keeps native's layout while
+  /// another one is still shown (an owner change, a quick re-engage).
+  ///
+  /// 0 means "not echoed": the host never stamps 0, and a platform that
+  /// leaves this at 0 gets the window-wide rule of [engagedApplied] alone.
+  /// A platform implementation should copy the epoch of each config it
+  /// applies.
+  final int appliedEpoch;
+
   /// Set when [installed] is false.
   final LiquidNativeUnavailableReason? unavailableReason;
 
@@ -118,6 +130,7 @@ class LiquidNativeShellState {
       other.sidebar == sidebar &&
       other.verticalBarSide == verticalBarSide &&
       other.engagedApplied == engagedApplied &&
+      other.appliedEpoch == appliedEpoch &&
       other.unavailableReason == unavailableReason;
 
   @override
@@ -127,6 +140,7 @@ class LiquidNativeShellState {
     sidebar,
     verticalBarSide,
     engagedApplied,
+    appliedEpoch,
     unavailableReason,
   );
 
@@ -136,6 +150,7 @@ class LiquidNativeShellState {
       'sidebar: ${sidebar.name}, '
       'verticalBarSide: ${verticalBarSide.name}, '
       'engagedApplied: $engagedApplied, '
+      'appliedEpoch: $appliedEpoch, '
       'unavailableReason: ${unavailableReason?.name})';
 }
 
@@ -389,6 +404,7 @@ class LiquidNativeChromeConfig {
     this.interactive = true,
     this.minimizeOnScroll = false,
     this.tabBarHidden = false,
+    this.epoch = 0,
   });
 
   /// No shell uses native chrome: hidden, and Flutter gets the whole window.
@@ -439,6 +455,33 @@ class LiquidNativeChromeConfig {
   /// Ignored while [hidden].
   final bool tabBarHidden;
 
+  /// Which hand-over this config belongs to, stamped by the shell's host:
+  /// it changes when the window's owner changes or `engaged` flips, and
+  /// stays the same for every other change. The platform reports the
+  /// epoch of the config it applied in
+  /// [LiquidNativeShellState.appliedEpoch], and may apply a new epoch over
+  /// an engaged config without animation (another shell took over).
+  /// 0 until stamped.
+  final int epoch;
+
+  /// This config with [epoch].
+  LiquidNativeChromeConfig copyWithEpoch(int epoch) => LiquidNativeChromeConfig(
+    engaged: engaged,
+    tabs: tabs,
+    selectedIndex: selectedIndex,
+    trailing: trailing,
+    footer: footer,
+    search: search,
+    tintArgb: tintArgb,
+    dark: dark,
+    rtl: rtl,
+    hidden: hidden,
+    interactive: interactive,
+    minimizeOnScroll: minimizeOnScroll,
+    tabBarHidden: tabBarHidden,
+    epoch: epoch,
+  );
+
   /// Whether the native chrome is on screen.
   bool get visible => engaged && !hidden;
 
@@ -457,7 +500,8 @@ class LiquidNativeChromeConfig {
       other.hidden == hidden &&
       other.interactive == interactive &&
       other.minimizeOnScroll == minimizeOnScroll &&
-      other.tabBarHidden == tabBarHidden;
+      other.tabBarHidden == tabBarHidden &&
+      other.epoch == epoch;
 
   @override
   int get hashCode => Object.hash(
@@ -474,6 +518,7 @@ class LiquidNativeChromeConfig {
     interactive,
     minimizeOnScroll,
     tabBarHidden,
+    epoch,
   );
 
   @override
@@ -483,7 +528,8 @@ class LiquidNativeChromeConfig {
       'search: $search, '
       'tintArgb: 0x${tintArgb.toRadixString(16).padLeft(8, '0')}, '
       'dark: $dark, rtl: $rtl, hidden: $hidden, interactive: $interactive, '
-      'minimizeOnScroll: $minimizeOnScroll, tabBarHidden: $tabBarHidden)';
+      'minimizeOnScroll: $minimizeOnScroll, tabBarHidden: $tabBarHidden, '
+      'epoch: $epoch)';
 }
 
 /// Something the native side reports.
@@ -611,9 +657,7 @@ final class LiquidNativeSearchTextChanged extends LiquidNativeEvent {
 /// The native search field gained or lost focus (presented or dismissed).
 final class LiquidNativeSearchActiveChanged extends LiquidNativeEvent {
   /// Creates the event.
-  // A single positional value, like every other event of this hierarchy.
-  // ignore: avoid_positional_boolean_parameters
-  const LiquidNativeSearchActiveChanged(this.active);
+  const LiquidNativeSearchActiveChanged({required this.active});
 
   /// Whether the search is active.
   final bool active;
@@ -626,7 +670,7 @@ final class LiquidNativeSearchActiveChanged extends LiquidNativeEvent {
   int get hashCode => active.hashCode;
 
   @override
-  String toString() => 'LiquidNativeSearchActiveChanged($active)';
+  String toString() => 'LiquidNativeSearchActiveChanged(active: $active)';
 }
 
 /// The user selected scope [index] in the native scope bar. Only the

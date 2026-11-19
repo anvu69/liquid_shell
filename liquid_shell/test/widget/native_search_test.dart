@@ -271,7 +271,7 @@ void main() {
     tester,
   ) async {
     final (fake, controller, _) = await _pump(tester);
-    fake.emitNative(const LiquidNativeSearchActiveChanged(true));
+    fake.emitNative(const LiquidNativeSearchActiveChanged(active: true));
     await tester.pump();
     expect(controller.isActive, isTrue);
     expect(_scope(tester).searchPhase, LiquidSearchPhase.active);
@@ -328,7 +328,7 @@ void main() {
     tester,
   ) async {
     final (fake, _, _) = await _pump(tester);
-    fake.emitNative(const LiquidNativeSearchActiveChanged(true));
+    fake.emitNative(const LiquidNativeSearchActiveChanged(active: true));
     await tester.pump();
     showDialog<void>(
       context: tester.element(find.byKey(const ValueKey('list-Search'))),
@@ -345,7 +345,7 @@ void main() {
     tester.view.viewInsets = const FakeViewPadding(bottom: 328);
     addTearDown(tester.view.resetViewInsets);
     fake
-      ..emitNative(const LiquidNativeSearchActiveChanged(true))
+      ..emitNative(const LiquidNativeSearchActiveChanged(active: true))
       ..emitNative(
         const LiquidNativeSearchFieldChanged(Rect.fromLTWH(8, 490, 330, 48)),
       );
@@ -374,7 +374,7 @@ void main() {
       ..viewInsets = const FakeViewPadding(bottom: 208)
       ..padding = const FakeViewPadding(left: 62, top: 68, right: 62);
     fake
-      ..emitNative(const LiquidNativeSearchActiveChanged(true))
+      ..emitNative(const LiquidNativeSearchActiveChanged(active: true))
       ..emitNative(
         const LiquidNativeSearchFieldChanged(Rect.fromLTWH(80, 142, 662, 44)),
       );
@@ -572,7 +572,7 @@ void main() {
             tester.element(find.byKey(ValueKey('list-$label'))),
           );
       expect(phaseOf('Search'), LiquidSearchPhase.selected);
-      fake.emitNative(const LiquidNativeSearchActiveChanged(true));
+      fake.emitNative(const LiquidNativeSearchActiveChanged(active: true));
       await tester.pump();
       expect(phaseOf('Search'), LiquidSearchPhase.active);
       fake.emitNative(const LiquidNativeDestinationTapped(0));
@@ -619,7 +619,7 @@ void main() {
       final b = NativeChromeHost.instance.claim(second.add);
       const events = <LiquidNativeEvent>[
         LiquidNativeSearchTextChanged('a', composing: false),
-        LiquidNativeSearchActiveChanged(true),
+        LiquidNativeSearchActiveChanged(active: true),
         LiquidNativeSearchSubmitted('a'),
         LiquidNativeSearchFieldChanged(Rect.fromLTWH(8, 490, 330, 48)),
         LiquidNativeBackTapped(2),
@@ -715,7 +715,7 @@ void main() {
       await pumpShell(tester, shell(first), padding: _compactPadding);
       fake.searchTexts.clear();
       fake.searchActives.clear();
-      fake.emitNative(const LiquidNativeSearchActiveChanged(true));
+      fake.emitNative(const LiquidNativeSearchActiveChanged(active: true));
       await tester.pump();
       await pumpShell(tester, shell(second), padding: _compactPadding);
       expect(fake.searchTexts, ['hồ'], reason: 'the field shows the new query');
@@ -1264,7 +1264,7 @@ void main() {
       tester,
     ) async {
       final (fake, controller, _) = await _pump(tester);
-      fake.emitNative(const LiquidNativeSearchActiveChanged(true));
+      fake.emitNative(const LiquidNativeSearchActiveChanged(active: true));
       await tester.pump();
       Navigator.of(
             tester.element(find.byKey(const ValueKey('list-Search'))),
@@ -1288,7 +1288,7 @@ void main() {
         'back (Telex one-way rule)', (tester) async {
       final (fake, _, _) = await _pump(tester);
       fake
-        ..emitNative(const LiquidNativeSearchActiveChanged(true))
+        ..emitNative(const LiquidNativeSearchActiveChanged(active: true))
         ..emitNative(
           const LiquidNativeSearchTextChanged('hồ', composing: false),
         );
@@ -1586,7 +1586,7 @@ void main() {
     testWidgets('Minor 3: a reconnected field starts inactive: Dart follows '
         'and tells native on entry', (tester) async {
       final (fake, controller, _) = await _pump(tester);
-      fake.emitNative(const LiquidNativeSearchActiveChanged(true));
+      fake.emitNative(const LiquidNativeSearchActiveChanged(active: true));
       await tester.pump();
       expect(controller.isActive, isTrue, reason: 'precondition');
       fake.searchActives.clear();
@@ -1595,6 +1595,26 @@ void main() {
       await tester.pumpAndSettle();
       expect(controller.isActive, isFalse);
       expect(fake.searchActives, [false]);
+    });
+
+    testWidgets('a takeover ack (a state with a new appliedEpoch) is not a '
+        'reconnect: an active native search stays', (tester) async {
+      final (fake, controller, _) = await _pump(tester);
+      fake.emitNative(const LiquidNativeSearchActiveChanged(active: true));
+      await tester.pump();
+      expect(controller.isActive, isTrue, reason: 'precondition');
+      fake.searchActives.clear();
+      fake.pushState(
+        LiquidNativeShellState(
+          installed: true,
+          compact: true,
+          engagedApplied: true,
+          appliedEpoch: fake.last.epoch,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(controller.isActive, isTrue);
+      expect(fake.searchActives, isEmpty);
     });
 
     testWidgets('Minor 3: the first native entry after an attach (a hot '
@@ -1819,7 +1839,7 @@ void main() {
         padding: _compactPadding,
       );
       if (active) {
-        fake.emitNative(const LiquidNativeSearchActiveChanged(true));
+        fake.emitNative(const LiquidNativeSearchActiveChanged(active: true));
         await tester.pump();
       }
       fake.searchActives.clear();
@@ -1854,7 +1874,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('The list'), findsNothing);
       expect(fake.searchActives, [false]);
-      fake.emitNative(const LiquidNativeSearchActiveChanged(false));
+      fake.emitNative(const LiquidNativeSearchActiveChanged(active: false));
       await tester.pump();
       await outer.currentState!.maybePop();
       await tester.pumpAndSettle();
@@ -1910,7 +1930,7 @@ void main() {
         padding: _compactPadding,
       );
       fake
-        ..emitNative(const LiquidNativeSearchActiveChanged(true))
+        ..emitNative(const LiquidNativeSearchActiveChanged(active: true))
         ..emitNative(
           const LiquidNativeSearchTextChanged('hồ', composing: false),
         );
@@ -2277,7 +2297,7 @@ void main() {
     composing(WidgetTester tester) async {
       final (fake, controller, changes) = await _pump(tester);
       fake
-        ..emitNative(const LiquidNativeSearchActiveChanged(true))
+        ..emitNative(const LiquidNativeSearchActiveChanged(active: true))
         ..emitNative(
           const LiquidNativeSearchTextChanged('かな', composing: true),
         );
@@ -2301,7 +2321,7 @@ void main() {
       controller.deactivate();
       await tester.pump();
       expect(fake.searchActives, [false]);
-      fake.emitNative(const LiquidNativeSearchActiveChanged(false));
+      fake.emitNative(const LiquidNativeSearchActiveChanged(active: false));
       await tester.pump();
       expectEnded(controller, changes);
     });
@@ -2313,7 +2333,7 @@ void main() {
     ) async {
       final (fake, controller, _) = await composing(tester);
       controller.deactivate();
-      fake.emitNative(const LiquidNativeSearchActiveChanged(false));
+      fake.emitNative(const LiquidNativeSearchActiveChanged(active: false));
       await tester.pump();
       fake.searchTexts.clear();
       // A recent search tapped, written only outside a composition.
@@ -2332,7 +2352,7 @@ void main() {
       fake.emitNative(const LiquidNativeDestinationTapped(0));
       await tester.pumpAndSettle();
       expectEnded(controller, changes);
-      fake.emitNative(const LiquidNativeSearchActiveChanged(false));
+      fake.emitNative(const LiquidNativeSearchActiveChanged(active: false));
       await tester.pump();
       expectEnded(controller, changes);
       fake.emitNative(const LiquidNativeDestinationTapped(2));
@@ -2349,7 +2369,7 @@ void main() {
 
     testWidgets('R1: an active search keeps its composition', (tester) async {
       final (fake, controller, _) = await composing(tester);
-      fake.emitNative(const LiquidNativeSearchActiveChanged(true));
+      fake.emitNative(const LiquidNativeSearchActiveChanged(active: true));
       await tester.pump();
       expect(controller.isActive, isTrue);
       expect(controller.value.composing, isTrue);
@@ -2659,7 +2679,7 @@ void main() {
         padding: _compactPadding,
       );
       fake
-        ..emitNative(const LiquidNativeSearchActiveChanged(true))
+        ..emitNative(const LiquidNativeSearchActiveChanged(active: true))
         ..emitNative(
           const LiquidNativeSearchTextChanged('かな', composing: true),
         );
@@ -2688,7 +2708,7 @@ void main() {
         shell(controller, changes, nativeChrome: LiquidNativeChrome.off),
         padding: _compactPadding,
       );
-      fake.emitNative(const LiquidNativeSearchActiveChanged(false));
+      fake.emitNative(const LiquidNativeSearchActiveChanged(active: false));
       await tester.pumpAndSettle();
       expectEnded(controller, changes);
     });
@@ -2708,7 +2728,7 @@ void main() {
       final (fake, controller, changes) = await composing(tester);
       fake.pushState(const LiquidNativeShellState(installed: false));
       await tester.pumpAndSettle();
-      fake.emitNative(const LiquidNativeSearchActiveChanged(false));
+      fake.emitNative(const LiquidNativeSearchActiveChanged(active: false));
       await tester.pumpAndSettle();
       expectEnded(controller, changes);
     });

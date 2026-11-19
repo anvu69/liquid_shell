@@ -275,7 +275,9 @@ void main() {
           nativeChrome: LiquidNativeChrome.off,
         ),
       );
-      expect(native.last, LiquidNativeChromeConfig.dormant);
+      // Stamped with its hand-over epoch; otherwise the dormant config.
+      expect(native.last.copyWithEpoch(0), LiquidNativeChromeConfig.dormant);
+      expect(native.last.epoch, greaterThan(0));
       expect(_flutterChrome(), isTrue);
       expect(_scope(tester).nativeChrome, isFalse);
     });
@@ -1169,7 +1171,9 @@ void main() {
       await _pumpNative(tester);
       await tester.pumpWidget(const SizedBox());
       await tester.pump();
-      expect(native.last, LiquidNativeChromeConfig.dormant);
+      // Stamped with its hand-over epoch; otherwise the dormant config.
+      expect(native.last.copyWithEpoch(0), LiquidNativeChromeConfig.dormant);
+      expect(native.last.epoch, greaterThan(0));
     });
   });
 }
