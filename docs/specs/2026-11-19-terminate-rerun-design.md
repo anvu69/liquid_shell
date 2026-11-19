@@ -133,8 +133,9 @@ twice.
 
 - `tool/test/fake_sim.dart`: per-call `FAKE_TESTS` outcomes, a parseable
   summary when `FAKE_FAILURES` is set (`FAKE_FAILED`, `FAKE_RERUN_TOTAL`),
-  `FAKE_RESULT_MISSING`. The default summary stays unparseable, which is the
-  unreadable case.
+  `FAKE_RESULT_MISSING`, `FAKE_STALL_RESULT` (a stall that leaves a
+  readable bundle, so only the 124 check keeps it from a rerun),
+  `FAKE_SUMMARY=broken`. The default summary stays unparseable.
 - `tool/test/ios_xctest_test.dart`: the positive case from the H2 fixture,
   then each gate condition red against a looser version first (non-exhaustive
   list, n > 2, a mixed failure, an empty list, an unreadable or absent

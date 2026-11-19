@@ -384,6 +384,9 @@ void main() {
         selection: minimize,
         env: {
           'FAKE_TESTS': 'stall',
+          // A bundle whose summary would pass the gate: the stall alone
+          // keeps it from a rerun.
+          'FAKE_STALL_RESULT': '1',
           'FAKE_FAILURES': jsonEncode([h2Entry()]),
         },
       );

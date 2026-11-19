@@ -26,7 +26,7 @@
 - Modify: `tool/test/fake_sim.dart`
 - Create: `tool/test/fixtures/h2-terminate-summary.json` (H2's real `xcresulttool` summary)
 
-- [ ] **Step 1:** `FAKE_TESTS="fail pass"`: the outcomes of the 1st, 2nd, … `test-without-building` (`pass`, `fail`, `stall`), as `FAKE_DRIVES`; overrides `FAKE_TEST`. `FAKE_RESULT_MISSING`: a red run writes no bundle. `xcresulttool … summary` fails on an absent bundle. With `FAKE_FAILURES` (a JSON array) it prints a parseable summary: `failedTests` `FAKE_FAILED` (default the array's length, here given by the test), at top level and under `devicesAndConfigurations`, and `totalTestCount` `FAKE_RERUN_TOTAL` (default 1) for a `-rerun.xcresult`.
+- [ ] **Step 1:** `FAKE_TESTS="fail pass"`: the outcomes of the 1st, 2nd, … `test-without-building` (`pass`, `fail`, `stall`), as `FAKE_DRIVES`; overrides `FAKE_TEST`. `FAKE_RESULT_MISSING`: a red run writes no bundle; `FAKE_STALL_RESULT`: a stalled run writes one before it hangs. `xcresulttool … summary` fails on an absent bundle. With `FAKE_FAILURES` (a JSON array) it prints a parseable summary: `failedTests` `FAKE_FAILED` (default 1), at top level and under `devicesAndConfigurations`, and `totalTestCount` `FAKE_RERUN_TOTAL` (default 1) for a `-rerun.xcresult`.
 - [ ] **Step 2:** `fvm dart test tool/test/ios_xctest_test.dart tool/test/ios_sim_test.dart`: green, the defaults are unchanged.
 - [ ] **Step 3: Commit** `test(ci): fake per-call xcodebuild test outcomes and failure lists (VK-1083)`.
 

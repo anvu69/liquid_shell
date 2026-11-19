@@ -30,6 +30,8 @@ import 'package:test/test.dart';
 ///   Runs past the list pass. Overrides `FAKE_TEST`.
 /// - `FAKE_RESULT_MISSING`: a failed `test-without-building` writes no
 ///   result bundle.
+/// - `FAKE_STALL_RESULT`: a stalled `test-without-building` writes its
+///   result bundle before it hangs (by default it writes none).
 /// - `FAKE_FAILURES`: a JSON array, the summary's `testFailures`. Set, the
 ///   summary is JSON alone (the real shape: `failedTests` at the top and
 ///   under `devicesAndConfigurations`, `totalTestCount`), so it parses;
@@ -220,7 +222,12 @@ case "$1" in
         while [ $# -gt 0 ] && [ "$1" != -resultBundlePath ]; do shift; done
         [ -n "${FAKE_RESULT_MISSING:-}" ] || mkdir -p "$2"
         exit 65 ;;
-      stall) sleep 300 ;;
+      stall)
+        if [ -n "${FAKE_STALL_RESULT:-}" ]; then
+          while [ $# -gt 0 ] && [ "$1" != -resultBundlePath ]; do shift; done
+          mkdir -p "$2"
+        fi
+        sleep 300 ;;
       *)
         while [ $# -gt 0 ] && [ "$1" != -resultBundlePath ]; do shift; done
         [ $# -lt 2 ] || mkdir -p "$2" ;;
