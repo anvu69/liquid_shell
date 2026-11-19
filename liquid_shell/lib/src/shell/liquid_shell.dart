@@ -1549,8 +1549,8 @@ class _LiquidShellState extends State<LiquidShell>
   /// height, so LiquidPage's bar sits where native's was and the first row
   /// does not move; and the body's bottom safe area held at the window's
   /// own, last seen at this size, so content reading it does not jump by
-  /// native's bar height. The bottom view padding only ever lowers; the
-  /// padding is what the keyboard leaves of it. A new window size holds
+  /// native's bar height. Both bottoms only ever lower; the padding is what
+  /// the keyboard leaves of the held view padding. A new window size holds
   /// nothing; a size the window's bottom was not seen at holds the top only.
   MediaQueryData _holdMirror(MediaQueryData media) {
     if (_handover != NativeHandover.mirror || media.size != _handoverSize) {
@@ -1564,8 +1564,17 @@ class _LiquidShellState extends State<LiquidShell>
         media.size == _windowBottomSize &&
         window < media.viewPadding.bottom) {
       viewPadding = viewPadding.copyWith(bottom: window);
+      // Never above the real padding: what an ancestor consumed stays so.
       padding = padding.copyWith(
-        bottom: math.max(0, window - media.viewInsets.bottom).toDouble(),
+        bottom: math
+            .max(
+              0,
+              math.min(
+                media.padding.bottom,
+                window - media.viewInsets.bottom,
+              ),
+            )
+            .toDouble(),
       );
     }
     return media.copyWith(padding: padding, viewPadding: viewPadding);

@@ -56,8 +56,10 @@ this size.
   `media.size == _handoverSize == _windowBottomSize`:
   - `viewPadding.bottom = min(media.viewPadding.bottom, _windowBottom)`
     (it only ever lowers);
-  - `padding.bottom = max(0, that − media.viewInsets.bottom)`, the rule of
-    `_holdBarInset`;
+  - `padding.bottom = max(0, min(media.padding.bottom, that −
+    media.viewInsets.bottom))`: what the keyboard leaves of it, and never
+    above the real padding, so an ancestor's consumed padding stays
+    consumed (follow-up review; `_holdBarInset` has no `min`);
   - `viewInsets` as they are.
   The top hold is unchanged.
 - **No saved value, or another size** (rotated while engaged, a takeover or
@@ -102,7 +104,7 @@ the bottom held) and after the metrics drop, and no `setClient`,
 | 1 | Scope | A: hold the body's bottom safe area in the mirror |
 | 2 | Source of the window bottom | the last Flutter-layout frame (phase `none`) or the `none → waiting` start, keyed by size |
 | 3 | No saved value, or another size | no bottom hold |
-| 4 | Hold shape | `viewPadding.bottom = min(real, saved)`, `padding.bottom = max(0, that − viewInsets.bottom)`, `viewInsets` untouched |
+| 4 | Hold shape | `viewPadding.bottom = min(real, saved)`, `padding.bottom = max(0, min(real, that − viewInsets.bottom))` (the `min` added in review), `viewInsets` untouched |
 | 5 | Red test | the skipped known gap rewritten under `iosDevice` |
 | 6 | The VK-1074 group's platform | left on the default; new tests use `iosDevice` |
 | 7 | Release | no version bump; a "Fixed" line under `## Unreleased` in `liquid_shell/CHANGELOG.md` |
@@ -118,15 +120,20 @@ Decision 7's line, for `liquid_shell/CHANGELOG.md`:
 >   `MediaQuery.paddingOf` keep the window's bottom. The tab bar itself
 >   never moved.
 
-As built: not added. `tool/test/release_version_test.dart` ("each
-CHANGELOG has a heading for the version, nothing older above") accepts only
-a newer `-dev.N` heading above the current version, so `## Unreleased`
-turns `make test` red. Left for the owner (§8).
+As built: under `## 0.1.0-dev.15`, with no pubspec bump.
+`tool/test/release_version_test.dart` ("each CHANGELOG has a heading for
+the version, nothing older above") accepts only a newer `-dev.N` heading
+above the current version, so `## Unreleased` turned `make test` red; a
+newer dev heading is the shape its comment allows for unreleased work.
 
 ## 8. As built
 
-- The CHANGELOG line (§7) is pending an owner call: a `## 0.1.0-dev.15`
-  heading (the shape the test allows) or a test change.
+- The CHANGELOG line (§7) sits under `## 0.1.0-dev.15`; the pubspecs stay
+  at `0.1.0-dev.14`.
+- `padding.bottom` never rises above the real one. A `SafeArea` above the
+  shell lowers both paddings (`removePadding`), so the window bottom it
+  saw is 0 and nothing is held; an ancestor that zeroes only
+  `padding.bottom` kept it at 34 before the `min` (tested).
 - Spec 2026-11-18 §2.3 and §10 are corrected: the bottom is held by this
   rule, not by `_holdBarInset`, and the residual's 761 was the Android test
   platform.

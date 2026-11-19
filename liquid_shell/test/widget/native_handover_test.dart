@@ -696,6 +696,64 @@ void main() {
     );
 
     testWidgets(
+      'ack first under a SafeArea that consumed the bottom: the mirror keeps '
+      'padding.bottom at 0',
+      variant: iosDevice,
+      (tester) async {
+        final chrome = ValueNotifier(LiquidNativeChrome.auto);
+        addTearDown(chrome.dispose);
+        final fake = await _engaged(
+          tester,
+          app: SafeArea(top: false, child: flippable(chrome)),
+        );
+        await flip(tester, chrome, LiquidNativeChrome.off);
+        fake.apply(disengaged(fake));
+        await tester.pump();
+        expect(_flutterBars(tester, 'Home'), 1, reason: 'mirror: Flutter bar');
+        // SafeArea's removePadding lowers the view padding too, so the
+        // window's bottom it saw is 0 as well: nothing is given back.
+        bodyBottom(tester, padding: 0, view: 0, when: 'mirror');
+        _setPadding(tester, _window);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        bodyBottom(tester, padding: 0, view: 0, when: 'settled');
+      },
+    );
+
+    testWidgets(
+      'ack first under an ancestor that consumed only padding.bottom: the '
+      'mirror never raises it',
+      variant: iosDevice,
+      (tester) async {
+        final chrome = ValueNotifier(LiquidNativeChrome.auto);
+        addTearDown(chrome.dispose);
+        // Padding consumed, view padding kept (as the keyboard does).
+        final app = Builder(
+          builder: (context) {
+            final media = MediaQuery.of(context);
+            return MediaQuery(
+              data: media.copyWith(
+                padding: media.padding.copyWith(bottom: 0),
+              ),
+              child: flippable(chrome),
+            );
+          },
+        );
+        final fake = await _engaged(tester, app: app);
+        await flip(tester, chrome, LiquidNativeChrome.off);
+        fake.apply(disengaged(fake));
+        await tester.pump();
+        expect(_flutterBars(tester, 'Home'), 1, reason: 'mirror: Flutter bar');
+        // The hold only ever lowers: consumed padding is not given back.
+        bodyBottom(tester, padding: 0, view: 34, when: 'mirror');
+        _setPadding(tester, _window);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        bodyBottom(tester, padding: 0, view: 34, when: 'settled');
+      },
+    );
+
+    testWidgets(
       'rotated between the engage and the disengage: the mirror holds no '
       'bottom',
       variant: iosDevice,
