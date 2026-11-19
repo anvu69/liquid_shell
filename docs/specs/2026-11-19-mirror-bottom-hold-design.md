@@ -133,8 +133,10 @@ turns `make test` red. Left for the owner (§8).
 - The hold lowers only (`window < real`); otherwise the bottom passes
   through untouched. A takeover start that recorded native's 83 would hold
   83, the same as no hold, so the takeover guard checks the outcome (83).
-  The rotation guard fails without the size check (measured: 34 instead of
-  70).
+  Mutations, each red against the file: no size check (rotation guard, 34
+  instead of 70); recording on every restart, or not at the engage's start
+  (the three hold tests, 83 instead of 34); not recording in the Flutter
+  layout (`a takeover after the Flutter layout: …`, 83 instead of 34).
 - Rotation and keyboard tests flip the mode through a `ValueNotifier`, not
   `pumpShell`, which would reset the view's size and padding.
 

@@ -719,6 +719,50 @@ void main() {
     );
 
     testWidgets(
+      "a takeover after the Flutter layout: the mirror holds the window's "
+      'bottom that layout saw',
+      variant: iosDevice,
+      (tester) async {
+        // Another config is applied on screen; this shell starts with mode
+        // off (the Flutter layout at the window's insets), so its engage is
+        // a takeover, not a waiting start.
+        final fake =
+            installFakeNative(
+                state: const LiquidNativeShellState(
+                  installed: true,
+                  compact: true,
+                  engagedApplied: true,
+                  appliedEpoch: 41,
+                ),
+              )
+              ..echoEpochs = true
+              ..autoApply = false;
+        final chrome = ValueNotifier(LiquidNativeChrome.off);
+        addTearDown(chrome.dispose);
+        await pumpShell(
+          tester,
+          flippable(chrome),
+          padding: _window,
+          settle: false,
+        );
+        await tester.pump();
+        expect(_flutterBars(tester, 'Home'), 1, reason: 'Flutter layout');
+        await flip(tester, chrome, LiquidNativeChrome.auto);
+        expect(fake.last.engaged, isTrue, reason: 'engaged sent');
+        fake.applyLast();
+        _setPadding(tester, _native);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        releasing(tester, 'mine');
+        await flip(tester, chrome, LiquidNativeChrome.off);
+        fake.apply(disengaged(fake));
+        await tester.pump();
+        flutterLayout(tester, 'mirror');
+        bodyBottom(tester, padding: 34, view: 34, when: 'mirror');
+      },
+    );
+
+    testWidgets(
       'a takeover start never saw the window: the mirror holds no bottom',
       variant: iosDevice,
       (tester) async {
