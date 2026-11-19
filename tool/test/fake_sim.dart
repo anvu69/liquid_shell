@@ -25,6 +25,32 @@ import 'package:test/test.dart';
 /// - `FAKE_LOG_SHOW`: `fail` makes `log show` fail; `linger` makes it pass
 ///   and leave a `sleep 60` that holds its output, its pid in `log-lingerer`.
 /// - `FAKE_TEST`: `fail` or `stall` for `xcodebuild test-without-building`.
+/// - `FAKE_TESTS`: the outcomes of the 1st, 2nd, ... `xcodebuild
+///   test-without-building`, space-separated: `pass`, `fail`, `stall` or
+///   `infra` (exit 70, a run that could not test, with a bundle).
+///   Runs past the list pass. Overrides `FAKE_TEST`.
+/// - `FAKE_RESULT_MISSING`: a failed `test-without-building` writes no
+///   result bundle.
+/// - `FAKE_STALL_RESULT`: a stalled `test-without-building` writes its
+///   result bundle before it hangs (by default it writes none).
+/// - `FAKE_FAILURES`: a JSON array, the summary's `testFailures`. Set, the
+///   summary is JSON alone (the real shape: `failedTests` at the top and
+///   under `devicesAndConfigurations`, `totalTestCount`), so it parses;
+///   unset, `FAKE SUMMARY` comes first and it does not.
+/// - `FAKE_FAILED`: the summary's `failedTests` with `FAKE_FAILURES`
+///   (default 1). `FAKE_SKIPPED` (default 0) and `FAKE_PASSED` (default
+///   the rest of `totalTestCount`) give `skippedTests` and `passedTests`;
+///   `FAKE_RESULT` the `result` (default `Failed`).
+/// - `FAKE_RERUN_PASSED`, `FAKE_RERUN_FAILED`: a `*-rerun.xcresult`'s
+///   `passedTests` (default all its tests but the failed) and `failedTests`
+///   (default 0; its `result` is then `Passed`).
+/// - `FAKE_RERUN_TOTAL`: the `totalTestCount` of a `*-rerun.xcresult`
+///   (default 1).
+/// - `FAKE_SUMMARY`: `broken` makes the summary of a present bundle
+///   unparseable even with `FAKE_FAILURES`.
+///
+/// `xcresulttool ... summary` of a bundle that does not exist fails, as
+/// the real one does.
 /// - `FAKE_DRIVE`: `fail`, `stall` (every drive), `stall-once` (the first
 ///   drive only) or `linger` (the drive passes, and leaves a `sleep 60`
 ///   that holds its output, its pid in `lingerer`) for `flutter drive`.
@@ -155,8 +181,31 @@ case "$*" in
   simctl\ spawn\ *\ launchctl\ list)
     printf '%b\n' "${FAKE_LAUNCHCTL-4242\t0\tUIKitApplication:vn.lasoai.liquidShellExample[b61d][rb-legacy]}" ;;
   'xcresulttool get test-results summary'*)
-    echo 'FAKE SUMMARY'
-    echo "{ \"totalTestCount\" : ${FAKE_TOTAL:-6} }" ;;
+    path="$*"
+    path=${path##*--path }
+    [ -d "$path" ] || { echo "xcresulttool: no result bundle at $path" >&2; exit 1; }
+    total=${FAKE_TOTAL:-6}
+    case "$path" in *-rerun.xcresult) total=${FAKE_RERUN_TOTAL:-1} ;; esac
+    if [ -z "${FAKE_FAILURES:-}" ] || [ "${FAKE_SUMMARY:-}" = broken ]; then
+      echo 'FAKE SUMMARY'
+      echo "{ \"totalTestCount\" : $total }"
+    else
+      failed=${FAKE_FAILED:-1} skipped=${FAKE_SKIPPED:-0} outcome=Failed
+      case "$path" in
+        *-rerun.xcresult)
+          failed=${FAKE_RERUN_FAILED:-0}
+          passed=${FAKE_RERUN_PASSED:-$((total - failed))}
+          skipped=$((total - failed - passed))
+          [ "$failed" -ne 0 ] || outcome=Passed ;;
+        *) passed=${FAKE_PASSED:-$((total - failed - skipped))} ;;
+      esac
+      echo "{ \"title\" : \"FAKE SUMMARY\", \"result\" : \"${FAKE_RESULT:-$outcome}\","
+      echo "  \"devicesAndConfigurations\" : [ { \"failedTests\" : $failed } ],"
+      echo "  \"failedTests\" : $failed, \"passedTests\" : $passed,"
+      echo "  \"skippedTests\" : $skipped, \"expectedFailures\" : 0,"
+      echo "  \"totalTestCount\" : $total,"
+      echo "  \"testFailures\" : $FAKE_FAILURES }"
+    fi ;;
 esac
 exit 0
 ''';
@@ -178,12 +227,27 @@ case "$1" in
         exit 65 ;;
     esac ;;
   test-without-building)
-    case "${FAKE_TEST:-}" in
+    outcome=${FAKE_TEST:-}
+    if [ -n "${FAKE_TESTS:-}" ]; then
+      n=$(($(cat "$FAKE_DIR/tests" 2> /dev/null || echo 0) + 1))
+      echo "$n" > "$FAKE_DIR/tests"
+      outcome=$(echo "$FAKE_TESTS" | awk -v n="$n" '{ print $n }')
+    fi
+    case "$outcome" in
       fail)
         while [ $# -gt 0 ] && [ "$1" != -resultBundlePath ]; do shift; done
-        mkdir -p "$2"
+        [ -n "${FAKE_RESULT_MISSING:-}" ] || mkdir -p "$2"
         exit 65 ;;
-      stall) sleep 300 ;;
+      infra)
+        while [ $# -gt 0 ] && [ "$1" != -resultBundlePath ]; do shift; done
+        mkdir -p "$2"
+        exit 70 ;;
+      stall)
+        if [ -n "${FAKE_STALL_RESULT:-}" ]; then
+          while [ $# -gt 0 ] && [ "$1" != -resultBundlePath ]; do shift; done
+          mkdir -p "$2"
+        fi
+        sleep 300 ;;
       *)
         while [ $# -gt 0 ] && [ "$1" != -resultBundlePath ]; do shift; done
         [ $# -lt 2 ] || mkdir -p "$2" ;;

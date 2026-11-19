@@ -300,6 +300,7 @@ jobs:
           name: ios-unit-${{ matrix.device }}-diagnostics
           path: |
             liquid_shell/example/build/ios-unit.xcresult
+            liquid_shell/example/build/ios-unit-rerun.xcresult
             liquid_shell/example/build/ios-diagnostics/*-app.log
             crash-reports/
           retention-days: 7
@@ -353,6 +354,7 @@ jobs:
           name: ios-ui-${{ matrix.device }}-diagnostics
           path: |
             liquid_shell/example/build/ios-ui.xcresult
+            liquid_shell/example/build/ios-ui-rerun.xcresult
             liquid_shell/example/build/ios-diagnostics/*-app.log
             crash-reports/
           retention-days: 7
@@ -400,12 +402,17 @@ jobs:
           mkdir -p crash-reports
           cp ~/Library/Logs/DiagnosticReports/Runner-*.ips crash-reports/ 2>/dev/null \
             || echo "no Runner crash report"
+      # VK-1083: tool/ios_xctest.sh reruns a test XCTest failed to
+      # terminate before into <result>-rerun.xcresult; a red rerun keeps
+      # both bundles. A rescued (green) run keeps its record, the first
+      # summary, a dump and the term log, in ios-diagnostics/ (always()).
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: ios-minimize-iPhone-diagnostics
           path: |
             liquid_shell/example/build/ios-minimize.xcresult
+            liquid_shell/example/build/ios-minimize-rerun.xcresult
             liquid_shell/example/build/ios-diagnostics/*-app.log
             crash-reports/
           retention-days: 7

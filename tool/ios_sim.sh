@@ -8,6 +8,7 @@
 #   tool/ios_sim.sh warmup UDID [APP | --build]
 #   tool/ios_sim.sh diagnose UDID LABEL [WINDOW]
 #   tool/ios_sim.sh applog UDID LABEL SECONDS
+#   tool/ios_sim.sh termlog UDID LABEL SECONDS
 #   tool/ios_sim.sh guard UDID LABEL SECONDS command [args...]
 #   tool/ios_sim.sh build UDID ACTION [xcodebuild args...]
 #
@@ -33,6 +34,11 @@
 #           IOS_APPLOG_BYTES. A red XCTest run's job log has only the test
 #           runner's output, never the app's (VK-1046). The read is capped
 #           at 120 s; a failed one leaves a note in the file; it exits 0.
+# termlog   Writes IOS_DIAG_DIR/<UTC time>-<LABEL>-term.log as applog does,
+#           but of the termination path (VK-1083): runningboardd's and
+#           testmanagerd's lines and every line naming IOS_APP_BUNDLE_ID,
+#           at most its last IOS_TERMLOG_BYTES. tool/ios_xctest.sh writes
+#           it before it reruns a test XCTest failed to terminate before.
 # guard     The stall guard. Runs the command under tool/with_timeout.sh for
 #           at most SECONDS. A stall (124) is diagnosed before the stop; then
 #           the app is terminated and the command runs once more on the same
@@ -68,6 +74,9 @@
 # IOS_BUILD_TIMEOUT   seconds each step of build (and --build) may take
 #                     (default 900)
 # IOS_APPLOG_BYTES    bytes applog keeps, the newest (default 2000000)
+# IOS_TERMLOG_BYTES   bytes termlog keeps, the newest (default 10000000:
+#                     runningboardd is chatty, and the failed terminate
+#                     can be early in the window)
 # IOS_DIAG_DIR        diagnostics root
 #                     (default liquid_shell/example/build/ios-diagnostics)
 # FLUTTER             flutter command for build (default: flutter)
@@ -102,6 +111,11 @@ vm_predicate='process == "Runner" AND eventMessage CONTAINS "Dart VM service is 
 vm_line='Dart VM service is listening on'
 # applog: the app's process (never RunnerUITests-Runner), both prefixes.
 app_predicate='process == "Runner" AND eventMessage CONTAINS "liquid_shell"'
+# termlog (VK-1083): who terminates the app, and every line naming the
+# app's bundle id, escaped for the predicate's string literal (\ and ").
+term_bundle=${bundle//\\/\\\\}
+term_bundle=${term_bundle//\"/\\\"}
+term_predicate="process == \"runningboardd\" OR process == \"testmanagerd\" OR eventMessage CONTAINS \"$term_bundle\""
 # VK-627: the phrase of Xcode's Target Integrity error, as xcodebuild and
 # flutter print it, and the note that names the retry.
 vk627_signature='requires minimum platform version'
@@ -126,6 +140,7 @@ usage() {
 usage: tool/ios_sim.sh warmup UDID [APP | --build]
        tool/ios_sim.sh diagnose UDID LABEL [WINDOW]
        tool/ios_sim.sh applog UDID LABEL SECONDS
+       tool/ios_sim.sh termlog UDID LABEL SECONDS
        tool/ios_sim.sh guard UDID LABEL SECONDS command [args...]
        tool/ios_sim.sh build UDID ACTION [xcodebuild args...]
 EOF
@@ -168,24 +183,35 @@ diagnose() { # <udid> <label> [window]
   note "diagnostics in $dir"
 }
 
-applog() { # <udid> <label> <seconds>
-  local udid=$1 label=$2 secs file full bytes
-  secs=$(number_or_default "applog SECONDS" "$3" 3600)
-  bytes=$(number_or_default IOS_APPLOG_BYTES "${IOS_APPLOG_BYTES:-2000000}" 2000000)
-  [ "$bytes" -gt 0 ] || bytes=2000000
+# The newest <bytes> of `log show --last <seconds>s` of <predicate> into
+# IOS_DIAG_DIR/<UTC time>-<label>-<suffix>.log (applog, termlog).
+logfile() { # <udid> <label> <seconds> <predicate> <suffix> <bytes var> <bytes default>
+  local udid=$1 label=$2 secs predicate=$4 suffix=$5 file full bytes bytes_var
+  secs=$(number_or_default "$suffix""log SECONDS" "$3" 3600)
+  bytes_var=$6
+  bytes=$(number_or_default "$bytes_var" "${!bytes_var:-$7}" "$7")
+  [ "$bytes" -gt 0 ] || bytes=$7
   mkdir -p "$diag_root"
-  file="$diag_root/$(date -u +%Y%m%dT%H%M%SZ)-${label//[^A-Za-z0-9._-]/_}-app.log"
+  file="$diag_root/$(date -u +%Y%m%dT%H%M%SZ)-${label//[^A-Za-z0-9._-]/_}-$suffix.log"
   # Into a file, never a pipe: a process left holding the read's output
   # would hold a reader at the pipe's end past the cap (as in diagnose).
   # The untrimmed read stays outside the uploaded folder, so a cancelled
   # job never uploads it.
-  full=$(mktemp "${TMPDIR:-/tmp}/ios_sim_applog.XXXXXX") || full="$file.full"
+  full=$(mktemp "${TMPDIR:-/tmp}/ios_sim_$suffix.XXXXXX") || full="$file.full"
   cap 120 xcrun simctl spawn "$udid" log show --last "${secs}s" --style compact \
-    --predicate "$app_predicate" > "$full" 2>&1 \
+    --predicate "$predicate" > "$full" 2>&1 \
     || echo "ios_sim: log show failed (status $?)" >> "$full"
   tail -c "$bytes" "$full" > "$file"
   rm -f "$full"
-  note "app log in $file"
+  note "$suffix log in $file"
+}
+
+applog() { # <udid> <label> <seconds>
+  logfile "$1" "$2" "$3" "$app_predicate" app IOS_APPLOG_BYTES 2000000
+}
+
+termlog() { # <udid> <label> <seconds>
+  logfile "$1" "$2" "$3" "$term_predicate" term IOS_TERMLOG_BYTES 10000000
 }
 
 # Runs a command with its stdout and stderr shown on stdout and copied to
@@ -383,6 +409,7 @@ case "$command" in
   warmup) [ $# -ge 1 ] && [ $# -le 2 ] || usage; warmup "$@" ;;
   diagnose) [ $# -ge 2 ] && [ $# -le 3 ] || usage; diagnose "$@" ;;
   applog) [ $# -eq 3 ] || usage; applog "$@" ;;
+  termlog) [ $# -eq 3 ] || usage; termlog "$@" ;;
   guard) [ $# -ge 4 ] || usage; guard "$@" ;;
   build) [ $# -ge 2 ] || usage; build "$@" ;;
   *) usage ;;
