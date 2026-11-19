@@ -301,7 +301,10 @@ void main() {
     });
 
     test('two terminate failures rerun both, capped for two', () {
-      final r = redRun([h2Entry(), entry('testATapOnTheCircleExpands')]);
+      final r = redRun(
+        [h2Entry(), entry('testATapOnTheCircleExpands')],
+        env: {'FAKE_RERUN_TOTAL': '2'},
+      );
       expect(r.exitCode, 0, reason: outputOf(r));
       final second = testCalls()[1].split(' ');
       expect(
@@ -356,6 +359,38 @@ void main() {
           ),
         ]),
       );
+    });
+
+    test('a red exit other than failed tests (70) is not rerun', () {
+      expectNoRerun(redRun([h2Entry()], tests: 'infra pass'), status: 70);
+    });
+
+    test('a summary whose counts do not add up to its total is not rerun '
+        '(tests that never ran)', () {
+      final r = redRun([h2Entry()], env: {'FAKE_PASSED': '2'});
+      expectNoRerun(r);
+      expect(outputOf(r), contains('ios_xctest: no terminate rerun:'));
+    });
+
+    test('a summary whose result is not Failed is not rerun', () {
+      expectNoRerun(redRun([h2Entry()], env: {'FAKE_RESULT': 'Passed'}));
+    });
+
+    test('a test with a terminate failure and an assertion failure is not '
+        'rerun', () {
+      expectNoRerun(
+        redRun([
+          h2Entry(),
+          {...h2Entry(), 'failureText': 'XCTAssertTrue failed - the bar'},
+        ]),
+      );
+    });
+
+    test('a green rerun whose test was skipped is red', () {
+      final r = redRun([h2Entry()], env: {'FAKE_RERUN_PASSED': '0'});
+      expect(r.exitCode, 1, reason: outputOf(r));
+      expect(testCalls(), hasLength(2));
+      expect(outputOf(r), contains('the rerun passed 0 of 1 tests'));
     });
 
     test('a red run with no listed failure is not rerun', () {

@@ -36,7 +36,7 @@
 #           at 120 s; a failed one leaves a note in the file; it exits 0.
 # termlog   Writes IOS_DIAG_DIR/<UTC time>-<LABEL>-term.log as applog does,
 #           but of the termination path (VK-1083): runningboardd's and
-#           testmanagerd's lines and every line naming liquidShellExample,
+#           testmanagerd's lines and every line naming IOS_APP_BUNDLE_ID,
 #           at most its last IOS_TERMLOG_BYTES. tool/ios_xctest.sh writes
 #           it before it reruns a test XCTest failed to terminate before.
 # guard     The stall guard. Runs the command under tool/with_timeout.sh for
@@ -111,8 +111,11 @@ vm_predicate='process == "Runner" AND eventMessage CONTAINS "Dart VM service is 
 vm_line='Dart VM service is listening on'
 # applog: the app's process (never RunnerUITests-Runner), both prefixes.
 app_predicate='process == "Runner" AND eventMessage CONTAINS "liquid_shell"'
-# termlog (VK-1083): who terminates the app, and the app itself.
-term_predicate='process == "runningboardd" OR process == "testmanagerd" OR eventMessage CONTAINS "liquidShellExample"'
+# termlog (VK-1083): who terminates the app, and every line naming the
+# app's bundle id, escaped for the predicate's string literal (\ and ").
+term_bundle=${bundle//\\/\\\\}
+term_bundle=${term_bundle//\"/\\\"}
+term_predicate="process == \"runningboardd\" OR process == \"testmanagerd\" OR eventMessage CONTAINS \"$term_bundle\""
 # VK-627: the phrase of Xcode's Target Integrity error, as xcodebuild and
 # flutter print it, and the note that names the retry.
 vk627_signature='requires minimum platform version'

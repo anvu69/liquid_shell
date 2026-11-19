@@ -29,7 +29,10 @@
 #    vn.lasoai.liquidShellExample:<pid>", and the next test then passes on
 #    the same simulator. A red run (not a stall) whose summary parses and
 #    lists only that failure, for every failed test (failedTests equals the
-#    listed ids) and at most 2 tests, runs once more: only those tests
+#    listed ids) and at most 2 tests, runs once more. Only xcodebuild's
+#    65 (tests ran and failed) qualifies, and the summary must read
+#    "Failed" with passed + failed + skipped + expected failures equal to
+#    totalTestCount (so no test went unrun). It runs once more: only those tests
 #    (-only-testing:<target>/<class>/<test>, replacing the selection), into
 #    RESULT-rerun.xcresult, capped at MAX_ALLOWANCE x n + 120 s. It is
 #    recorded first, all under IOS_DIAG_DIR (a rescued job is green, so
@@ -37,8 +40,8 @@
 #    first summary as <UTC>-<label>-terminate-rerun.json, a
 #    `tool/ios_sim.sh diagnose` dump and `tool/ios_sim.sh termlog` of the
 #    suite's seconds plus a minute (the termination path's log lines).
-#    The run's status is then the rerun's, and the 0-test guard reads the
-#    rerun's bundle. Anything else, python3 failing included, keeps the
+#    The run's status is then the rerun's; a green rerun must have passed
+#    every rerun test (passedTests), and the 0-test guard reads its bundle. Anything else, python3 failing included, keeps the
 #    first status. Never more than one rerun.
 #
 # `-collect-test-diagnostics never`: with xcodebuild's default (on-failure,
@@ -111,7 +114,16 @@ try:
     summary = json.load(sys.stdin)
 except ValueError:
     no("the summary is not JSON")
-failures = summary.get("testFailures") if isinstance(summary, dict) else None
+if not isinstance(summary, dict):
+    no("the summary is not an object")
+if summary.get("result") != "Failed":
+    no("the result is %r, not Failed" % (summary.get("result"),))
+counts = [summary.get(k) for k in
+          ("passedTests", "failedTests", "skippedTests", "expectedFailures", "totalTestCount")]
+if any(type(c) is not int for c in counts) or sum(counts[:4]) != counts[4]:
+    no("passed, failed, skipped and expected failures %r do not add up to "
+       "totalTestCount %r (tests that never ran)" % (counts[:4], counts[4]))
+failures = summary.get("testFailures")
 if not isinstance(failures, list) or not failures:
     no("the summary lists no failure")
 signal = re.compile(r"Failed to terminate " + re.escape(sys.argv[1]) + r":[0-9]+")
@@ -149,7 +161,9 @@ suite "$result" "$suite_secs" "$label" "$@" || status=$?
 if [ "$status" -ne 0 ]; then
   red "$result" "$label" "$started" || true
   ids=
-  [ "$status" -eq 124 ] \
+  # 65: xcodebuild ran the tests and some failed. Anything else (a stall's
+  # 124, 70 for a run that could not test) is never rerun.
+  [ "$status" -ne 65 ] \
     || ids=$(python3 -I -c "$gate_py" "$bundle" < "$tmp/$label.json") || ids=
   [ -n "$ids" ] || exit "$status"
   selection=()
@@ -175,6 +189,7 @@ if [ "$status" -ne 0 ]; then
     red "$result" "$label-rerun" "$started" || true
     exit "$status"
   fi
+  rerun=1
 fi
 # A selection that matches nothing (a renamed or moved test class) makes
 # xcodebuild exit 0 having run nothing, and a blocking job would then guard
@@ -188,4 +203,15 @@ if [ -z "$total" ]; then
 elif [ "$total" -eq 0 ]; then
   echo "✗ ios_xctest: the selection ran 0 tests: $*" >&2
   exit 1
+fi
+if [ -n "${rerun:-}" ]; then
+  # A green rerun rescues the job only if every rerun test passed: a
+  # skipped one (or a summary that cannot say) is red.
+  passed=$(xcrun xcresulttool get test-results summary --path "$result" 2> /dev/null \
+    | python3 -I -c 'import json, sys; print(json.load(sys.stdin)["passedTests"])' \
+      2> /dev/null || true)
+  if [ "$passed" != "$#" ]; then
+    echo "✗ ios_xctest: the rerun passed ${passed:-an unreadable number} of $# tests: $*" >&2
+    exit 1
+  fi
 fi

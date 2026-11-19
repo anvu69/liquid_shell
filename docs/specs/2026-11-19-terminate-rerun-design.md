@@ -49,8 +49,10 @@ without a signal; VK-1043, VK-1063, VK-1069, VK-1081 D10).
 
 ### 2.1 The gate (D2, D8)
 
-A red suite that is not a stall (status not 0, not 124) is rerun only when
-all of these hold on its `xcresulttool get test-results summary`:
+A red suite is rerun only when xcodebuild exited 65 (the tests ran and some
+failed: never a stall's 124, nor 70 or any other exit of a run that could
+not test) and all of these hold on its `xcresulttool get test-results
+summary`:
 
 - the result bundle exists and its summary parses as JSON (`python3 -I`,
   D12: `make test` runs `tool/test` on ubuntu, which has no `plutil`);
@@ -60,6 +62,8 @@ all of these hold on its `xcresulttool get test-results summary`:
   id is `IOS_APP_BUNDLE_ID`, escaped);
 - each entry's id, `targetName` + `/` + `testIdentifierString` without its
   trailing `()`, has the shape `Target/Class/test` (word characters only);
+- `result` is `Failed`, and `passedTests + failedTests + skippedTests +
+  expectedFailures == totalTestCount` (no test went unrun);
 - the top-level `failedTests` equals the number of distinct ids (a guard in
   case `testFailures` is not exhaustive);
 - there are at most 2 ids.
@@ -80,7 +84,8 @@ status, and the script says why it did not rerun.
   suites). A stalled rerun is diagnosed before the stop, as the suite is.
 - The run's status is the rerun's. A red rerun saves its own app log and
   prints its summary, after the first one. A green rerun passes the
-  zero-test guard on the rerun bundle.
+  zero-test guard on the rerun bundle, and its `passedTests` must equal the
+  number of rerun ids (a skipped rerun test is red).
 - Never more than one rerun.
 
 ### 2.3 The record (D6, D9, D11)
@@ -97,7 +102,9 @@ Before the rerun, in this order:
    SECONDS` of the termination path into
    `IOS_DIAG_DIR/<UTC>-<label>-term.log`, predicate
    `process == "runningboardd" OR process == "testmanagerd" OR eventMessage
-   CONTAINS "liquidShellExample"`, the window the suite's seconds plus a
+   CONTAINS "<IOS_APP_BUNDLE_ID>"` (default `vn.lasoai.liquidShellExample`,
+   `\` and `"` escaped for the predicate's string; final review, in place
+   of D11's literal `liquidShellExample`), the window the suite's seconds plus a
    minute, at most its newest `IOS_TERMLOG_BYTES` (default 10 MB; a minute of
    runningboardd is chatty and the event can be early in the window). The
    read is capped at 120 s; a failed one leaves a note; it exits 0.

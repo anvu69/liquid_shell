@@ -520,10 +520,23 @@ void main() {
         call,
         contains(
           'process == "runningboardd" OR process == "testmanagerd" OR '
-          'eventMessage CONTAINS "liquidShellExample"',
+          'eventMessage CONTAINS "vn.lasoai.liquidShellExample"',
         ),
       );
       expect(sim.dumps, isEmpty, reason: 'a file, not a dump folder');
+    });
+
+    test("names the app of IOS_APP_BUNDLE_ID, escaped for the predicate's "
+        'string', () {
+      final r = sim.run(
+        script,
+        ['termlog', udid, 'x', '60'],
+        env: {'IOS_APP_BUNDLE_ID': r'com.example.a"b\c'},
+      );
+      expect(r.exitCode, 0, reason: outputOf(r));
+      final call = sim.callsWith('log show').single;
+      expect(call, contains(r'eventMessage CONTAINS "com.example.a\"b\\c"'));
+      expect(call, isNot(contains('liquidShellExample')));
     });
 
     test('keeps only the last IOS_TERMLOG_BYTES', () {
