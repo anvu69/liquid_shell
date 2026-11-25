@@ -1070,6 +1070,80 @@ void main() {
       });
     }
 
+    testWidgets(
+      'compact: under an ancestor that consumed only padding.bottom, a '
+      'dialog hiding the bar never raises it',
+      (tester) async {
+        final native = installFakeNative(state: _compact);
+        await _pumpNative(
+          tester,
+          size: kPhone,
+          padding: _compactPadding,
+          shell: Builder(
+            builder: (context) {
+              final media = MediaQuery.of(context);
+              return MediaQuery(
+                data: media.copyWith(
+                  padding: media.padding.copyWith(bottom: 0),
+                ),
+                child: const TestShell(destinations: kNative),
+              );
+            },
+          ),
+        );
+        final page = find.byType(TestPage).first;
+        void expectBodyInsets() {
+          final media = MediaQuery.of(tester.element(page));
+          expect(media.padding.bottom, 0);
+          expect(media.viewPadding.bottom, 83);
+        }
+
+        expectBodyInsets();
+        unawaited(
+          showDialog<void>(
+            context: tester.element(page),
+            builder: (_) => const Text('above'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(native.last.hidden, isTrue);
+        _setBottomPadding(tester, 34);
+        await tester.pump();
+        expectBodyInsets();
+
+        tester.state<NavigatorState>(find.byType(Navigator)).pop();
+        _setBottomPadding(tester, 83);
+        await tester.pumpAndSettle();
+        expect(native.last.hidden, isFalse);
+        expectBodyInsets();
+      },
+    );
+
+    testWidgets('compact: a dialog with the keyboard keeps the held view '
+        'padding without adding body padding', (tester) async {
+      final native = installFakeNative(state: _compact);
+      await _pumpNative(tester, size: kPhone, padding: _compactPadding);
+      final page = find.byType(TestPage).first;
+      unawaited(
+        showDialog<void>(
+          context: tester.element(page),
+          builder: (_) => const Text('above'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(native.last.hidden, isTrue);
+
+      tester.view
+        ..padding = const FakeViewPadding(top: 62)
+        ..viewPadding = const FakeViewPadding(top: 62, bottom: 34)
+        ..viewInsets = const FakeViewPadding(bottom: 300);
+      await tester.pump();
+      final media = MediaQuery.of(tester.element(page));
+      expect(media.padding.bottom, 0);
+      expect(media.viewPadding.bottom, 83);
+      expect(media.viewInsets.bottom, 300);
+    });
+
     // Hide on push: the page covers the body, so the bar's inset goes.
     testWidgets('compact: a page pushed above drops the bar inset', (
       tester,

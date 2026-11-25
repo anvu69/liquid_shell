@@ -1614,6 +1614,7 @@ class _LiquidShellState extends State<LiquidShell>
   /// the overlay, above the shell, lays out against the home indicator.
   /// Also held after the pop until native shows the bar again. A page
   /// pushed above, `LiquidHideChrome`, or a new window size drops it.
+  /// Bottom padding consumed by an ancestor stays consumed.
   MediaQueryData _holdBarInset(MediaQueryData media, {required bool barShown}) {
     final bottom = media.viewPadding.bottom;
     if (!barShown || _covered) {
@@ -1627,11 +1628,14 @@ class _LiquidShellState extends State<LiquidShell>
       _barSize = media.size;
       return media;
     }
+    final viewInsets = media.viewInsets.bottom;
+    final paddingConsumed =
+        media.padding.bottom < math.max(0, bottom - viewInsets);
     return media.copyWith(
       viewPadding: media.viewPadding.copyWith(bottom: held),
-      padding: media.padding.copyWith(
-        bottom: math.max(0, held - media.viewInsets.bottom),
-      ),
+      padding: paddingConsumed
+          ? media.padding
+          : media.padding.copyWith(bottom: math.max(0, held - viewInsets)),
     );
   }
 
