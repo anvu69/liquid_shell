@@ -6,7 +6,8 @@
   `MediaQuery.paddingOf` keep the window's bottom. The tab bar itself
   never moved.
 - Fixed: a dialog or sheet hiding the compact native tab bar no longer
-  restores the body's bottom padding when an ancestor has consumed it.
+  raises the body's bottom padding back when an ancestor above the shell
+  has consumed it.
 
 ## 0.1.0-dev.14
 
